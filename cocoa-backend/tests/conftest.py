@@ -10,7 +10,7 @@ from app.core.db import Base
 
 logger = logging.getLogger(__name__)
 
-TEST_DATABASE_URL = "postgresql+asyncpg://postgres:postgres@localhost:5432/cocoa_dev"
+TEST_DATABASE_URL = "postgresql+asyncpg://postgres:postgres@localhost:5432/cocoa_test"
 
 
 @pytest_asyncio.fixture(autouse=True, scope="function")
