@@ -1,11 +1,22 @@
-"""SQLAlchemy declarative base for the Cocoa backend.
+"""SQLAlchemy async engine, session factory, and declarative base for Cocoa."""
 
-P0 stub — no models are defined yet. ``alembic/env.py`` imports
-``Base`` from this module so future ``app/models/*.py`` tables register
-against the same metadata.
-"""
-
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
+
+from app.core.config import settings
+
+engine = create_async_engine(
+    settings.DATABASE_URL,
+    echo=False,
+    pool_size=5,
+    max_overflow=10,
+)
+
+AsyncSessionLocal = async_sessionmaker(
+    engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+)
 
 
 class Base(DeclarativeBase):
