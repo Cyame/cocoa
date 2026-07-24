@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.core.db import Base
 
-TEST_DATABASE_URL = "postgresql+asyncpg://cocoa:cocoa@localhost:5433/cocoa_dev"
+TEST_DATABASE_URL = "postgresql+asyncpg://postgres:postgres@localhost:5432/cocoa_dev"
 
 
 @pytest_asyncio.fixture(autouse=True, scope="function")

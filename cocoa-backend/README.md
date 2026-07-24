@@ -10,7 +10,7 @@ Start a local PostgreSQL 16 instance for development:
 docker compose -f docker-compose.dev.yml up -d
 ```
 
-Credentials: `postgresql://cocoa:cocoa@localhost:5433/cocoa_dev`
+Credentials: `postgresql://postgres:postgres@localhost:5432/cocoa_dev`
 
 Stop the database:
 
