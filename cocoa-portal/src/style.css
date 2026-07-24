@@ -1,5 +1,1 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-/* Cocoa Portal — global styles live alongside tailwind base. */
+@import "tailwindcss";
