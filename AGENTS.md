@@ -4,11 +4,11 @@
 
 ## 项目概述
 
-Cocoa 是多 Agent 控制台（multi-agent control studio）。本仓库目前处于 **P0 脚手架阶段**，包含：
+Cocoa 是多 Agent 控制台（multi-agent control studio）。本仓库已完成 **P2 核心域模型**，包含：
 
 | 组件 | 技术栈 | 状态 |
 |------|--------|------|
-| `cocoa-backend/` | Python 3.12 + FastAPI + SQLAlchemy (async) + asyncpg + Alembic | 骨架 |
+| `cocoa-backend/` | Python 3.12 + FastAPI + SQLAlchemy (async) + asyncpg + Alembic | P2：12 模型 + 迁移 + 171 测试 |
 | `cocoa-portal/`  | React 19 + Vite 8 + TypeScript + Tailwind CSS v4 + Bun + lucide-react | 骨架 |
 | `cocoa-artifacts/` | Docker 镜像 & K8s 清单占位 | P7 才填 |
 | `.github/workflows/` | CI 基础（lint + build） | 骨架 |
@@ -176,6 +176,17 @@ chore/upgrade-fastapi
 ```
 
 禁止：无意义名称（`test123`、`temp`）、纯日期名称、中文 / 大写 / 下划线。
+
+### 阶段分支工作流（P2 起生效）
+
+每个 Phase 固定从 **master 最新** 建分支，验收通过后**合并回 master**，下一阶段再从 master 重新出发：
+
+1. `git checkout master && git checkout -b feat/phase-N-xxx` — 永远从 master 最新建支，不从上一阶段的分支叠加
+2. 阶段内所有工作在分支上完成（commit 原子化）
+3. 验收通过后 fast-forward / merge 回 master
+4. 分支合并后可删除；`.omo/` 状态随合并进入 master
+
+例外：纯文档阶段（如 P1 命名）经用户确认可留在独立 docs 分支不合并。
 
 ### Commit Message
 
