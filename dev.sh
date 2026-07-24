@@ -117,8 +117,8 @@ if ! command -v uv &>/dev/null; then
   exit 1
 fi
 
-if ! command -v node &>/dev/null || ! command -v npm &>/dev/null; then
-  err "未找到 node/npm，请先安装 Node.js >= 18"
+if ! command -v bun &>/dev/null; then
+  err "未找到 bun，请先安装 Bun >= 1.2: https://bun.sh/docs/installation"
   exit 1
 fi
 
@@ -132,13 +132,13 @@ if [ ! -d "$PORTAL_DIR" ]; then
   exit 1
 fi
 
-log "前置检查通过 (uv=$(uv --version 2>/dev/null || echo '?'), node=$(node --version))"
+log "前置检查通过 (uv=$(uv --version 2>/dev/null || echo '?'), bun=$(bun --version))"
 
 # ── 依赖安装 ──────────────────────────────────────────────
 if [ "$FRESH" = true ]; then
   log "--fresh: 清理并重新安装依赖..."
   rm -rf "$BACKEND_DIR/.venv"
-  rm -rf "$PORTAL_DIR/node_modules"
+  rm -rf "$PORTAL_DIR/node_modules" "$PORTAL_DIR/bun.lock"
 fi
 
 if [ ! -d "$BACKEND_DIR/.venv" ]; then
@@ -149,8 +149,8 @@ else
 fi
 
 if [ ! -d "$PORTAL_DIR/node_modules" ]; then
-  log "安装 Portal 前端依赖 (npm install)..."
-  (cd "$PORTAL_DIR" && npm install)
+  log "安装 Portal 前端依赖 (bun install)..."
+  (cd "$PORTAL_DIR" && bun install)
 else
   log "Portal 依赖已就绪，跳过安装"
 fi
@@ -174,7 +174,7 @@ PIDS+=("$BACKEND_PID")
 
 (
   cd "$PORTAL_DIR"
-  exec npm run dev \
+  exec bun run dev \
     > "$LOG_DIR/portal.log" 2>&1
 ) &
 PORTAL_PID=$!
