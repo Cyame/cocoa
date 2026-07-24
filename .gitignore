@@ -1,0 +1,61 @@
+# ========================
+# Environment & secrets
+# ========================
+.env
+.env.*
+!.env.example
+
+# ========================
+# Python / backend
+# ========================
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+*.egg-info/
+.eggs/
+*.egg
+htmlcov/
+.coverage
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ========================
+# Node / frontend
+# ========================
+node_modules/
+dist/
+dist-ssr/
+*.local
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ========================
+# Editor & system
+# ========================
+.DS_Store
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+Thumbs.db
+
+# ========================
+# Data files
+# ========================
+*.db
+*.sqlite3
+data/
+
+# ========================
+# OS tool caches
+# ========================
+.codex-screenshots/
