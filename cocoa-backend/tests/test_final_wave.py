@@ -4,26 +4,13 @@ Integration tests that actually insert data and verify DB constraints.
 """
 
 import pytest
-import pytest_asyncio
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.employee import Employee, EmployeePreset, EmployeeRank
 from app.models.instance import Instance
 from app.models.office import Office, Membership, MembershipRole
 from app.models.user import User
-
-TEST_DATABASE_URL = "postgresql+asyncpg://postgres:postgres@localhost:5432/cocoa_dev"
-
-
-@pytest_asyncio.fixture
-async def session():
-    """Provide an async SQLAlchemy session for each test."""
-    engine = create_async_engine(TEST_DATABASE_URL, echo=False)
-    async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    async with async_session() as s:
-        yield s
-    await engine.dispose()
 
 
 class TestMultiInstance:
