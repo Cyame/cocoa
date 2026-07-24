@@ -1,0 +1,13 @@
+# Frontend build output
+node_modules/
+dist/
+
+# Vite
+*.local
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
