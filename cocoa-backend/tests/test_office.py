@@ -2,20 +2,10 @@
 
 from sqlalchemy import CheckConstraint, Index
 
-from app.core.db import Base
-from app.models.base import BaseModel
+from app.models.employee import Employee  # noqa: F401
+from app.models.instance import Instance  # noqa: F401
 from app.models.office import Corridor, Membership, MembershipRole, Office
-from app.models.user import User  # noqa: F401 — register users table on Base.metadata
-
-
-class _InstanceStub(BaseModel, Base):
-    """Minimal stub for FK resolution — Instance model runs in parallel todo.
-
-    Registers the ``instances`` table on ``Base.metadata`` so that
-    ``Base.metadata.create_all()`` can resolve Membership FK references.
-    """
-
-    __tablename__ = "instances"
+from app.models.user import User  # noqa: F401
 
 
 class TestMembershipRole:
