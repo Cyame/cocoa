@@ -9,7 +9,7 @@ Cocoa 是多 Agent 控制台（multi-agent control studio）。本仓库目前�
 | 组件 | 技术栈 | 状态 |
 |------|--------|------|
 | `cocoa-backend/` | Python 3.12 + FastAPI + SQLAlchemy (async) + asyncpg + Alembic | 骨架 |
-| `cocoa-portal/`  | Vue 3 + Vite + TypeScript + Tailwind CSS + lucide-vue-next | 骨架 |
+| `cocoa-portal/`  | React 19 + Vite 6 + TypeScript + Tailwind CSS v4 + Bun + lucide-react | 骨架 |
 | `cocoa-artifacts/` | Docker 镜像 & K8s 清单占位 | P7 才填 |
 | `.github/workflows/` | CI 基础（lint + build） | 骨架 |
 
@@ -34,10 +34,12 @@ uv run ruff check --fix .                    # Lint + 自动修复
 
 ```bash
 cd cocoa-portal
-npm install
-npm run dev          # http://localhost:5173
-npm run build        # 生产构建
-vue-tsc -b           # 类型检查
+bun install
+bun run dev          # http://localhost:5173
+bun run build        # 生产构建
+tsc -b               # 类型检查
+bun run lint         # Lint (Biome)
+bun run test         # 测试 (Vitest)
 ```
 
 ### 一键启动
@@ -53,7 +55,8 @@ vue-tsc -b           # 类型检查
 
 | 类型 | 规则 |
 |------|------|
-| Vue 组件文件 | PascalCase（如 `UserProfile.vue`） |
+| React 组件文件 | PascalCase（如 `UserProfile.tsx`） |
+| React Hooks | camelCase（如 `useAuth.ts`） |
 | 工具函数 / composable | camelCase（如 `useAuth.ts`） |
 | 类型 / 接口 | PascalCase（如 `UserInfo`） |
 | 常量 | UPPER_SNAKE_CASE |
@@ -66,23 +69,23 @@ vue-tsc -b           # 类型检查
 
 **未经用户明确允许，禁止在任何地方使用 emoji**，包括但不限于：
 
-- Vue 模板中的图标位 —— 改用 `lucide-vue-next` 组件
+- React 模板中的图标位 —— 改用 `lucide-react` 组件
 - 提示文案、占位符、label —— 纯文本
 - 日志输出、Toast 消息 —— 纯文本
 - 文档、commit message、PR 描述 —— 纯文本
 - HTML 实体字符 / 几何符号当图标 —— 同样禁止，一律改用 Lucide 组件
 
-```vue
-<!-- 禁止 -->
+```tsx
+{/* 禁止 */}
 <span>搜索实例...</span>
 <span>提示</span>
 
-<!-- 正确 -->
-<Search class="w-4 h-4" />
-<Bell class="w-4 h-4" />
+{/* 正确 */}
+<Search className="w-4 h-4" />
+<Bell className="w-4 h-4" />
 ```
 
-图标统一从 `lucide-vue-next` 按需导入，常用尺寸 `w-4 h-4`（导航 / 按钮）、`w-5 h-5`（Logo / 标题）。
+图标统一从 `lucide-react` 按需导入，常用尺寸 `w-4 h-4`（导航 / 按钮）、`w-5 h-5`（Logo / 标题）。
 
 ### 软删除规则（强制）
 
@@ -210,7 +213,7 @@ chore(repo): 初始化根目录约定与启动脚本
 ```
 .
 ├── cocoa-backend/        # Python 后端（pyproject.toml 在此）
-├── cocoa-portal/         # Vue 前端（package.json 在此）
+├── cocoa-portal/         # React 前端（package.json 在此）
 ├── cocoa-artifacts/      # 镜像 / K8s 清单占位
 ├── .omo/                 # 计划、草稿、运行续接状态
 ├── .github/workflows/    # CI

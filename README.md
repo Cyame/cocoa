@@ -9,7 +9,7 @@ Cocoa is a control surface for running multi-agent systems. A web portal pairs w
 | Component | State |
 |-----------|-------|
 | `cocoa-backend/` | P0 scaffold (FastAPI + uv + Alembic) |
-| `cocoa-portal/`  | P0 scaffold (Vue 3 + Vite + Tailwind) |
+| `cocoa-portal/`  | P0 scaffold (React 19 + Vite 6 + Tailwind CSS v4 + Bun) |
 | `cocoa-artifacts/` | Placeholder (Docker images & K8s manifests come in P7) |
 | CI | Baseline (lint + build on push/PR) |
 
@@ -18,7 +18,7 @@ Cocoa is a control surface for running multi-agent systems. A web portal pairs w
 ```
 cocoa/
 ├── cocoa-backend/      # API server -- Python 3.12 + FastAPI + SQLAlchemy
-├── cocoa-portal/       # Web portal -- Vue 3 + Vite + TypeScript + Tailwind
+├── cocoa-portal/       # Web portal -- React 19 + Vite 6 + TypeScript + Bun + Tailwind CSS v4
 ├── cocoa-artifacts/    # Docker images & deploy manifests (P7)
 ├── .omo/               # Plans, drafts, run-continuation state
 ├── .github/            # CI workflows
@@ -30,14 +30,14 @@ cocoa/
 
 ## Build-context note
 
-**The backend builds from `cocoa-backend/`, not the repo root.** `pyproject.toml` and `alembic.ini` live in `cocoa-backend/`. Run `uv sync` and `alembic` from inside that directory, or use `dev.sh` which handles the `cd` for you. The same applies to the portal: `npm install` and `npm run dev` are meant to be run from `cocoa-portal/`.
+**The backend builds from `cocoa-backend/`, not the repo root.** `pyproject.toml` and `alembic.ini` live in `cocoa-backend/`. Run `uv sync` and `alembic` from inside that directory, or use `dev.sh` which handles the `cd` for you. The same applies to the portal: `bun install` and `bun run dev` are meant to be run from `cocoa-portal/`.
 
 ## Prerequisites
 
 | Dependency                                        | Purpose                              |
 | ------------------------------------------------- | ------------------------------------ |
 | Python >= 3.12 + [uv](https://docs.astral.sh/uv/) | Backend runtime & package manager    |
-| Node.js >= 18 + npm                               | Frontend runtime & package manager   |
+| Bun >= 1.2                                       | Frontend runtime & package manager    |
 
 ## Quick Start
 
@@ -46,7 +46,7 @@ cocoa/
 ./dev.sh --fresh      # Force reinstall .venv and node_modules first
 ```
 
-`dev.sh` runs the backend (`uv run uvicorn`) and the portal (`npm run dev`) in the background, prefixes each line of output with `[BACKEND]` or `[PORTAL]` so you can tell streams apart, and cleans up both children on `Ctrl+C`.
+`dev.sh` runs the backend (`uv run uvicorn`) and the portal (`bun run dev`) in the background, prefixes each line of output with `[BACKEND]` or `[PORTAL]` so you can tell streams apart, and cleans up both children on `Ctrl+C`.
 
 ### Manual start (alternative)
 
@@ -65,8 +65,8 @@ API at `http://localhost:4510` | Swagger at `http://localhost:4510/docs`.
 
 ```bash
 cd cocoa-portal
-npm install
-npm run dev
+bun install
+bun run dev
 ```
 
 Portal at `http://localhost:5173` (Vite default) | `/api` auto-proxies to the backend.
@@ -77,8 +77,10 @@ Portal at `http://localhost:5173` (Vite default) | `/api` auto-proxies to the ba
 |------|---------|
 | Backend lint        | `cd cocoa-backend && uv run ruff check .` |
 | Backend tests       | `cd cocoa-backend && uv run pytest` |
-| Frontend type-check | `cd cocoa-portal && vue-tsc -b` |
-| Frontend build      | `cd cocoa-portal && npm run build` |
+| Frontend type-check | `cd cocoa-portal && tsc -b` |
+| Frontend lint       | `cd cocoa-portal && bun run lint` |
+| Frontend build      | `cd cocoa-portal && bun run build` |
+| Frontend test       | `cd cocoa-portal && bun run test` |
 | Lint everything     | see `AGENTS.md` |
 
 See [AGENTS.md](AGENTS.md) for the full development guide, including soft-delete and Alembic rules, the no-emoji rule, and Git conventions.
