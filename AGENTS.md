@@ -30,6 +30,28 @@ uv run ruff check .                          # Lint
 uv run ruff check --fix .                    # Lint + 自动修复
 ```
 
+### 开发数据库（后端）
+
+后端使用本地 PostgreSQL（>= 16）上的**两个独立数据库**，职责严格分离：
+
+| 数据库 | 用途 | 管理者 |
+|--------|------|--------|
+| `cocoa_dev` | 开发 schema + 你的手工数据 | **Alembic 独占**（`alembic upgrade head`） |
+| `cocoa_test_template` | pytest 模板（会话级） | conftest 建/删 |
+| `cocoa_test_<hex>` | pytest 每测试克隆库 | conftest 建/删 |
+
+**铁律：pytest 绝不触碰 `cocoa_dev`。** 每个需要 DB 的测试从 `cocoa_test_template`（Alembic 迁移构建）克隆一份私有库，跑完即删 —— 你在 `cocoa_dev` 里的数据永远安全。测试代码中禁止出现 `cocoa_dev` 连接串。
+
+```bash
+# 首次建库（只需要 cocoa_dev；测试库由 conftest 自动管理）
+psql -U postgres -h 127.0.0.1 -c "CREATE DATABASE cocoa_dev;"
+
+# 应用 schema（cocoa_dev 只走 Alembic，禁止 create_all）
+cd cocoa-backend && uv run alembic upgrade head
+```
+
+无本地 Postgres 时可用 `cocoa-backend/docker-compose.dev.yml` 起一次性容器（端口 5433，避免与本地 5432 冲突）。
+
 ### 前端（cocoa-portal）
 
 ```bash

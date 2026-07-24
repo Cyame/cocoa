@@ -2,13 +2,13 @@
 
 **Multi-agent control studio.** A workspace where humans orchestrate AI agents -- from strategy to execution.
 
-Cocoa is a control surface for running multi-agent systems. A web portal pairs with a Python backend to give operators a single place to plan, delegate, and observe AI-driven work. This repository is the **P0 scaffold** -- the empty house ready for P1+ feature work. No business logic yet.
+Cocoa is a control surface for running multi-agent systems. A web portal pairs with a Python backend to give operators a single place to plan, delegate, and observe AI-driven work. The backend has its **P2 core domain** in place (12 models, Alembic migration, pytest harness); the portal is a P0 scaffold. No API routes or UI features yet.
 
 ## Status
 
 | Component | State |
 |-----------|-------|
-| `cocoa-backend/` | P0 scaffold (FastAPI + uv + Alembic) |
+| `cocoa-backend/` | P2 core domain (12 SQLAlchemy models, Alembic migration, 171 tests) |
 | `cocoa-portal/`  | P0 scaffold (React 19 + Vite 8 + Tailwind CSS v4 + Bun) |
 | `cocoa-artifacts/` | Placeholder (Docker images & K8s manifests come in P7) |
 | CI | Baseline (lint + build on push/PR) |
@@ -38,6 +38,23 @@ cocoa/
 | ------------------------------------------------- | ------------------------------------ |
 | Python >= 3.12 + [uv](https://docs.astral.sh/uv/) | Backend runtime & package manager    |
 | Bun >= 1.2                                       | Frontend runtime & package manager    |
+| PostgreSQL >= 16 (local or Docker)                | Backend database (dev + test)        |
+
+## Database setup (first time only)
+
+The backend uses `cocoa_dev` on your local PostgreSQL for development (Alembic-managed). Test databases (`cocoa_test_template` + per-test clones) are created and destroyed automatically by the pytest harness.
+
+```bash
+# Create the dev database (adjust user/host to your local Postgres)
+psql -U postgres -h 127.0.0.1 -c "CREATE DATABASE cocoa_dev;"
+
+# Apply the schema
+cd cocoa-backend
+cp .env.example .env   # then set DATABASE_URL=postgresql+asyncpg://<user>:<pass>@localhost:5432/cocoa_dev
+uv run alembic upgrade head
+```
+
+A `docker-compose.dev.yml` is also available in `cocoa-backend/` if you prefer a disposable container (runs on port 5433 to avoid clashing with an existing local Postgres).
 
 ## Quick Start
 
@@ -77,6 +94,8 @@ Portal at `http://localhost:5173` (Vite default) | `/api` auto-proxies to the ba
 |------|---------|
 | Backend lint        | `cd cocoa-backend && uv run ruff check .` |
 | Backend tests       | `cd cocoa-backend && uv run pytest` |
+| Backend migration   | `cd cocoa-backend && uv run alembic upgrade head` |
+| New migration       | `cd cocoa-backend && uv run alembic revision --autogenerate -m "..."` |
 | Frontend type-check | `cd cocoa-portal && tsc -b` |
 | Frontend lint       | `cd cocoa-portal && bun run lint` |
 | Frontend build      | `cd cocoa-portal && bun run build` |
