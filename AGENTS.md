@@ -9,7 +9,7 @@ Cocoa 是多 Agent 控制台（multi-agent control studio）。本仓库目前�
 | 组件 | 技术栈 | 状态 |
 |------|--------|------|
 | `cocoa-backend/` | Python 3.12 + FastAPI + SQLAlchemy (async) + asyncpg + Alembic | 骨架 |
-| `cocoa-portal/`  | React 19 + Vite 6 + TypeScript + Tailwind CSS v4 + Bun + lucide-react | 骨架 |
+| `cocoa-portal/`  | React 19 + Vite 8 + TypeScript + Tailwind CSS v4 + Bun + lucide-react | 骨架 |
 | `cocoa-artifacts/` | Docker 镜像 & K8s 清单占位 | P7 才填 |
 | `.github/workflows/` | CI 基础（lint + build） | 骨架 |
 

@@ -9,7 +9,7 @@ Cocoa is a control surface for running multi-agent systems. A web portal pairs w
 | Component | State |
 |-----------|-------|
 | `cocoa-backend/` | P0 scaffold (FastAPI + uv + Alembic) |
-| `cocoa-portal/`  | P0 scaffold (React 19 + Vite 6 + Tailwind CSS v4 + Bun) |
+| `cocoa-portal/`  | P0 scaffold (React 19 + Vite 8 + Tailwind CSS v4 + Bun) |
 | `cocoa-artifacts/` | Placeholder (Docker images & K8s manifests come in P7) |
 | CI | Baseline (lint + build on push/PR) |
 
@@ -18,7 +18,7 @@ Cocoa is a control surface for running multi-agent systems. A web portal pairs w
 ```
 cocoa/
 ├── cocoa-backend/      # API server -- Python 3.12 + FastAPI + SQLAlchemy
-├── cocoa-portal/       # Web portal -- React 19 + Vite 6 + TypeScript + Bun + Tailwind CSS v4
+├── cocoa-portal/       # Web portal -- React 19 + Vite 8 + TypeScript + Bun + Tailwind CSS v4
 ├── cocoa-artifacts/    # Docker images & deploy manifests (P7)
 ├── .omo/               # Plans, drafts, run-continuation state
 ├── .github/            # CI workflows
