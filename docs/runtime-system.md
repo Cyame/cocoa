@@ -1,0 +1,207 @@
+# Cocoa Runtime System
+
+The Instance runtime system is Cocoa's execution substrate. An Instance is the running embodiment of an Employee within an Office — it owns an isolated workspace, consumes configuration from the database, receives messages via the P5 messaging topology, and writes results to the P6 blackboard. P7 delivers the Instance CRUD API, lifecycle state machine, and K8s deployment scaffolding; the actual agent execution harness arrives in P8.
+
+## 1. Instance Lifecycle Model
+
+Instances move through a directed acyclic graph (DAG) of statuses. Each transition is validated explicitly in the action endpoint — there is no generic PATCH status.
+
+```
+creating
+   |
+   v
+deploying
+   |
+   v
+running ──→ restarting ──→ deploying ──→ running
+   |                           ^
+   |      (restart loop)       |
+   └───────────────────────────┘
+   |
+   v
+pending ──→ deleting (soft-delete, 204)
+
+any ──→ failed (fault report)
+```
+
+### Status Definitions
+
+| Status | Meaning |
+|--------|---------|
+| `creating` | Initial state after `POST /instances`. Workspace path and proxy token are assigned. |
+| `deploying` | `POST /instances/{id}/deploy` — K8s manifests are being applied (or simulated). |
+| `running` | `POST /instances/{id}/start` — agent process is active, receiving messages. |
+| `restarting` | `POST /instances/{id}/restart` — instance is cycling (stop then start). |
+| `pending` | `POST /instances/{id}/stop` — instance is halted but not deleted; workspace is preserved. |
+| `failed` | `POST /instances/{id}/fail` — fault report received; may be restarted. |
+| `deleting` | `DELETE /instances/{id}` — soft-delete in progress; workspace PVC is retained until cleanup. |
+
+### Valid Transitions
+
+| Action Endpoint | Allowed From | Target Status |
+|-----------------|-------------|---------------|
+| `POST .../deploy` | `creating`, `restarting` | `deploying` |
+| `POST .../start` | `pending`, `deploying` | `running` |
+| `POST .../restart` | `running`, `failed` | `restarting` |
+| `POST .../stop` | `running` | `pending` |
+| `POST .../fail` | any | `failed` |
+| `DELETE ...` | `pending`, `failed`, `creating` | `deleting` |
+
+Invalid transitions return `409 Conflict` with `error_code: "instance.invalid_transition"` and a `details` payload listing `current` status and `expected` allowed statuses.
+
+## 2. Instance CRUD and Action API Reference
+
+All endpoints live under `/api/v1/instances`. Time fields are ISO 8601 UTC. Pagination uses offset-based defaults (`?limit=50&offset=0`).
+
+### CRUD Endpoints
+
+| Method | Path | Description | Response |
+|--------|------|-------------|----------|
+| `GET` | `/api/v1/instances` | List instances. Filters: `?employee_id=`, `?office_id=`, `?status=` | `200` — paginated list of `InstanceOut` |
+| `GET` | `/api/v1/instances/{instance_id}` | Get a single instance | `200` — `InstanceOut`; `404` — not found |
+| `POST` | `/api/v1/instances` | Create an instance. Body: `{employee_id, office_id, workspace_path?, runtime_config?}` | `201` — `InstanceOut` |
+| `PATCH` | `/api/v1/instances/{instance_id}` | Update `runtime_config` or `workspace_path`. Status is **not** patchable — use action endpoints. | `200` — `InstanceOut` |
+| `DELETE` | `/api/v1/instances/{instance_id}` | Soft-delete. Fails with `409` if status is `running` (must stop first). Idempotent if already `deleting`. | `204` |
+
+### Action Endpoints (Stripe-style)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/v1/instances/{instance_id}/deploy` | `creating` / `restarting` -> `deploying` |
+| `POST` | `/api/v1/instances/{instance_id}/start` | `pending` / `deploying` -> `running` |
+| `POST` | `/api/v1/instances/{instance_id}/restart` | `running` / `failed` -> `restarting` |
+| `POST` | `/api/v1/instances/{instance_id}/stop` | `running` -> `pending` |
+| `POST` | `/api/v1/instances/{instance_id}/fail` | any -> `failed`. Body: `{"reason": "string"}` |
+
+### Create Payload (`InstanceCreate`)
+
+```json
+{
+  "employee_id": "uuid",
+  "office_id": "uuid",
+  "workspace_path": ".pi/workspace/alice-a1b2c3d4/",  // optional, auto-generated
+  "runtime_config": {}                                  // optional, defaults to {}
+}
+```
+
+### Concurrency Safety
+
+All action endpoints acquire a row-level lock (`SELECT ... FOR UPDATE`) on the Instance row before validating the current status and applying the transition. This prevents concurrent actions from racing on the same Instance.
+
+## 3. Instance Lifecycle Events
+
+Each lifecycle transition emits an event via the P3.5 event system (`app.core.events.emit`). Events carry `actor_type="user"`, `resource_type="instance"`, and the Instance UUID as `resource_id`. Events are stored in the database and are available through the event query API.
+
+| Event Type | Emitter | Payload |
+|-----------|---------|---------|
+| `instance.created` | `POST .../` create | `{instance_id, employee_id, office_id}` |
+| `instance.deploying` | `POST .../deploy` | `{instance_id}` |
+| `instance.running` | `POST .../start` | `{instance_id}` |
+| `instance.restarting` | `POST .../restart` | `{instance_id}` |
+| `instance.failed` | `POST .../fail` | `{instance_id, reason}` |
+| `instance.deleted` | `DELETE ...` | `{instance_id}` |
+
+## 4. K8s Deployment Manifests
+
+All manifests live under `cocoa-artifacts/k8s/instance/`. Each file uses `{instance_id}` and `{office_id}` template variables that a deploy script substitutes before applying.
+
+| File | Kind | Purpose |
+|------|------|---------|
+| `deployment.yaml` | Deployment | Single-replica pod running `cocoa-instance:latest`. Mounts workspace PVC at `/app/.pi/workspace`. Env from ConfigMap. Resources: 100m CPU / 256Mi memory. |
+| `configmap.yaml` | ConfigMap | Injects `RUNTIME_CONFIG` (JSON) and `INSTANCE_ID` into the container. |
+| `pvc.yaml` | PersistentVolumeClaim | 1Gi `ReadWriteOnce` volume for the Instance workspace. One PVC per Instance. |
+| `service.yaml` | Service | `ClusterIP` on port 8080. Internal-only communication. |
+| `networkpolicy.yaml` | NetworkPolicy | Ingress isolation: only Pods with `office-id={office_id}` can connect. |
+| `kustomization.yaml` | Kustomization | Groups all resources with common label `app: cocoa-instance`. |
+
+### Template Variable Reference
+
+| Variable | Description | Used In |
+|----------|-------------|---------|
+| `{instance_id}` | Instance UUID | All manifests (name, labels, selectors, ConfigMap key, PVC name) |
+| `{office_id}` | Office UUID | `deployment.yaml` labels, `networkpolicy.yaml` podSelector |
+
+### Build and Deploy
+
+```bash
+# Build the instance image
+docker build -t cocoa-instance:latest -f cocoa-artifacts/docker/Dockerfile.instance .
+
+# Dry-run validation (no actual resources created)
+kubectl apply --dry-run=server -k cocoa-artifacts/k8s/instance/
+
+# Apply (after substituting template variables)
+kubectl apply -k cocoa-artifacts/k8s/instance/
+
+# Tear down
+kubectl delete -k cocoa-artifacts/k8s/instance/
+```
+
+## 5. Multi-Instance Isolation
+
+Each Instance operates within its own namespace for workspace files, messages, and blackboard entries.
+
+### Workspace Path
+
+The workspace path follows the naming convention:
+
+```
+.pi/workspace/{employee_slug}-{instance_id[:8]}/
+```
+
+Generated by `app.core.workspace.generate_workspace_path()`. The function takes an employee slug and instance UUID, returning a unique directory path. If the caller provides a custom `workspace_path` during creation, that value is used instead (uniqueness is enforced at the database level by the `uq_instances_workspace_path` partial unique index).
+
+### Filesystem Isolation (K8s)
+
+In Kubernetes, each Instance Deployment references a dedicated PVC named `{instance_id}-workspace`. The PVC is `ReadWriteOnce`, so only the Instance Pod can mount it. No Instance can access another Instance's files.
+
+### At the Database Level
+
+- Each Instance is scoped to one Employee and one Office.
+- Instance CRUD endpoints require the current user to hold `editor` or higher role in the Instance's Office (via the P6 permission system).
+- Messages are routed to Instances by `instance_id` in the P5 messaging topology.
+- Blackboard entries reference the Instance's `id` as the owner.
+
+## 6. Langfuse Integration Plan
+
+Langfuse is the planned observability backend for agent tracing in Cocoa. P8's harness will initialize a Langfuse client per running Instance, using credentials stored in `Instance.runtime_config`.
+
+### Reserved Fields in `runtime_config`
+
+```json
+{
+  "langfuse_enabled": true,
+  "langfuse_public_key": "pk-...",
+  "langfuse_secret_key": "sk-...",
+  "langfuse_host": "https://cloud.langfuse.com"
+}
+```
+
+### P7 Status
+
+- **No Langfuse SDK dependency** — `pyproject.toml` does not reference `langfuse`.
+- **No initialization code** — the fields above are documentation-only placeholders in the Instance model's `runtime_config` docstring.
+- **P8 responsibility** — the harness reads `runtime_config.langfuse_*` on Instance startup, initializes `Langfuse(trace_context=...)`, and wraps agent execution steps in Langfuse spans.
+
+### Integration Point (P8)
+
+```
+app.agent_runtime (P8)
+  └── reads Instance.runtime_config
+       └── if langfuse_enabled:
+            └── import langfuse
+            └── Langfuse(public_key=..., secret_key=..., host=...)
+            └── trace all LLM calls, tool invocations, and blackboard writes
+```
+
+### Schema Note
+
+The `runtime_config` field is a `JSONB` column on the `instances` table. Its schema is validated by the Pydantic model at the API boundary but not enforced at the PostgreSQL level (no JSON Schema constraint). P8's harness should gracefully handle missing or malformed `langfuse_*` fields — default to disabled if the field is absent.
+
+## Related Documents
+
+- [API Architecture](api-architecture.md) — API conventions, error format, pagination
+- [Messaging System](messaging-system.md) — Instance message routing (P5)
+- [Blackboard System](blackboard-system.md) — Instance blackboard and workspace files (P6)
+- [Observability](observability.md) — Event system and logging conventions
+- [AGENTS.md](../AGENTS.md) — Development guide and commit conventions

@@ -1,0 +1,24 @@
+# Cocoa Instance Service
+#
+# Template variables:
+#   {instance_id}  — unique Instance UUID
+#
+# ClusterIP Service exposes port 8080 for the Instance's agent
+# runtime process. Communication is internal-only — no Ingress
+# or LoadBalancer is created. The cocoa-backend API server
+# connects to Instances via this Service from within the cluster.
+apiVersion: v1
+kind: Service
+metadata:
+  name: "{instance_id}-svc"
+  labels:
+    app: cocoa-instance
+    instance-id: "{instance_id}"
+spec:
+  type: ClusterIP
+  selector:
+    app: cocoa-instance
+    instance-id: "{instance_id}"
+  ports:
+  - port: 8080
+    targetPort: 8080

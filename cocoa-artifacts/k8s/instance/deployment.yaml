@@ -1,0 +1,47 @@
+# Cocoa Instance Deployment
+#
+# Template variables (substituted by a deploy script before apply):
+#   {instance_id}  — unique Instance UUID
+#   {office_id}    — Office UUID for isolation labels
+#
+# Each Instance runs as a single-replica Deployment with its own
+# workspace PVC and ConfigMap. The agent_runtime process listens
+# on port 8080 inside the container.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "{instance_id}"
+  labels:
+    app: cocoa-instance
+    instance-id: "{instance_id}"
+    office-id: "{office_id}"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cocoa-instance
+      instance-id: "{instance_id}"
+  template:
+    metadata:
+      labels:
+        app: cocoa-instance
+        instance-id: "{instance_id}"
+        office-id: "{office_id}"
+    spec:
+      containers:
+      - name: cocoa-instance
+        image: cocoa-instance:latest
+        envFrom:
+        - configMapRef:
+            name: "{instance_id}-config"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+        volumeMounts:
+        - name: workspace
+          mountPath: /app/.pi/workspace
+      volumes:
+      - name: workspace
+        persistentVolumeClaim:
+          claimName: "{instance_id}-workspace"

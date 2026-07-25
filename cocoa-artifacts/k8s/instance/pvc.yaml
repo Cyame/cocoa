@@ -1,0 +1,22 @@
+# Cocoa Instance PersistentVolumeClaim
+#
+# Template variables:
+#   {instance_id}  — unique Instance UUID
+#
+# Each Instance gets an isolated PVC for its workspace directory
+# (/app/.pi/workspace). AccessMode is ReadWriteOnce so only the
+# Instance Pod can mount it. The storage class defaults to the
+# cluster's default (no explicit storageClassName set).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: "{instance_id}-workspace"
+  labels:
+    app: cocoa-instance
+    instance-id: "{instance_id}"
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi

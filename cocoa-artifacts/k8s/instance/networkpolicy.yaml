@@ -1,0 +1,30 @@
+# Cocoa Instance NetworkPolicy
+#
+# Template variables:
+#   {instance_id}  — unique Instance UUID
+#   {office_id}    — Office UUID for podSelector
+#
+# Isolates Instance Pods by Office: only Pods belonging to the same
+# Office may initiate connections to this Instance. Egress is not
+# restricted (default allow-all). The backend API server must carry
+# the office-id label to reach Instances.
+#
+# Requires a CNI that enforces NetworkPolicy (Calico, Cilium, etc.).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: "{instance_id}-isolation"
+  labels:
+    app: cocoa-instance
+    instance-id: "{instance_id}"
+spec:
+  podSelector:
+    matchLabels:
+      instance-id: "{instance_id}"
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          office-id: "{office_id}"

@@ -2,15 +2,15 @@
 
 **Multi-agent control studio.** A workspace where humans orchestrate AI agents -- from strategy to execution.
 
-Cocoa is a control surface for running multi-agent systems. A web portal pairs with a Python backend to give operators a single place to plan, delegate, and observe AI-driven work. The backend has its **P2 core domain** in place (12 models, Alembic migration, pytest harness) plus the **P3 API architecture** layer and **P4 Agent Presets** (preset manifest schema, 6 built-in presets, CRUD API, in-memory registry); the portal is a P0 scaffold. API routes live at /api/v1/ with Auth, EmployeePresets, Employees, Offices, and other business endpoints.
+Cocoa is a control surface for running multi-agent systems. A web portal pairs with a Python backend to give operators a single place to plan, delegate, and observe AI-driven work. The backend has its **P2 core domain** in place (12 models, Alembic migration, pytest harness), **P3 API architecture**, **P4 Agent Presets** (preset manifest schema, 6 built-in presets, CRUD API, in-memory registry), **P5 messaging** (neighbor-only delivery, corridor CRUD, directive routing), **P6 blackboard** (virtual filesystem, vault archiving, memory entries), and **P7 instance runtime** (lifecycle state machine, K8s deployment scaffolding); the portal is a P0 scaffold. API routes live at /api/v1/ with Auth, EmployeePresets, Employees, Offices, and other business endpoints.
 
 ## Status
 
 | Component | State |
 |-----------|-------|
-| `cocoa-backend/` | P6 blackboard & storage & vault on top of P5 messaging topology (neighbor-only delivery, corridor CRUD, directive routing, membership role model, 501 meeting/scheduled scaffold) on top of P3.5 observability |
+| `cocoa-backend/` | P7 instance runtime & deployment scaffolding on top of P6 blackboard & storage & vault & messaging on top of P3.5 observability |
 | `cocoa-portal/`  | P0 scaffold (React 19 + Vite 8 + Tailwind CSS v4 + Bun) |
-| `cocoa-artifacts/` | Placeholder (Docker images & K8s manifests come in P7) |
+| `cocoa-artifacts/` | P7 Instance runtime Dockerfile and K8s manifests (Deployment, Service, ConfigMap, PVC, NetworkPolicy) |
 | CI | Baseline (lint + build on push/PR) |
 
 ## Project Layout

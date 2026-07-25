@@ -1,0 +1,8 @@
+# Cocoa Instance Runtime Image
+# P7 scaffolding — actual app.agent_runtime module is implemented in P8.
+# Build: docker build -t cocoa-instance:latest -f cocoa-artifacts/docker/Dockerfile.instance .
+FROM python:3.12-slim
+WORKDIR /app
+COPY cocoa-backend/ /app/
+RUN pip install uv && uv sync --frozen
+CMD ["python", "-m", "app.agent_runtime"]
