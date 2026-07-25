@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 import app.models.blackboard  # noqa: E402, F401
 import app.models.employee  # noqa: E402, F401
+import app.models.event  # noqa: E402, F401
 import app.models.instance  # noqa: E402, F401
 import app.models.memory  # noqa: E402, F401
 import app.models.office  # noqa: E402, F401
