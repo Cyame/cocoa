@@ -273,71 +273,69 @@ async def create_corridor(
     """Create a new corridor or reactivate a soft-deleted one.
 
     Validates that the new edge does not introduce a cycle in the office graph.
-    Uses a transaction with row-level lock on from_membership to serialize
-    concurrent edge creation and prevent race-condition cycles.
+    Uses SELECT...FOR UPDATE on from_membership to serialize concurrent edge
+    creation within the implicit session transaction (SQLAlchemy 2.0 autobegin).
 
     Raises 409 if an active corridor already exists between the same memberships,
     or if adding the edge would create a cycle.
     """
-    async with db.begin():
-        # Lock the from_membership row to serialize concurrent edge creation
-        lock = await db.execute(
-            select(Membership).where(
-                Membership.id == body.from_membership_id,
-                Membership.deleted_at.is_(None),
-            ).with_for_update()
+    lock = await db.execute(
+        select(Membership).where(
+            Membership.id == body.from_membership_id,
+            Membership.deleted_at.is_(None),
+        ).with_for_update(),
+    )
+    if lock.scalar_one_or_none() is None:
+        raise NotFoundError(
+            "membership.not_found",
+            "errors.membership.not_found",
+            f"Membership '{body.from_membership_id}' not found",
         )
-        if lock.scalar_one_or_none() is None:
-            raise NotFoundError(
-                "membership.not_found",
-                "errors.membership.not_found",
-                f"Membership '{body.from_membership_id}' not found",
-            )
 
-        # Check for existing edge (active or soft-deleted)
-        result = await db.execute(
-            select(Corridor).where(
-                Corridor.office_id == body.office_id,
-                Corridor.from_membership_id == body.from_membership_id,
-                Corridor.to_membership_id == body.to_membership_id,
+    # Check for existing edge (active or soft-deleted)
+    result = await db.execute(
+        select(Corridor).where(
+            Corridor.office_id == body.office_id,
+            Corridor.from_membership_id == body.from_membership_id,
+            Corridor.to_membership_id == body.to_membership_id,
+        ),
+    )
+    existing = result.scalars().first()
+    if existing is not None:
+        if existing.deleted_at is None:
+            raise ConflictError(
+                "corridor.duplicate",
+                "errors.corridor.duplicate",
+                "Corridor already exists between these memberships",
             )
+        # Undelete and reactivate
+        existing.deleted_at = None
+        existing.is_active = True
+        await db.commit()
+        await db.refresh(existing)
+        return existing
+
+    # Acyclicity check
+    acyclic = await check_acyclic(
+        db, body.office_id, body.from_membership_id, body.to_membership_id,
+    )
+    if not acyclic:
+        raise ConflictError(
+            "corridor.would_create_cycle",
+            "errors.corridor.would_create_cycle",
+            "Adding this edge would create a cycle",
         )
-        existing = result.scalars().first()
-        if existing is not None:
-            if existing.deleted_at is None:
-                raise ConflictError(
-                    "corridor.duplicate",
-                    "errors.corridor.duplicate",
-                    "Corridor already exists between these memberships",
-                )
-            # Undelete and reactivate
-            existing.deleted_at = None
-            existing.is_active = True
-            created = existing
-        else:
-            # Acyclicity check
-            acyclic = await check_acyclic(
-                db, body.office_id, body.from_membership_id, body.to_membership_id,
-            )
-            if not acyclic:
-                raise ConflictError(
-                    "corridor.would_create_cycle",
-                    "errors.corridor.would_create_cycle",
-                    "Adding this edge would create a cycle",
-                )
 
-            corridor = Corridor(
-                office_id=body.office_id,
-                from_membership_id=body.from_membership_id,
-                to_membership_id=body.to_membership_id,
-                is_active=True,
-            )
-            db.add(corridor)
-            created = corridor
-
-    # Transaction committed — refresh to populate server-generated fields
-    await db.refresh(created)
-    return created
+    corridor = Corridor(
+        office_id=body.office_id,
+        from_membership_id=body.from_membership_id,
+        to_membership_id=body.to_membership_id,
+        is_active=True,
+    )
+    db.add(corridor)
+    await db.commit()
+    await db.refresh(corridor)
+    return corridor
 
 
 @router.patch("/corridors/{corridor_id}", response_model=CorridorOut)
