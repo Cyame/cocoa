@@ -1,7 +1,16 @@
 import { createBrowserRouter } from 'react-router';
+import App from '../App';
+
+function Index() {
+  return <div>Cocoa Portal</div>;
+}
 
 const router = createBrowserRouter([
-  // routes: to be added in P9 — portal UI phase
+  {
+    path: '/',
+    Component: App,
+    children: [{ index: true, Component: Index }],
+  },
 ]);
 
 export default router;
