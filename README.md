@@ -8,7 +8,7 @@ Cocoa is a control surface for running multi-agent systems. A web portal pairs w
 
 | Component | State |
 |-----------|-------|
-| `cocoa-backend/` | P3 API architecture (RESTful URL rules, middleware pipeline, CocoaError framework, pagination tools, DI stubs, OpenAPI) on top of P2 core domain |
+| `cocoa-backend/` | P3.5 observability (loguru/Event audit/TaskQueue) on top of P3 API architecture (RESTful URL rules, middleware pipeline, CocoaError framework, pagination tools, DI stubs, OpenAPI) on top of P2 core domain |
 | `cocoa-portal/`  | P0 scaffold (React 19 + Vite 8 + Tailwind CSS v4 + Bun) |
 | `cocoa-artifacts/` | Placeholder (Docker images & K8s manifests come in P7) |
 | CI | Baseline (lint + build on push/PR) |

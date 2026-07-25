@@ -172,6 +172,7 @@ Cocoa 后端 API 遵循 `docs/api-architecture.md` 中的完整约定，核心�
 6. 弃用：`Deprecation` 头（RFC 9745，`@unix时间戳`）+ `Sunset` 头（RFC 8594）+ `Link: rel="deprecation"`
 7. `DELETE` 映射软删除返 204；创建成功返 201；时间戳 ISO 8601 UTC；路径参数 UUID
 8. 分页：游标分页默认（`?limit=&cursor=`），偏移分页备选（`?limit=&offset=`），排序 `?sort=-created_at`
+- 日志/事件/队列约定见 `docs/observability.md`
 
 ## Git 规范
 
