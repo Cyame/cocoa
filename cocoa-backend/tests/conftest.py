@@ -13,7 +13,9 @@ import uuid
 
 import asyncpg
 import pytest_asyncio
+from _pytest.monkeypatch import MonkeyPatch
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from starlette.testclient import TestClient
 
 _ADMIN_DSN = "postgresql://postgres:postgres@localhost:5432/postgres"
 _TEMPLATE_DB = "cocoa_test_template"
@@ -67,3 +69,26 @@ async def session(db_url):
     async with factory() as s:
         yield s
     await engine.dispose()
+
+
+@pytest_asyncio.fixture
+async def client(db_url: str):
+    """TestClient wired to the per-test cloned database."""
+    import app.core.db as db_mod
+    from app.main import app
+
+    monkeypatch = MonkeyPatch()
+    monkeypatch.setattr("app.core.config.settings.DATABASE_URL", db_url)
+    db_mod._engine = None
+    db_mod._session_factory = None
+    with TestClient(app) as tc:
+        yield tc
+    # Teardown: dispose engine if it was created (lifespan in P3 is stub, no DB — but for P3.5 compatibility)
+    if db_mod._engine is not None:
+        try:
+            await db_mod._engine.dispose()
+        except Exception:
+            pass  # cross-loop disposal may fail; DROP DATABASE WITH (FORCE) is the backstop
+    db_mod._engine = None
+    db_mod._session_factory = None
+    monkeypatch.undo()
