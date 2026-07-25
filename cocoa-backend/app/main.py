@@ -25,7 +25,9 @@ from app.core.errors import (
     ValidationError,  # noqa: F401
     error_response,
 )
+from app.core.logging import configure_logging
 from app.core.middleware.auth import AuthMiddleware
+from app.core.middleware.logging import LoggingMiddleware
 from app.core.middleware.rate_limit import RateLimitMiddleware
 from app.core.middleware.request_id import RequestIDMiddleware
 
@@ -33,6 +35,7 @@ from app.core.middleware.request_id import RequestIDMiddleware
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup/shutdown lifecycle stub. Real init hooks land in P1/P2."""
+    configure_logging()
     yield
 
 
@@ -126,8 +129,8 @@ if settings.ENV == "dev":
 # Registration order is REVERSED vs execution order because Starlette inserts each
 # middleware at stack position 0 (`user_middleware.insert(0, ...)`), so the LAST
 # add_middleware call ends up outermost and executes FIRST.
-# Execution order (outer → inner): RequestID → CORS → Auth → RateLimit.
-# Registration call order:          RateLimit → Auth → CORS → RequestID.
+# Execution order (outer → inner): RequestID → Logging → CORS → Auth → RateLimit.
+# Registration call order:          RateLimit → Auth → CORS → Logging → RequestID.
 app.add_middleware(RateLimitMiddleware)
 app.add_middleware(AuthMiddleware)
 app.add_middleware(
@@ -136,6 +139,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(LoggingMiddleware)
 app.add_middleware(RequestIDMiddleware)
 
 
@@ -149,4 +153,4 @@ async def health() -> dict[str, str]:
 
 
 if __name__ == "__main__":
-    uvicorn.run("app.main:app", host="0.0.0.0", port=4510)
+    uvicorn.run("app.main:app", host="0.0.0.0", port=4510, log_config=None)

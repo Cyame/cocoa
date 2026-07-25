@@ -31,5 +31,10 @@ class Settings(BaseSettings):
     # "dev" exposes /api/v1/error-test and tracebacks in error responses.
     ENV: str = "dev"
 
+    # ── Logging ──────────────────────────────────────────
+    # Applied by configure_logging() at startup. dev gets human-readable stderr
+    # with color; non-dev gets JSON to stdout.
+    LOG_LEVEL: str = "INFO"
+
 
 settings = Settings()

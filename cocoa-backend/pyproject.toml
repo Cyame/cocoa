@@ -16,6 +16,7 @@ dependencies = [
     "pydantic-settings>=2.7.0",
     # Database migrations
     "alembic>=1.13.0",
+    "loguru>=0.7.3",
 ]
 
 [dependency-groups]
