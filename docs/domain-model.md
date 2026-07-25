@@ -56,7 +56,7 @@ classDiagram
         +office_id: FK → offices.id
         +workspace_path: str?
         +status: enum(creating|pending|deploying|running|restarting|failed|deleting)
-        +runtime_config: JSONB?
+        +runtime_config: JSON?
         +proxy_token: str?
         +created_at: datetime
         +updated_at: datetime
@@ -79,7 +79,7 @@ classDiagram
         +hex_q: int
         +hex_r: int
         +role: enum(owner|editor|viewer)
-        +permissions: JSONB?
+        +permissions: JSON?
         +created_at: datetime
         +updated_at: datetime
         +deleted_at: datetime?
@@ -90,7 +90,7 @@ classDiagram
         +from_membership_id: FK → memberships.id
         +to_membership_id: FK → memberships.id
         +is_active: bool
-        +edge_meta: JSONB?
+        +edge_meta: JSON?
         +created_at: datetime
         +updated_at: datetime
         +deleted_at: datetime?

@@ -51,16 +51,16 @@ with logger.contextualize(request_id=request_id):
 | DEBUG | 开发调试信息、变量值、SQL 参数 | `logger.debug("Query params", params=params)` |
 | INFO | 关键流程节点、请求起止、任务调度 | `logger.info("http.request.start", method=req.method)` |
 | WARNING | 可恢复的异常、降级行为、重试 | `logger.warning("Rate limit approaching", remaining=5)` |
-| ERROR | 操作失败、异常捕获、外部服务不可达 | `logger.error("DB commit failed", exc_info=True)` |
+| ERROR | 操作失败、异常捕获、外部服务不可达 | `logger.opt(exception=True).error("DB commit failed")` |
 
-`logger.exception()` 是 `logger.error(exc_info=True)` 的快捷方式，二者等价。
+`logger.exception()` 内部即调用 `logger.opt(exception=True).error(...)`，是 loguru 推荐的等价格式；勿使用 stdlib 风格的 `exc_info=True`（loguru 会把 `exc_info` 当作 extra 字段，不会触发异常记录）。
 
 ### 1.5 prod JSON vs dev console
 
 `configure_logging()`（`app/core/logging.py`）在 lifespan 启动时根据 `settings.ENV` 选择 sink：
 
 - **dev**：彩色 console 输出到 stderr，human-readable 格式。
-- **prod**：JSON 行输出到 stdout（`serialize=True`），每条日志一行 JSON，`extra` 字段扁平化在顶层。
+- **prod**：JSON 行输出到 stdout（`serialize=True`），每条日志一行 JSON。`extra` 字段位于 `record.extra` 路径下（**不扁平化**）——`request_id` 位于 `record.extra.request_id`。引用方按此路径解析。
 
 ```python
 # app/core/logging.py 关键逻辑（已落地，无需手动干预）
