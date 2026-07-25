@@ -44,9 +44,10 @@ async def test_health_endpoint(client: TestClient):
 
 async def test_no_versioned_health(client: TestClient):
     assert client.get("/api/v1/health").status_code == 404
-    # Business endpoints are not implemented in P3 either.
-    assert client.get("/api/v1/employees").status_code == 404
-    assert client.get("/api/v1/offices").status_code == 404
+    # P4 mounted auth/employee_presets/employees/offices routers.
+    # Auth-gated endpoints return 401 (not 404) when no token is provided.
+    assert client.get("/api/v1/employees").status_code == 401
+    assert client.get("/api/v1/offices").status_code == 401
 
 
 async def test_request_id_header(client: TestClient):
