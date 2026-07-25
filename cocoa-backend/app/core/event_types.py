@@ -26,3 +26,11 @@ HARNESS_CHECKPOINT = "harness.checkpoint"
 HARNESS_CONTINUATION_INJECTED = "harness.continuation_injected"
 HARNESS_LOOP_STOPPED = "harness.loop_stopped"
 HARNESS_BREAKER_TRIPPED = "harness.breaker_tripped"
+
+# ---------------------------------------------------------------------------
+# Messaging (emit points in P5)
+# ---------------------------------------------------------------------------
+
+MESSAGING_MESSAGE_SENT = "messaging.message_sent"
+MESSAGING_DELIVERY_BLOCKED = "messaging.delivery_blocked"
+MESSAGING_ACTIVATION_TRIGGERED = "messaging.activation_triggered"
