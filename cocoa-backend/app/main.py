@@ -52,6 +52,15 @@ async def lifespan(app: FastAPI):
     app.state.task_queue = queue
     await queue.start()
 
+    # Load preset registry from DB before accepting requests.
+    try:
+        from app.core.preset_registry import registry
+
+        async with get_session_factory()() as s:
+            await registry.load(s)
+    except Exception:
+        logger.opt(exception=True).error("Failed to load preset registry")
+
     try:
         async with get_session_factory()() as s:
             await emit(
@@ -91,7 +100,9 @@ app = FastAPI(
     swagger_ui_parameters={"defaultModelsExpandDepth": -1},
     openapi_tags=[
         {"name": "Health", "description": "Liveness and readiness probes"},
-        {"name": "Employees", "description": "Employee and office management"},
+        {"name": "Auth", "description": "Authentication and registration"},
+        {"name": "EmployeePresets", "description": "Agent preset template management"},
+        {"name": "Employees", "description": "Employee and agent cell management"},
         {"name": "Offices", "description": "Office workspace management"},
         {"name": "Instances", "description": "Instance lifecycle"},
         {"name": "Messaging", "description": "Agent messaging"},
