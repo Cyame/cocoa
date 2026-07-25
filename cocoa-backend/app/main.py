@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.requests import Request
 
+from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.errors import (
     CocoaError,
@@ -121,6 +122,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(RequestIDMiddleware)
+
+
+app.include_router(api_router)
 
 
 @app.get("/health")
