@@ -36,8 +36,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if request.scope["type"] != "http":
             return await call_next(request)
 
+        # Only the limiter's own bookkeeping may raise into this handler;
+        # call_next stays outside so endpoint exceptions reach the global
+        # Exception handler (dev traceback) instead of becoming opaque 500s.
         try:
-            return await self._handle(request, call_next)
+            rejection = self._check_rate_limit(request)
         except Exception:
             # Middleware-internal failure: the app's CocoaError handler lives in
             # ExceptionMiddleware (inner layer) and never sees middleware exceptions,
@@ -53,9 +56,20 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 },
             )
 
-    async def _handle(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        if rejection is not None:
+            return rejection
+
+        response = await call_next(request)
+        remaining = getattr(request.state, "rate_limit_remaining", None)
+        if remaining is not None:
+            response.headers["X-RateLimit-Remaining"] = str(remaining)
+        return response
+
+    def _check_rate_limit(self, request: Request) -> JSONResponse | None:
+        """429 when over the window, else None. On the under-limit path,
+        stashes remaining quota on ``request.state`` for the response header."""
         if not request.url.path.startswith(COUNTED_PATH_PREFIX):
-            return await call_next(request)
+            return None
 
         now = time.time()
         self._cleanup_expired(now)
@@ -86,11 +100,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             )
 
         entry["count"] += 1
-        remaining = MAX_REQUESTS_PER_WINDOW - int(entry["count"])
-
-        response = await call_next(request)
-        response.headers["X-RateLimit-Remaining"] = str(remaining)
-        return response
+        request.state.rate_limit_remaining = MAX_REQUESTS_PER_WINDOW - int(entry["count"])
+        return None
 
     def _cleanup_expired(self, now: float) -> None:
         """Drop window entries idle for longer than CLEANUP_AGE_SECONDS."""

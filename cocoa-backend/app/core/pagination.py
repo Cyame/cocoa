@@ -7,7 +7,7 @@ Pure functions — no FastAPI dependency. Callers supply their own
 
 from typing import Generic, TypeVar
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,6 +24,10 @@ class CursorPage(BaseModel, Generic[T]):
         total: Optional total count of matching records.
     """
 
+    # ORM row objects (SQLAlchemy declarative models) are not Pydantic-native
+    # types; allow them so CursorPage[Employee]-style usage doesn't crash.
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     items: list[T]
     next_cursor: str | None = None
     total: int | None = None
@@ -38,6 +42,9 @@ class OffsetPage(BaseModel, Generic[T]):
         limit: Maximum number of items requested.
         total: Total count of matching records.
     """
+
+    # See CursorPage for why arbitrary types must be allowed.
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     items: list[T]
     offset: int
@@ -104,7 +111,10 @@ async def paginate_cursor(
     that is comparison-compatible with *cursor_field*.
 
     The ``next_cursor`` is produced by calling ``str()`` on the
-    *cursor_field* value of the extra row fetched beyond the page.
+    *cursor_field* value of the LAST item in the returned page.  Because the
+    next query filters with a strict ``>`` comparison, the extra row fetched
+    beyond the page becomes the first row of the next page — no row is
+    skipped at the page boundary.
     """
     if cursor is not None:
         decoded_cursor = decoder(cursor)
@@ -119,8 +129,7 @@ async def paginate_cursor(
 
     next_cursor: str | None = None
     if has_more:
-        last_item = all_items[limit]
-        cursor_value = getattr(last_item, cursor_field.key)
+        cursor_value = getattr(items[-1], cursor_field.key)
         next_cursor = str(cursor_value)
 
     return CursorPage(items=items, next_cursor=next_cursor)

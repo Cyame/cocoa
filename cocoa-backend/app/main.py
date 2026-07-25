@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -90,7 +91,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             "error_code": "validation_error",
             "message_key": "errors.validation",
             "message": "Request validation failed",
-            "details": {"errors": exc.errors()},
+            "details": {"errors": jsonable_encoder(exc.errors())},
             "request_id": getattr(request.state, "request_id", None),
         },
     )
