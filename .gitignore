@@ -61,8 +61,10 @@ data/
 .omo/boulder.json
 .omo/run-continuation/
 .omo/ulw-loop/
+.omo/notepads/
 
 # ========================
 # OS tool caches
 # ========================
 .codex-screenshots/
+.playwright-mcp/
