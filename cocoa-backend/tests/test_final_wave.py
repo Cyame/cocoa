@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.employee import Employee, EmployeePreset, EmployeeRank
 from app.models.instance import Instance
-from app.models.office import Office, Membership, MembershipRole
+from app.models.office import Membership, MembershipRole, Office
 from app.models.user import User
 
 

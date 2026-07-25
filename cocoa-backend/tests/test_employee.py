@@ -1,8 +1,8 @@
 """Tests for Employee and EmployeePreset models."""
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.employee import Employee, EmployeePreset, EmployeeRank
 
