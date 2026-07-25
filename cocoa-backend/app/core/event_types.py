@@ -48,3 +48,14 @@ BLACKBOARD_FILE_ARCHIVED = "blackboard.file_archived"
 # ---------------------------------------------------------------------------
 
 MEMORY_ENTRY_APPENDED = "memory.entry_appended"
+
+# ---------------------------------------------------------------------------
+# Instance lifecycle (emit points in P7)
+# ---------------------------------------------------------------------------
+
+INSTANCE_CREATED = "instance.created"
+INSTANCE_DEPLOYING = "instance.deploying"
+INSTANCE_RUNNING = "instance.running"
+INSTANCE_RESTARTING = "instance.restarting"
+INSTANCE_FAILED = "instance.failed"
+INSTANCE_DELETED = "instance.deleted"

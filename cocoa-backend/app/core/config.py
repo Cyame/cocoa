@@ -36,5 +36,11 @@ class Settings(BaseSettings):
     # with color; non-dev gets JSON to stdout.
     LOG_LEVEL: str = "INFO"
 
+    # ── Langfuse ──────────────────────────────────────────
+    # Langfuse integration (P8 agent runtime reads from instance runtime_config)
+    # LANGFUSE_PUBLIC_KEY: str = ""
+    # LANGFUSE_SECRET_KEY: str = ""
+    # LANGFUSE_HOST: str = ""
+
 
 settings = Settings()

@@ -63,6 +63,12 @@ class Instance(BaseModel, Base):
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, default=InstanceStatus.creating.value
     )
+    # Langfuse integration (P8 agent runtime reads from instance runtime_config):
+    #   Reserved keys in runtime_config dict:
+    #     langfuse_enabled: bool
+    #     langfuse_public_key: str
+    #     langfuse_secret_key: str
+    #     langfuse_host: str
     runtime_config: Mapped[dict | None] = mapped_column(JSON, nullable=True, default=None)
     proxy_token: Mapped[str | None] = mapped_column(
         String(255), nullable=True, default=None
