@@ -30,13 +30,27 @@ from app.core.middleware.auth import AuthMiddleware
 from app.core.middleware.logging import LoggingMiddleware
 from app.core.middleware.rate_limit import RateLimitMiddleware
 from app.core.middleware.request_id import RequestIDMiddleware
+from app.core.queue import InMemoryTaskQueue
+
+
+async def _noop_handler(payload: dict) -> None:
+    """No-op handler for system.noop — smoke test for the task queue."""
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup/shutdown lifecycle stub. Real init hooks land in P1/P2."""
+    """Startup/shutdown lifecycle."""
     configure_logging()
+
+    # Task queue (in-memory; P5/P7 replaces with Redis, protocol unchanged).
+    queue = InMemoryTaskQueue()
+    queue.register_task("system.noop", _noop_handler)
+    app.state.task_queue = queue
+    await queue.start()
+
     yield
+
+    await queue.stop()
 
 
 app = FastAPI(
