@@ -36,9 +36,23 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Cocoa Backend",
-    version="0.1.0",
+    title="Cocoa API",
+    description="Multi-agent control studio API",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
     lifespan=lifespan,
+    swagger_ui_parameters={"defaultModelsExpandDepth": -1},
+    openapi_tags=[
+        {"name": "Health", "description": "Liveness and readiness probes"},
+        {"name": "Employees", "description": "Employee and office management"},
+        {"name": "Offices", "description": "Office workspace management"},
+        {"name": "Instances", "description": "Instance lifecycle"},
+        {"name": "Messaging", "description": "Agent messaging"},
+        {"name": "Blackboard", "description": "Shared collaboration surface"},
+        {"name": "Learning", "description": "Persistent learning and /distill"},
+    ],
 )
 
 
