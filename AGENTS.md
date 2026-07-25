@@ -175,6 +175,7 @@ Cocoa 后端 API 遵循 `docs/api-architecture.md` 中的完整约定，核心�
 - 日志/事件/队列约定见 `docs/observability.md`
 - Preset 系统设计见 `docs/preset-system.md`（P4 Agent Presets 核心文档）
 - 消息系统设计见 `docs/messaging-system.md`：消息拓扑、近邻投递、激活触发器、Directive 路由
+- 黑板系统设计见 `docs/blackboard-system.md`：Blackboard 被动状态模块、BlackboardFile 虚拟文件系统、Vault 归档、MemoryEntry 追加日志、权限模型
 
 ## Git 规范
 

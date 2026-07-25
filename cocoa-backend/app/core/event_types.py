@@ -34,3 +34,17 @@ HARNESS_BREAKER_TRIPPED = "harness.breaker_tripped"
 MESSAGING_MESSAGE_SENT = "messaging.message_sent"
 MESSAGING_DELIVERY_BLOCKED = "messaging.delivery_blocked"
 MESSAGING_ACTIVATION_TRIGGERED = "messaging.activation_triggered"
+
+# ---------------------------------------------------------------------------
+# Blackboard (emit points in P6)
+# ---------------------------------------------------------------------------
+
+BLACKBOARD_FILE_CREATED = "blackboard.file_created"
+BLACKBOARD_FILE_UPDATED = "blackboard.file_updated"
+BLACKBOARD_FILE_ARCHIVED = "blackboard.file_archived"
+
+# ---------------------------------------------------------------------------
+# Memory (emit points in P6)
+# ---------------------------------------------------------------------------
+
+MEMORY_ENTRY_APPENDED = "memory.entry_appended"
