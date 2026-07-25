@@ -42,3 +42,9 @@ class BaseModel:
     def soft_delete(self) -> None:
         """Mark this record as deleted by setting ``deleted_at`` to now."""
         self.deleted_at = datetime.now(timezone.utc)
+
+
+# Base 实际定义在 app.core.db（与 engine + session factory 同处，便于集中管理连接配置）。
+# 此处重导出仅为符合 P2 计划 todo 1 的字面契约，让"from app.models.base import Base"模式可用。
+# 新代码请直接 `from app.core.db import Base`。
+from app.core.db import Base  # noqa: E402, F401
