@@ -160,6 +160,19 @@ uv run alembic upgrade head    # 本地验证
 - 调用必须使用命名参数：`t('errors.instance.not_found', { name })`
 - 后端错误响应必须包含 `error_code` + `message_key` + `message`
 
+### API 约定
+
+Cocoa 后端 API 遵循 `docs/api-architecture.md` 中的完整约定，核心规则摘要：
+
+1. 业务 API 全部 `/api/v1/`，仅破坏性变更升 v2；运维端点（`/health`、`/docs`、`/openapi.json`）留在根路径不版本化
+2. JSON 字段 snake_case 端到端（Pydantic 字段即线上字段，无别名转换层）
+3. 资源命名：复数 kebab-case（`/employee-presets`），嵌套 ≤2 层
+4. 动作端点：`POST /resources/{id}/action`（Stripe 风格，不混用 `:action` 语法）
+5. 错误响应格式：`{error_code, message_key, message, details, request_id}`——后端同时注册 `CocoaError`、`StarletteHTTPException`、`RequestValidationError`、`Exception` 四处理器
+6. 弃用：`Deprecation` 头（RFC 9745，`@unix时间戳`）+ `Sunset` 头（RFC 8594）+ `Link: rel="deprecation"`
+7. `DELETE` 映射软删除返 204；创建成功返 201；时间戳 ISO 8601 UTC；路径参数 UUID
+8. 分页：游标分页默认（`?limit=&cursor=`），偏移分页备选（`?limit=&offset=`），排序 `?sort=-created_at`
+
 ## Git 规范
 
 ### 分支命名

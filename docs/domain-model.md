@@ -220,11 +220,11 @@ At P2, these schemas are structural definitions only — no parsing logic exists
 
 | Concern | Phase | Detail |
 |---------|-------|--------|
-| `EmployeePreset.manifest` (JSONB) | P3 | The `manifest` field stores preset definition data (skills, tools, model, instructions). Its internal schema will be defined in P3 when presets become active. At P2 it is nullable and untyped. |
+| `EmployeePreset.manifest` (JSONB) | P4 | The `manifest` field stores preset definition data (skills, tools, model, instructions). Its internal schema will be defined in P4 when presets become active. At P2 it is nullable and untyped. |
 | `CommandRegistry` | P4 | The `CommandRegistry` schema in `slash.py` is a placeholder. P4's slash-parser module will own the final command list, per-preset overrides, and command validation logic. |
 | Slash protocol parser | P4 | Raw text → `Turn`/`Directive` parsing is a P4 concern. P2 only validates pre-parsed objects. |
 | Corridor acyclicity | P5 | The Corridor adjacency graph currently has no cycle-detection at the DB level. A service-layer acyclicity check is planned for P5 (checking for closed loops when edges are added). |
-| Ring (环) topology | P3/P4 | The Ring concept is named in the metaphor table but has no corresponding DB table. It is a higher-level grouping of Memberships for explicit collaboration rings. |
+| Ring (环) topology | P5 | The Ring concept is named in the metaphor table but has no corresponding DB table. It is a higher-level grouping of Memberships for explicit collaboration rings (deferred to P5 messaging-topology phase). |
 
 ## Key Design Decisions
 

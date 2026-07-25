@@ -2,13 +2,13 @@
 
 **Multi-agent control studio.** A workspace where humans orchestrate AI agents -- from strategy to execution.
 
-Cocoa is a control surface for running multi-agent systems. A web portal pairs with a Python backend to give operators a single place to plan, delegate, and observe AI-driven work. The backend has its **P2 core domain** in place (12 models, Alembic migration, pytest harness); the portal is a P0 scaffold. No API routes or UI features yet.
+Cocoa is a control surface for running multi-agent systems. A web portal pairs with a Python backend to give operators a single place to plan, delegate, and observe AI-driven work. The backend has its **P2 core domain** in place (12 models, Alembic migration, pytest harness) plus the **P3 API architecture** layer; the portal is a P0 scaffold. API routes live at /api/v1/ with health and error-test stubs; business endpoints land in P4-P10.
 
 ## Status
 
 | Component | State |
 |-----------|-------|
-| `cocoa-backend/` | P2 core domain (12 SQLAlchemy models, Alembic migration, 171 tests) |
+| `cocoa-backend/` | P3 API architecture (RESTful URL rules, middleware pipeline, CocoaError framework, pagination tools, DI stubs, OpenAPI) on top of P2 core domain |
 | `cocoa-portal/`  | P0 scaffold (React 19 + Vite 8 + Tailwind CSS v4 + Bun) |
 | `cocoa-artifacts/` | Placeholder (Docker images & K8s manifests come in P7) |
 | CI | Baseline (lint + build on push/PR) |
