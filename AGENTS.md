@@ -174,6 +174,7 @@ Cocoa 后端 API 遵循 `docs/api-architecture.md` 中的完整约定，核心�
 8. 分页：游标分页默认（`?limit=&cursor=`），偏移分页备选（`?limit=&offset=`），排序 `?sort=-created_at`
 - 日志/事件/队列约定见 `docs/observability.md`
 - Preset 系统设计见 `docs/preset-system.md`（P4 Agent Presets 核心文档）
+- 消息系统设计见 `docs/messaging-system.md`：消息拓扑、近邻投递、激活触发器、Directive 路由
 
 ## Git 规范
 

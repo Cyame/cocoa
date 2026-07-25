@@ -8,7 +8,7 @@ Cocoa is a control surface for running multi-agent systems. A web portal pairs w
 
 | Component | State |
 |-----------|-------|
-| `cocoa-backend/` | P4 Agent Presets (preset manifest schema, 6 built-in presets, CRUD API, in-memory registry, seed migration) on top of P3.5 observability |
+| `cocoa-backend/` | P4 Agent Presets + P5 messaging topology (neighbor-only delivery, corridor CRUD, directive routing, membership role model, 501 meeting/scheduled scaffold) on top of P3.5 observability |
 | `cocoa-portal/`  | P0 scaffold (React 19 + Vite 8 + Tailwind CSS v4 + Bun) |
 | `cocoa-artifacts/` | Placeholder (Docker images & K8s manifests come in P7) |
 | CI | Baseline (lint + build on push/PR) |
