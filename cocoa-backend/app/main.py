@@ -10,11 +10,13 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from loguru import logger
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.requests import Request
 
 from app.api.v1.router import api_router
 from app.core.config import settings
+from app.core.db import get_session_factory
 from app.core.errors import (
     CocoaError,
     ConflictError,  # noqa: F401
@@ -25,6 +27,8 @@ from app.core.errors import (
     ValidationError,  # noqa: F401
     error_response,
 )
+from app.core.event_types import SYSTEM_SHUTDOWN, SYSTEM_STARTUP
+from app.core.events import emit
 from app.core.logging import configure_logging
 from app.core.middleware.auth import AuthMiddleware
 from app.core.middleware.logging import LoggingMiddleware
@@ -48,7 +52,30 @@ async def lifespan(app: FastAPI):
     app.state.task_queue = queue
     await queue.start()
 
+    try:
+        async with get_session_factory()() as s:
+            await emit(
+                SYSTEM_STARTUP,
+                actor_type="system",
+                payload={"env": settings.ENV},
+                session=s,
+            )
+            await s.commit()
+    except Exception:
+        logger.opt(exception=True).error("Failed to emit system.startup event")
+
     yield
+
+    try:
+        async with get_session_factory()() as s:
+            await emit(
+                SYSTEM_SHUTDOWN,
+                actor_type="system",
+                session=s,
+            )
+            await s.commit()
+    except Exception:
+        logger.opt(exception=True).error("Failed to emit system.shutdown event")
 
     await queue.stop()
 
