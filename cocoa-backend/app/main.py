@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.requests import Request
@@ -22,6 +23,9 @@ from app.core.errors import (
     ValidationError,  # noqa: F401
     error_response,
 )
+from app.core.middleware.auth import AuthMiddleware
+from app.core.middleware.rate_limit import RateLimitMiddleware
+from app.core.middleware.request_id import RequestIDMiddleware
 
 
 @asynccontextmanager
@@ -101,6 +105,22 @@ if settings.ENV == "dev":
     async def error_test() -> None:
         """Dev-only endpoint that always raises a structured 404."""
         raise NotFoundError("test.not_found", "errors.test.not_found", "Test error endpoint")
+
+
+# Registration order is REVERSED vs execution order because Starlette inserts each
+# middleware at stack position 0 (`user_middleware.insert(0, ...)`), so the LAST
+# add_middleware call ends up outermost and executes FIRST.
+# Execution order (outer → inner): RequestID → CORS → Auth → RateLimit.
+# Registration call order:          RateLimit → Auth → CORS → RequestID.
+app.add_middleware(RateLimitMiddleware)
+app.add_middleware(AuthMiddleware)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Dev default; tighten per-environment in P7.
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+app.add_middleware(RequestIDMiddleware)
 
 
 @app.get("/health")
