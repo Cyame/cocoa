@@ -27,5 +27,9 @@ class Settings(BaseSettings):
     # ── Encryption ───────────────────────────────────────
     ENCRYPTION_KEY: str = ""
 
+    # ── Runtime environment ──────────────────────────────
+    # "dev" exposes /api/v1/error-test and tracebacks in error responses.
+    ENV: str = "dev"
+
 
 settings = Settings()
