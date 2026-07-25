@@ -1,9 +1,27 @@
 """FastAPI application entry point for the Cocoa backend."""
 
+import json
+import traceback
 from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.requests import Request
+
+from app.core.config import settings
+from app.core.errors import (
+    CocoaError,
+    ConflictError,  # noqa: F401
+    ForbiddenError,  # noqa: F401
+    InternalError,  # noqa: F401
+    NotFoundError,
+    UnauthorizedError,  # noqa: F401
+    ValidationError,  # noqa: F401
+    error_response,
+)
 
 
 @asynccontextmanager
@@ -19,10 +37,76 @@ app = FastAPI(
 )
 
 
+@app.exception_handler(CocoaError)
+async def cocoa_error_handler(request: Request, exc: CocoaError) -> JSONResponse:
+    """Serialize CocoaError subclasses into the standard error envelope."""
+    response = error_response(exc)
+    content = json.loads(response.body)
+    content["request_id"] = getattr(request.state, "request_id", None)
+    return JSONResponse(status_code=exc.status_code, content=content)
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+    """Convert native 404/405/etc into the standard error envelope."""
+    return JSONResponse(
+        status_code=exc.status_code,
+        headers=exc.headers,
+        content={
+            "error_code": f"http.{exc.status_code}",
+            "message_key": f"errors.http.{exc.status_code}",
+            "message": exc.detail,
+            "details": None,
+            "request_id": getattr(request.state, "request_id", None),
+        },
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    """Convert request-schema validation failures into the standard envelope."""
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error_code": "validation_error",
+            "message_key": "errors.validation",
+            "message": "Request validation failed",
+            "details": {"errors": exc.errors()},
+            "request_id": getattr(request.state, "request_id", None),
+        },
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Catch-all for unexpected failures; traceback leaks only in dev."""
+    details = None
+    if settings.ENV == "dev":
+        details = {"traceback": traceback.format_exc()}
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error_code": "internal_error",
+            "message_key": "errors.internal",
+            "message": "Internal server error",
+            "details": details,
+            "request_id": getattr(request.state, "request_id", None),
+        },
+    )
+
+
+if settings.ENV == "dev":
+    # Permanently retained for integration tests (Todo 8) and rate-limit QA (Todo 2).
+    @app.get("/api/v1/error-test")
+    async def error_test() -> None:
+        """Dev-only endpoint that always raises a structured 404."""
+        raise NotFoundError("test.not_found", "errors.test.not_found", "Test error endpoint")
+
+
 @app.get("/health")
 async def health() -> dict[str, str]:
     """Liveness probe. Returns 200 while the process is up."""
-    return {"status": "ok"}
+    return {"status": "ok", "version": "1.0.0"}
 
 
 if __name__ == "__main__":
