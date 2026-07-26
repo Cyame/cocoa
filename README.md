@@ -2,14 +2,14 @@
 
 **Multi-agent control studio.** A workspace where humans orchestrate AI agents -- from strategy to execution.
 
-Cocoa is a control surface for running multi-agent systems. A web portal pairs with a Python backend to give operators a single place to plan, delegate, and observe AI-driven work. The backend has its **P2 core domain** in place (12 models, Alembic migration, pytest harness), **P3 API architecture**, **P4 Agent Presets** (preset manifest schema, 6 built-in presets, CRUD API, in-memory registry), **P5 messaging** (neighbor-only delivery, corridor CRUD, directive routing), **P6 blackboard** (virtual filesystem, vault archiving, memory entries), and **P7 instance runtime** (lifecycle state machine, K8s deployment scaffolding); the portal is a P0 scaffold. API routes live at `/api/v1/` with Auth, EmployeePresets, Employees, Offices, Instances, Messaging, Blackboard, Memory, and other business endpoints.
+Cocoa is a control surface for running multi-agent systems. A web portal pairs with a Python backend to give operators a single place to plan, delegate, and observe AI-driven work. The backend has its **P2 core domain** in place (13 models — 12 business + 1 audit Event — Alembic migrations, pytest harness), **P3 API architecture** (RESTful URL rules, middleware pipeline, error envelope, pagination, OpenAPI), **P4 Agent Presets** (preset manifest schema, 6 built-in presets, CRUD API, in-memory registry, JWT auth), **P5 messaging** (neighbor-only delivery, corridor CRUD, directive routing, activation triggers), **P6 blackboard + storage + vault + memory** (virtual filesystem, vault archiving, append-only memory entries, office-scoped permissions), and **P7 instance runtime** (lifecycle state machine with 7 statuses, Stripe-style action endpoints, K8s deployment scaffolding, Langfuse integration reservation). A **P7.5 fix-and-sync wave** landed the P8-plan review findings (handler DB-write prohibition, proxy_token-in-payload, permission model simplification, response schemas, lifespan daily-report wiring, test isolation) plus P7 implementation corrections (DELETE `previous_status` capture, list/get office authorization, Membership cascade soft-delete, workspace_path 409 mapping, past-tense event naming) and full documentation sync. 249 tests pass; ruff is clean. The portal is a P1.5 scaffold (React 19 + Vite 8 + Bun + Tailwind v4 + RouterProvider接入 — P0 UI in place). API routes live at `/api/v1/` with `Auth`, `EmployeePresets`, `Employees`, `Offices`, `Instances`, `Messaging`, `Blackboard` (with BlackboardFile + Vault sub-resources), `Memory`, and `Learning` (stub for P10).
 
 ## Status
 
 | Component | State |
 |-----------|-------|
-| `cocoa-backend/` | P7 instance runtime & deployment scaffolding on top of P6 blackboard & storage & vault & messaging on top of P3.5 observability |
-| `cocoa-portal/`  | P0 scaffold (React 19 + Vite 8 + Tailwind CSS v4 + Bun) |
+| `cocoa-backend/` | P7 instance runtime & deployment scaffolding on top of P6 blackboard & storage & vault & messaging on top of P3.5 observability; P7.5 fix-and-sync wave landed (audit + doc sync) |
+| `cocoa-portal/`  | P1.5 scaffold (React 19 + Vite 8 + Tailwind CSS v4 + Bun, RouterProvider wired, single Index page placeholder) |
 | `cocoa-artifacts/` | P7 Instance runtime Dockerfile and K8s manifests (Deployment, Service, ConfigMap, PVC, NetworkPolicy) |
 | CI | Baseline (lint + build on push/PR) |
 

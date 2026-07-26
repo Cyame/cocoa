@@ -103,17 +103,41 @@ class Event(BaseModel, Base):
 
 `app/core/event_types.py` 定义所有事件类型常量，命名规则：`<域>.<动作过去式>`。
 
+完整事件家族清单（按域分组）：
+
 | 常量 | 值 | 域 | 发射点 |
 |------|-----|-----|--------|
 | `SYSTEM_STARTUP` | `system.startup` | 系统生命周期 | P3.5（lifespan startup） |
 | `SYSTEM_SHUTDOWN` | `system.shutdown` | 系统生命周期 | P3.5（lifespan shutdown） |
+| `MESSAGING_MESSAGE_SENT` | `messaging.message_sent` | 消息 | P5（`route_message()` 投递成功） |
+| `MESSAGING_DELIVERY_BLOCKED` | `messaging.delivery_blocked` | 消息 | P5（`route_message()` 投递被门控） |
+| `MESSAGING_ACTIVATION_TRIGGERED` | `messaging.activation_triggered` | 消息 | P5（`trigger_on_mention` / `_daily_report_handler`） |
+| `INSTANCE_CREATED` | `instance.created` | 实例 | P7（`POST /instances`） |
+| `INSTANCE_DEPLOYED` | `instance.deployed` | 实例 | P7（`POST .../deploy`） |
+| `INSTANCE_STARTED` | `instance.started` | 实例 | P7（`POST .../start`） |
+| `INSTANCE_RESTARTED` | `instance.restarted` | 实例 | P7（`POST .../restart`） |
+| `INSTANCE_STOPPED` | `instance.stopped` | 实例 | P7（`POST .../stop`） |
+| `INSTANCE_FAILED` | `instance.failed` | 实例 | P7（`POST .../fail`） |
+| `INSTANCE_DELETED` | `instance.deleted` | 实例 | P7（`DELETE ...`） |
+| `BLACKBOARD_FILE_CREATED` | `blackboard.file_created` | 黑板 | P6（`POST .../files`） |
+| `BLACKBOARD_FILE_UPDATED` | `blackboard.file_updated` | 黑板 | P6（`PATCH .../files/{id}`） |
+| `BLACKBOARD_FILE_ARCHIVED` | `blackboard.file_archived` | 黑板 | P6（`POST .../files/{id}/archive`） |
+| `MEMORY_ENTRY_APPENDED` | `memory.entry_appended` | 记忆 | P6（`POST /memory/entries`） |
 | `HARNESS_LOOP_STARTED` | `harness.loop_started` | 控制循环 | P8 落地 |
 | `HARNESS_CHECKPOINT` | `harness.checkpoint` | 控制循环 | P8 落地 |
 | `HARNESS_CONTINUATION_INJECTED` | `harness.continuation_injected` | 控制循环 | P8 落地 |
 | `HARNESS_LOOP_STOPPED` | `harness.loop_stopped` | 控制循环 | P8 落地 |
 | `HARNESS_BREAKER_TRIPPED` | `harness.breaker_tripped` | 控制循环 | P8 落地 |
 
-harness 族常量已定义，但发射点（`emit()` 调用）留到 P8 落地。P3.5 仅发射 `system.startup` 和 `system.shutdown`。
+**发射状态总结**：
+
+- **P3.5 落地**：`system.startup` / `system.shutdown`（2 个）
+- **P5 落地**：`messaging.*`（3 个）
+- **P6 落地**：`blackboard.*` / `memory.*`（4 个）
+- **P7 落地**：`instance.*`（7 个，过去式命名 P7.5 已统一）
+- **P8 待落地**：`harness.*`（5 个，常量已预埋）
+
+harness 族常量已定义但发射点（`emit()` 调用）留到 P8 落地。
 
 ### 2.3 emit() 用法
 

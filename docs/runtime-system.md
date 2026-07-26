@@ -94,12 +94,15 @@ Each lifecycle transition emits an event via the P3.5 event system (`app.core.ev
 
 | Event Type | Emitter | Payload |
 |-----------|---------|---------|
-| `instance.created` | `POST .../` create | `{instance_id, employee_id, office_id}` |
-| `instance.deploying` | `POST .../deploy` | `{instance_id}` |
-| `instance.running` | `POST .../start` | `{instance_id}` |
-| `instance.restarting` | `POST .../restart` | `{instance_id}` |
-| `instance.failed` | `POST .../fail` | `{instance_id, reason}` |
-| `instance.deleted` | `DELETE ...` | `{instance_id}` |
+| `instance.created` | `POST .../` create | `{workspace_path, office_id}` |
+| `instance.deployed` | `POST .../deploy` | `{}` |
+| `instance.started` | `POST .../start` | `{}` |
+| `instance.restarted` | `POST .../restart` | `{}` |
+| `instance.stopped` | `POST .../stop` | `{}` |
+| `instance.failed` | `POST .../fail` | `{reason}` |
+| `instance.deleted` | `DELETE ...` | `{previous_status}` |
+
+> Event names follow the `<domain>.<action_past_tense>` convention (P7.5 refactor; previously `instance.deploying` / `instance.running` / `instance.restarting` used present participles). Event constants live in `app/core/event_types.py:INSTANCE_*`. All events carry `actor_type="user"`, `actor_id=<caller user_id>`, `resource_type="instance"`, `resource_id=<instance_id>`.
 
 ## 4. K8s Deployment Manifests
 

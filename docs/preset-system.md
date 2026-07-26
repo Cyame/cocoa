@@ -180,13 +180,21 @@ cache of all active `EmployeePreset` rows.
 ```text
 lifespan.startup:
     1. configure_logging()
-    2. start task queue
-    3. registry.load(db)       ← load presets from DB
-    4. emit system.startup     ← after registry is ready
+    2. start task queue (InMemoryTaskQueue)
+    3. schedule_daily_report_sync(queue)  ← P5 activation registration (P7.5)
+    4. registry.load(db)                  ← load presets from DB
+    5. emit system.startup                ← after registry is ready
+
+lifespan.shutdown:
+    1. emit system.shutdown
+    2. queue.stop()
 ```
 
 The registry is loaded *before* the `system.startup` event to guarantee it is
-ready before the first HTTP request arrives.
+ready before the first HTTP request arrives. The `daily_report_sync` task is
+scheduled on the queue before the registry load to ensure the P5 activation
+trigger pipeline is wired (otherwise the consumer `messaging.activation_triggered`
+events are emitted but no `daily_report_sync` task is registered to act on them).
 
 ### CRUD Reload
 

@@ -16,7 +16,7 @@ between two nodes.
 Office
   |
   +-- Membership A (user or instance in office, role + hex position)
-  |     |   role: owner | member | observer
+  |     |   role: owner | editor | viewer
   |     |   hex_q, hex_r: hexagonal grid coordinates
   |
   +-- Membership B
@@ -38,9 +38,9 @@ acyclic at corridor creation via BFS (`app/core/topology.py:check_acyclic`).
   where a Corridor `from_membership_id=X, to_membership_id=Y` is active.
 - **Corridor gating**: Even if both memberships exist in the same office, a
   missing or inactive corridor blocks delivery (reason: `not_neighbor`).
-- **Membership role model**: Three roles (`owner`, `member`, `observer`)
+- **Membership role model**: Three roles (`owner`, `editor`, `viewer`)
   defined in `app/models/office.py:MembershipRole`. Role does not affect
-  delivery routing — it is metadata for authorization logic (P8+).
+  delivery routing — it is metadata for authorization logic (P6+).
 - **Acyclicity**: `check_acyclic` runs a BFS from the target membership to
   detect if the source is already reachable. If so, the new edge is rejected
   with a 409 Conflict to prevent cycles.
@@ -54,7 +54,7 @@ class Membership(BaseModel):
     instance_id: str | None
     hex_q: int          # column position in hex grid
     hex_r: int          # row position in hex grid
-    role: MembershipRole  # owner | member | observer
+    role: MembershipRole  # owner | editor | viewer
 
 class Corridor(BaseModel):
     office_id: str
@@ -138,31 +138,60 @@ Audit events only (no message rows)
 
 ### Audit Event Types
 
-Defined in `app/core/event_types.py`:
+Defined in `app/core/event_types.py`. The full Cocoa event taxonomy spans five
+families; messaging contributes three:
 
 ```python
-MESSAGING_MESSAGE_SENT       = "messaging.message_sent"
-MESSAGING_DELIVERY_BLOCKED   = "messaging.delivery_blocked"
-MESSAGING_ACTIVATION_TRIGGERED = "messaging.activation_triggered"
+# Messaging family (P5)
+MESSAGING_MESSAGE_SENT            = "messaging.message_sent"
+MESSAGING_DELIVERY_BLOCKED        = "messaging.delivery_blocked"
+MESSAGING_ACTIVATION_TRIGGERED    = "messaging.activation_triggered"
+
+# Lifecycle system events (P3.5)
+SYSTEM_STARTUP   = "system.startup"
+SYSTEM_SHUTDOWN  = "system.shutdown"
+
+# Harness loop events (P3.5 declared; P8 emits)
+HARNESS_LOOP_STARTED            = "harness.loop_started"
+HARNESS_CHECKPOINT              = "harness.checkpoint"
+HARNESS_CONTINUATION_INJECTED   = "harness.continuation_injected"
+HARNESS_LOOP_STOPPED            = "harness.loop_stopped"
+HARNESS_BREAKER_TRIPPED         = "harness.breaker_tripped"
+
+# Blackboard / Memory / Instance events (P6/P7)
+BLACKBOARD_FILE_CREATED     = "blackboard.file_created"
+BLACKBOARD_FILE_UPDATED     = "blackboard.file_updated"
+BLACKBOARD_FILE_ARCHIVED    = "blackboard.file_archived"
+MEMORY_ENTRY_APPENDED       = "memory.entry_appended"
+INSTANCE_CREATED   = "instance.created"
+INSTANCE_DEPLOYED  = "instance.deployed"
+INSTANCE_STARTED   = "instance.started"
+INSTANCE_RESTARTED = "instance.restarted"
+INSTANCE_STOPPED   = "instance.stopped"
+INSTANCE_FAILED    = "instance.failed"
+INSTANCE_DELETED   = "instance.deleted"
 ```
+
+Messaging-family emissions:
 
 | Event | Emitted When | Trigger Location |
 |-------|-------------|------------------|
-| `message_sent` | Corridor exists, delivery allowed | `route_message()` § Delivery Decision (emit on match) |
-| `delivery_blocked` | No active corridor between members | `route_message()` § Delivery Decision (emit on miss) |
-| `activation_triggered` | on_mention or daily_report fires | `trigger_on_mention()` / `_daily_report_handler()` |
+| `messaging.message_sent` | Corridor exists, delivery allowed | `route_message()` § Delivery Decision (emit on match) |
+| `messaging.delivery_blocked` | No active corridor between members | `route_message()` § Delivery Decision (emit on miss) |
+| `messaging.activation_triggered` | on_mention or daily_report fires | `trigger_on_mention()` / `_daily_report_handler()` |
 
 ---
 
 ## 4. Activation Triggers
 
-Three trigger types defined in `app/core/activation.py`.
+Two activation triggers emit `MESSAGING_ACTIVATION_TRIGGERED`; intern
+hot-load is a separate invocation path that does not emit the event.
 
-| Trigger | Fires | Mechanism | Handler |
-|---------|-------|-----------|---------|
-| `daily_report` | Once per 24h (first run after 5s) | TaskQueue recurring task | `_daily_report_handler()` |
-| `on_mention` | After successful message delivery | Called by `route_turn()` | `trigger_on_mention()` |
-| `intern_hot_load` | When a directive targets an intern | Called by `route_turn()` | `handle_intern_invocation()` |
+| Trigger | Fires | Mechanism | Emits `activation_triggered`? |
+|---------|-------|-----------|-------------------------------|
+| `daily_report` | Once per 24h (TaskQueue recurring task, `delay=0` first run) | `_daily_report_handler()` | yes |
+| `on_mention` | After successful message delivery | `trigger_on_mention()` (called from `route_turn()`) | yes |
+| `intern_hot_load` | When a directive targets an intern | `handle_intern_invocation()` (called from `route_turn()` before `route_message`) | no — direct hot-load |
 
 ### Event Payload Format
 
