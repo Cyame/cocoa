@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 
+from app.agent_runtime import start_runtime_for
 from app.api.deps import DB, CurrentUserDep
 from app.core.errors import ConflictError, NotFoundError
 from app.core.event_types import (
@@ -26,12 +27,14 @@ from app.core.event_types import (
     INSTANCE_STOPPED,
 )
 from app.core.events import emit
+from app.core.harness_supervisor import supervisor
 from app.core.openapi import add_error_responses
 from app.core.pagination import OffsetPage, paginate_offset
 from app.core.permissions import require_office_role
 from app.core.workspace import generate_workspace_path
 from app.models.employee import Employee
 from app.models.instance import Instance, InstanceStatus
+from app.models.loop_state import InstanceLoopState
 from app.models.office import Membership, Office
 from app.schemas.instance import (
     InstanceCreate,
@@ -39,6 +42,7 @@ from app.schemas.instance import (
     InstanceOutWithToken,
     InstanceUpdate,
 )
+from app.schemas.loop_state import BoulderSnapshotOut, InstanceLoopStateOut
 
 router = APIRouter(prefix="/instances", tags=["Instances"])
 add_error_responses(router)
@@ -455,3 +459,133 @@ async def fail_instance(
         current_user=current_user,
         payload={"reason": body.reason},
     )
+
+
+# ---------------------------------------------------------------------------
+# Harness control command endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.post("/{instance_id}/interrupt", response_model=InstanceLoopStateOut)
+async def interrupt_instance(
+    instance_id: str,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> InstanceLoopStateOut:
+    """Send a kill signal to the agent loop and mark it interrupted."""
+    instance = await _get_instance_or_404(instance_id, db)
+    await require_office_role(db, current_user.user_id, instance.office_id, "editor")
+    state = await supervisor.handle_interrupt(instance_id, db)
+    await db.commit()
+    await db.refresh(state)
+    return InstanceLoopStateOut.model_validate(_to_status_payload(state))
+
+
+@router.post("/{instance_id}/pause", response_model=InstanceLoopStateOut)
+async def pause_instance(
+    instance_id: str,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> InstanceLoopStateOut:
+    """Pause the agent loop and mark its loop state paused."""
+    instance = await _get_instance_or_404(instance_id, db)
+    await require_office_role(db, current_user.user_id, instance.office_id, "editor")
+    state = await supervisor.handle_pause(instance_id, db)
+    await db.commit()
+    await db.refresh(state)
+    return InstanceLoopStateOut.model_validate(_to_status_payload(state))
+
+
+@router.post("/{instance_id}/resume", response_model=InstanceLoopStateOut)
+async def resume_instance(
+    instance_id: str,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> InstanceLoopStateOut:
+    """Resume the agent loop and ensure its runtime task is started."""
+    instance = await _get_instance_or_404(instance_id, db)
+    await require_office_role(db, current_user.user_id, instance.office_id, "editor")
+    state = await supervisor.handle_resume(instance_id, db)
+    await db.commit()
+    await db.refresh(state)
+    await start_runtime_for(instance_id)
+    return InstanceLoopStateOut.model_validate(_to_status_payload(state))
+
+
+@router.get("/{instance_id}/status", response_model=InstanceLoopStateOut)
+async def get_instance_status(
+    instance_id: str,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> InstanceLoopStateOut:
+    """Return the persisted loop state merged with live supervisor metrics."""
+    instance = await _get_instance_or_404(instance_id, db)
+    await require_office_role(db, current_user.user_id, instance.office_id, "editor")
+    state = await _ensure_loop_state(instance_id, db)
+    return InstanceLoopStateOut.model_validate(_to_status_payload(state))
+
+
+@router.post("/{instance_id}/snapshot", response_model=BoulderSnapshotOut)
+async def snapshot_instance(
+    instance_id: str,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> BoulderSnapshotOut:
+    """Capture and validate the current Boulder snapshot."""
+    instance = await _get_instance_or_404(instance_id, db)
+    await require_office_role(db, current_user.user_id, instance.office_id, "editor")
+    snapshot, continuation_count, captured_at = await supervisor.capture_snapshot(
+        instance_id, db
+    )
+    return BoulderSnapshotOut(
+        boulder_snapshot=snapshot,
+        continuation_count=continuation_count,
+        captured_at=captured_at,
+    )
+
+
+async def _get_instance_or_404(instance_id: str, db: DB) -> Instance:
+    """Fetch an active instance or raise the standard not-found error."""
+    instance = await db.get(Instance, instance_id)
+    if instance is None or instance.deleted_at is not None:
+        raise NotFoundError(
+            "instance.not_found",
+            "errors.instance.not_found",
+            f"Instance '{instance_id}' not found",
+        )
+    return instance
+
+
+def _to_status_payload(state: InstanceLoopState) -> dict:
+    """Merge DB loop state with in-memory supervisor metrics."""
+    metrics = supervisor.get_loop_status(state.instance_id)
+    return {
+        "instance_id": state.instance_id,
+        "loop_status": state.loop_status,
+        "continuation_count": metrics["continuation_count"],
+        "total_token_estimate": metrics["token_estimate"],
+        "last_checkpoint_at": metrics["last_checkpoint_at"],
+        "breaker_config": {
+            "max_continuations": state.max_continuations,
+            "max_wall_clock_seconds": state.max_wall_clock_seconds,
+            "max_token_estimate": state.max_token_estimate,
+            "idle_timeout_seconds": state.idle_timeout_seconds,
+        },
+    }
+
+
+async def _ensure_loop_state(instance_id: str, db: DB) -> InstanceLoopState:
+    """Lazy-create an active loop state when an instance has no row."""
+    result = await db.execute(
+        select(InstanceLoopState).where(
+            InstanceLoopState.instance_id == instance_id,
+            InstanceLoopState.deleted_at.is_(None),
+        )
+    )
+    state = result.scalars().first()
+    if state is not None:
+        return state
+    state = InstanceLoopState(instance_id=instance_id)
+    db.add(state)
+    await db.flush()
+    return state
