@@ -9,7 +9,6 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any
 
 from loguru import logger
 from sqlalchemy import select
@@ -90,7 +89,7 @@ class HarnessSupervisor:
         self._runtime_tasks.clear()
         logger.info("HarnessSupervisor shut down")
 
-    async def _on_harness_event(self, **kwargs: Any) -> None:
+    async def _on_harness_event(self, **kwargs: object) -> None:
         event_type: str = kwargs["event_type"]
         instance_id: str | None = kwargs.get("resource_id")
         if instance_id is None:
