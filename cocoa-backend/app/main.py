@@ -53,6 +53,12 @@ async def lifespan(app: FastAPI):
     await queue.start()
 
     # P7.5: 启动 daily_report 定时同步（P5 activation → P8 harness 消费）
+    # P7.5-comprehensive-review: module-level `_pending_daily_report` would otherwise
+    # prevent registration on subsequent queue instances (e.g., test lifespan re-entry).
+    # Reset to None so the new queue always gets registered.
+    from app.core import activation as act_mod
+    act_mod._pending_daily_report = None
+    act_mod._task_queue = None
     from app.core.activation import schedule_daily_report_sync
     await schedule_daily_report_sync(queue)
 
@@ -191,7 +197,7 @@ app.add_middleware(RateLimitMiddleware)
 app.add_middleware(AuthMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Dev default; tighten per-environment in P7.
+    allow_origins=settings.CORS_ALLOWED_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )

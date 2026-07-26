@@ -86,6 +86,12 @@ async def client(db_url: str):
     # P7.5: 清理事件 handler 全局列表，防止测试间跨污染
     import app.core.events as ev_mod
     ev_mod._handlers.clear()
+    # P7.5-comprehensive-review: module-level `_pending_daily_report` would otherwise
+    # prevent registration on subsequent queue instances (e.g., test lifespan re-entry).
+    # Reset to None so the new queue always gets registered.
+    import app.core.activation as act_mod
+    act_mod._pending_daily_report = None
+    act_mod._task_queue = None
     # P8 Supervisor 模块级单例清理（try/except 包裹，P8 后才存在）
     try:
         from app.core.harness_supervisor import supervisor
