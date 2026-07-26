@@ -52,6 +52,10 @@ async def lifespan(app: FastAPI):
     app.state.task_queue = queue
     await queue.start()
 
+    # P7.5: 启动 daily_report 定时同步（P5 activation → P8 harness 消费）
+    from app.core.activation import schedule_daily_report_sync
+    await schedule_daily_report_sync(queue)
+
     # Load preset registry from DB before accepting requests.
     try:
         from app.core.preset_registry import registry
