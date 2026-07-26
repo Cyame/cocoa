@@ -16,6 +16,7 @@ from app.core.db import get_session_factory
 from app.core.event_types import MESSAGING_ACTIVATION_TRIGGERED
 from app.core.events import emit
 from app.core.queue import TaskQueue
+from app.core.workspace import generate_workspace_path
 from app.models.employee import Employee
 from app.models.instance import Instance, InstanceStatus
 from app.models.office import Office
@@ -205,7 +206,7 @@ async def handle_intern_invocation(
     instance = Instance(
         employee_id=emp.id,
         office_id=office_id,
-        workspace_path=f".pi/workspace/{employee_slug}-{uuid4().hex[:8]}",
+        workspace_path=generate_workspace_path(emp.slug, str(uuid4())),
         status=InstanceStatus.creating.value,
         proxy_token=str(uuid4()),
     )

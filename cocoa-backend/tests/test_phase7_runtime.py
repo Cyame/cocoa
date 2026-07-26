@@ -230,7 +230,7 @@ class TestInstanceStateMachine:
         auth_user_id: str,
         session: AsyncSession,
     ) -> None:
-        """create → POST deploy → 200 status='deploying'; verify INSTANCE_DEPLOYING event."""
+        """create → POST deploy → 200 status='deploying'; verify INSTANCE_DEPLOYED event."""
         h = _auth(auth_token)
         office_id = _setup_office_and_membership(
             client, auth_token, auth_user_id,
@@ -262,7 +262,7 @@ class TestInstanceStateMachine:
             select(Event).where(
                 Event.resource_type == "instance",
                 Event.resource_id == inst_id,
-                Event.type == "instance.deploying",
+                Event.type == "instance.deployed",
             ),
         )
         events = result.scalars().all()
@@ -459,7 +459,7 @@ class TestInstanceEvents:
         auth_user_id: str,
         session: AsyncSession,
     ) -> None:
-        """create → deploy → query events → INSTANCE_CREATED and INSTANCE_DEPLOYING."""
+        """create → deploy → query events → INSTANCE_CREATED and INSTANCE_DEPLOYED."""
         h = _auth(auth_token)
         office_id = _setup_office_and_membership(
             client, auth_token, auth_user_id,
@@ -488,10 +488,10 @@ class TestInstanceEvents:
         event_types = [e.type for e in events]
 
         assert "instance.created" in event_types
-        assert "instance.deploying" in event_types
+        assert "instance.deployed" in event_types
 
-        # INSTANCE_DEPLOYING has resource_id set correctly
-        deploy_events = [e for e in events if e.type == "instance.deploying"]
+        # INSTANCE_DEPLOYED has resource_id set correctly
+        deploy_events = [e for e in events if e.type == "instance.deployed"]
         assert len(deploy_events) == 1
         assert deploy_events[0].resource_id == inst_id
 
@@ -504,7 +504,7 @@ class TestInstanceEvents:
         session: AsyncSession,
     ) -> None:
         """create → deploy → start → fail → query events →
-        INSTANCE_CREATED, INSTANCE_DEPLOYING, INSTANCE_RUNNING, INSTANCE_FAILED."""
+        INSTANCE_CREATED, INSTANCE_DEPLOYED, INSTANCE_STARTED, INSTANCE_FAILED."""
         h = _auth(auth_token)
         office_id = _setup_office_and_membership(
             client, auth_token, auth_user_id,
@@ -539,8 +539,8 @@ class TestInstanceEvents:
         event_types = [e.type for e in events]
 
         assert "instance.created" in event_types
-        assert "instance.deploying" in event_types
-        assert "instance.running" in event_types
+        assert "instance.deployed" in event_types
+        assert "instance.started" in event_types
         assert "instance.failed" in event_types
 
         # Deploy/running/failed events have resource_id set correctly

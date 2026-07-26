@@ -54,8 +54,9 @@ MEMORY_ENTRY_APPENDED = "memory.entry_appended"
 # ---------------------------------------------------------------------------
 
 INSTANCE_CREATED = "instance.created"
-INSTANCE_DEPLOYING = "instance.deploying"
-INSTANCE_RUNNING = "instance.running"
-INSTANCE_RESTARTING = "instance.restarting"
+INSTANCE_DEPLOYED = "instance.deployed"
+INSTANCE_STARTED = "instance.started"
+INSTANCE_RESTARTED = "instance.restarted"
+INSTANCE_STOPPED = "instance.stopped"
 INSTANCE_FAILED = "instance.failed"
 INSTANCE_DELETED = "instance.deleted"

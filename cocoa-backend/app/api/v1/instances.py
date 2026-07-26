@@ -19,10 +19,11 @@ from app.core.errors import ConflictError, NotFoundError
 from app.core.event_types import (
     INSTANCE_CREATED,
     INSTANCE_DELETED,
-    INSTANCE_DEPLOYING,
+    INSTANCE_DEPLOYED,
     INSTANCE_FAILED,
-    INSTANCE_RESTARTING,
-    INSTANCE_RUNNING,
+    INSTANCE_RESTARTED,
+    INSTANCE_STARTED,
+    INSTANCE_STOPPED,
 )
 from app.core.events import emit
 from app.core.openapi import add_error_responses
@@ -359,7 +360,7 @@ async def deploy_instance(
         instance_id,
         allowed=[InstanceStatus.creating.value, InstanceStatus.restarting.value],
         new_status=InstanceStatus.deploying.value,
-        event_type=INSTANCE_DEPLOYING,
+        event_type=INSTANCE_DEPLOYED,
         db=db,
         current_user=current_user,
     )
@@ -379,7 +380,7 @@ async def start_instance(
         instance_id,
         allowed=[InstanceStatus.pending.value, InstanceStatus.deploying.value],
         new_status=InstanceStatus.running.value,
-        event_type=INSTANCE_RUNNING,
+        event_type=INSTANCE_STARTED,
         db=db,
         current_user=current_user,
     )
@@ -399,7 +400,7 @@ async def restart_instance(
         instance_id,
         allowed=[InstanceStatus.running.value, InstanceStatus.failed.value],
         new_status=InstanceStatus.restarting.value,
-        event_type=INSTANCE_RESTARTING,
+        event_type=INSTANCE_RESTARTED,
         db=db,
         current_user=current_user,
     )
@@ -413,13 +414,13 @@ async def stop_instance(
 ) -> Instance:
     """Transition instance to ``pending`` (graceful shutdown).
 
-    Allowed from: ``running``. No lifecycle event is emitted for stop.
+    Allowed from: ``running``. Emits an ``instance.stopped`` lifecycle event.
     """
     return await _transition(
         instance_id,
         allowed=[InstanceStatus.running.value],
         new_status=InstanceStatus.pending.value,
-        event_type=None,
+        event_type=INSTANCE_STOPPED,
         db=db,
         current_user=current_user,
     )
