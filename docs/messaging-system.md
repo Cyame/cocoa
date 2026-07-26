@@ -148,8 +148,8 @@ MESSAGING_ACTIVATION_TRIGGERED = "messaging.activation_triggered"
 
 | Event | Emitted When | Trigger Location |
 |-------|-------------|------------------|
-| `message_sent` | Corridor exists, delivery allowed | `route_message()` line 133 |
-| `delivery_blocked` | No active corridor between members | `route_message()` line 115 |
+| `message_sent` | Corridor exists, delivery allowed | `route_message()` § Delivery Decision (emit on match) |
+| `delivery_blocked` | No active corridor between members | `route_message()` § Delivery Decision (emit on miss) |
 | `activation_triggered` | on_mention or daily_report fires | `trigger_on_mention()` / `_daily_report_handler()` |
 
 ---

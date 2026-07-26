@@ -74,10 +74,12 @@ Available in every preset, defined in `app/core/preset_registry.py`:
 
 | Command     | Description |
 |-------------|-------------|
-| `/read`     | Read a resource by reference |
-| `/list`     | List resources matching criteria |
-| `/write`    | Write content to a target |
-| `/archive`  | Archive or soft-delete a resource |
+| `read`      | Read a resource by reference |
+| `list`      | List resources matching criteria |
+| `write`     | Write content to a target |
+| `archive`   | Archive or soft-delete a resource |
+
+> **Note:** `GLOBAL_COMMANDS` in `app/core/preset_registry.py` stores the verbs without a leading slash (e.g. `"read"`, not `"/read"`). The slash is added at parse/display time by the slash-protocol grammar (§4). A separate `CONTROL_COMMANDS` set (P8, e.g. `"/interrupt"`) does include the leading slash.
 
 ### Per-preset Commands
 

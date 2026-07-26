@@ -71,7 +71,7 @@ snake_case 端到端：Pydantic 字段名即线上字段名，**无别名转换�
 
 ### 2.1 管道图
 
-每个请求自外向内依次穿过 4 个中间件，响应沿原路返回：
+每个请求自外向内依次穿过 5 个中间件，响应沿原路返回：
 
 ```
 client
@@ -82,24 +82,31 @@ client
 │    uuid4 → request.state.request_id                       │
 │    回显  → 响应头 X-Request-ID                            │
 │  ┌─────────────────────────────────────────────────────┐  │
-│  │ 2. CORSMiddleware        (fastapi.middleware.cors)  │  │
-│  │    dev: allow_origins/methods/headers = ["*"]       │  │
-│  │    P7 按环境收紧                                     │  │
+│  │ 2. LoggingMiddleware      (app/core/middleware/      │  │
+│  │    logging)                                          │  │
+│  │    每个请求一条结构化 JSON 日志（含 request_id）     │  │
+│  │    P3.5 引入                                          │  │
 │  │  ┌───────────────────────────────────────────────┐  │  │
-│  │  │ 3. AuthMiddleware   (app/core/middleware/auth)│  │  │
-│  │  │    解析 Authorization: Bearer <token>         │  │  │
-│  │  │    → request.state.token / .user_id           │  │  │
-│  │  │    P3 存根只提取不校验；P4 接入真实 JWT        │  │  │
+│  │  │ 3. CORSMiddleware    (fastapi.middleware.cors)│  │  │
+│  │  │    dev: allow_origins/methods/headers = ["*"] │  │  │
+│  │  │    P7 按环境收紧                               │  │  │
 │  │  │  ┌─────────────────────────────────────────┐  │  │  │
-│  │  │  │ 4. RateLimitMiddleware                  │  │  │  │
-│  │  │  │  (app/core/middleware/rate_limit)       │  │  │  │
-│  │  │  │  固定窗口 100 次/60s，按客户端 IP        │  │  │  │
-│  │  │  │  仅计数 /api/*；/health、/docs 豁免      │  │  │  │
-│  │  │  │  超限 → 429 + Retry-After               │  │  │  │
-│  │  │  │       + X-RateLimit-Remaining           │  │  │  │
-│  │  │  │  内存存根；P8 换 Redis                   │  │  │  │
-│  │  │  │                  ↓                      │  │  │  │
-│  │  │  │        APIRouter → endpoint             │  │  │  │
+│  │  │  │ 4. AuthMiddleware (app/core/middleware/ │  │  │  │
+│  │  │  │    auth)                                │  │  │  │
+│  │  │  │    解析 Authorization: Bearer <token>    │  │  │  │
+│  │  │  │    → request.state.token / .user_id      │  │  │  │
+│  │  │  │    P3 存根只提取不校验；P4 接入真实 JWT   │  │  │  │
+│  │  │  │  ┌─────────────────────────────────────┐  │  │  │  │
+│  │  │  │  │ 5. RateLimitMiddleware             │  │  │  │  │
+│  │  │  │  │  (app/core/middleware/rate_limit)  │  │  │  │  │
+│  │  │  │  │  固定窗口 100 次/60s，按客户端 IP   │  │  │  │  │
+│  │  │  │  │  仅计数 /api/*；/health、/docs 豁免 │  │  │  │  │
+│  │  │  │  │  超限 → 429 + Retry-After          │  │  │  │  │
+│  │  │  │  │       + X-RateLimit-Remaining      │  │  │  │  │
+│  │  │  │  │  内存存根；P8 换 Redis              │  │  │  │  │
+│  │  │  │  │                ↓                   │  │  │  │  │
+│  │  │  │  │        APIRouter → endpoint        │  │  │  │  │
+│  │  │  │  └─────────────────────────────────────┘  │  │  │  │
 │  │  │  └─────────────────────────────────────────┘  │  │  │
 │  │  └───────────────────────────────────────────────┘  │  │
 │  └─────────────────────────────────────────────────────┘  │
@@ -114,8 +121,8 @@ Starlette 的 `add_middleware` 把每个中间件插入栈顶（`user_middleware
 # Registration order is REVERSED vs execution order because Starlette inserts each
 # middleware at stack position 0 (`user_middleware.insert(0, ...)`), so the LAST
 # add_middleware call ends up outermost and executes FIRST.
-# Execution order (outer → inner): RequestID → CORS → Auth → RateLimit.
-# Registration call order:          RateLimit → Auth → CORS → RequestID.
+# Execution order (outer → inner): RequestID → Logging → CORS → Auth → RateLimit.
+# Registration call order:          RateLimit → Auth → CORS → Logging → RequestID.
 app.add_middleware(RateLimitMiddleware)
 app.add_middleware(AuthMiddleware)
 app.add_middleware(
@@ -124,8 +131,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(LoggingMiddleware)  # P3.5 — sits between CORS and RequestID.
 app.add_middleware(RequestIDMiddleware)
 ```
+
+> LoggingMiddleware 在 P3.5 加入（位于 CORS 与 RequestID 之间）——为每个请求生成结构化 JSON 日志条目，注入 request_id。
 
 新增中间件时按期望的执行位置**反向**插入注册序列，并在块上方注释中更新两行顺序说明。
 
@@ -309,7 +319,7 @@ async def list_office_employees(
 
 - 文档入口（根路径、不版本化）：Swagger UI `/docs`，ReDoc `/redoc`，schema `/openapi.json`。
 - 应用元数据在 `app/main.py` 的 `FastAPI(...)` 构造中：`title="Cocoa API"`、`version="1.0.0"`、`swagger_ui_parameters={"defaultModelsExpandDepth": -1}`（默认折叠 model 区，保持端点列表可读）。
-- 标签组织（`openapi_tags`）：`Health`、`Employees`、`Offices`、`Instances`、`Messaging`、`Blackboard`、`Learning`。每个子路由文件用 `APIRouter(prefix="/employees", tags=["Employees"])` 对齐其一，禁止自造新标签名。
+- 标签组织（`openapi_tags`）：`Health`、`Auth`、`EmployeePresets`、`Employees`、`Offices`、`Instances`、`Messaging`、`Blackboard`、`Learning`（共 9 个）。每个子路由文件用 `APIRouter(prefix="/employees", tags=["Employees"])` 对齐其一，禁止自造新标签名。
 - 标准错误响应：`app/core/openapi.py` 的 `STANDARD_ERROR_RESPONSES` 定义了 401 / 403 / 404 / 422 / 500 五个状态码的信封示例。每个业务路由注册一次：
 
 ```python
