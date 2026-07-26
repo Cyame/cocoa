@@ -224,6 +224,7 @@ async def delete_instance(
             f"Instance '{instance_id}' is still running — stop it first",
         )
 
+    previous_status = instance.status
     instance.status = InstanceStatus.deleting.value
     await emit(
         INSTANCE_DELETED,
@@ -231,7 +232,7 @@ async def delete_instance(
         actor_id=current_user.user_id,
         resource_type="instance",
         resource_id=instance.id,
-        payload={"previous_status": instance.status},
+        payload={"previous_status": previous_status},
         session=db,
     )
     instance.soft_delete()
