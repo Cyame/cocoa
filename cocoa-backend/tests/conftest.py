@@ -83,6 +83,15 @@ async def client(db_url: str):
     db_mod._session_factory = None
     with TestClient(app) as tc:
         yield tc
+    # P7.5: 清理事件 handler 全局列表，防止测试间跨污染
+    import app.core.events as ev_mod
+    ev_mod._handlers.clear()
+    # P8 Supervisor 模块级单例清理（try/except 包裹，P8 后才存在）
+    try:
+        from app.core.harness_supervisor import supervisor
+        supervisor._registry.clear()
+    except ImportError:
+        pass
     # Teardown: dispose engine if it was created (lifespan in P3 is stub, no DB — but for P3.5 compatibility)
     if db_mod._engine is not None:
         try:
