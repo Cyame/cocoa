@@ -177,6 +177,9 @@ Cocoa 后端 API 遵循 `docs/api-architecture.md` 中的完整约定，核心�
 - 消息系统设计见 `docs/messaging-system.md`：消息拓扑、近邻投递、激活触发器、Directive 路由
 - 黑板系统设计见 `docs/blackboard-system.md`：Blackboard 被动状态模块、BlackboardFile 虚拟文件系统、Vault 归档、MemoryEntry 追加日志、权限模型
 - 实例运行时系统见 `docs/runtime-system.md`：Instance 生命周期模型、CRUD API、K8s 部署脚手架、多实例隔离、Langfuse 集成预留
+- Harness 系统设计见 `docs/harness-system.md`：D11 控制面、Supervisor + 4 个确定性熔断器、Boulder 循环引擎、5 个控制命令、Notepad 契约、Agent Runtime 骨架、Control Downlink 双路径机制
+
+**P8 Harness**: D11 control plane lives in `app/core/harness_supervisor.py`. In-memory loop-state registry + 4 deterministic circuit breakers. Handler updates ONLY the registry (no DB writes — P3.5 contract). DB mutations happen via `handle_*` direct mutators from the API endpoint layer. Control commands (`/interrupt /pause /resume /status /snapshot`) are the third command category after P4 global scope-ops and per-preset commands.
 
 ## Git 规范
 

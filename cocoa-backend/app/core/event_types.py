@@ -26,6 +26,13 @@ HARNESS_CHECKPOINT = "harness.checkpoint"
 HARNESS_CONTINUATION_INJECTED = "harness.continuation_injected"
 HARNESS_LOOP_STOPPED = "harness.loop_stopped"
 HARNESS_BREAKER_TRIPPED = "harness.breaker_tripped"
+# control_sent is the D11 control-plane downlink event. Payload carries
+# `{"action": "kill" | "pause" | "resume", "instance_id": "..."}`.
+# Instance agent runtime consumes it on next checkpoint and self-terminates.
+HARNESS_PAUSED = "harness.paused"
+HARNESS_RESUMED = "harness.resumed"
+HARNESS_INTERRUPTED = "harness.interrupted"
+HARNESS_CONTROL_SENT = "harness.control_sent"
 
 # ---------------------------------------------------------------------------
 # Messaging (emit points in P5)

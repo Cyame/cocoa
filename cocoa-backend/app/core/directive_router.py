@@ -11,9 +11,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.activation import handle_intern_invocation, trigger_on_mention
 from app.core.message_router import MessageDeliveryResult, route_message
+from app.core.preset_registry import is_control_command
 from app.core.slash_parser import parse_turn
 from app.models.employee import Employee, EmployeeRank
 from app.models.office import Membership
+from app.schemas.slash import Directive
 
 
 @dataclass
@@ -59,6 +61,19 @@ async def route_turn(
     for directive in turn.directives:
         target_slug = directive.target_employee
 
+        # CONTROL COMMAND BRANCH (P8) — routes to Harness Supervisor, NOT corridor
+        # Bare cmds (target_slug is None) are silently dropped, matching P5 contract.
+        if is_control_command(directive.cmd):
+            directive_results.append(
+                await _route_control_directive(
+                    session=session,
+                    office_id=office_id,
+                    directive=directive,
+                    target_slug=target_slug,
+                )
+            )
+            continue
+
         # If target is an intern, ensure instance exists (hot-load)
         if target_slug:
             # Check if target is intern
@@ -99,3 +114,89 @@ async def route_turn(
         )
 
     return directive_results
+
+
+async def _route_control_directive(
+    session: AsyncSession,
+    office_id: str,
+    directive: Directive,
+    target_slug: str | None,
+) -> DirectiveResult:
+    """Route a control command to the Harness Supervisor.
+
+    Bare cmds (target_slug is None) are silently dropped — matching the P5
+    bare-cmd semantics in ``app/core/message_router.py:93-94``. With an
+    explicit @target, we look up the target Employee's active Instance in
+    this office and dispatch to the corresponding Supervisor action.
+
+    Returns a ``DirectiveResult`` with the cmd echoed and an empty results
+    list (control commands don't produce ``MessageDeliveryResult`` rows;
+    their effect is on the harness state, not the message log).
+    """
+    if target_slug is None:
+        # Bare cmd — silently drop per P5 bare-cmd semantics
+        return DirectiveResult(
+            directive_raw=directive.raw_text,
+            target_employee=None,
+            cmd=directive.cmd,
+            results=[],
+        )
+
+    emp_result = await session.execute(
+        select(Employee).where(
+            Employee.slug == target_slug,
+            Employee.deleted_at.is_(None),
+        )
+    )
+    target_employee = emp_result.scalars().first()
+    if target_employee is None:
+        return DirectiveResult(
+            directive_raw=directive.raw_text,
+            target_employee=target_slug,
+            cmd=directive.cmd,
+            results=[],
+        )
+
+    from app.models.instance import Instance, InstanceStatus
+
+    inst_result = await session.execute(
+        select(Instance).where(
+            Instance.employee_id == target_employee.id,
+            Instance.office_id == office_id,
+            Instance.deleted_at.is_(None),
+            Instance.status.in_(
+                [
+                    InstanceStatus.running.value,
+                    InstanceStatus.pending.value,
+                    InstanceStatus.creating.value,
+                    InstanceStatus.deploying.value,
+                ]
+            ),
+        )
+    )
+    instance = inst_result.scalars().first()
+    if instance is None:
+        return DirectiveResult(
+            directive_raw=directive.raw_text,
+            target_employee=target_slug,
+            cmd=directive.cmd,
+            results=[],
+        )
+
+    from app.core.harness_supervisor import supervisor
+
+    if directive.cmd == "/interrupt":
+        await supervisor.handle_interrupt(instance.id, session)
+    elif directive.cmd == "/pause":
+        await supervisor.handle_pause(instance.id, session)
+    elif directive.cmd == "/resume":
+        await supervisor.handle_resume(instance.id, session)
+    # /status and /snapshot are GET/POST on the API; not routable via turn
+    await session.flush()
+
+    return DirectiveResult(
+        directive_raw=directive.raw_text,
+        target_employee=target_slug,
+        cmd=directive.cmd,
+        results=[],
+    )

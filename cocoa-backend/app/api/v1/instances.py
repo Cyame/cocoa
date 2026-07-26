@@ -3,6 +3,10 @@
 P7 implements the full Instance lifecycle: create → deploy → start →
 restart → stop → fail → delete. Each state transition is governed by
 an explicit allowed-status whitelist; invalid transitions return 409.
+
+P8 harness control commands (interrupt / pause / resume / status /
+snapshot) live in :mod:`app.api.v1.harness` — this module hosts only
+the P7 CRUD + lifecycle surface so it stays under the 250 LOC ceiling.
 """
 
 from __future__ import annotations

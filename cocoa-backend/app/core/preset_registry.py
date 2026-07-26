@@ -34,7 +34,29 @@ from app.models.employee import EmployeePreset
 
 # ── Global commands ──────────────────────────────────────────────────────────
 
-GLOBAL_COMMANDS: list[str] = ["read", "list", "write", "archive"]
+GLOBAL_COMMANDS: list[str] = ["/read", "/list", "/write", "/archive"]
+
+# ── Harness control commands (P8) ────────────────────────────────────────────
+# Third command category — privileged, available on every Instance,
+# routes to the Harness Supervisor rather than the message corridor.
+# Slash prefix matches the P4 parser output convention.
+CONTROL_COMMANDS: list[str] = [
+    "/interrupt",
+    "/pause",
+    "/resume",
+    "/status",
+    "/snapshot",
+]
+
+
+def is_control_command(cmd: str) -> bool:
+    """Return True if *cmd* is a harness control command.
+
+    Case-sensitive match against :data:`CONTROL_COMMANDS`. The slash prefix
+    is included — P4's parser outputs ``Directive.cmd`` with the prefix.
+    """
+    return cmd in CONTROL_COMMANDS
+
 
 # ── Registry singleton ───────────────────────────────────────────────────────
 
@@ -115,7 +137,8 @@ class PresetRegistry:
     def is_global_command(cmd: str) -> bool:
         """Return ``True`` if *cmd* is a recognised global command.
 
-        The check is case-sensitive and does **not** include the ``/`` prefix.
+        The check is case-sensitive and includes the ``/`` prefix matching the
+        P4 parser output.
         """
         return cmd in GLOBAL_COMMANDS
 
