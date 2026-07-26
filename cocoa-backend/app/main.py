@@ -62,6 +62,27 @@ async def lifespan(app: FastAPI):
     from app.core.activation import schedule_daily_report_sync
     await schedule_daily_report_sync(queue)
 
+    # P8: supervisor registration order is load-bearing — register the
+    # TaskQueue handler BEFORE enqueue (ValueError on unknown task name)
+    # and start the supervisor BEFORE rehydrate (registry must exist).
+    from app.core.activation_consumer import register_activation_consumer
+    from app.core.continuation import idle_check_handler
+    from app.core.harness_supervisor import supervisor
+
+    queue.register_task("idle_check", idle_check_handler)
+    try:
+        await supervisor.start()
+        await queue.enqueue(
+            "idle_check", delay=0, payload={"task_queue": queue}
+        )
+        register_activation_consumer()
+        async with get_session_factory()() as rehydrate_session:
+            await supervisor.rehydrate(rehydrate_session)
+    except Exception:
+        logger.opt(exception=True).warning(
+            "Harness supervisor init failed; continuing without rehydrate"
+        )
+
     # Load preset registry from DB before accepting requests.
     try:
         from app.core.preset_registry import registry
@@ -97,6 +118,12 @@ async def lifespan(app: FastAPI):
         logger.opt(exception=True).error("Failed to emit system.shutdown event")
 
     await queue.stop()
+
+    try:
+        from app.core.harness_supervisor import supervisor
+        await supervisor.shutdown()
+    except Exception:
+        logger.opt(exception=True).warning("Supervisor shutdown failed")
 
 
 app = FastAPI(
