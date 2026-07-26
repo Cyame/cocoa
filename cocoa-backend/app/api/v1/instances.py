@@ -11,7 +11,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, status
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 
 from app.api.deps import DB, CurrentUserDep
 from app.core.errors import ConflictError, NotFoundError
@@ -252,6 +252,14 @@ async def delete_instance(
         resource_id=instance.id,
         payload={"previous_status": previous_status},
         session=db,
+    )
+    await db.execute(
+        update(Membership)
+        .where(
+            Membership.instance_id == instance.id,
+            Membership.deleted_at.is_(None),
+        )
+        .values(deleted_at=func.now())
     )
     instance.soft_delete()
     await db.commit()
