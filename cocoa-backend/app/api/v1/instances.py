@@ -30,8 +30,13 @@ from app.core.permissions import require_office_role
 from app.core.workspace import generate_workspace_path
 from app.models.employee import Employee
 from app.models.instance import Instance, InstanceStatus
-from app.models.office import Office
-from app.schemas.instance import InstanceCreate, InstanceOut, InstanceUpdate
+from app.models.office import Membership, Office
+from app.schemas.instance import (
+    InstanceCreate,
+    InstanceOut,
+    InstanceOutWithToken,
+    InstanceUpdate,
+)
 
 router = APIRouter(prefix="/instances", tags=["Instances"])
 add_error_responses(router)
@@ -67,7 +72,17 @@ async def list_instances(
     if employee_id is not None:
         stmt = stmt.where(Instance.employee_id == employee_id)
     if office_id is not None:
+        await require_office_role(db, current_user.user_id, office_id, "viewer")
         stmt = stmt.where(Instance.office_id == office_id)
+    else:
+        stmt = stmt.where(
+            Instance.office_id.in_(
+                select(Membership.office_id).where(
+                    Membership.user_id == current_user.user_id,
+                    Membership.deleted_at.is_(None),
+                )
+            )
+        )
     if status is not None:
         stmt = stmt.where(Instance.status == status)
 
@@ -92,6 +107,7 @@ async def get_instance(
             "errors.instance.not_found",
             f"Instance '{instance_id}' not found",
         )
+    await require_office_role(db, current_user.user_id, instance.office_id, "editor")
     return instance
 
 
@@ -100,7 +116,9 @@ async def get_instance(
 # ---------------------------------------------------------------------------
 
 
-@router.post("", response_model=InstanceOut, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "", response_model=InstanceOutWithToken, status_code=status.HTTP_201_CREATED
+)
 async def create_instance(
     body: InstanceCreate,
     db: DB,

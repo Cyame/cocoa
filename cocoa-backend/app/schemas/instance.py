@@ -28,7 +28,7 @@ class InstanceUpdate(BaseModel):
 
 
 class InstanceOut(BaseModel):
-    """Response body for a single Instance."""
+    """Response body for a single Instance without its proxy token."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -38,6 +38,11 @@ class InstanceOut(BaseModel):
     workspace_path: str | None = None
     status: str
     runtime_config: dict | None = None
-    proxy_token: str | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class InstanceOutWithToken(InstanceOut):
+    """Response body for Instance creation, including its proxy token."""
+
+    proxy_token: str | None = None
