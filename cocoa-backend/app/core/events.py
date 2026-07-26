@@ -126,7 +126,7 @@ async def emit(
                 actor_id=actor_id,
                 resource_type=resource_type,
                 resource_id=resource_id,
-                payload=payload,
+                payload=payload if payload is not None else {},
                 request_id=request_id,
             )
         except Exception:

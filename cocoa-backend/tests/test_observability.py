@@ -10,6 +10,7 @@ import json
 
 from loguru import logger
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from starlette.testclient import TestClient
 
 from app.core.event_types import (
@@ -275,3 +276,65 @@ async def test_lifecycle_events(client: TestClient, session):
     event = rows[0]
     assert event.actor_type == "system"
     assert event.type == "system.startup"
+
+
+async def test_lifecycle_events_shutdown(db_url: str):
+    """Both system.startup and system.shutdown are emitted across lifespan.
+
+    This test manually creates a TestClient so that the shutdown event
+    (fired on context exit) can be asserted after the context closes.
+    """
+    import app.core.db as db_mod
+    from app.core.config import settings
+    from app.main import app
+
+    # Point lifespan DB access to the test clone (same technique as client fixture).
+    settings.DATABASE_URL = db_url
+    db_mod._engine = None
+    db_mod._session_factory = None
+
+    engine = create_async_engine(db_url, echo=False)
+    factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+    with TestClient(app) as _client:
+        async with factory() as session:
+            result = await session.execute(
+                select(Event).where(Event.type == SYSTEM_STARTUP)
+            )
+            assert len(result.scalars().all()) == 1
+
+    async with factory() as session:
+        result = await session.execute(
+            select(Event).where(Event.type == SYSTEM_SHUTDOWN)
+        )
+        rows = result.scalars().all()
+        assert len(rows) == 1, f"Expected 1 system.shutdown event, got {len(rows)}"
+        event = rows[0]
+        assert event.actor_type == "system"
+        assert event.type == "system.shutdown"
+
+    await engine.dispose()
+
+
+async def test_emit_handler_payload_default(session):
+    """When emit() is called without payload, handlers receive {} not None."""
+    received = {}
+
+    async def capture_handler(**kwargs):
+        received["payload"] = kwargs.get("payload")
+
+    original = list(_handlers)
+    try:
+        register_handler("system.*", capture_handler)
+
+        await emit(
+            "system.no_payload",
+            actor_type="system",
+            session=session,
+        )
+        await session.commit()
+
+        assert received.get("payload") == {}, f"Expected {{}} but got {received.get('payload')!r}"
+    finally:
+        _handlers.clear()
+        _handlers.extend(original)
