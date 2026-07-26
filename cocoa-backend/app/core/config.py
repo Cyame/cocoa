@@ -20,6 +20,8 @@ class Settings(BaseSettings):
 
     # ── Database ─────────────────────────────────────────
     DATABASE_URL: str = ""
+    DB_POOL_SIZE: int = 5
+    DB_MAX_OVERFLOW: int = 10
 
     # ── JWT ──────────────────────────────────────────────
     JWT_SECRET: str = ""
@@ -35,6 +37,10 @@ class Settings(BaseSettings):
     # Applied by configure_logging() at startup. dev gets human-readable stderr
     # with color; non-dev gets JSON to stdout.
     LOG_LEVEL: str = "INFO"
+
+    # ── CORS ─────────────────────────────────────────────
+    # Dev default allows all origins; tighten per-environment in P8+.
+    CORS_ALLOWED_ORIGINS: list[str] = ["*"]
 
     # ── Langfuse ──────────────────────────────────────────
     # Langfuse integration (P8 agent runtime reads from instance runtime_config)
