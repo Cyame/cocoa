@@ -12,6 +12,7 @@ from uuid import uuid4
 from fastapi import APIRouter, status
 from pydantic import BaseModel
 from sqlalchemy import func, select, update
+from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import DB, CurrentUserDep
 from app.core.errors import ConflictError, NotFoundError
@@ -172,7 +173,15 @@ async def create_instance(
         payload={"workspace_path": workspace_path, "office_id": body.office_id},
         session=db,
     )
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise ConflictError(
+            "instance.workspace_path_taken",
+            "errors.instance.workspace_path_taken",
+            f"workspace_path '{workspace_path}' is already used by another instance",
+        )
     await db.refresh(instance)
     return instance
 
@@ -204,7 +213,16 @@ async def update_instance(
     for field, value in patch_data.items():
         setattr(instance, field, value)
 
-    await db.commit()
+    workspace_path = instance.workspace_path
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise ConflictError(
+            "instance.workspace_path_taken",
+            "errors.instance.workspace_path_taken",
+            f"workspace_path '{workspace_path}' is already used by another instance",
+        )
     await db.refresh(instance)
     return instance
 
