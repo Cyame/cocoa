@@ -71,6 +71,130 @@ async def session(db_url):
     await engine.dispose()
 
 
+@pytest_asyncio.fixture(autouse=True)
+async def _clear_handlers():
+    """Reset global handler list + supervisor registry around every test.
+
+    Critical per C4 review: without this, harness.* handlers pile up across
+    tests, causing state from previous tests to leak (e.g., stale
+    supervisor._registry entries, leftover event handlers, in-flight
+    task queue singletons).
+    """
+    import app.core.activation as act_mod
+    import app.core.events as ev_mod
+
+    try:
+        from app.core.harness_supervisor import supervisor
+    except ImportError:
+        supervisor = None
+
+    def _reset() -> None:
+        if supervisor is not None:
+            supervisor._registry.clear()
+            supervisor._runtime_tasks.clear()
+        ev_mod._handlers.clear()
+        act_mod._pending_daily_report = None
+        act_mod._task_queue = None
+
+    _reset()
+    yield
+    _reset()
+
+
+@pytest_asyncio.fixture
+async def loop_state_factory(session: AsyncSession):
+    """Create an InstanceLoopState row tied to an existing Instance."""
+
+    async def _make(instance, **overrides):
+        from app.models.loop_state import InstanceLoopState, LoopStatus
+
+        defaults = {
+            "instance_id": instance.id,
+            "loop_status": LoopStatus.idle.value,
+            "continuation_count": 0,
+            "total_token_estimate": 0,
+        }
+        defaults.update(overrides)
+        state = InstanceLoopState(**defaults)
+        session.add(state)
+        await session.flush()
+        return state
+
+    return _make
+
+
+@pytest_asyncio.fixture
+async def office_factory(session: AsyncSession):
+    """Return an async factory of :class:`Office` rows bound to *session*."""
+
+    async def _make(**overrides):
+        import uuid as _uuid
+
+        from app.models.office import Office
+
+        defaults = {
+            "name": overrides.pop("name", "Test Office"),
+            "slug": overrides.pop("slug", f"test-office-{_uuid.uuid4().hex[:8]}"),
+        }
+        defaults.update(overrides)
+        office = Office(**defaults)
+        session.add(office)
+        await session.flush()
+        return office
+
+    return _make
+
+
+@pytest_asyncio.fixture
+async def employee_factory(session: AsyncSession):
+    """Return an async factory of :class:`Employee` rows bound to *session*."""
+
+    async def _make(**overrides):
+        import uuid as _uuid
+
+        from app.models.employee import Employee
+
+        defaults = {
+            "name": overrides.pop("name", "Test Employee"),
+            "slug": overrides.pop("slug", f"test-emp-{_uuid.uuid4().hex[:8]}"),
+        }
+        defaults.update(overrides)
+        emp = Employee(**defaults)
+        session.add(emp)
+        await session.flush()
+        return emp
+
+    return _make
+
+
+@pytest_asyncio.fixture
+async def instance_factory(session: AsyncSession, employee_factory, office_factory):
+    """Return an async factory of :class:`Instance` rows bound to *session*."""
+
+    async def _make(**overrides):
+        import uuid as _uuid
+
+        from app.models.instance import Instance, InstanceStatus
+
+        if "employee_id" not in overrides:
+            emp = await employee_factory()
+            overrides["employee_id"] = emp.id
+        if "office_id" not in overrides:
+            office = await office_factory()
+            overrides["office_id"] = office.id
+        defaults = {
+            "status": InstanceStatus.creating.value,
+            "proxy_token": str(_uuid.uuid4()),
+        }
+        defaults.update(overrides)
+        inst = Instance(**defaults)
+        session.add(inst)
+        await session.flush()
+        return inst
+
+    return _make
+
+
 @pytest_asyncio.fixture
 async def client(db_url: str):
     """TestClient wired to the per-test cloned database."""
