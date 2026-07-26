@@ -2,7 +2,7 @@
 
 **Multi-agent control studio.** A workspace where humans orchestrate AI agents -- from strategy to execution.
 
-Cocoa is a control surface for running multi-agent systems. A web portal pairs with a Python backend to give operators a single place to plan, delegate, and observe AI-driven work. The backend has its **P2 core domain** in place (12 models, Alembic migration, pytest harness), **P3 API architecture**, **P4 Agent Presets** (preset manifest schema, 6 built-in presets, CRUD API, in-memory registry), **P5 messaging** (neighbor-only delivery, corridor CRUD, directive routing), **P6 blackboard** (virtual filesystem, vault archiving, memory entries), and **P7 instance runtime** (lifecycle state machine, K8s deployment scaffolding); the portal is a P0 scaffold. API routes live at /api/v1/ with Auth, EmployeePresets, Employees, Offices, and other business endpoints.
+Cocoa is a control surface for running multi-agent systems. A web portal pairs with a Python backend to give operators a single place to plan, delegate, and observe AI-driven work. The backend has its **P2 core domain** in place (12 models, Alembic migration, pytest harness), **P3 API architecture**, **P4 Agent Presets** (preset manifest schema, 6 built-in presets, CRUD API, in-memory registry), **P5 messaging** (neighbor-only delivery, corridor CRUD, directive routing), **P6 blackboard** (virtual filesystem, vault archiving, memory entries), and **P7 instance runtime** (lifecycle state machine, K8s deployment scaffolding); the portal is a P0 scaffold. API routes live at `/api/v1/` with Auth, EmployeePresets, Employees, Offices, Instances, Messaging, Blackboard, Memory, and other business endpoints.
 
 ## Status
 

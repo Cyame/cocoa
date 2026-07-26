@@ -4,13 +4,13 @@
 
 ## 项目概述
 
-Cocoa 是多 Agent 控制台（multi-agent control studio）。本仓库已完成 **P2 核心域模型**，包含：
+Cocoa 是多 Agent 控制台（multi-agent control studio）。本仓库已完成 **P7 实例运行时与 K8s 部署脚手架**，包含：
 
 | 组件 | 技术栈 | 状态 |
 |------|--------|------|
-| `cocoa-backend/` | Python 3.12 + FastAPI + SQLAlchemy (async) + asyncpg + Alembic | P2：12 模型 + 迁移 + 171 测试 |
-| `cocoa-portal/`  | React 19 + Vite 8 + TypeScript + Tailwind CSS v4 + Bun + lucide-react | 骨架 |
-| `cocoa-artifacts/` | Docker 镜像 & K8s 清单占位 | P7 才填 |
+| `cocoa-backend/` | Python 3.12 + FastAPI + SQLAlchemy (async) + asyncpg + Alembic | P2 引入 12 核心域模型；P3.5 加入 Event 模型（审计事件），合计 13 models（12 业务 + 1 审计）+ 3 迁移 + 249 测试 |
+| `cocoa-portal/`  | React 19 + Vite 8 + TypeScript + Tailwind CSS v4 + Bun + lucide-react | P1.5 骨架（RouterProvider 已接入） |
+| `cocoa-artifacts/` | Dockerfile + K8s 清单（Deployment/Service/ConfigMap/PVC/NetworkPolicy） | P7 已完成 |
 | `.github/workflows/` | CI 基础（lint + build） | 骨架 |
 
 后端构建上下文：**`cocoa-backend/`，不是仓库根目录**。`pyproject.toml`、`alembic.ini`、`.env` 都在 `cocoa-backend/` 下。`uv sync` / `alembic` 命令必须从该目录执行，或通过 `dev.sh` 自动 `cd`。
