@@ -4,9 +4,11 @@ Each preset has a Chinese slug (P1 naming), a human-readable name, a semantic
 version, and a ``manifest`` dict that conforms to the ``PresetManifest`` schema
 defined in ``app/schemas/preset.py``.
 
-The ``prompt`` field is set to ``"TODO P8"`` — a skeleton placeholder that
-P8 replaces with a real system prompt.  The ``model`` field defaults to
-``"tbd"``.
+P14a upgrade: each manifest now carries a ``provider`` sub-dict describing
+which LLMClient to use (4 provider types — see ``app/schemas/llm.py``).
+``zong-jian`` (Director) is human-driven and sets ``provider=None`` — it
+does not route through any LLM. The ``prompt`` placeholder is now
+``"TODO P14a"``; the real system prompt arrives in P14b.
 
 Usage::
 
@@ -29,10 +31,16 @@ BUILTIN_PRESETS: list[dict] = [
         "version": "1.0.0",
         "manifest": {
             "model": "tbd",
-            "prompt": "TODO P8",
+            "prompt": "TODO P14a",
             "skills": [],
             "tools": [],
             "commands": ["plan", "decompose", "prioritize"],
+            "provider": {
+                "type": "openai-compatible",
+                "model": "gpt-4o-mini",
+                "max_tokens": 2048,
+                "temperature": 0.7,
+            },
         },
     },
     {
@@ -41,10 +49,16 @@ BUILTIN_PRESETS: list[dict] = [
         "version": "1.0.0",
         "manifest": {
             "model": "tbd",
-            "prompt": "TODO P8",
+            "prompt": "TODO P14a",
             "skills": [],
             "tools": [],
             "commands": ["execute", "build", "test"],
+            "provider": {
+                "type": "openai-compatible",
+                "model": "claude-3-5-sonnet-latest",  # via anthropic-compatible API
+                "max_tokens": 4096,
+                "temperature": 0.5,
+            },
         },
     },
     {
@@ -53,10 +67,16 @@ BUILTIN_PRESETS: list[dict] = [
         "version": "1.0.0",
         "manifest": {
             "model": "tbd",
-            "prompt": "TODO P8",
+            "prompt": "TODO P14a",
             "skills": [],
             "tools": [],
             "commands": ["analyze", "predict", "review"],
+            "provider": {
+                "type": "anthropic",
+                "model": "claude-3-5-sonnet-latest",
+                "max_tokens": 2048,
+                "temperature": 0.3,
+            },
         },
     },
     {
@@ -65,10 +85,16 @@ BUILTIN_PRESETS: list[dict] = [
         "version": "1.0.0",
         "manifest": {
             "model": "tbd",
-            "prompt": "TODO P8",
+            "prompt": "TODO P14a",
             "skills": [],
             "tools": [],
             "commands": ["search", "survey", "report"],
+            "provider": {
+                "type": "openai-compatible",
+                "model": "gpt-4o-mini",
+                "max_tokens": 2048,
+                "temperature": 0.6,
+            },
         },
     },
     {
@@ -77,10 +103,16 @@ BUILTIN_PRESETS: list[dict] = [
         "version": "1.0.0",
         "manifest": {
             "model": "tbd",
-            "prompt": "TODO P8",
+            "prompt": "TODO P14a",
             "skills": [],
             "tools": [],
             "commands": ["review", "approve", "reject"],
+            "provider": {
+                "type": "anthropic",
+                "model": "claude-3-5-haiku-latest",
+                "max_tokens": 1024,
+                "temperature": 0.4,
+            },
         },
     },
     {
@@ -89,10 +121,11 @@ BUILTIN_PRESETS: list[dict] = [
         "version": "1.0.0",
         "manifest": {
             "model": "tbd",
-            "prompt": "TODO P8",
+            "prompt": "TODO P14a",
             "skills": [],
             "tools": [],
             "commands": ["approve", "reject", "delegate"],
+            "provider": None,  # humans don't need an LLM
         },
     },
 ]
