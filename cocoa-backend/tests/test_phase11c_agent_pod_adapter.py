@@ -44,16 +44,34 @@ from app.core.event_types import (
 
 _spec = importlib.util.spec_from_file_location(
     "app._agent_runtime_legacy_for_tests",
-    "/tmp/p11c-worktree/cocoa-backend/app/agent_runtime.py",
+    "/tmp/p14a-worktree/cocoa-backend/app/agent_runtime/__init__.py",
 )
-_legacy = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_legacy)
+_pkg_mod = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_pkg_mod)
+# The package __init__.py (P11c shim) loads the legacy ``app/agent_runtime.py``
+# into ``sys.modules['app._agent_runtime_legacy']`` and re-exports only
+# ``start_runtime_for``. The test needs the full legacy namespace (it
+# monkey-patches ``is_k8s_pod_mode``, ``run_agent_loop``, ``emit``, etc.),
+# so we follow the shim chain and pull the legacy module out of sys.modules.
+_legacy = sys.modules["app._agent_runtime_legacy"]
 sys.modules["app._agent_runtime_legacy_for_tests"] = _legacy
 import app as _app_pkg  # noqa: E402
 
 _app_pkg._agent_runtime_legacy_for_tests = _legacy
 
 run_agent_loop = _legacy.run_agent_loop
+
+# P14a replaced the P11c no-LLM skeleton with a real LLM call loop
+# (commit 7a00d16). ``_build_llm_client()`` now requires an
+# ``OPENAI_API_KEY`` and an httpx SOCKS proxy, neither of which the
+# local/K8s dispatch tests provide. The tests were designed against
+# the P11c no-op loop and exercise dispatch branches that no longer
+# exist in P14a's ``run_agent_loop``. Skipped per the task note
+# "accept some skips if needed"; re-enable when these tests are
+# ported to P14a's LLMClient contract.
+pytestmark = pytest.mark.skip(
+    reason="P14a real-LLM loop incompatible with P11c no-LLM test design",
+)
 
 # ── 1. Local mode keeps the P8 in-process emit contract ────────────────
 
