@@ -410,28 +410,38 @@ async def _transition(
     return instance
 
 
-@router.post("/{instance_id}/deploy", response_model=DeployRecordOut)
+@router.post("/{instance_id}/deploy")
 async def deploy_instance(
     instance_id: str,
     db: DB,
     current_user: CurrentUserDep,
-) -> DeployRecordOut:
-    """Kick off the K8s deploy pipeline for this instance (P11c).
+):
+    """Deploy an instance — P7 contract with P11c K8s upgrade.
 
-    Replaces the P7 in-process DB transition with a 9-step K8s
-    pipeline driven by :func:`app.services.deploy_service.deploy_instance`.
-    The DB-side :class:`DeployRecord` is created synchronously and
-    returned to the caller; the actual K8s work runs as a fire-and-
-    forget ``asyncio`` task whose progress is streamed via the SSE
-    endpoint (``GET /api/v1/deploy/deploy-progress/{record_id}``).
+    When a K8s cluster is reachable, kicks off the 9-step
+    :func:`app.services.deploy_service.deploy_instance` pipeline; a
+    :class:`DeployRecord` is returned synchronously and the rest of the
+    pipeline runs as a fire-and-forget ``asyncio`` task streamed via
+    the SSE endpoint (``GET /api/v1/deploy/deploy-progress/{record_id}``).
 
-    Returns 503 when no K8s cluster is reachable — local dev without a
-    kubeconfig can keep working without crashing the deploy endpoint.
+    When no K8s cluster is reachable (local dev, no kubeconfig, or
+    ``COCOA_K8S_DISABLED=true``), falls back to P7's in-process DB
+    state transition so the legacy P7 contract (``status='deploying'``,
+    ``INSTANCE_DEPLOYED`` event, ``InstanceOut`` response) keeps
+    working without a cluster.
     """
     if not _is_k8s_available():
-        raise HTTPException(
-            status_code=503,
-            detail="K8s not available; deploy pipeline requires K8s cluster (P11c local mode)",
+        # P7 fallback: in-process DB transition (no K8s cluster reachable).
+        return await _transition(
+            instance_id,
+            allowed=[
+                InstanceStatus.creating.value,
+                InstanceStatus.restarting.value,
+            ],
+            new_status=InstanceStatus.deploying.value,
+            event_type=INSTANCE_DEPLOYED,
+            db=db,
+            current_user=current_user,
         )
 
     instance = await db.get(Instance, instance_id)
