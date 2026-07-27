@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
-  parse_turn,
-  segmentCompartments,
-  SlashParserError,
   type Directive,
+  parse_turn,
+  SlashParserError,
+  segmentCompartments,
 } from '@/lib/slash-parser';
 
 describe('slash-parser', () => {

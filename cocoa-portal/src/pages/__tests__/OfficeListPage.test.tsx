@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { api, ApiError } from '@/lib/api';
+import { ApiError, api } from '@/lib/api';
 import OfficeListPage from '@/pages/OfficeListPage';
 
 vi.mock('@/lib/api', async (importOriginal) => {

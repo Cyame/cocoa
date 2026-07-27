@@ -571,10 +571,8 @@ export default function TopologyPage() {
     async function createCorridor() {
       const body: CorridorCreateBody = {
         office_id: officeId as string,
-        from_membership_id:
-          completion.source.kind === 'membership' ? completion.source.id : null,
-        to_membership_id:
-          completion.target.kind === 'membership' ? completion.target.id : null,
+        from_membership_id: completion.source.kind === 'membership' ? completion.source.id : null,
+        to_membership_id: completion.target.kind === 'membership' ? completion.target.id : null,
         from_corridor_node_id:
           completion.source.kind === 'corridor_node' ? completion.source.id : null,
         to_corridor_node_id:
@@ -868,8 +866,7 @@ export default function TopologyPage() {
                 {nodes.map((node) => {
                   const isPendingSource =
                     pendingConnection !== null && pendingConnection.id === node.id;
-                  const isSelected =
-                    selectedNode !== null && selectedNode.id === node.id;
+                  const isSelected = selectedNode !== null && selectedNode.id === node.id;
                   const dragOverride =
                     dragState !== null && dragState.id === node.id
                       ? { x: dragState.currentX, y: dragState.currentY }
@@ -881,9 +878,7 @@ export default function TopologyPage() {
                       onClick={handleNodeClick}
                       onMouseDown={handleNodeMouseDown}
                       isHighlighted={isPendingSource || isSelected}
-                      highlightKind={
-                        isPendingSource ? 'pending' : isSelected ? 'selected' : null
-                      }
+                      highlightKind={isPendingSource ? 'pending' : isSelected ? 'selected' : null}
                       dragOverride={dragOverride}
                       isMoveCursor={interactionMode === 'move'}
                     />
@@ -912,8 +907,7 @@ export default function TopologyPage() {
                 setSelectedNode(null);
                 setActionError(null);
               } catch (error) {
-                const message =
-                  error instanceof Error ? error.message : 'Failed to delete node';
+                const message = error instanceof Error ? error.message : 'Failed to delete node';
                 setActionError(message);
               }
             }}

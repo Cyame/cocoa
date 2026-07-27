@@ -1,7 +1,7 @@
 import { AlertCircle, Building2, LoaderCircle, LogIn } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router';
-import { api, ApiError } from '@/lib/api';
+import { ApiError, api } from '@/lib/api';
 import { useSessionStore } from '@/stores/session';
 
 type TokenResponse = {

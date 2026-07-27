@@ -1,6 +1,6 @@
 import { Bug, Download, Filter, LoaderCircle, RefreshCw } from 'lucide-react';
 import { Fragment, useCallback, useEffect, useState } from 'react';
-import { api, ApiError } from '@/lib/api';
+import { ApiError, api } from '@/lib/api';
 import type { Event, JsonObject } from '@/lib/types';
 
 const POLL_INTERVAL_MS = 5000;
@@ -169,12 +169,15 @@ export default function DebugPage() {
           <p className="text-xs font-semibold uppercase tracking-widest text-slate-600">
             Audit stream
           </p>
-          <h1 id="debug-page-title" className="mt-1 text-3xl font-semibold tracking-tight text-slate-950">
+          <h1
+            id="debug-page-title"
+            className="mt-1 text-3xl font-semibold tracking-tight text-slate-950"
+          >
             Debug
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-            Raw audit event stream with cursor pagination. Auto-refreshes every 5 seconds;
-            events may be delayed up to 5s.
+            Raw audit event stream with cursor pagination. Auto-refreshes every 5 seconds; events
+            may be delayed up to 5s.
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -279,7 +282,9 @@ export default function DebugPage() {
             Apply
           </button>
           <p className="text-xs text-slate-500">
-            {lastUpdated !== null ? `Last updated ${new Date(lastUpdated).toLocaleTimeString()}` : null}
+            {lastUpdated !== null
+              ? `Last updated ${new Date(lastUpdated).toLocaleTimeString()}`
+              : null}
           </p>
         </div>
       </div>
@@ -297,15 +302,28 @@ export default function DebugPage() {
         </div>
       ) : null}
 
-      <div className="overflow-auto rounded-xl border border-slate-200 bg-white shadow-sm" style={{ maxHeight: '70vh' }}>
+      <div
+        className="overflow-auto rounded-xl border border-slate-200 bg-white shadow-sm"
+        style={{ maxHeight: '70vh' }}
+      >
         <table className="w-full border-collapse text-sm">
           <thead className="sticky top-0 z-10 bg-slate-50 text-left text-xs uppercase tracking-wider text-slate-600">
             <tr>
-              <th scope="col" className="border-b border-slate-200 px-4 py-3 font-semibold">Created at</th>
-              <th scope="col" className="border-b border-slate-200 px-4 py-3 font-semibold">Type</th>
-              <th scope="col" className="border-b border-slate-200 px-4 py-3 font-semibold">Actor</th>
-              <th scope="col" className="border-b border-slate-200 px-4 py-3 font-semibold">Resource</th>
-              <th scope="col" className="border-b border-slate-200 px-4 py-3 font-semibold">Payload</th>
+              <th scope="col" className="border-b border-slate-200 px-4 py-3 font-semibold">
+                Created at
+              </th>
+              <th scope="col" className="border-b border-slate-200 px-4 py-3 font-semibold">
+                Type
+              </th>
+              <th scope="col" className="border-b border-slate-200 px-4 py-3 font-semibold">
+                Actor
+              </th>
+              <th scope="col" className="border-b border-slate-200 px-4 py-3 font-semibold">
+                Resource
+              </th>
+              <th scope="col" className="border-b border-slate-200 px-4 py-3 font-semibold">
+                Payload
+              </th>
             </tr>
           </thead>
           <tbody>

@@ -108,7 +108,9 @@ describe('OfficeDetailPage', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: 'Blackboard' }));
 
-    expect(await screen.findByText('Coordinate the quarterly research sprint.')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Coordinate the quarterly research sprint.'),
+    ).toBeInTheDocument();
     expect(screen.getByText('Review findings every Friday.')).toBeInTheDocument();
     expect(mockedApi).toHaveBeenCalledWith('/blackboards?office_id=office-1');
   });

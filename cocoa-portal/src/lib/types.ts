@@ -93,13 +93,7 @@ export type Instance = {
   readonly updated_at: string;
 };
 
-export type LoopStatus =
-  | 'idle'
-  | 'running'
-  | 'paused'
-  | 'interrupted'
-  | 'completed'
-  | 'failed';
+export type LoopStatus = 'idle' | 'running' | 'paused' | 'interrupted' | 'completed' | 'failed';
 
 export type InstanceLoopState = {
   readonly instance_id: string;

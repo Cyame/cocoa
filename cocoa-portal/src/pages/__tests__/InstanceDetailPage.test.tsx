@@ -132,7 +132,9 @@ describe('InstanceDetailPage', () => {
     expect(screen.getByTestId('instance-continuation-count')).toHaveTextContent('3');
 
     // Last checkpoint
-    expect(screen.getByTestId('instance-last-checkpoint')).toHaveTextContent('2026-07-27T10:00:00Z');
+    expect(screen.getByTestId('instance-last-checkpoint')).toHaveTextContent(
+      '2026-07-27T10:00:00Z',
+    );
 
     // Breaker config renders the 4 thresholds
     const breaker = screen.getByTestId('instance-breaker-config');

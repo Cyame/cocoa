@@ -2,12 +2,12 @@ import { AlertCircle, AtSign, LoaderCircle, MessageSquare, Send } from 'lucide-r
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { CommandAutocomplete } from '@/components/CommandAutocomplete';
-import { api, ApiError } from '@/lib/api';
+import { ApiError, api } from '@/lib/api';
 import {
-  parse_turn,
-  segmentCompartments,
-  SlashParserError,
   type Compartment,
+  parse_turn,
+  SlashParserError,
+  segmentCompartments,
   type Turn,
 } from '@/lib/slash-parser';
 import type { EmployeePreset } from '@/lib/types';
@@ -87,9 +87,7 @@ export default function ComposerPage() {
     void Promise.all(
       toFetch.map(async (slug): Promise<[string, EmployeePreset | null]> => {
         try {
-          const preset = await api<EmployeePreset>(
-            `/employee-presets/${encodeURIComponent(slug)}`,
-          );
+          const preset = await api<EmployeePreset>(`/employee-presets/${encodeURIComponent(slug)}`);
           return [slug, preset];
         } catch {
           return [slug, null];
@@ -200,7 +198,11 @@ export default function ComposerPage() {
               disabled={!canSend}
               className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
-              {sending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              {sending ? (
+                <LoaderCircle className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
               {sending ? 'Sending...' : 'Send'}
             </button>
           </div>
@@ -212,9 +214,9 @@ export default function ComposerPage() {
             Compartments
           </h2>
           <div className="space-y-3">
-            {compartments.map((comp, idx) => (
+            {compartments.map((comp) => (
               <CompartmentCard
-                key={`${comp.label}-${idx}`}
+                key={comp.label}
                 compartment={comp}
                 preset={presetCache[comp.label] ?? undefined}
               />
@@ -238,8 +240,7 @@ type CompartmentCardProps = {
 
 function CompartmentCard({ compartment, preset }: CompartmentCardProps) {
   const isGeneral = compartment.label === 'general';
-  const hasContent =
-    compartment.general_text !== null || compartment.directives.length > 0;
+  const hasContent = compartment.general_text !== null || compartment.directives.length > 0;
 
   return (
     <div
@@ -253,25 +254,21 @@ function CompartmentCard({ compartment, preset }: CompartmentCardProps) {
         <span className="text-sm font-semibold text-slate-800">
           {isGeneral ? 'General' : `@${compartment.label}`}
         </span>
-        <span className="text-xs text-slate-400">
-          {compartment.directives.length} cmd(s)
-        </span>
+        <span className="text-xs text-slate-400">{compartment.directives.length} cmd(s)</span>
       </div>
 
       {compartment.general_text !== null && (
         <p className="mb-2 truncate text-sm text-slate-600">{compartment.general_text}</p>
       )}
 
-      {compartment.directives.map((d, i) => (
+      {compartment.directives.map((d) => (
         <div
-          key={i}
+          key={d.raw_text}
           className="mb-2 rounded border border-slate-100 bg-slate-50 px-3 py-2 text-xs"
         >
           <div className="flex items-center gap-2">
             <code className="font-mono text-blue-600">{d.cmd}</code>
-            {d.args.length > 0 && (
-              <span className="text-slate-500">{d.args.join(' ')}</span>
-            )}
+            {d.args.length > 0 && <span className="text-slate-500">{d.args.join(' ')}</span>}
           </div>
           {d.content_ref !== null && (
             <p className="mt-1 text-slate-500">
@@ -287,10 +284,7 @@ function CompartmentCard({ compartment, preset }: CompartmentCardProps) {
           <p className="mb-1 text-xs font-medium text-slate-500">Available commands:</p>
           <div className="flex flex-wrap gap-1">
             {preset.manifest.commands.map((cmd) => (
-              <span
-                key={cmd}
-                className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600"
-              >
+              <span key={cmd} className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
                 {cmd}
               </span>
             ))}

@@ -128,7 +128,7 @@ export function parse_directive(line: string): Directive | string {
 
   return {
     target_employee: target,
-    cmd: '/' + cmd,
+    cmd: `/${cmd}`,
     args,
     content_ref: contentRef,
     raw_text: original,

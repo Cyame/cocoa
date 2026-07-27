@@ -1,4 +1,4 @@
-import { Building2, Bug, LogOut, Network, Pencil, User } from 'lucide-react';
+import { Bug, Building2, LogOut, Network, Pencil, User } from 'lucide-react';
 import { Navigate, NavLink, Outlet, useParams } from 'react-router';
 import { cn } from '@/lib/utils';
 import { useSelectedStore } from '@/stores/selected';

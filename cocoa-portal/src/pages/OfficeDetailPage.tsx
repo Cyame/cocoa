@@ -1,7 +1,15 @@
-import { AlertCircle, Building2, Cpu, LoaderCircle, Notebook, UserRound, Users } from 'lucide-react';
+import {
+  AlertCircle,
+  Building2,
+  Cpu,
+  LoaderCircle,
+  Notebook,
+  UserRound,
+  Users,
+} from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router';
-import { api, ApiError } from '@/lib/api';
+import { ApiError, api } from '@/lib/api';
 import type { Instance, Membership, Office } from '@/lib/types';
 import { useSelectedStore } from '@/stores/selected';
 
@@ -55,7 +63,9 @@ export default function OfficeDetailPage() {
         if (activeTab === 'employees') {
           const [officeResponse, membershipPage] = await Promise.all([
             office === null ? api<Office>(`/offices/${officeId}`) : Promise.resolve(office),
-            api<OffsetPage<Membership>>(`/messaging/memberships?office_id=${encodeURIComponent(officeId)}`),
+            api<OffsetPage<Membership>>(
+              `/messaging/memberships?office_id=${encodeURIComponent(officeId)}`,
+            ),
           ]);
           if (isActive) {
             setOffice(officeResponse);
@@ -95,7 +105,7 @@ export default function OfficeDetailPage() {
     return () => {
       isActive = false;
     };
-  }, [activeTab, id]);
+  }, [activeTab, id, office]);
 
   if (id === undefined) {
     return <p className="p-6 text-sm text-red-700">Office identifier is missing.</p>;
@@ -110,7 +120,10 @@ export default function OfficeDetailPage() {
           </span>
           <div className="min-w-0">
             <p className="font-mono text-xs text-slate-500">{office?.slug ?? 'Loading office'}</p>
-            <h1 id="office-title" className="mt-1 truncate text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">
+            <h1
+              id="office-title"
+              className="mt-1 truncate text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl"
+            >
               {office?.name ?? 'Office detail'}
             </h1>
             <p className="mt-2 text-sm leading-6 text-slate-600">
@@ -122,7 +135,11 @@ export default function OfficeDetailPage() {
 
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="overflow-x-auto border-b border-slate-200">
-          <div role="tablist" aria-label="Office detail sections" className="flex min-w-max gap-1 px-3 pt-3">
+          <div
+            role="tablist"
+            aria-label="Office detail sections"
+            className="flex min-w-max gap-1 px-3 pt-3"
+          >
             {TABS.map(({ id: tabId, label, Icon }) => (
               <button
                 key={tabId}
@@ -145,9 +162,17 @@ export default function OfficeDetailPage() {
           </div>
         </div>
 
-        <div id={`panel-${activeTab}`} role="tabpanel" aria-labelledby={`tab-${activeTab}`} className="min-h-64 p-4 sm:p-6">
+        <div
+          id={`panel-${activeTab}`}
+          role="tabpanel"
+          aria-labelledby={`tab-${activeTab}`}
+          className="min-h-64 p-4 sm:p-6"
+        >
           {errorMessage !== null ? (
-            <div role="alert" className="flex gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            <div
+              role="alert"
+              className="flex gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+            >
               <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
               <p>{errorMessage}</p>
             </div>
@@ -164,7 +189,10 @@ export default function OfficeDetailPage() {
             memberships.length > 0 ? (
               <ul className="grid gap-3 sm:grid-cols-2">
                 {memberships.map((membership) => (
-                  <li key={membership.id} className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                  <li
+                    key={membership.id}
+                    className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4"
+                  >
                     <span className="grid size-9 shrink-0 place-items-center rounded-full bg-white text-slate-600 shadow-sm">
                       <UserRound className="size-4" aria-hidden="true" />
                     </span>
@@ -178,7 +206,11 @@ export default function OfficeDetailPage() {
                 ))}
               </ul>
             ) : (
-              <EmptyState Icon={Users} title="No employees" detail="This office has no active memberships." />
+              <EmptyState
+                Icon={Users}
+                title="No employees"
+                detail="This office has no active memberships."
+              />
             )
           ) : null}
 
@@ -186,10 +218,17 @@ export default function OfficeDetailPage() {
             instances.length > 0 ? (
               <ul className="space-y-3">
                 {instances.map((instance) => (
-                  <li key={instance.id} className="grid gap-3 rounded-lg border border-slate-200 p-4 sm:grid-cols-[1fr_auto] sm:items-center">
+                  <li
+                    key={instance.id}
+                    className="grid gap-3 rounded-lg border border-slate-200 p-4 sm:grid-cols-[1fr_auto] sm:items-center"
+                  >
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-slate-900">{instance.employee_id}</p>
-                      <p className="mt-1 truncate font-mono text-xs text-slate-500">{instance.workspace_path ?? instance.id}</p>
+                      <p className="truncate text-sm font-semibold text-slate-900">
+                        {instance.employee_id}
+                      </p>
+                      <p className="mt-1 truncate font-mono text-xs text-slate-500">
+                        {instance.workspace_path ?? instance.id}
+                      </p>
                     </div>
                     <span className="w-fit rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
                       {instance.status}
@@ -198,13 +237,21 @@ export default function OfficeDetailPage() {
                 ))}
               </ul>
             ) : (
-              <EmptyState Icon={Cpu} title="No instances" detail="No active runtime is assigned to this office." />
+              <EmptyState
+                Icon={Cpu}
+                title="No instances"
+                detail="No active runtime is assigned to this office."
+              />
             )
           ) : null}
 
           {!isLoading && errorMessage === null && activeTab === 'blackboard' ? (
             blackboard === null ? (
-              <EmptyState Icon={Notebook} title="No blackboard" detail="Shared office context has not been initialized." />
+              <EmptyState
+                Icon={Notebook}
+                title="No blackboard"
+                detail="Shared office context has not been initialized."
+              />
             ) : (
               <div className="grid gap-4 lg:grid-cols-2">
                 <article className="rounded-lg border border-slate-200 bg-slate-50 p-4">

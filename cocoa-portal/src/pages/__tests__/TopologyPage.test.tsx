@@ -568,7 +568,9 @@ describe('TopologyPage', () => {
       );
     });
     await act(async () => {
-      window.dispatchEvent(new MouseEvent('mouseup', { clientX: 300, clientY: 200, bubbles: true }));
+      window.dispatchEvent(
+        new MouseEvent('mouseup', { clientX: 300, clientY: 200, bubbles: true }),
+      );
     });
 
     await waitFor(() => {
