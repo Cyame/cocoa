@@ -8,9 +8,11 @@ Three endpoint tests cover the wiring changes in
    (mocked), kicks off the async pipeline (also mocked), and returns a
    :class:`DeployRecordOut` body with the expected fields.
 
-2. ``test_deploy_local_mode_returns_503`` — with ``COCOA_K8S_DISABLED=true``
-   (local dev), the deploy endpoint short-circuits with 503 *before*
-   hitting the DB.
+2. ``test_deploy_local_mode_falls_back_to_db_transition`` — with
+   ``COCOA_K8S_DISABLED=true`` (local dev), the deploy endpoint
+   short-circuits to the P7 in-process DB transition
+   (``creating``/``restarting`` → ``deploying``) instead of returning
+   503.
 
 3. ``test_delete_calls_k8s_delete_namespace`` — ``DELETE /instances/{id}``
    performs a best-effort K8s ``delete_namespace`` on the
@@ -170,18 +172,22 @@ async def test_deploy_calls_deploy_service(
 
 
 @pytest.mark.asyncio
-async def test_deploy_local_mode_returns_503(
+async def test_deploy_local_mode_falls_back_to_db_transition(
     instances_app: FastAPI,
+    session: AsyncSession,
     instance_factory,
     db_url: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Local mode (COCOA_K8S_DISABLED=true) makes the deploy endpoint 503.
+    """Local mode (COCOA_K8S_DISABLED=true) falls back to P7 DB transition.
 
-    The check runs before any DB or service-layer work, so an
-    instance without office membership still produces a 503 (not a
-    403/404). This protects local dev environments that don't have a
-    kubeconfig from crashing the deploy endpoint.
+    With no kubeconfig / service-account / GATEWAY_KUBECONFIG and
+    ``COCOA_K8S_DISABLED=true`` set, ``_is_k8s_available()`` returns
+    ``False``. The deploy endpoint then short-circuits to the P7
+    in-process DB transition (``creating``/``restarting`` → ``deploying``),
+    keeping the legacy P7 contract usable in local dev without a
+    cluster. The fallback path returns 200 with the same
+    ``InstanceOut`` body the P7 contract defines.
     """
     import app.core.db as db_mod
 
@@ -192,23 +198,28 @@ async def test_deploy_local_mode_returns_503(
     monkeypatch.delenv("KUBECONFIG", raising=False)
     monkeypatch.delenv("GATEWAY_KUBECONFIG", raising=False)
 
-    instance = await instance_factory(workspace_path="deploy-local-503")
+    instance = await instance_factory(workspace_path="deploy-local-fallback")
 
     transport = ASGITransport(app=instances_app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         username = f"local_{uuid.uuid4().hex[:8]}"
         token = await _register_and_login(ac, username)
 
+        from jose import jwt
+
+        user_id = jwt.get_unverified_claims(token)["sub"]
+        await _link_user_to_office(session, user_id, instance.office_id)
+
         resp = await ac.post(
             f"/api/v1/instances/{instance.id}/deploy",
             headers={"Authorization": f"Bearer {token}"},
         )
 
-    assert resp.status_code == 503, resp.text
+    assert resp.status_code == 200, resp.text
     body = resp.json()
-    # FastAPI wraps HTTPException(detail=...) under "detail"; the
-    # message body must surface the local-mode reason.
-    assert "K8s not available" in str(body.get("detail", ""))
+    assert body["status"] == "deploying"
+    assert body["id"] == instance.id
+    assert body["workspace_path"] == "deploy-local-fallback"
 
 
 @pytest.mark.asyncio
