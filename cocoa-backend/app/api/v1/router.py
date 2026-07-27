@@ -8,6 +8,7 @@ from fastapi import APIRouter
 from app.api.v1.auth import router as auth_router
 from app.api.v1.blackboard import router as blackboard_router
 from app.api.v1.corridor_node import router as corridor_node_router
+from app.api.v1.deploy import router as deploy_router
 from app.api.v1.employee_presets import router as employee_presets_router
 from app.api.v1.employees import router as employees_router
 from app.api.v1.events import router as events_router
@@ -23,6 +24,7 @@ api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(auth_router)
 api_router.include_router(blackboard_router)
 api_router.include_router(corridor_node_router)
+api_router.include_router(deploy_router)
 api_router.include_router(employee_presets_router)
 api_router.include_router(employees_router)
 api_router.include_router(events_router)
