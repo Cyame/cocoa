@@ -1,4 +1,4 @@
-import { AlertCircle, Bot, LoaderCircle, Network, User } from 'lucide-react';
+import { AlertCircle, Bot, Link, LoaderCircle, Network, Trash, User, X } from 'lucide-react';
 import {
   type ReactElement,
   type MouseEvent as ReactMouseEvent,
@@ -11,7 +11,8 @@ import {
 } from 'react';
 import { useParams } from 'react-router';
 import TopologyGlowDefs, { GLOW_INTENSITY_OPACITY } from '@/components/TopologyGlow';
-import { api } from '@/lib/api';
+import TopologyToolbar from '@/components/TopologyToolbar';
+import { ApiError, api } from '@/lib/api';
 import type {
   CorridorNode as CorridorNodeModel,
   Event,
@@ -20,6 +21,7 @@ import type {
   Membership,
 } from '@/lib/types';
 import { useSelectedStore } from '@/stores/selected';
+import { useSessionStore } from '@/stores/session';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -80,6 +82,33 @@ type NodeSummary = {
   readonly fillColor: string;
   readonly glowColor: string;
   readonly glowIntensity: GlowIntensity;
+};
+
+type PendingConnection = {
+  readonly id: string;
+  readonly kind: NodeKind;
+};
+
+type DragState = {
+  readonly id: string;
+  readonly kind: NodeKind;
+  readonly originX: number;
+  readonly originY: number;
+  readonly currentX: number;
+  readonly currentY: number;
+};
+
+type NodeDragPatchBody = {
+  readonly posx: number;
+  readonly posy: number;
+};
+
+type CorridorCreateBody = {
+  readonly office_id: string;
+  readonly from_membership_id: string | null;
+  readonly to_membership_id: string | null;
+  readonly from_corridor_node_id: string | null;
+  readonly to_corridor_node_id: string | null;
 };
 
 // ---------------------------------------------------------------------------
@@ -156,6 +185,8 @@ async function fetchStaticData(officeId: string): Promise<TopologyStaticData> {
 export default function TopologyPage() {
   const { id: routeOfficeId } = useParams<{ id: string }>();
   const setOfficeId = useSelectedStore((state) => state.setOfficeId);
+  const interactionMode = useSelectedStore((state) => state.interactionMode);
+  const sessionUser = useSessionStore((state) => state.user);
   const [staticData, setStaticData] = useState<TopologyStaticData | null>(null);
   const [liveStatus, setLiveStatus] = useState<readonly LiveStatusItem[]>([]);
   const [activeCorridors, setActiveCorridors] = useState<ReadonlyMap<string, number>>(
@@ -163,6 +194,12 @@ export default function TopologyPage() {
   );
   const [isStaticLoading, setIsStaticLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // ---- Interaction state (Todo 9) ----
+  const [selectedNode, setSelectedNode] = useState<NodeSummary | null>(null);
+  const [pendingConnection, setPendingConnection] = useState<PendingConnection | null>(null);
+  const [dragState, setDragState] = useState<DragState | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   // ---- Viewport state (pan / zoom) ----
   const [panX, setPanX] = useState(0);
@@ -399,16 +436,24 @@ export default function TopologyPage() {
   }, [staticData]);
 
   // ---- Pointer handlers (pan via drag) ----
-  const handleMouseDown = useCallback((event: ReactMouseEvent<SVGSVGElement>) => {
-    if (event.button !== 0) return;
-    const target = event.target as Element | null;
-    // Only start panning when the click lands on the background, not a node
-    if (target !== null && target.closest('[data-topology-node="true"]') !== null) {
-      return;
-    }
-    isDraggingRef.current = true;
-    lastPointerRef.current = { x: event.clientX, y: event.clientY };
-  }, []);
+  const handleMouseDown = useCallback(
+    (event: ReactMouseEvent<SVGSVGElement>) => {
+      if (event.button !== 0) return;
+      const target = event.target as Element | null;
+      // Only start panning when the click lands on the background, not a node
+      if (target !== null && target.closest('[data-topology-node="true"]') !== null) {
+        return;
+      }
+      // Clicking empty canvas in connect mode cancels the pending connection.
+      if (interactionMode === 'connect' && pendingConnection !== null) {
+        setPendingConnection(null);
+        return;
+      }
+      isDraggingRef.current = true;
+      lastPointerRef.current = { x: event.clientX, y: event.clientY };
+    },
+    [interactionMode, pendingConnection],
+  );
 
   useEffect(() => {
     function handleMouseMove(event: globalThis.MouseEvent) {
@@ -457,17 +502,223 @@ export default function TopologyPage() {
     setZoom(next);
   }, []);
 
-  // ---- Node click handler (Todo 9 will route by interaction mode) ----
-  const handleNodeClick = useCallback((node: NodeSummary) => {
-    // eslint-disable-next-line no-console -- explicitly logged for Todo 9 to pick up
-    console.info('[topology] node click', {
-      kind: node.kind,
-      id: node.id,
-      label: node.label,
-      role: node.role,
-      status: node.status,
-    });
-  }, []);
+  // ---- Node interaction handlers (Todo 9: mode-aware) ----
+
+  // Drag state mirrored into a ref so the global mousemove/mouseup listeners
+  // can read the latest drag coordinates without re-subscribing on every move.
+  const dragStateRef = useRef<DragState | null>(null);
+  useEffect(() => {
+    dragStateRef.current = dragState;
+  }, [dragState]);
+
+  // rAF token so we coalesce mousemove updates to one React state write per frame.
+  const rafIdRef = useRef<number | null>(null);
+  const lastDragPointerRef = useRef<{ x: number; y: number } | null>(null);
+
+  const isEditor = useMemo(() => {
+    if (sessionUser === null) return false;
+    if (sessionUser.is_super_admin) return true;
+    // The session store doesn't carry office-scoped role; the topology page
+    // is read-only for non-super-admins until P9.5 wires office membership
+    // into the session. Editors in practice authenticate as super_admin in
+    // the dev harness.
+    return false;
+  }, [sessionUser]);
+
+  const handleNodeClick = useCallback(
+    (node: NodeSummary) => {
+      if (interactionMode === 'select') {
+        setSelectedNode(node);
+        setPendingConnection(null);
+        return;
+      }
+      if (interactionMode === 'connect') {
+        if (pendingConnection === null) {
+          setPendingConnection({ id: node.id, kind: node.kind });
+          setActionError(null);
+          return;
+        }
+        if (pendingConnection.id === node.id) {
+          setPendingConnection(null);
+          return;
+        }
+        setPendingConnectionCompletion({
+          source: pendingConnection,
+          target: { id: node.id, kind: node.kind },
+        });
+        setPendingConnection(null);
+        return;
+      }
+    },
+    [interactionMode, pendingConnection],
+  );
+
+  const [pendingConnectionCompletion, setPendingConnectionCompletion] = useState<{
+    readonly source: PendingConnection;
+    readonly target: PendingConnection;
+  } | null>(null);
+
+  // Effect: when a connect-mode pair is completed, POST /messaging/corridors.
+  // The fetch is deferred to an effect (not inlined in the click handler) so
+  // the call is observable by tests and so a slow network cannot block the
+  // click-driven UI state transitions.
+  useEffect(() => {
+    if (pendingConnectionCompletion === null) return;
+    if (officeId === null) return;
+    const completion = pendingConnectionCompletion;
+    let cancelled = false;
+
+    async function createCorridor() {
+      const body: CorridorCreateBody = {
+        office_id: officeId as string,
+        from_membership_id:
+          completion.source.kind === 'membership' ? completion.source.id : null,
+        to_membership_id:
+          completion.target.kind === 'membership' ? completion.target.id : null,
+        from_corridor_node_id:
+          completion.source.kind === 'corridor_node' ? completion.source.id : null,
+        to_corridor_node_id:
+          completion.target.kind === 'corridor_node' ? completion.target.id : null,
+      };
+      try {
+        await api<Corridor>('/messaging/corridors', {
+          method: 'POST',
+          body: JSON.stringify(body),
+        });
+        if (cancelled) return;
+        const fresh = await fetchStaticData(officeId as string);
+        if (cancelled) return;
+        setStaticData(fresh);
+        setActionError(null);
+      } catch (error) {
+        if (cancelled) return;
+        const message = error instanceof Error ? error.message : 'Failed to create corridor';
+        setActionError(message);
+      }
+    }
+
+    void createCorridor();
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingConnectionCompletion, officeId]);
+
+  // ---- Move mode: drag handlers ----
+
+  const handleNodeMouseDown = useCallback(
+    (node: NodeSummary, event: ReactMouseEvent<SVGGElement>) => {
+      if (interactionMode !== 'move') return;
+      if (event.button !== 0) return;
+      event.stopPropagation();
+      const initial: DragState = {
+        id: node.id,
+        kind: node.kind,
+        originX: node.x,
+        originY: node.y,
+        currentX: node.x,
+        currentY: node.y,
+      };
+      dragStateRef.current = initial;
+      setDragState(initial);
+      lastDragPointerRef.current = { x: event.clientX, y: event.clientY };
+    },
+    [interactionMode],
+  );
+
+  // Global mousemove/mouseup for node drag (separate from pan listeners so
+  // we can apply rAF throttling and resolve SVG coordinates correctly).
+  useEffect(() => {
+    if (dragState === null) return;
+
+    function handleMove(event: globalThis.MouseEvent) {
+      const drag = dragStateRef.current;
+      const lastPointer = lastDragPointerRef.current;
+      if (drag === null || lastPointer === null) return;
+      const svg = svgRef.current;
+      if (svg === null) return;
+
+      const rect = svg.getBoundingClientRect();
+      const userPerPixel = rect.width > 0 ? 2000 / rect.width : 1;
+      const dx = (event.clientX - lastPointer.x) * userPerPixel;
+      const dy = (event.clientY - lastPointer.y) * userPerPixel;
+      lastDragPointerRef.current = { x: event.clientX, y: event.clientY };
+
+      const next: DragState = {
+        ...drag,
+        currentX: drag.currentX + dx,
+        currentY: drag.currentY + dy,
+      };
+      dragStateRef.current = next;
+
+      if (rafIdRef.current !== null) return;
+      rafIdRef.current = requestAnimationFrame(() => {
+        rafIdRef.current = null;
+        setDragState(dragStateRef.current);
+      });
+    }
+
+    async function handleUp() {
+      const drag = dragStateRef.current;
+      if (drag === null) return;
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+      lastDragPointerRef.current = null;
+      dragStateRef.current = null;
+      setDragState(null);
+
+      const moved =
+        Math.round(drag.currentX) !== Math.round(drag.originX) ||
+        Math.round(drag.currentY) !== Math.round(drag.originY);
+      if (!moved) return;
+
+      const patchBody: NodeDragPatchBody = {
+        posx: Math.round(drag.currentX),
+        posy: Math.round(drag.currentY),
+      };
+      const endpoint =
+        drag.kind === 'membership'
+          ? `/messaging/memberships/${encodeURIComponent(drag.id)}`
+          : `/learning/corridor-nodes/${encodeURIComponent(drag.id)}`;
+
+      try {
+        await api(endpoint, {
+          method: 'PATCH',
+          body: JSON.stringify(patchBody),
+        });
+        // Refetch so server-truth coordinates replace the optimistic drag pos.
+        if (officeId !== null) {
+          const fresh = await fetchStaticData(officeId);
+          setStaticData(fresh);
+        }
+        setActionError(null);
+      } catch (error) {
+        // Revert is implicit: dragState was cleared above and the optimistic
+        // position was never persisted into staticData, so the next render
+        // falls back to the original (originX, originY) from the server.
+        const message =
+          error instanceof ApiError && error.status === 409
+            ? `Position (${patchBody.posx}, ${patchBody.posy}) is already used in this office`
+            : error instanceof Error
+              ? error.message
+              : 'Failed to move node';
+        setActionError(message);
+      }
+    }
+
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleUp);
+    };
+  }, [dragState, officeId]);
+
+  useEffect(() => {
+    if (interactionMode !== 'connect') setPendingConnection(null);
+    if (interactionMode !== 'select') setSelectedNode(null);
+  }, [interactionMode]);
 
   // ---- Render ----
   if (officeId === null) {
@@ -508,6 +759,40 @@ export default function TopologyPage() {
         </p>
       </header>
 
+      <TopologyToolbar />
+
+      {pendingConnection !== null ? (
+        <div
+          role="status"
+          className="flex shrink-0 items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800 sm:px-6"
+          data-testid="topology-connect-hint"
+        >
+          <span className="grid size-4 place-items-center rounded-full bg-amber-500 text-white">
+            <Link className="size-2.5" aria-hidden="true" />
+          </span>
+          <span>点击目标节点</span>
+        </div>
+      ) : null}
+
+      {actionError !== null ? (
+        <div
+          role="alert"
+          className="flex shrink-0 items-center gap-3 border-b border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 sm:px-6"
+          data-testid="topology-action-error"
+        >
+          <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          <p className="min-w-0 flex-1">{actionError}</p>
+          <button
+            type="button"
+            onClick={() => setActionError(null)}
+            className="inline-flex size-6 shrink-0 items-center justify-center rounded text-red-600 hover:bg-red-100"
+            aria-label="Dismiss error"
+          >
+            <X className="size-3.5" aria-hidden="true" />
+          </button>
+        </div>
+      ) : null}
+
       {errorMessage !== null ? (
         <div
           role="alert"
@@ -518,72 +803,121 @@ export default function TopologyPage() {
         </div>
       ) : null}
 
-      <div
-        className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-slate-50"
-        data-testid="topology-canvas-container"
-      >
-        {isStaticLoading ? (
-          <div className="flex items-center justify-center gap-3 text-sm text-slate-500">
-            <LoaderCircle className="size-5 animate-spin" aria-hidden="true" />
-            Loading topology
-          </div>
-        ) : null}
+      <div className="relative flex min-h-0 flex-1">
+        <div
+          className="relative flex min-w-0 flex-1 items-center justify-center overflow-hidden bg-slate-50"
+          data-testid="topology-canvas-container"
+        >
+          {isStaticLoading ? (
+            <div className="flex items-center justify-center gap-3 text-sm text-slate-500">
+              <LoaderCircle className="size-5 animate-spin" aria-hidden="true" />
+              Loading topology
+            </div>
+          ) : null}
 
-        {!isStaticLoading && errorMessage === null ? (
-          <svg
-            ref={svgRef}
-            role="img"
-            aria-label={`Topology canvas for office ${officeId}`}
-            data-testid="topology-canvas"
-            viewBox={VIEW_BOX}
-            preserveAspectRatio="xMidYMid meet"
-            className="h-full w-full select-none"
-            onMouseDown={handleMouseDown}
-            onWheel={handleWheel}
-          >
-            <TopologyGlowDefs />
+          {!isStaticLoading && errorMessage === null ? (
+            <svg
+              ref={svgRef}
+              role="img"
+              aria-label={`Topology canvas for office ${officeId}`}
+              data-testid="topology-canvas"
+              viewBox={VIEW_BOX}
+              preserveAspectRatio="xMidYMid meet"
+              className="h-full w-full select-none"
+              onMouseDown={handleMouseDown}
+              onWheel={handleWheel}
+            >
+              <TopologyGlowDefs />
 
-            {/* subtle grid backdrop — purely cosmetic, no role in tests */}
-            <g opacity="0.25">
-              {[-800, -400, 0, 400, 800].map((tick) => (
-                <line
-                  key={`v-${tick}`}
-                  x1={tick}
-                  y1={-1000}
-                  x2={tick}
-                  y2={1000}
-                  stroke="#cbd5e1"
-                  strokeWidth={1}
-                />
-              ))}
-              {[-800, -400, 0, 400, 800].map((tick) => (
-                <line
-                  key={`h-${tick}`}
-                  x1={-1000}
-                  y1={tick}
-                  x2={1000}
-                  y2={tick}
-                  stroke="#cbd5e1"
-                  strokeWidth={1}
-                />
-              ))}
-            </g>
+              {/* subtle grid backdrop - purely cosmetic, no role in tests */}
+              <g opacity="0.25">
+                {[-800, -400, 0, 400, 800].map((tick) => (
+                  <line
+                    key={`v-${tick}`}
+                    x1={tick}
+                    y1={-1000}
+                    x2={tick}
+                    y2={1000}
+                    stroke="#cbd5e1"
+                    strokeWidth={1}
+                  />
+                ))}
+                {[-800, -400, 0, 400, 800].map((tick) => (
+                  <line
+                    key={`h-${tick}`}
+                    x1={-1000}
+                    y1={tick}
+                    x2={1000}
+                    y2={tick}
+                    stroke="#cbd5e1"
+                    strokeWidth={1}
+                  />
+                ))}
+              </g>
 
-            <g data-testid="topology-canvas-content" transform={transform}>
-              {resolvedCorridors.map((entry) => (
-                <CorridorView
-                  key={entry.corridor.id}
-                  entry={entry}
-                  isActive={activeCorridors.has(entry.corridor.id)}
-                  now={now}
-                />
-              ))}
+              <g data-testid="topology-canvas-content" transform={transform}>
+                {resolvedCorridors.map((entry) => (
+                  <CorridorView
+                    key={entry.corridor.id}
+                    entry={entry}
+                    isActive={activeCorridors.has(entry.corridor.id)}
+                    now={now}
+                  />
+                ))}
 
-              {nodes.map((node) => (
-                <NodeView key={`${node.kind}:${node.id}`} node={node} onClick={handleNodeClick} />
-              ))}
-            </g>
-          </svg>
+                {nodes.map((node) => {
+                  const isPendingSource =
+                    pendingConnection !== null && pendingConnection.id === node.id;
+                  const isSelected =
+                    selectedNode !== null && selectedNode.id === node.id;
+                  const dragOverride =
+                    dragState !== null && dragState.id === node.id
+                      ? { x: dragState.currentX, y: dragState.currentY }
+                      : null;
+                  return (
+                    <NodeView
+                      key={`${node.kind}:${node.id}`}
+                      node={node}
+                      onClick={handleNodeClick}
+                      onMouseDown={handleNodeMouseDown}
+                      isHighlighted={isPendingSource || isSelected}
+                      highlightKind={
+                        isPendingSource ? 'pending' : isSelected ? 'selected' : null
+                      }
+                      dragOverride={dragOverride}
+                      isMoveCursor={interactionMode === 'move'}
+                    />
+                  );
+                })}
+              </g>
+            </svg>
+          ) : null}
+        </div>
+
+        {selectedNode !== null ? (
+          <NodeDrawer
+            node={selectedNode}
+            isEditor={isEditor}
+            onClose={() => setSelectedNode(null)}
+            onDelete={async (node) => {
+              const endpoint =
+                node.kind === 'membership'
+                  ? `/messaging/memberships/${encodeURIComponent(node.id)}`
+                  : `/learning/corridor-nodes/${encodeURIComponent(node.id)}`;
+              try {
+                await api(endpoint, { method: 'DELETE' });
+                if (officeId !== null) {
+                  setStaticData(await fetchStaticData(officeId));
+                }
+                setSelectedNode(null);
+                setActionError(null);
+              } catch (error) {
+                const message =
+                  error instanceof Error ? error.message : 'Failed to delete node';
+                setActionError(message);
+              }
+            }}
+          />
         ) : null}
       </div>
     </section>
@@ -597,14 +931,31 @@ export default function TopologyPage() {
 type NodeViewProps = {
   readonly node: NodeSummary;
   readonly onClick: (node: NodeSummary) => void;
+  readonly onMouseDown: (node: NodeSummary, event: ReactMouseEvent<SVGGElement>) => void;
+  readonly isHighlighted: boolean;
+  readonly highlightKind: 'pending' | 'selected' | null;
+  readonly dragOverride: { readonly x: number; readonly y: number } | null;
+  readonly isMoveCursor: boolean;
 };
 
-function NodeView({ node, onClick }: NodeViewProps): ReactElement {
+function NodeView({
+  node,
+  onClick,
+  onMouseDown,
+  isHighlighted,
+  highlightKind,
+  dragOverride,
+  isMoveCursor,
+}: NodeViewProps): ReactElement {
   const haloOpacity = intensityOpacity(node.glowIntensity);
   const coreStrokeOpacity = intensityStrokeOpacity(node.glowIntensity);
   const isUser = node.kind === 'membership' && node.fillColor === DEFAULT_USER_FILL;
   const tooltip = `${node.label} | ${node.role} | ${node.status}`;
   const Icon = isUser ? User : Bot;
+  const renderX = dragOverride !== null ? dragOverride.x : node.x;
+  const renderY = dragOverride !== null ? dragOverride.y : node.y;
+  const highlightStroke =
+    highlightKind === 'pending' ? '#f59e0b' : highlightKind === 'selected' ? '#2563eb' : null;
 
   return (
     /* biome-ignore lint/a11y/noStaticElementInteractions: SVG <g> has no semantic <button> */
@@ -612,13 +963,27 @@ function NodeView({ node, onClick }: NodeViewProps): ReactElement {
       data-testid={`topology-node-${node.id}`}
       data-topology-node="true"
       data-node-kind={node.kind}
-      transform={`translate(${node.x} ${node.y})`}
-      className="cursor-pointer"
+      data-highlight={highlightKind ?? undefined}
+      transform={`translate(${renderX} ${renderY})`}
+      className={isMoveCursor ? 'cursor-move' : 'cursor-pointer'}
       onClick={(event) => {
         event.stopPropagation();
         onClick(node);
       }}
+      onMouseDown={(event) => {
+        onMouseDown(node, event);
+      }}
     >
+      {isHighlighted && highlightStroke !== null ? (
+        <circle
+          r={HALO_RADIUS + 6}
+          fill="none"
+          stroke={highlightStroke}
+          strokeWidth={2}
+          strokeDasharray="6 3"
+          data-testid={`topology-node-highlight-${node.id}`}
+        />
+      ) : null}
       {haloOpacity > 0 ? (
         <circle
           r={HALO_RADIUS}
@@ -648,6 +1013,88 @@ function NodeView({ node, onClick }: NodeViewProps): ReactElement {
       </foreignObject>
       <title>{tooltip}</title>
     </g>
+  );
+}
+
+type NodeDrawerProps = {
+  readonly node: NodeSummary;
+  readonly isEditor: boolean;
+  readonly onClose: () => void;
+  readonly onDelete: (node: NodeSummary) => Promise<void>;
+};
+
+function NodeDrawer({ node, isEditor, onClose, onDelete }: NodeDrawerProps): ReactElement {
+  return (
+    <aside
+      className="flex w-72 shrink-0 flex-col gap-3 border-l border-slate-200 bg-white p-4"
+      aria-label="Selected node details"
+      data-testid="topology-node-drawer"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+            {node.kind === 'membership' ? 'Membership' : 'Corridor node'}
+          </p>
+          <h2 className="truncate text-base font-semibold text-slate-950">{node.label}</h2>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="inline-flex size-7 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+          aria-label="Close details"
+        >
+          <X className="size-4" aria-hidden="true" />
+        </button>
+      </div>
+
+      <dl className="flex flex-col gap-2 text-sm">
+        <div className="flex justify-between gap-3">
+          <dt className="text-slate-500">ID</dt>
+          <dd className="truncate font-mono text-xs text-slate-800">{node.id}</dd>
+        </div>
+        <div className="flex justify-between gap-3">
+          <dt className="text-slate-500">Role</dt>
+          <dd className="text-slate-800">{node.role}</dd>
+        </div>
+        <div className="flex justify-between gap-3">
+          <dt className="text-slate-500">Status</dt>
+          <dd className="text-slate-800">{node.status}</dd>
+        </div>
+        <div className="flex justify-between gap-3">
+          <dt className="text-slate-500">Glow</dt>
+          <dd className="flex items-center gap-2 text-slate-800">
+            <span
+              className="inline-block size-3 rounded-full"
+              style={{ backgroundColor: node.glowColor }}
+              aria-hidden="true"
+            />
+            <span>{node.glowIntensity}</span>
+          </dd>
+        </div>
+        <div className="flex justify-between gap-3">
+          <dt className="text-slate-500">Position</dt>
+          <dd className="font-mono text-xs text-slate-800">
+            ({node.x}, {node.y})
+          </dd>
+        </div>
+      </dl>
+
+      {isEditor ? (
+        <div className="mt-auto flex flex-col gap-2 border-t border-slate-200 pt-3">
+          <button
+            type="button"
+            className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-50"
+            onClick={() => {
+              void onDelete(node);
+            }}
+            data-testid={`topology-node-delete-${node.id}`}
+          >
+            <Trash className="size-4" aria-hidden="true" />
+            <span>Delete</span>
+          </button>
+        </div>
+      ) : null}
+    </aside>
   );
 }
 

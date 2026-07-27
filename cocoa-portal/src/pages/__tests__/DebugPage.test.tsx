@@ -161,8 +161,8 @@ describe('DebugPage', () => {
     const parsed = JSON.parse(blobText);
     expect(parsed).toEqual([EVENT_1, EVENT_2]);
 
-    const anchor = clickSpy.mock.instances[0] as unknown as HTMLAnchorElement;
-    expect(anchor.download).toMatch(/^cocoa-events-.*\.json$/);
+    const anchor = clickSpy.mock.instances[0] as unknown as HTMLAnchorElement | undefined;
+    expect(anchor?.download).toMatch(/^cocoa-events-.*\.json$/);
 
     expect(revokeObjectURLSpy).toHaveBeenCalledWith('blob:cocoa-events');
   });

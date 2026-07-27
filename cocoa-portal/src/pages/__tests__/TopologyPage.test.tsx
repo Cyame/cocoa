@@ -452,4 +452,145 @@ describe('TopologyPage', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Backend offline');
   });
+
+  it('creates a corridor via POST when connect mode clicks two nodes in sequence', async () => {
+    setupMockApi();
+
+    useSelectedStore.setState({ interactionMode: 'connect' });
+
+    renderTopology();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('topology-node-membership-1')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('topology-node-membership-1'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('topology-connect-hint')).toHaveTextContent('点击目标节点');
+    });
+
+    const postSpy = vi.fn().mockResolvedValue({
+      id: 'corridor-new',
+      office_id: 'office-1',
+      from_membership_id: 'membership-1',
+      to_membership_id: 'membership-2',
+      from_corridor_node_id: null,
+      to_corridor_node_id: null,
+      is_active: true,
+    });
+    mockedApi.mockImplementation((path: string, init?: RequestInit): Promise<EndpointResponse> => {
+      if (path === '/messaging/corridors' && init?.method === 'POST') {
+        return postSpy(path, init);
+      }
+      if (path.startsWith('/messaging/memberships?')) {
+        return Promise.resolve({ items: [MEMBERSHIP_INSTANCE, MEMBERSHIP_USER], total: 2 });
+      }
+      if (path.startsWith('/messaging/corridors?')) {
+        return Promise.resolve({ items: [CORRIDOR_EDGE], total: 1 });
+      }
+      if (path.startsWith('/learning/corridor-nodes?')) {
+        return Promise.resolve({ items: [], next_cursor: null, total: 0 });
+      }
+      if (path.includes('/live-status')) {
+        return Promise.resolve(LIVE_STATUS_ITEMS);
+      }
+      if (path.startsWith('/events?')) {
+        return Promise.resolve({ items: [], next_cursor: null, total: 0 });
+      }
+      return Promise.reject(new Error(`Unmocked path: ${path}`));
+    });
+
+    fireEvent.click(screen.getByTestId('topology-node-membership-2'));
+
+    await waitFor(() => {
+      expect(postSpy).toHaveBeenCalledTimes(1);
+    });
+
+    const [calledPath, calledInit] = postSpy.mock.calls[0];
+    expect(calledPath).toBe('/messaging/corridors');
+    expect(calledInit?.method).toBe('POST');
+    const body = JSON.parse(calledInit?.body as string);
+    expect(body).toEqual({
+      office_id: 'office-1',
+      from_membership_id: 'membership-1',
+      to_membership_id: 'membership-2',
+      from_corridor_node_id: null,
+      to_corridor_node_id: null,
+    });
+  });
+
+  it('reverts the node position and shows an error when move drag PATCH returns 409', async () => {
+    setupMockApi();
+
+    useSelectedStore.setState({ interactionMode: 'move' });
+
+    renderTopology();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('topology-node-membership-1')).toBeInTheDocument();
+    });
+
+    const nodeGroup = screen.getByTestId('topology-node-membership-1');
+    expect(nodeGroup.getAttribute('transform')).toBe('translate(200 100)');
+
+    const patchSpy = vi
+      .fn()
+      .mockRejectedValue(
+        new ApiError(409, { message: 'Position (300, 150) is already used in this office' }),
+      );
+    mockedApi.mockImplementation((path: string, init?: RequestInit): Promise<EndpointResponse> => {
+      if (path.startsWith('/messaging/memberships/membership-1') && init?.method === 'PATCH') {
+        return patchSpy(path, init);
+      }
+      if (path.startsWith('/messaging/memberships?')) {
+        return Promise.resolve({ items: [MEMBERSHIP_INSTANCE, MEMBERSHIP_USER], total: 2 });
+      }
+      if (path.startsWith('/messaging/corridors?')) {
+        return Promise.resolve({ items: [], total: 0 });
+      }
+      if (path.startsWith('/learning/corridor-nodes?')) {
+        return Promise.resolve({ items: [], next_cursor: null, total: 0 });
+      }
+      if (path.includes('/live-status')) {
+        return Promise.resolve(LIVE_STATUS_ITEMS);
+      }
+      if (path.startsWith('/events?')) {
+        return Promise.resolve({ items: [], next_cursor: null, total: 0 });
+      }
+      return Promise.reject(new Error(`Unmocked path: ${path}`));
+    });
+
+    fireEvent.mouseDown(nodeGroup, { clientX: 250, clientY: 150, button: 0 });
+    await act(async () => {
+      window.dispatchEvent(
+        new MouseEvent('mousemove', { clientX: 300, clientY: 200, bubbles: true }),
+      );
+    });
+    await act(async () => {
+      window.dispatchEvent(new MouseEvent('mouseup', { clientX: 300, clientY: 200, bubbles: true }));
+    });
+
+    await waitFor(() => {
+      expect(patchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    const [calledPath, calledInit] = patchSpy.mock.calls[0];
+    expect(calledPath).toBe('/messaging/memberships/membership-1');
+    expect(calledInit?.method).toBe('PATCH');
+    const body = JSON.parse(calledInit?.body as string);
+    expect(body.posx).toBeTypeOf('number');
+    expect(body.posy).toBeTypeOf('number');
+
+    await waitFor(() => {
+      expect(screen.getByTestId('topology-action-error')).toHaveTextContent(
+        /Position.*is already used/,
+      );
+    });
+
+    await waitFor(() => {
+      const reverted = screen.getByTestId('topology-node-membership-1');
+      expect(reverted.getAttribute('transform')).toBe('translate(200 100)');
+    });
+  });
 });
