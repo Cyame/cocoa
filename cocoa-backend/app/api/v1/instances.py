@@ -333,6 +333,20 @@ async def delete_instance(
     instance.soft_delete()
     await db.commit()
 
+    # P11c: best-effort K8s namespace teardown. The DB soft-delete is the
+    # authoritative source of truth — a missing or unreachable cluster
+    # must never block the API call, so any error is logged and swallowed.
+    namespace = f"cocoa-default-{instance.workspace_path or instance.id}"
+    try:
+        api_client = await k8s_manager.get_gateway_client()
+        client = K8sClient(api_client)
+        await client.core.delete_namespace(namespace)
+    except Exception as exc:  # noqa: BLE001 — best-effort teardown
+        logger.warning(
+            "K8s namespace delete failed (continuing)",
+            extra={"namespace": namespace, "error": str(exc)},
+        )
+
 
 # ---------------------------------------------------------------------------
 # Lifecycle action endpoints (R4 Stripe-style POST /{id}/action)
