@@ -50,7 +50,14 @@ class Office(BaseModel, Base):
 
 
 class Membership(BaseModel, Base):
-    """Links a user or instance to an office with a role and hex position.
+    """Links a user or instance to an office with a role and canvas position.
+
+    The ``posx`` / ``posy`` columns are free Cartesian coordinates on the
+    office's 2D canvas (P9 — previously named ``hex_q`` / ``hex_r`` to
+    imply axial hex-grid coordinates, but the canvas is now free
+    Cartesian, not hex). A partial unique index on
+    ``(office_id, posx, posy)`` (``uq_memberships_office_pos``) prevents
+    two active memberships from sharing the same canvas cell.
 
     Has an exclusive-FK constraint: exactly one of ``user_id`` or
     ``instance_id`` must be non-null.
@@ -80,6 +87,14 @@ class Membership(BaseModel, Base):
                 "deleted_at IS NULL AND instance_id IS NOT NULL"
             ),
         ),
+        Index(
+            "uq_memberships_office_pos",
+            "office_id",
+            "posx",
+            "posy",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
     )
 
     office_id: Mapped[str] = mapped_column(
@@ -91,8 +106,8 @@ class Membership(BaseModel, Base):
     instance_id: Mapped[str | None] = mapped_column(
         ForeignKey("instances.id"), nullable=True
     )
-    hex_q: Mapped[int] = mapped_column(Integer, nullable=False)
-    hex_r: Mapped[int] = mapped_column(Integer, nullable=False)
+    posx: Mapped[int] = mapped_column(Integer, nullable=False)
+    posy: Mapped[int] = mapped_column(Integer, nullable=False)
     role: Mapped[str] = mapped_column(String(20), nullable=False)
     permissions: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 

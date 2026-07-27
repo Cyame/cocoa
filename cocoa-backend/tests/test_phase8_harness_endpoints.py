@@ -86,8 +86,8 @@ async def _bootstrap_instance(
         json={
             "office_id": office["id"],
             "user_id": auth_user_id,
-            "hex_q": 0,
-            "hex_r": 0,
+            "posx": 0,
+            "posy": 0,
             "role": "owner",
         },
     )
@@ -220,8 +220,8 @@ async def test_p5_route_turn_unaffected_by_p8_changes(
     membership = Membership(
         user_id=user.id,
         office_id=office.id,
-        hex_q=0,
-        hex_r=0,
+        posx=0,
+        posy=0,
         role=MembershipRole.editor.value,
     )
     session.add(membership)

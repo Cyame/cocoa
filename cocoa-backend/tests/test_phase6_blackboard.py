@@ -436,6 +436,8 @@ class TestPermissions:
             "office_id": office_id,
             "user_id": viewer.id,
             "role": "viewer",
+            "posx": 500,
+            "posy": 500,
         })
         assert resp.status_code == 201
 

@@ -74,9 +74,9 @@ class TestMembershipModel:
         assert hasattr(Membership, "user_id")
         assert hasattr(Membership, "instance_id")
 
-    def test_hex_columns_exist(self) -> None:
-        assert hasattr(Membership, "hex_q")
-        assert hasattr(Membership, "hex_r")
+    def test_pos_columns_exist(self) -> None:
+        assert hasattr(Membership, "posx")
+        assert hasattr(Membership, "posy")
 
     def test_role_and_permissions_exist(self) -> None:
         assert hasattr(Membership, "role")
@@ -117,6 +117,19 @@ class TestMembershipModel:
                 break
         assert idx is not None, (
             "Index 'uq_memberships_office_instance' not found"
+        )
+        assert idx.unique is True
+
+    def test_office_pos_partial_unique_index(self) -> None:
+        """Membership has uq_memberships_office_pos index (P9: posx/posy coords)."""
+        table_args = Membership.__table_args__
+        idx = None
+        for arg in table_args:
+            if isinstance(arg, Index) and arg.name == "uq_memberships_office_pos":
+                idx = arg
+                break
+        assert idx is not None, (
+            "Index 'uq_memberships_office_pos' not found"
         )
         assert idx.unique is True
 

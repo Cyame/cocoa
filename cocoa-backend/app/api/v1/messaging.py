@@ -5,6 +5,7 @@ P5 implements messaging endpoints.
 
 from fastapi import APIRouter, Query, Response, status
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import DB, CurrentUserDep
 from app.core.errors import ConflictError, ForbiddenError, NotFoundError
@@ -104,8 +105,8 @@ async def create_membership(
         # Undelete — reactivate a soft-deleted membership
         existing.deleted_at = None
         existing.role = body.role
-        existing.hex_q = body.hex_q
-        existing.hex_r = body.hex_r
+        existing.posx = body.posx
+        existing.posy = body.posy
         await db.commit()
         await db.refresh(existing)
         return existing
@@ -114,12 +115,22 @@ async def create_membership(
         office_id=body.office_id,
         user_id=body.user_id,
         instance_id=body.instance_id,
-        hex_q=body.hex_q,
-        hex_r=body.hex_r,
+        posx=body.posx,
+        posy=body.posy,
         role=body.role,
     )
     db.add(membership)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        # uq_memberships_office_pos (P9) rejects (office_id, posx, posy)
+        # duplicates on insert or reactivate of an active membership.
+        await db.rollback()
+        raise ConflictError(
+            "membership.position_taken",
+            "errors.membership.position_taken",
+            f"Position ({body.posx}, {body.posy}) is already used in this office",
+        )
     await db.refresh(membership)
     return membership
 
@@ -167,7 +178,21 @@ async def update_membership(
     for key, value in update_data.items():
         setattr(membership, key, value)
 
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        # uq_memberships_office_pos (P9) rejects moves to an occupied pos.
+        # Read conflict coords from the request body, not the membership
+        # — commit() failure invalidates the ORM attribute cache, and
+        # any membership.* access would raise DetachedInstanceError.
+        conflict_posx = body.posx
+        conflict_posy = body.posy
+        await db.rollback()
+        raise ConflictError(
+            "membership.position_taken",
+            "errors.membership.position_taken",
+            f"Position ({conflict_posx}, {conflict_posy}) is already used in this office",
+        )
     await db.refresh(membership)
     return membership
 

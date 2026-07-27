@@ -122,8 +122,8 @@ class TestMembershipExclusiveFK:
             office_id=office.id,
             user_id=None,
             instance_id=None,
-            hex_q=0,
-            hex_r=0,
+            posx=0,
+            posy=0,
             role=MembershipRole.viewer.value,
         )
         session.add(member)
@@ -145,8 +145,8 @@ class TestMembershipExclusiveFK:
             office_id=office.id,
             user_id=user.id,
             instance_id=None,
-            hex_q=0,
-            hex_r=0,
+            posx=0,
+            posy=0,
             role=MembershipRole.viewer.value,
         )
         session.add(member)
@@ -179,8 +179,8 @@ class TestMembershipExclusiveFK:
             office_id=office.id,
             user_id=None,
             instance_id=inst.id,
-            hex_q=0,
-            hex_r=0,
+            posx=0,
+            posy=0,
             role=MembershipRole.editor.value,
         )
         session.add(member)

@@ -21,8 +21,8 @@ class MembershipCreate(BaseModel):
     office_id: str
     user_id: str | None = None
     instance_id: str | None = None
-    hex_q: int = 0
-    hex_r: int = 0
+    posx: int = 0
+    posy: int = 0
     role: str = "viewer"
 
     @field_validator("role")
@@ -47,8 +47,8 @@ class MembershipUpdate(BaseModel):
     All fields are optional — only provided fields are updated.
     """
 
-    hex_q: int | None = None
-    hex_r: int | None = None
+    posx: int | None = None
+    posy: int | None = None
     role: str | None = None
 
     @field_validator("role")
@@ -68,8 +68,8 @@ class MembershipOut(BaseModel):
     office_id: str
     user_id: str | None
     instance_id: str | None
-    hex_q: int
-    hex_r: int
+    posx: int
+    posy: int
     role: str
     permissions: dict | None
     created_at: datetime

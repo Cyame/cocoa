@@ -240,7 +240,7 @@ class TestCorridorCrud:
         user2 = result.scalars().first()
         assert user2 is not None
 
-        # 3. User1 joins (owner)
+        # 3. User1 joins (owner) at (0, 0)
         resp = client.post(
             "/api/v1/messaging/memberships",
             headers=h,
@@ -248,12 +248,14 @@ class TestCorridorCrud:
                 "office_id": office_id,
                 "user_id": auth_user_id,
                 "role": "owner",
+                "posx": 0,
+                "posy": 0,
             },
         )
         assert resp.status_code == 201
         m1_id = resp.json()["id"]
 
-        # 4. User2 joins (viewer)
+        # 4. User2 joins (viewer) at distinct coords (P9 partial unique index)
         resp = client.post(
             "/api/v1/messaging/memberships",
             headers=h,
@@ -261,10 +263,13 @@ class TestCorridorCrud:
                 "office_id": office_id,
                 "user_id": user2.id,
                 "role": "viewer",
+                "posx": 100,
+                "posy": 100,
             },
         )
         assert resp.status_code == 201
         m2_id = resp.json()["id"]
+
 
         # 5. Create corridor u1 → u2
         resp = client.post(
@@ -386,8 +391,7 @@ class TestCorridorCrud:
         )
         user2 = result.scalars().first()
         assert user2 is not None
-
-        # 3. Both join
+        # 3. Both join at distinct coords (P9 partial unique index on (office_id, posx, posy))
         resp = client.post(
             "/api/v1/messaging/memberships",
             headers=h,
@@ -395,6 +399,8 @@ class TestCorridorCrud:
                 "office_id": office_id,
                 "user_id": auth_user_id,
                 "role": "owner",
+                "posx": 0,
+                "posy": 0,
             },
         )
         assert resp.status_code == 201
@@ -407,10 +413,13 @@ class TestCorridorCrud:
                 "office_id": office_id,
                 "user_id": user2.id,
                 "role": "viewer",
+                "posx": 200,
+                "posy": 200,
             },
         )
         assert resp.status_code == 201
         m2_id = resp.json()["id"]
+
 
         # 4. Create corridor
         resp = client.post(
