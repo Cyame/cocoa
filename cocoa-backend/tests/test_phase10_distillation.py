@@ -21,7 +21,6 @@ from app.models.employee import EmployeePreset
 from app.models.memory import MemoryEntry, MemoryKind
 from app.schemas.learning import AggregatedMemoryCount, DistillRequest, SkillManifestPreview
 
-
 # ---------------------------------------------------------------------------
 # Protocol / Error / Dataclass structural tests
 # ---------------------------------------------------------------------------
@@ -60,7 +59,7 @@ class TestDistillationError:
 
 class TestDistillResult:
     """Verify DistillResult dataclass."""
-    
+
     def test_fields_present(self) -> None:
         """DistillResult must have all 5 fields."""
         preview = SkillManifestPreview()

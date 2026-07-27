@@ -2,14 +2,14 @@
 
 **Multi-agent control studio.** A workspace where humans orchestrate AI agents -- from strategy to execution.
 
-Cocoa is a control surface for running multi-agent systems. A web portal pairs with a Python backend to give operators a single place to plan, delegate, and observe AI-driven work. The backend has its **P2 core domain** in place (13 models — 12 business + 1 audit Event — Alembic migrations, pytest harness), **P3 API architecture** (RESTful URL rules, middleware pipeline, error envelope, pagination, OpenAPI), **P4 Agent Presets** (preset manifest schema, 6 built-in presets, CRUD API, in-memory registry, JWT auth), **P5 messaging** (neighbor-only delivery, corridor CRUD, directive routing, activation triggers), **P6 blackboard + storage + vault + memory** (virtual filesystem, vault archiving, append-only memory entries, office-scoped permissions), **P7 instance runtime** (lifecycle state machine with 7 statuses, Stripe-style action endpoints, K8s deployment scaffolding, Langfuse integration reservation), and **P8 harness + control plane** (Boulder loop engine + in-memory Harness Supervisor with 4 deterministic circuit breakers + 5 control command actions on `/instances/{id}/{interrupt,pause,resume,status,snapshot}` + P5 activation consumer + idle-check continuation engine + append-only notepad + todo-completion enforcer for `boulder_snapshot`). A **P7.5 fix-and-sync wave** landed the P8-plan review findings (handler DB-write prohibition, proxy_token-in-payload, permission model simplification, response schemas, lifespan daily-report wiring, test isolation) plus P7 implementation corrections (DELETE `previous_status` capture, list/get office authorization, Membership cascade soft-delete, workspace_path 409 mapping, past-tense event naming) and full documentation sync. 265 tests pass (P8 adds 16 integration tests); ruff is clean. The portal is a P1.5 scaffold (React 19 + Vite 8 + Bun + Tailwind v4 + RouterProvider接入 — P0 UI in place). API routes live at `/api/v1/` with `Auth`, `EmployeePresets`, `Employees`, `Offices`, `Instances` (5 new harness control actions: interrupt / pause / resume / status / snapshot), `Messaging`, `Blackboard` (with BlackboardFile + Vault sub-resources), `Memory`, and `Learning` (stub for P10).
+Cocoa is a control surface for running multi-agent systems. A web portal pairs with a Python backend to give operators a single place to plan, delegate, and observe AI-driven work. The backend has its **P2 core domain** in place (13 models — 12 business + 1 audit Event — Alembic migrations, pytest harness), **P3 API architecture** (RESTful URL rules, middleware pipeline, error envelope, pagination, OpenAPI), **P4 Agent Presets** (preset manifest schema, 6 built-in presets, CRUD API, in-memory registry, JWT auth), **P5 messaging** (neighbor-only delivery, corridor CRUD, directive routing, activation triggers), **P6 blackboard + storage + vault + memory** (virtual filesystem, vault archiving, append-only memory entries, office-scoped permissions), **P7 instance runtime** (lifecycle state machine with 7 statuses, Stripe-style action endpoints, K8s deployment scaffolding, Langfuse integration reservation), and **P8 harness + control plane** (Boulder loop engine + in-memory Harness Supervisor with 4 deterministic circuit breakers + 5 control command actions on `/instances/{id}/{interrupt,pause,resume,status,snapshot}` + P5 activation consumer + idle-check continuation engine + append-only notepad + todo-completion enforcer for `boulder_snapshot`). A **P7.5 fix-and-sync wave** landed the P8-plan review findings (handler DB-write prohibition, proxy_token-in-payload, permission model simplification, response schemas, lifespan daily-report wiring, test isolation) plus P7 implementation corrections (DELETE `previous_status` capture, list/get office authorization, Membership cascade soft-delete, workspace_path 409 mapping, past-tense event naming) and full documentation sync. 265 tests pass (P8 adds 16 integration tests); ruff is clean. The portal is a P1.5 scaffold (React 19 + Vite 8 + Bun + Tailwind v4 + RouterProvider接入 — P0 UI in place). API routes live at `/api/v1/` with `Auth`, `EmployeePresets`, `Employees`, `Offices`, `Instances` (5 new harness control actions: interrupt / pause / resume / status / snapshot), `Messaging`, `Blackboard` (with BlackboardFile + Vault sub-resources), `Memory`, and `Learning` (3 endpoints: memory summary, skill distill, preset fetch).
 
 ## Status
 
 | Component | State |
 |-----------|-------|
-| `cocoa-backend/` | P9 portal backend: events cursor pagination, live-status glow aggregation, CorridorNode CRUD, Membership posx/posy rename, Corridor polymorphic FK — on top of P8 harness + control plane (Boulder loop engine + Harness Supervisor + control command endpoints + activation consumer + continuation engine + notepad + todo-enforcer) + P7 instance runtime; P7.5 fix-and-sync wave landed |
-| `cocoa-portal/`  | P9 first UI (7 pages + topology viz + CorridorNode + 3 interaction modes + zero new npm deps) |
+| `cocoa-backend/` | P10 learning: DistillationEngine Protocol + AggregatingDistiller + 3 learning API endpoints + LEARNING_COMMANDS 4th command family + portal EmployeeLearningPage — on top of P9 portal backend (events cursor pagination, live-status glow, CorridorNode CRUD, Membership posx/posy) + P8 harness + P7 runtime; P7.5 fix-and-sync landed |
+| `cocoa-portal/`  | P10 Learning page + P9 first UI (7 pages + topology viz + CorridorNode + 3 interaction modes + zero new npm deps) |
 | `cocoa-artifacts/` | P7 Instance runtime Dockerfile and K8s manifests (Deployment, Service, ConfigMap, PVC, NetworkPolicy) |
 | CI | Baseline (lint + build on push/PR) |
 
@@ -101,6 +101,31 @@ After `./dev.sh`, open `http://localhost:5173` and follow this path to explore t
 7. **Debug** — `/debug` is the raw audit event stream. Filter by type prefix (e.g. `harness.`), resource type, resource ID, request ID, or date range. Events poll every 5 seconds. Export to JSON with one click.
 
 For architecture details, see [docs/portal-system.md](docs/portal-system.md).
+
+### Quick start: distill a skill
+
+P10 Learning converts accumulated employee memory into reusable agent presets. Here is the flow:
+
+1. **Browse memory summary** — Navigate to `/employees/:id/learning` in the portal. The page shows per-kind memory counts (experience / lesson / decision / problem) and recent lesson snippets.
+2. **Trigger distillation** — Enter a kebab-case `target_skill_slug` (e.g. `debugging-checklist`), optionally select memory kind filters, and click "Distill". The system runs the `AggregatingDistiller` heuristic engine (no LLM) to extract commands, skills, and a prompt from the employee's memory.
+3. **Preview manifest** — A modal shows the generated manifest (model, prompt, skills, tools, commands) before committing. Confirm to create a new `EmployeePreset` with slug `{source}-skill-{target}`.
+4. **Assign to employees** — The new preset appears in the preset list and can be assigned to any employee for future instances.
+
+For the API equivalent:
+
+```bash
+# View memory summary
+curl -H "Authorization: Bearer $TOKEN" \
+  http://localhost:4510/api/v1/learning/memories/$EMPLOYEE_ID/summary
+
+# Distill into a new preset (returns 201 with manifest preview)
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"target_skill_slug": "my-skill", "source_preset_slug": "base-preset"}' \
+  http://localhost:4510/api/v1/learning/employees/$EMPLOYEE_ID/distill
+```
+
+Full docs at [docs/learning-system.md](docs/learning-system.md).
 
 ## Development
 
