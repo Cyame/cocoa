@@ -11,9 +11,12 @@ the P7 CRUD + lifecycle surface so it stays under the 250 LOC ceiling.
 
 from __future__ import annotations
 
+import asyncio
+import logging
+import os
 from uuid import uuid4
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
@@ -43,6 +46,16 @@ from app.schemas.instance import (
     InstanceOutWithToken,
     InstanceUpdate,
 )
+from app.services.deploy_service import (
+    deploy_instance as svc_deploy_instance,
+)
+from app.services.deploy_service import (
+    execute_deploy_pipeline as svc_execute_deploy_pipeline,
+)
+from app.services.k8s.client_manager import k8s_manager
+from app.services.k8s.k8s_client import K8sClient
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/instances", tags=["Instances"])
 add_error_responses(router)
@@ -52,6 +65,39 @@ class FailBody(BaseModel):
     """Payload for ``POST /instances/{instance_id}/fail``."""
 
     reason: str
+
+
+class DeployRecordOut(BaseModel):
+    """Response body for ``POST /instances/{instance_id}/deploy`` (P11c).
+
+    Mirrors the public fields of :class:`app.models.deploy_record.DeployRecord`
+    the API caller needs to track the asynchronous K8s pipeline run.
+    Defined locally to avoid coupling this module to ``app.schemas``.
+    """
+
+    id: str
+    instance_id: str
+    revision: int = 1
+    action: str
+    status: str
+    image_version: str | None = None
+
+
+def _is_k8s_available() -> bool:
+    """P11c: probe whether a K8s cluster is reachable from this process.
+
+    In local mode (no cluster, no ``KUBECONFIG``, no service-account
+    token, or ``COCOA_K8S_DISABLED=true``), returns ``False`` so the
+    deploy endpoint can short-circuit with 503 instead of crashing.
+    """
+
+    if os.environ.get("COCOA_K8S_DISABLED", "").lower() == "true":
+        return False
+    return (
+        os.path.exists("/var/run/secrets/kubernetes.io/serviceaccount/token")
+        or os.environ.get("KUBECONFIG") is not None
+        or os.environ.get("GATEWAY_KUBECONFIG") is not None
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -350,23 +396,59 @@ async def _transition(
     return instance
 
 
-@router.post("/{instance_id}/deploy", response_model=InstanceOut)
+@router.post("/{instance_id}/deploy", response_model=DeployRecordOut)
 async def deploy_instance(
     instance_id: str,
     db: DB,
     current_user: CurrentUserDep,
-) -> Instance:
-    """Transition instance to ``deploying``.
+) -> DeployRecordOut:
+    """Kick off the K8s deploy pipeline for this instance (P11c).
 
-    Allowed from: ``creating``, ``restarting``.
+    Replaces the P7 in-process DB transition with a 9-step K8s
+    pipeline driven by :func:`app.services.deploy_service.deploy_instance`.
+    The DB-side :class:`DeployRecord` is created synchronously and
+    returned to the caller; the actual K8s work runs as a fire-and-
+    forget ``asyncio`` task whose progress is streamed via the SSE
+    endpoint (``GET /api/v1/deploy/deploy-progress/{record_id}``).
+
+    Returns 503 when no K8s cluster is reachable — local dev without a
+    kubeconfig can keep working without crashing the deploy endpoint.
     """
-    return await _transition(
-        instance_id,
-        allowed=[InstanceStatus.creating.value, InstanceStatus.restarting.value],
-        new_status=InstanceStatus.deploying.value,
-        event_type=INSTANCE_DEPLOYED,
+    if not _is_k8s_available():
+        raise HTTPException(
+            status_code=503,
+            detail="K8s not available; deploy pipeline requires K8s cluster (P11c local mode)",
+        )
+
+    instance = await db.get(Instance, instance_id)
+    if instance is None or instance.deleted_at is not None:
+        raise NotFoundError(
+            "instance.not_found",
+            "errors.instance.not_found",
+            f"Instance '{instance_id}' not found",
+        )
+
+    await require_office_role(db, current_user.user_id, instance.office_id, "editor")
+
+    record_id, ctx = await svc_deploy_instance(
+        name=instance.workspace_path or str(instance.id),
+        image_version="latest",
+        office_id=instance.office_id,
+        employee_id=instance.employee_id,
+        proxy_token=instance.proxy_token or "",
+        triggered_by=current_user.user_id,
         db=db,
-        current_user=current_user,
+    )
+
+    asyncio.create_task(svc_execute_deploy_pipeline(ctx))
+
+    return DeployRecordOut(
+        id=record_id,
+        instance_id=instance_id,
+        revision=getattr(ctx, "revision", 1),
+        action="deploy",
+        status="running",
+        image_version=ctx.image_version,
     )
 
 
