@@ -58,6 +58,28 @@ def is_control_command(cmd: str) -> bool:
     return cmd in CONTROL_COMMANDS
 
 
+# ── Learning commands (P10) ───────────────────────────────────────────────────
+# Fourth command category — operates on employee memory & skill distillation,
+# creating new EmployeePreset rows rather than routing through the message
+# corridor or the harness supervisor.
+LEARNING_COMMANDS: list[str] = [
+    "/distill",
+    "/consolidate",
+    "/reflect",
+]
+
+
+def is_learning_command(cmd: str) -> bool:
+    """Return True if *cmd* is a learning command.
+
+    Case-sensitive match against :data:`LEARNING_COMMANDS`. The slash prefix
+    is included — P4's parser outputs ``Directive.cmd`` with the prefix.
+    Requires an explicit ``@target``; bare learning commands are silently
+    dropped, matching the P5 bare-cmd semantics.
+    """
+    return cmd in LEARNING_COMMANDS
+
+
 # ── Registry singleton ───────────────────────────────────────────────────────
 
 

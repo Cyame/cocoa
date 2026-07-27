@@ -11,9 +11,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.activation import handle_intern_invocation, trigger_on_mention
 from app.core.message_router import MessageDeliveryResult, route_message
-from app.core.preset_registry import is_control_command
+from app.core.preset_registry import is_control_command, is_learning_command
 from app.core.slash_parser import parse_turn
-from app.models.employee import Employee, EmployeeRank
+from app.models.employee import Employee, EmployeePreset, EmployeeRank
 from app.models.office import Membership
 from app.schemas.slash import Directive
 
@@ -70,6 +70,21 @@ async def route_turn(
                     office_id=office_id,
                     directive=directive,
                     target_slug=target_slug,
+                )
+            )
+            continue
+
+        # LEARNING COMMAND BRANCH (P10) — routes to AggregatingDistiller,
+        # NOT corridor. Requires explicit @target; bare cmds are silently
+        # dropped, matching P5 bare-cmd semantics.
+        if is_learning_command(directive.cmd):
+            directive_results.append(
+                await _route_learning_directive(
+                    session=session,
+                    office_id=office_id,
+                    directive=directive,
+                    target_slug=target_slug,
+                    from_user_id=from_user_id,
                 )
             )
             continue
@@ -193,6 +208,95 @@ async def _route_control_directive(
         await supervisor.handle_resume(instance.id, session)
     # /status and /snapshot are GET/POST on the API; not routable via turn
     await session.flush()
+
+    return DirectiveResult(
+        directive_raw=directive.raw_text,
+        target_employee=target_slug,
+        cmd=directive.cmd,
+        results=[],
+    )
+
+
+async def _route_learning_directive(
+    session: AsyncSession,
+    office_id: str,
+    directive: Directive,
+    target_slug: str | None,
+    from_user_id: str,
+) -> DirectiveResult:
+    """Route a learning command to the AggregatingDistiller.
+
+    Bare cmds (target_slug is None) are silently dropped — matching the P5
+    bare-cmd semantics. With an explicit @target, we look up the target
+    Employee, run distillation on their memory entries, create a new
+    EmployeePreset, and emit a LEARNING_DISTILLATION_COMPLETED event.
+
+    Returns a ``DirectiveResult`` with the cmd echoed and an empty results
+    list (learning commands don't produce ``MessageDeliveryResult`` rows).
+    """
+    if target_slug is None:
+        return DirectiveResult(
+            directive_raw=directive.raw_text,
+            target_employee=None,
+            cmd=directive.cmd,
+            results=[],
+        )
+
+    emp_result = await session.execute(
+        select(Employee).where(
+            Employee.slug == target_slug,
+            Employee.deleted_at.is_(None),
+        )
+    )
+    target_employee = emp_result.scalars().first()
+    if target_employee is None:
+        return DirectiveResult(
+            directive_raw=directive.raw_text,
+            target_employee=target_slug,
+            cmd=directive.cmd,
+            results=[],
+        )
+
+    from app.core.distillation import AggregatingDistiller
+    from app.core.event_types import LEARNING_DISTILLATION_COMPLETED
+    from app.core.events import emit
+    from app.schemas.learning import DistillRequest
+
+    target_skill_slug = (
+        directive.args[0] if directive.args else "default-skill"
+    )
+    request = DistillRequest(
+        target_skill_slug=target_skill_slug,
+        memory_kind_filter=None,
+        source_preset_slug=target_employee.preset_slug,
+        target_preset_name=None,
+    )
+    result = await AggregatingDistiller().distill(
+        target_employee.id, request=request, session=session,
+    )
+
+    new_preset = EmployeePreset(
+        slug=result.new_preset_slug,
+        name=f"Skill: {target_skill_slug}",
+        manifest=result.manifest_preview.model_dump(),
+    )
+    session.add(new_preset)
+    await session.flush()
+
+    await emit(
+        event_type=LEARNING_DISTILLATION_COMPLETED,
+        actor_type="user",
+        actor_id=from_user_id,
+        resource_type="employee_preset",
+        resource_id=new_preset.id,
+        payload={
+            "employee_id": target_employee.id,
+            "new_preset_slug": result.new_preset_slug,
+            "source_preset_slug": target_employee.preset_slug,
+            "aggregated_counts": result.aggregated_memory.model_dump(),
+        },
+        session=session,
+    )
 
     return DirectiveResult(
         directive_raw=directive.raw_text,

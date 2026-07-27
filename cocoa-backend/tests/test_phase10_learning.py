@@ -4,6 +4,7 @@ Covers:
 - GET  /api/v1/learning/memories/{employee_id}/summary  (summary)
 - POST /api/v1/learning/employees/{employee_id}/distill  (distillation)
 - GET  /api/v1/learning/presets/{preset_id}              (preset fetch)
+- P5  directive_router learning command branch            (route_turn)
 """
 
 import uuid
@@ -511,3 +512,135 @@ class TestPresetFetch:
             headers=h,
         )
         assert resp.status_code == 404, resp.text
+
+
+# =========================================================================
+# P5 directive_router learning command branch
+# =========================================================================
+
+
+class TestP5RouteTurnLearningBranch:
+    """Verify that learning commands are correctly routed by the P5 directive router."""
+
+    @pytest.mark.asyncio
+    async def test_route_turn_distill_creates_preset(
+        self,
+        client: TestClient,
+        auth_token: str,
+        auth_user_id: str,
+        session: AsyncSession,
+    ) -> None:
+        """@target /distill creates new EmployeePreset and emits LEARNING_DISTILLATION_COMPLETED."""
+        office_id = _setup_office_and_membership(
+            client, auth_token, auth_user_id,
+            office_name="RT Distill Office",
+            office_slug=f"rt-distill-office-{uuid.uuid4().hex[:6]}",
+        )
+        employee_slug = f"rt-distill-emp-{uuid.uuid4().hex[:6]}"
+        employee_id = _create_employee(
+            client, auth_token, employee_slug, "RT Distill Employee",
+        )
+        _create_instance(client, auth_token, employee_id, office_id)
+
+        _create_memory(client, auth_token, employee_id, kind="lesson",
+                       key="debug-memory-leak",
+                       content="A" * 80 + " We found that memory leaks happen"
+                                " when circular references are not broken.")
+        _create_memory(client, auth_token, employee_id, kind="experience",
+                       key="first-exp", content="Worked on a big project.")
+
+        from app.core.directive_router import route_turn
+        from app.core.event_types import LEARNING_DISTILLATION_COMPLETED
+        from app.models.employee import EmployeePreset
+        from app.models.event import Event
+
+        raw_text = f"@{employee_slug} /distill my-skill"
+        results = await route_turn(session, raw_text, office_id, auth_user_id)
+
+        assert len(results) == 1
+        assert results[0].cmd == "/distill"
+        assert results[0].target_employee == employee_slug
+
+        preset_result = await session.execute(
+            select(EmployeePreset).where(
+                EmployeePreset.slug == "base-skill-my-skill",
+                EmployeePreset.deleted_at.is_(None),
+            )
+        )
+        preset = preset_result.scalars().first()
+        assert preset is not None, "Expected new EmployeePreset for base-skill-my-skill"
+        assert preset.name == "Skill: my-skill"
+        assert preset.manifest is not None
+        assert isinstance(preset.manifest, dict)
+
+        event_result = await session.execute(
+            select(Event).where(
+                Event.type == LEARNING_DISTILLATION_COMPLETED,
+                Event.resource_id == preset.id,
+            )
+        )
+        event = event_result.scalars().first()
+        assert event is not None, "Expected LEARNING_DISTILLATION_COMPLETED event"
+        assert event.payload["employee_id"] == employee_id
+
+    @pytest.mark.asyncio
+    async def test_route_turn_bare_distill_dropped(
+        self,
+        client: TestClient,
+        auth_token: str,
+        auth_user_id: str,
+        session: AsyncSession,
+    ) -> None:
+        """Bare /distill (no @target) is silently dropped."""
+        office_id = _setup_office_and_membership(
+            client, auth_token, auth_user_id,
+            office_name="RT Bare Distill Office",
+            office_slug=f"rt-bare-distill-{uuid.uuid4().hex[:6]}",
+        )
+
+        from app.core.directive_router import route_turn
+
+        raw_text = "/distill"
+        results = await route_turn(session, raw_text, office_id, auth_user_id)
+
+        assert len(results) == 1
+        assert results[0].cmd == "/distill"
+        assert results[0].target_employee is None
+
+    @pytest.mark.asyncio
+    async def test_route_turn_learning_vs_control_no_conflict(
+        self,
+        client: TestClient,
+        auth_token: str,
+        auth_user_id: str,
+        session: AsyncSession,
+    ) -> None:
+        """/distill does not conflict with /interrupt — both route to separate branches."""
+        office_id = _setup_office_and_membership(
+            client, auth_token, auth_user_id,
+            office_name="RT NoConflict Office",
+            office_slug=f"rt-noconflict-{uuid.uuid4().hex[:6]}",
+        )
+        employee_slug = f"rt-noconflict-emp-{uuid.uuid4().hex[:6]}"
+        employee_id = _create_employee(
+            client, auth_token, employee_slug, "RT NoConflict Employee",
+        )
+        _create_instance(client, auth_token, employee_id, office_id)
+
+        _create_memory(client, auth_token, employee_id, kind="lesson",
+                       key="debug-memory-leak",
+                       content="A" * 80 + " We found that memory leaks happen"
+                                " when circular references are not broken.")
+
+        from app.core.directive_router import route_turn
+        from app.core.preset_registry import is_control_command, is_learning_command
+
+        distill_text = f"@{employee_slug} /distill test-skill"
+        distill_results = await route_turn(session, distill_text, office_id, auth_user_id)
+        assert len(distill_results) == 1
+        assert distill_results[0].cmd == "/distill"
+
+        assert is_learning_command("/distill") is True
+        assert is_control_command("/distill") is False
+        assert is_learning_command("/interrupt") is False
+        assert is_control_command("/interrupt") is True
