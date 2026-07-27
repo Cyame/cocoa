@@ -9,6 +9,7 @@ import app.models.deploy_record  # noqa: E402, F401
 import app.models.employee  # noqa: E402, F401
 import app.models.event  # noqa: E402, F401
 import app.models.instance  # noqa: E402, F401
+import app.models.instance_provider_config  # noqa: E402, F401
 import app.models.loop_state  # noqa: E402, F401
 import app.models.memory  # noqa: E402, F401
 import app.models.office  # noqa: E402, F401
