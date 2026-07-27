@@ -9,7 +9,9 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
+
+from app.schemas.preset import PresetManifest
 
 
 class EmployeePresetCreate(BaseModel):
@@ -32,8 +34,22 @@ class EmployeePresetUpdate(BaseModel):
     manifest: dict | None = None
 
 
+class PresetManifestOut(PresetManifest):
+    """Out variant of :class:`PresetManifest` — accepts ``None`` and falls back to defaults."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_none(cls, data: object) -> object:
+        """Treat ``None`` as an empty manifest; all fields use defaults."""
+        if data is None:
+            return {}
+        return data
+
+
 class EmployeePresetOut(BaseModel):
-    """Response body for a single EmployeePreset."""
+    """Response body for a single EmployeePreset — ``manifest`` is expanded into 5 typed fields."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -41,6 +57,6 @@ class EmployeePresetOut(BaseModel):
     slug: str
     name: str
     version: str | None = None
-    manifest: dict | None = None
+    manifest: PresetManifestOut
     created_at: datetime
     updated_at: datetime

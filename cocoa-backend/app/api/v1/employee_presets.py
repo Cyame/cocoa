@@ -5,11 +5,11 @@ Endpoints for managing agent preset templates (灵格).  All mutations
 cache so that subsequent lookups see the new state immediately.
 
 Routes (all require authentication):
-    GET    /api/v1/employee-presets      — List all active presets (offset page)
-    GET    /api/v1/employee-presets/{id}  — Get a single preset
-    POST   /api/v1/employee-presets      — Create a new preset
-    PATCH  /api/v1/employee-presets/{id}  — Update an existing preset
-    DELETE /api/v1/employee-presets/{id}  — Soft-delete a preset
+    GET    /api/v1/employee-presets          — List all active presets (offset page)
+    GET    /api/v1/employee-presets/{slug}   — Get a single preset by slug (manifest expanded)
+    POST   /api/v1/employee-presets          — Create a new preset
+    PATCH  /api/v1/employee-presets/{id}     — Update an existing preset
+    DELETE /api/v1/employee-presets/{id}     — Soft-delete a preset
 """
 
 from __future__ import annotations
@@ -27,6 +27,7 @@ from app.schemas.employee_preset import (
     EmployeePresetCreate,
     EmployeePresetOut,
     EmployeePresetUpdate,
+    PresetManifestOut,
 )
 
 router = APIRouter(prefix="/employee-presets", tags=["EmployeePresets"])
@@ -45,24 +46,37 @@ async def list_presets(
     return await paginate_offset(db, stmt, offset, min(limit, 200))
 
 
-@router.get("/{preset_id}", response_model=EmployeePresetOut)
-async def get_preset(
-    preset_id: str,
+@router.get("/{slug}", response_model=EmployeePresetOut)
+async def get_preset_by_slug(
+    slug: str,
     db: DB,
     current_user: CurrentUserDep,
-) -> EmployeePreset:
-    """Return a single preset by ID.
-
-    Raises 404 if the preset does not exist or has been soft-deleted.
-    """
-    preset = await db.get(EmployeePreset, preset_id)
-    if preset is None or preset.deleted_at is not None:
+) -> EmployeePresetOut:
+    """Return a single preset by slug.  Manifest is materialised as ``PresetManifestOut``."""
+    result = await db.execute(
+        select(EmployeePreset).where(
+            EmployeePreset.slug == slug,
+            EmployeePreset.deleted_at.is_(None),
+        )
+    )
+    preset = result.scalar_one_or_none()
+    if preset is None:
         raise NotFoundError(
             "employee_preset.not_found",
             "errors.employee_preset.not_found",
-            f"EmployeePreset '{preset_id}' not found",
+            f"EmployeePreset '{slug}' not found",
         )
-    return preset
+
+    manifest_data = preset.manifest if isinstance(preset.manifest, dict) else {}
+    return EmployeePresetOut(
+        id=preset.id,
+        slug=preset.slug,
+        name=preset.name,
+        version=preset.version,
+        manifest=PresetManifestOut.model_validate(manifest_data),
+        created_at=preset.created_at,
+        updated_at=preset.updated_at,
+    )
 
 
 @router.post("", response_model=EmployeePresetOut, status_code=status.HTTP_201_CREATED)
