@@ -7,13 +7,20 @@ the default heuristic implementation; callers can swap in other engines
 
 The engine does NOT write to the database — it returns a pure DistillResult
 that callers handle persistence for.
+
+P14a adds :class:`LLMDistiller`, an LLM-powered alternative that calls
+``LLMClient.complete()`` with a manifest-generation prompt and parses
+the JSON response. On ``LLMError`` or invalid JSON, it falls back to
+:class:`AggregatingDistiller` so the caller never sees an exception.
 """
 
 from __future__ import annotations
 
+import json
+import logging
 import re
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,6 +28,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.employee import Employee, EmployeePreset
 from app.models.memory import MemoryEntry, MemoryKind
 from app.schemas.learning import AggregatedMemoryCount, DistillRequest, SkillManifestPreview
+
+logger = logging.getLogger(__name__)
 
 # Kebab-case command pattern: lowercase start, then letters/digits/hyphens.
 _CMD_PATTERN = re.compile(r"^[a-z][a-z0-9-]+$")
@@ -268,3 +277,144 @@ class AggregatingDistiller:
             source_employee_id=employee_id,
             source_preset_slug=source_preset_slug,
         )
+
+
+# ---------------------------------------------------------------------------
+# LLM-powered distillation (P14a)
+# ---------------------------------------------------------------------------
+
+
+_LLM_DISTILL_MAX_MEMORIES = 20  # token-budget cap
+
+
+class LLMDistiller:
+    """LLM-powered skill distillation (P14a).
+
+    Asks an :class:`LLMClient` to generate a JSON skill manifest from an
+    employee's accumulated memories. On ``LLMError`` or malformed JSON
+    response, falls back to a simple heuristic dict so the caller never
+    raises — distillation always returns *something* useful.
+    """
+
+    def __init__(self, llm_client: Any) -> None:
+        self.llm_client = llm_client
+
+    async def distill(
+        self,
+        employee_id: str,
+        *,
+        memories: list[dict[str, Any]] | None = None,
+        session: AsyncSession | None = None,
+    ) -> dict[str, Any]:
+        """Return a skill manifest dict; falls back to heuristic on error.
+
+        The LLM distiller takes pre-fetched ``memories`` rather than
+        querying the DB itself. When ``memories`` is None and ``session``
+        is provided, the distiller queries the DB.
+        """
+        mem_list: list[dict[str, Any]]
+        if memories is not None:
+            mem_list = memories
+        elif session is not None:
+            mem_list = await self._fetch_memories(employee_id, session)
+        else:
+            mem_list = []
+
+        if not mem_list:
+            logger.warning("LLMDistiller: no memories; returning empty manifest")
+            return {"commands": [], "skills": [], "tools": [], "prompt": "", "model": "tbd"}
+
+        prompt = self._build_prompt(mem_list)
+        try:
+            # Lazy import — llm_client is part of P14a and may not be on
+            # the path when this module is imported in isolation.
+            from app.services.llm.llm_client import LLMError as _LLMError
+
+            response = await self.llm_client.complete(
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=2048,
+                temperature=0.3,
+            )
+            return self._parse_response(response.content)
+        except (_LLMError, ValueError) as e:
+            logger.warning(
+                "LLM distillation failed; falling back to heuristic: %s", e,
+            )
+            return self._heuristic_manifest(mem_list)
+
+    async def _fetch_memories(
+        self,
+        employee_id: str,
+        session: AsyncSession,
+    ) -> list[dict[str, Any]]:
+        """Query ``MemoryEntry`` rows when no in-memory list was passed."""
+        result = await session.execute(
+            select(MemoryEntry).where(
+                MemoryEntry.employee_id == employee_id,
+                MemoryEntry.deleted_at.is_(None),
+            )
+        )
+        entries = list(result.scalars().all())
+        return [
+            {"kind": e.kind, "key": e.key, "content": e.content or ""}
+            for e in entries
+        ]
+
+    def _build_prompt(self, memories: list[dict[str, Any]]) -> str:
+        mem_text = "\n".join(
+            f"- [{m.get('kind', 'experience')}] {m.get('content', '')}"
+            for m in memories[:_LLM_DISTILL_MAX_MEMORIES]
+        )
+        return (
+            "Based on these memories from an employee:\n\n"
+            f"{mem_text}\n\n"
+            "Generate a JSON skill manifest with these fields:\n"
+            "- commands: list of kebab-case verbs\n"
+            "- skills: list of topics\n"
+            "- tools: list of function names\n"
+            "- prompt: short system prompt\n"
+            "- model: recommended model\n\n"
+            "Return ONLY valid JSON (no markdown)."
+        )
+
+    def _parse_response(self, content: str) -> dict[str, Any]:
+        text = content.strip()
+        # Strip markdown ```json fences if present.
+        if text.startswith("```"):
+            text = "\n".join(line for line in text.split("\n") if not line.startswith("```"))
+        return json.loads(text)
+
+    @staticmethod
+    def _heuristic_manifest(memories: list[dict[str, Any]]) -> dict[str, Any]:
+        """Fallback manifest extracted via simple heuristics.
+
+        Used when the LLM call fails or returns malformed JSON. Mirrors
+        the spirit of :class:`AggregatingDistiller` but operates on a
+        pre-fetched memory list rather than querying the DB.
+        """
+        commands: list[str] = []
+        seen: set[str] = set()
+        skills: list[str] = set()  # type: ignore[assignment]
+        longest = ""
+        for m in memories:
+            kind = m.get("kind") or "experience"
+            key = m.get("key") or ""
+            content = m.get("content") or ""
+            if kind in ("lesson", "decision") and _is_kebab_case(key) and key not in seen:
+                commands.append(key)
+                seen.add(key)
+                if len(commands) >= _MAX_COMMANDS:
+                    break
+            if key:
+                prefix = _extract_key_prefix(key)
+                if prefix:
+                    skills.add(prefix)
+            if kind == "lesson" and len(content) > len(longest):
+                longest = content
+        return {
+            "commands": commands,
+            "skills": sorted(skills),
+            "tools": [],
+            "prompt": _truncate_content(longest) if len(longest) >= _MIN_PROMPT_CHARS else "",
+            "model": "tbd",
+        }
