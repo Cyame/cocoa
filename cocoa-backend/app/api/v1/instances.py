@@ -476,22 +476,19 @@ async def deploy_instance(
     )
 
 
-@router.post("/{instance_id}/start")
+@router.post("/{instance_id}/start", response_model=InstanceOut)
 async def start_instance(
     instance_id: str,
     db: DB,
     current_user: CurrentUserDep,
-) -> dict:
-    """Transition instance to ``running`` and trigger a rebuild pipeline (P11c).
+) -> Instance:
+    """Transition instance from pending/deploying to running (P7 contract).
 
-    Allowed from: ``pending``, ``deploying``. After the state transition
-    commits, a fresh K8s deploy pipeline is kicked off via
-    :func:`app.services.deploy_service.deploy_instance` — semantically a
-    rebuild. The new :class:`DeployRecord` id is returned so the caller
-    can subscribe to ``/api/v1/deploy/deploy-progress/{record_id}`` for
-    live progress.
+    Per P11c plan: start is a state machine action, NOT a deploy. K8s deploy
+    happens via POST /instances/{id}/deploy which now falls back to P7 in
+    non-K8s mode. start_instance remains a pure state-machine action.
     """
-    await _transition(
+    return await _transition(
         instance_id,
         allowed=[InstanceStatus.pending.value, InstanceStatus.deploying.value],
         new_status=InstanceStatus.running.value,
@@ -499,26 +496,6 @@ async def start_instance(
         db=db,
         current_user=current_user,
     )
-
-    instance = await db.get(Instance, instance_id)
-    if instance is None or instance.deleted_at is not None:
-        raise NotFoundError(
-            "instance.not_found",
-            "errors.instance.not_found",
-            f"Instance '{instance_id}' not found",
-        )
-
-    record_id, ctx = await svc_deploy_instance(
-        name=instance.workspace_path or str(instance.id),
-        image_version="latest",
-        office_id=instance.office_id,
-        employee_id=instance.employee_id,
-        proxy_token=instance.proxy_token or "",
-        triggered_by=current_user.user_id,
-        db=db,
-    )
-    asyncio.create_task(svc_execute_deploy_pipeline(ctx))
-    return {"record_id": record_id, "status": "running"}
 
 
 @router.post("/{instance_id}/restart", response_model=InstanceOut)
