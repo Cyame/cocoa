@@ -136,7 +136,7 @@ async def test_round_trip_preserves_data_three_passes() -> None:
                 )
 
                 # downgrade -1
-                result = _run_alembic(db_url_asyncpg, "downgrade", "-1")
+                result = _run_alembic(db_url_asyncpg, "downgrade", _PRE_REVISION)
                 assert result.returncode == 0, (
                     f"pass {pass_idx} downgrade -1 failed:\n"
                     f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
