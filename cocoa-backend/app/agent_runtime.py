@@ -5,10 +5,8 @@ side-effect, and emits ``HARNESS_CHECKPOINT`` carrying real
 ``token_estimate`` plus the K8s ``proxy_token``. Mode is selected via
 ``is_k8s_pod_mode()``: local uses in-process ``emit()`` + DB status;
 K8s uses HTTP ``emit_event()`` + ``poll_control()``. P14a preset
-selection defaults to ``mi-shi``.
-
-K8s-mode events (LOOP_STARTED / CHECKPOINT / LOOP_STOPPED) all carry
-``proxy_token`` so the backend can verify pod identity (anti-spoofing).
+selection defaults to ``mi-shi``. K8s-mode events (LOOP_STARTED /
+CHECKPOINT / LOOP_STOPPED) all carry ``proxy_token`` (anti-spoofing).
 """
 
 from __future__ import annotations
@@ -55,12 +53,13 @@ def _build_llm_client() -> tuple[LLMClient, dict[str, Any]]:
         {},
     )
     cfg = LLMProviderConfig.from_manifest_legacy(manifest)
-    return LLMClient(
+    client = LLMClient(
         provider_type=cfg.provider_type.value,
         api_key=os.environ.get(cfg.api_key_ref, ""),
         base_url=cfg.base_url,
         default_model=cfg.default_model,
-    ), manifest
+    )
+    return client, manifest
 
 
 async def _should_stop_via_db(instance_id: str) -> bool:
@@ -75,16 +74,16 @@ async def _should_stop_via_db(instance_id: str) -> bool:
         loop_state = result.scalars().first()
         if loop_state is None:
             return False
-        return loop_state.loop_status in {
+        return loop_state.loop_status in (
             LoopStatus.interrupted.value,
             LoopStatus.paused.value,
             LoopStatus.completed.value,
             LoopStatus.failed.value,
-        }
+        )
 
 
 async def _write_checkpoint_memory(instance_id: str, summary: str) -> None:
-    """Append a ``MemoryEntry`` capturing the LLM's latest output (no-op if instance missing)."""
+    """Append a ``MemoryEntry`` for the LLM's latest output; no-op when instance is missing."""
     from app.models.employee import Employee
     from app.models.memory import MemoryEntry, MemoryKind
     from app.models.office import Membership
@@ -105,15 +104,13 @@ async def _write_checkpoint_memory(instance_id: str, summary: str) -> None:
         emp = await session.get(Employee, membership.employee_id)
         if emp is None:
             return
-        session.add(
-            MemoryEntry(
-                employee_id=emp.id,
-                kind=MemoryKind.experience.value,
-                key=f"checkpoint_{instance_id}",
-                content=summary[:500],
-                source_instance_id=instance_id,
-            )
-        )
+        session.add(MemoryEntry(
+            employee_id=emp.id,
+            kind=MemoryKind.experience.value,
+            key=f"checkpoint_{instance_id}",
+            content=summary[:500],
+            source_instance_id=instance_id,
+        ))
         await session.commit()
 
 
@@ -190,8 +187,7 @@ async def run_agent_loop(instance_id: str) -> None:
         """Emit one event — HTTP in K8s mode, in-process in local mode.
 
         K8s-mode payloads carry ``proxy_token`` on every event so the
-        backend can attribute and authenticate the pod (anti-spoofing):
-        any K8s event missing the per-instance proxy token is rejected.
+        backend can attribute and authenticate the pod (anti-spoofing).
         """
         if k8s_mode:
             await emit_event(
