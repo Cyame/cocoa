@@ -5,16 +5,29 @@ P8 delivers a placeholder event-driven loop that exercises the entire
 
     loop_started -> [checkpoint -> checkpoint -> ...] -> loop_stopped
 
-Real LLM integration lands in P9+. The skeleton is sufficient for:
-- P8 unit tests (Todo 11) to assert the event flow
-- P9 portal integration (debug-first raw panels observe the events)
+Real LLM integration lands in P9+. Notepad writes use
+``instance.workspace_path`` (P7 generated), falling back to a tempfile
+only if workspace_path is None. The runtime subscribes to
+``HARNESS_CONTROL_SENT`` and self-terminates on ``action == "kill"``
+(D11 control downlink contract).
 
-Notepad writes use ``instance.workspace_path`` (P7 generated), falling back
-to a tempfile only if workspace_path is None.
+P11c dual-mode dispatch
+-----------------------
+Mode is selected once per loop via
+``app.agent_runtime.k8s_adapter.is_k8s_pod_mode()``:
 
-The runtime also subscribes to ``HARNESS_CONTROL_SENT`` events and
-self-terminates when ``action == "kill"`` arrives — the D11 control
-downlink contract.
+- **Local mode** (default): in-process ``emit()`` +
+  ``register_handler(HARNESS_CONTROL_SENT, ...)`` (P8 contract
+  preserved). The per-iteration DB read of
+  ``InstanceLoopState.loop_status`` stays the canonical interrupt /
+  pause kill path.
+
+- **K8s pod mode** (``COCOA_POD_MODE=true``): HTTP ``emit_event()`` to
+  ``/api/v1/internal/events/emit`` + periodic ``poll_control()`` polling
+  the D11 downlink. K8s pods have no direct database access, so the
+  DB-status check is skipped — the control polling loop is the
+  canonical kill path. K8s-mode ``HARNESS_CHECKPOINT`` payloads carry
+  the ``proxy_token`` so the backend can attribute the event.
 """
 
 from __future__ import annotations
@@ -25,6 +38,12 @@ import tempfile
 from loguru import logger
 from sqlalchemy import select
 
+from app.agent_runtime.k8s_adapter import (
+    emit_event,
+    get_proxy_token,
+    is_k8s_pod_mode,
+    poll_control,
+)
 from app.core.db import get_session_factory
 from app.core.event_types import (
     HARNESS_CHECKPOINT,
@@ -40,6 +59,7 @@ from app.models.loop_state import InstanceLoopState, LoopStatus
 
 _ITERATIONS: int = 10
 _ITERATION_SLEEP: float = 0.2
+_POLL_INTERVAL: float = 1.0
 
 
 async def _resolve_workspace_path(instance_id: str) -> str | None:
@@ -57,13 +77,19 @@ async def _resolve_workspace_path(instance_id: str) -> str | None:
 async def run_agent_loop(instance_id: str) -> None:
     """Run the placeholder agent loop for one Instance.
 
-    1. Resolve workspace_path (DB or tempfile fallback)
-    2. Register a HARNESS_CONTROL_SENT handler that flips an internal flag
-    3. Emit HARNESS_LOOP_STARTED
-    4. Loop _ITERATIONS times: sleep, check stop, write notepad, emit checkpoint
-    5. Emit HARNESS_LOOP_STOPPED
-    6. Cleanup: deregister handler, remove from supervisor._runtime_tasks
+    Mode is selected via ``is_k8s_pod_mode()`` at start:
+
+    * Local → ``register_handler(HARNESS_CONTROL_SENT, ...)`` flips the
+      stop flag on a kill payload.
+    * K8s → spawn a polling task calling ``poll_control(last_seen_id)``
+      every ``_POLL_INTERVAL`` seconds and sets the stop flag when
+      ``payload.action == "kill"`` arrives.
+
+    Then emit ``HARNESS_LOOP_STARTED``, loop ``_ITERATIONS`` times
+    (sleep, stop check, notepad write [local only], emit checkpoint),
+    emit ``HARNESS_LOOP_STOPPED``, and clean up.
     """
+    k8s_mode = is_k8s_pod_mode()
     workspace_path = await _resolve_workspace_path(instance_id)
     if workspace_path is None:
         workspace_path = tempfile.mkdtemp(prefix=f"cocoa-agent-{instance_id}-")
@@ -74,36 +100,90 @@ async def run_agent_loop(instance_id: str) -> None:
         )
 
     stop_flag = asyncio.Event()
+    last_seen_id: int = 0
+    control_task: asyncio.Task | None = None
 
-    async def _on_control(**kwargs: object) -> None:
-        payload = kwargs.get("payload") or {}
-        if payload.get("instance_id") == instance_id and payload.get("action") == "kill":
-            stop_flag.set()
+    if k8s_mode:
+        async def _poll_control_loop() -> None:
+            nonlocal last_seen_id
+            while not stop_flag.is_set():
+                try:
+                    events = await poll_control(last_seen_id)
+                except Exception:
+                    logger.opt(exception=True).warning(
+                        "poll_control failed; will retry",
+                        instance_id=instance_id,
+                    )
+                    events = []
+                for event in events:
+                    eid = event.get("id")
+                    if isinstance(eid, int):
+                        last_seen_id = max(last_seen_id, eid)
+                    payload = event.get("payload") or {}
+                    if payload.get("action") == "kill":
+                        logger.info(
+                            "Agent loop stopping on polled kill",
+                            instance_id=instance_id,
+                        )
+                        stop_flag.set()
+                        return
+                await asyncio.sleep(_POLL_INTERVAL)
 
-    register_handler(HARNESS_CONTROL_SENT, _on_control)
+        control_task = asyncio.create_task(_poll_control_loop())
+    else:
+        async def _on_control(**kwargs: object) -> None:
+            payload = kwargs.get("payload") or {}
+            if payload.get("instance_id") == instance_id and payload.get("action") == "kill":
+                stop_flag.set()
+
+        register_handler(HARNESS_CONTROL_SENT, _on_control)
 
     try:
-        # ---- start ----
-        async with get_session_factory()() as s:
-            await emit(
+        if k8s_mode:
+            await emit_event(
                 HARNESS_LOOP_STARTED,
-                actor_type="instance",
-                actor_id=instance_id,
-                resource_type="instance",
-                resource_id=instance_id,
-                session=s,
+                actor_type="instance", actor_id=instance_id,
+                resource_type="instance", resource_id=instance_id,
+                payload={},
             )
-            await s.commit()
+        else:
+            async with get_session_factory()() as s:
+                await emit(
+                    HARNESS_LOOP_STARTED,
+                    actor_type="instance", actor_id=instance_id,
+                    resource_type="instance", resource_id=instance_id,
+                    session=s,
+                )
+                await s.commit()
 
-        # ---- iteration loop ----
         for i in range(_ITERATIONS):
             if stop_flag.is_set():
-                logger.info("Agent loop stopping on kill", instance_id=instance_id, iteration=i)
+                logger.info(
+                    "Agent loop stopping on kill",
+                    instance_id=instance_id, iteration=i,
+                )
                 break
 
             await asyncio.sleep(_ITERATION_SLEEP)
 
-            # Check DB loop_status (separate kill path)
+            if k8s_mode:
+                # K8s pods lack direct DB access — emit the checkpoint
+                # over HTTP and let the backend attribute via proxy_token.
+                await emit_event(
+                    HARNESS_CHECKPOINT,
+                    actor_type="instance", actor_id=instance_id,
+                    resource_type="instance", resource_id=instance_id,
+                    payload={
+                        "iteration": i,
+                        "instance_id": instance_id,
+                        "proxy_token": get_proxy_token() or "",
+                    },
+                )
+                continue
+
+            # Local mode: P8 contract — read loop_status, write notepad,
+            # and emit checkpoint inside a single session so the
+            # ``state.current_plan_ref`` snapshot stays accurate.
             async with get_session_factory()() as s:
                 state_result = await s.execute(
                     select(InstanceLoopState).where(
@@ -118,33 +198,25 @@ async def run_agent_loop(instance_id: str) -> None:
                 }:
                     logger.info(
                         "Agent loop stopping on DB status change",
-                        instance_id=instance_id,
-                        loop_status=state.loop_status,
+                        instance_id=instance_id, loop_status=state.loop_status,
                     )
                     break
 
-                # Notepad append
                 try:
                     await append_to_notepad(
-                        workspace_path,
-                        "p8-bootstrap",
-                        "learnings",
+                        workspace_path, "p8-bootstrap", "learnings",
                         f"Checkpoint {i}",
                     )
                 except Exception:
                     logger.opt(exception=True).warning(
                         "Notepad append failed",
-                        instance_id=instance_id,
-                        iteration=i,
+                        instance_id=instance_id, iteration=i,
                     )
 
-                # Emit checkpoint
                 await emit(
                     HARNESS_CHECKPOINT,
-                    actor_type="instance",
-                    actor_id=instance_id,
-                    resource_type="instance",
-                    resource_id=instance_id,
+                    actor_type="instance", actor_id=instance_id,
+                    resource_type="instance", resource_id=instance_id,
                     payload={
                         "token_estimate": 0,
                         "snapshot": {
@@ -157,32 +229,39 @@ async def run_agent_loop(instance_id: str) -> None:
                 )
                 await s.commit()
 
-        # ---- stop ----
-        async with get_session_factory()() as s:
-            await emit(
+        if k8s_mode:
+            await emit_event(
                 HARNESS_LOOP_STOPPED,
-                actor_type="instance",
-                actor_id=instance_id,
-                resource_type="instance",
-                resource_id=instance_id,
-                session=s,
+                actor_type="instance", actor_id=instance_id,
+                resource_type="instance", resource_id=instance_id,
+                payload={},
             )
-            await s.commit()
+        else:
+            async with get_session_factory()() as s:
+                await emit(
+                    HARNESS_LOOP_STOPPED,
+                    actor_type="instance", actor_id=instance_id,
+                    resource_type="instance", resource_id=instance_id,
+                    session=s,
+                )
+                await s.commit()
     finally:
-        # Always remove from registry and let the handler be GC'd.
         supervisor._runtime_tasks.pop(instance_id, None)
-        # Handler deregistration: register_handler only appends; we cannot
-        # selectively remove. Leaving the handler in place is benign — it
-        # only acts when payload["instance_id"] matches; once the loop ends
-        # we set stop_flag.set() so any subsequent kill is a no-op.
+        if control_task is not None:
+            control_task.cancel()
+            try:
+                await control_task
+            except asyncio.CancelledError:
+                pass
+        # Always set the flag so any pending handler call becomes a no-op.
         stop_flag.set()
 
 
 async def start_runtime_for(instance_id: str) -> None:
     """Start the agent runtime task for *instance_id* if not already running.
 
-    Idempotent: if a task already exists for this instance_id, this is a no-op.
-    Otherwise, create an asyncio.Task and register it in supervisor._runtime_tasks.
+    Idempotent: if a task already exists, this is a no-op. Otherwise
+    create an asyncio.Task and register it in ``supervisor._runtime_tasks``.
     """
     if instance_id in supervisor._runtime_tasks:
         return
