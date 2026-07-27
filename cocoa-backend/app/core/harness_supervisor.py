@@ -29,6 +29,7 @@ from app.core.events import emit, register_handler
 from app.core.harness_breakers import HarnessBreakers
 from app.core.harness_handlers import (
     handle_checkpoint,
+    handle_checkpoint_writes,
     handle_continuation_injected,
     handle_loop_started,
     handle_loop_stopped,
@@ -100,6 +101,7 @@ class HarnessSupervisor:
             handle_loop_started(self, instance_id)
         elif event_type == HARNESS_CHECKPOINT:
             await handle_checkpoint(self, instance_id, payload)
+            await handle_checkpoint_writes(resource_id=instance_id, payload=payload)
         elif event_type == HARNESS_CONTINUATION_INJECTED:
             handle_continuation_injected(self, instance_id)
         elif event_type == HARNESS_LOOP_STOPPED:
