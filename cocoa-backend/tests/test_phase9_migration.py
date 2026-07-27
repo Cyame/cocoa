@@ -32,7 +32,6 @@ from starlette.testclient import TestClient
 from app.models.office import Membership, MembershipRole, Office
 from app.models.user import User
 
-
 # ---------------------------------------------------------------------------
 # 1. Alembic round-trip data-preservation test
 # ---------------------------------------------------------------------------

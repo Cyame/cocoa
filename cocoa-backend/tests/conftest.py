@@ -96,6 +96,7 @@ async def _clear_handlers():
         act_mod._pending_daily_report = None
         act_mod._task_queue = None
         from collections import defaultdict as _dd
+
         from app.main import app as _app
         _stack = _app.middleware_stack
         while _stack is not None:
