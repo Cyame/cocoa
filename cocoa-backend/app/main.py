@@ -1,6 +1,8 @@
 """FastAPI application entry point for the Cocoa backend."""
 
 import json
+import os
+import secrets
 import traceback
 from contextlib import asynccontextmanager
 
@@ -45,6 +47,10 @@ async def _noop_handler(payload: dict) -> None:
 async def lifespan(app: FastAPI):
     """Startup/shutdown lifecycle."""
     configure_logging()
+
+    # P11c: process-scoped API token for /api/v1/internal/* requests.
+    if not os.environ.get("COCOA_API_TOKEN"):
+        os.environ["COCOA_API_TOKEN"] = secrets.token_urlsafe(32)
 
     # Task queue (in-memory; P5/P7 replaces with Redis, protocol unchanged).
     queue = InMemoryTaskQueue()
@@ -104,6 +110,15 @@ async def lifespan(app: FastAPI):
     except Exception:
         logger.opt(exception=True).error("Failed to emit system.startup event")
 
+    # P11c: in K8s pod mode the backend polls the events table so handlers
+    # registered on this pod also fire on events emitted by sibling pods.
+    if os.environ.get("COCOA_POD_MODE", "").lower() == "true":
+        try:
+            from app.core.event_watcher import event_watcher
+            await event_watcher.start()
+        except Exception:
+            logger.opt(exception=True).warning("EventWatcher start failed")
+
     yield
 
     try:
@@ -124,6 +139,21 @@ async def lifespan(app: FastAPI):
         await supervisor.shutdown()
     except Exception:
         logger.opt(exception=True).warning("Supervisor shutdown failed")
+
+    # P11c: stop EventWatcher polling task before closing K8s clients so the
+    # poll loop cannot issue another DB round-trip mid-shutdown.
+    if os.environ.get("COCOA_POD_MODE", "").lower() == "true":
+        try:
+            from app.core.event_watcher import event_watcher
+            await event_watcher.stop()
+        except Exception:
+            logger.opt(exception=True).warning("EventWatcher stop failed")
+
+    try:
+        from app.services.k8s.client_manager import k8s_manager
+        await k8s_manager.close_all()
+    except Exception:
+        logger.opt(exception=True).warning("K8s client manager close failed")
 
 
 app = FastAPI(
