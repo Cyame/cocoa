@@ -16,6 +16,7 @@ dependencies = [
     "pydantic-settings>=2.7.0",
     # Database migrations
     "alembic>=1.13.0",
+    "kubernetes_asyncio>=28.0.0",  # P11a K8s infrastructure; required by nodeskclaw-style K8sClient
     "loguru>=0.7.3",
 ]
 
