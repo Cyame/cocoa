@@ -157,6 +157,46 @@ export type LiveStatusItem = {
 
 export type CorridorNodeStatus = 'active' | 'paused' | 'archived';
 
+export type AggregatedMemoryCount = {
+  readonly experience: number;
+  readonly lesson: number;
+  readonly decision: number;
+  readonly problem: number;
+  readonly total: number;
+};
+
+export type MemorySummaryOut = {
+  readonly employee_id: string;
+  readonly aggregated_counts: AggregatedMemoryCount;
+  readonly sample_lessons: readonly string[];
+  readonly sample_keys_by_kind: Readonly<Record<string, readonly string[]>>;
+};
+
+export type SkillManifestPreview = {
+  readonly model: string;
+  readonly prompt: string;
+  readonly skills: readonly string[];
+  readonly tools: readonly string[];
+  readonly commands: readonly string[];
+};
+
+export type DistillRequest = {
+  readonly target_skill_slug: string;
+  readonly memory_kind_filter?: readonly MemoryKind[] | null;
+  readonly source_preset_slug?: string | null;
+  readonly target_preset_name?: string | null;
+};
+
+export type DistillResultOut = {
+  readonly new_preset_id: string;
+  readonly new_preset_slug: string;
+  readonly new_preset_name: string;
+  readonly manifest_preview: SkillManifestPreview;
+  readonly aggregated_memory: AggregatedMemoryCount;
+  readonly source_employee_id: string;
+  readonly source_preset_slug: string | null;
+};
+
 export type CorridorNode = {
   readonly id: string;
   readonly office_id: string;

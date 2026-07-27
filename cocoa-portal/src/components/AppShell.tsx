@@ -1,4 +1,4 @@
-import { Bug, Building2, LogOut, Network, Pencil, User } from 'lucide-react';
+import { BookOpen, Bug, Building2, LogOut, Network, Pencil, User } from 'lucide-react';
 import { Navigate, NavLink, Outlet, useParams } from 'react-router';
 import { cn } from '@/lib/utils';
 import { useSelectedStore } from '@/stores/selected';
@@ -49,6 +49,13 @@ export default function AppShell() {
       Icon: Pencil,
       end: true,
       isDisabled: officeId === null,
+    },
+    {
+      label: 'Learning',
+      href: '/employees',
+      Icon: BookOpen,
+      end: true,
+      isDisabled: false,
     },
   ] as const;
 
@@ -127,7 +134,7 @@ export default function AppShell() {
         </header>
 
         <nav
-          className="grid shrink-0 grid-cols-4 border-b border-slate-200 bg-white md:hidden"
+          className="grid shrink-0 grid-cols-5 border-b border-slate-200 bg-white md:hidden"
           aria-label="Primary navigation"
         >
           {navigationItems.map(({ label, href, Icon, end, isDisabled }) => (

@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate } from 'react-router';
 import App from '@/App';
 import ComposerPage from '@/pages/ComposerPage';
 import DebugPage from '@/pages/DebugPage';
+import EmployeeLearningPage from '@/pages/EmployeeLearningPage';
 import InstanceDetailPage from '@/pages/InstanceDetailPage';
 import LoginPage from '@/pages/LoginPage';
 import OfficeDetailPage from '@/pages/OfficeDetailPage';
@@ -45,6 +46,10 @@ const router = createBrowserRouter([
       {
         path: '/offices/:id/topology',
         Component: TopologyPage,
+      },
+      {
+        path: '/employees/:employeeId/learning',
+        Component: EmployeeLearningPage,
       },
       {
         path: '/debug',
