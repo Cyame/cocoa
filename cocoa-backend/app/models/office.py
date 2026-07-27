@@ -120,14 +120,34 @@ class Membership(BaseModel, Base):
 
 
 class Corridor(BaseModel, Base):
-    """A directed edge between two memberships in the same office.
+    """A directed edge between two endpoints in the same office.
 
-    Forms the adjacency graph for hex-grid navigation. Acyclicity is
-    enforced at the service layer (P5), not via DB constraints.
+    Endpoints are **polymorphic** (P9 Todo 8): each side of the edge is
+    either a :class:`Membership` (the original P5 design, an office
+    member) or a :class:`CorridorNode` (a first-class canvas anchor
+    introduced in P9). A CHECK constraint enforces that exactly one of
+    ``from_membership_id`` / ``from_corridor_node_id`` is non-null on
+    the *from* side, and likewise on the *to* side. The three valid
+    edge shapes are therefore M<->M, M<->CN, and CN<->CN.
+
+    Forms the adjacency graph for canvas navigation. Acyclicity is
+    enforced at the service layer (P5) for the membership graph; CN
+    endpoints are skipped in that BFS because they are not principals
+    and do not have a notion of "receiving a message" themselves.
     """
 
     __tablename__ = "corridors"
     __table_args__ = (
+        CheckConstraint(
+            "(from_membership_id IS NOT NULL)::int"
+            " + (from_corridor_node_id IS NOT NULL)::int = 1",
+            name="ck_corridors_from_polymorphic",
+        ),
+        CheckConstraint(
+            "(to_membership_id IS NOT NULL)::int"
+            " + (to_corridor_node_id IS NOT NULL)::int = 1",
+            name="ck_corridors_to_polymorphic",
+        ),
         Index(
             "uq_corridors_active_edge",
             "office_id",
@@ -143,11 +163,17 @@ class Corridor(BaseModel, Base):
     office_id: Mapped[str] = mapped_column(
         ForeignKey("offices.id"), nullable=False
     )
-    from_membership_id: Mapped[str] = mapped_column(
-        ForeignKey("memberships.id"), nullable=False
+    from_membership_id: Mapped[str | None] = mapped_column(
+        ForeignKey("memberships.id"), nullable=True
     )
-    to_membership_id: Mapped[str] = mapped_column(
-        ForeignKey("memberships.id"), nullable=False
+    to_membership_id: Mapped[str | None] = mapped_column(
+        ForeignKey("memberships.id"), nullable=True
+    )
+    from_corridor_node_id: Mapped[str | None] = mapped_column(
+        ForeignKey("corridor_nodes.id"), nullable=True
+    )
+    to_corridor_node_id: Mapped[str | None] = mapped_column(
+        ForeignKey("corridor_nodes.id"), nullable=True
     )
     is_active: Mapped[bool] = mapped_column(
         Boolean, default=True, nullable=False
@@ -158,5 +184,8 @@ class Corridor(BaseModel, Base):
         cls = type(self).__name__
         return (
             f"<{cls} {self.id!r} office={self.office_id!r}"
-            f" from={self.from_membership_id!r} to={self.to_membership_id!r}>"
+            f" from_m={self.from_membership_id!r}"
+            f" to_m={self.to_membership_id!r}"
+            f" from_cn={self.from_corridor_node_id!r}"
+            f" to_cn={self.to_corridor_node_id!r}>"
         )

@@ -297,32 +297,92 @@ async def create_corridor(
 ) -> Corridor:
     """Create a new corridor or reactivate a soft-deleted one.
 
-    Validates that the new edge does not introduce a cycle in the office graph.
-    Uses SELECT...FOR UPDATE on from_membership to serialize concurrent edge
-    creation within the implicit session transaction (SQLAlchemy 2.0 autobegin).
+    Endpoints are polymorphic (P9 Todo 8): each side is either a
+    :class:`Membership` or a :class:`CorridorNode`. The Pydantic
+    :class:`CorridorCreate` enforces "exactly one of the two endpoint
+    columns on each side must be set" before the request reaches
+    this handler.
 
-    Raises 409 if an active corridor already exists between the same memberships,
-    or if adding the edge would create a cycle.
+    For membership-to-membership edges, validates that the new edge
+    does not introduce a cycle in the office graph (P5 acyclicity
+    contract is unchanged) and uses ``SELECT ... FOR UPDATE`` on the
+    from-membership row to serialize concurrent edge creation within
+    the implicit session transaction. Membership-to-node, node-to-
+    membership, and node-to-node edges skip the acyclic check because
+    corridor nodes are not principals and do not participate in
+    message routing.
+
+    Raises 404 if the office / from-membership does not exist.
+    Raises 409 if an active corridor already exists between the same
+    endpoints, or if adding the edge would create a cycle.
     """
-    lock = await db.execute(
-        select(Membership).where(
-            Membership.id == body.from_membership_id,
-            Membership.deleted_at.is_(None),
-        ).with_for_update(),
-    )
-    if lock.scalar_one_or_none() is None:
-        raise NotFoundError(
-            "membership.not_found",
-            "errors.membership.not_found",
-            f"Membership '{body.from_membership_id}' not found",
-        )
+    from app.models.corridor_node import CorridorNode
 
-    # Check for existing edge (active or soft-deleted)
+    if body.from_membership_id is not None:
+        lock = await db.execute(
+            select(Membership).where(
+                Membership.id == body.from_membership_id,
+                Membership.deleted_at.is_(None),
+            ).with_for_update(),
+        )
+        if lock.scalar_one_or_none() is None:
+            raise NotFoundError(
+                "membership.not_found",
+                "errors.membership.not_found",
+                f"Membership '{body.from_membership_id}' not found",
+            )
+    else:
+        node_lock = await db.execute(
+            select(CorridorNode).where(
+                CorridorNode.id == body.from_corridor_node_id,
+                CorridorNode.deleted_at.is_(None),
+            ).with_for_update(),
+        )
+        if node_lock.scalar_one_or_none() is None:
+            raise NotFoundError(
+                "corridor_node.not_found",
+                "errors.corridor_node.not_found",
+                f"CorridorNode '{body.from_corridor_node_id}' not found",
+            )
+
+    if body.to_membership_id is not None:
+        to_lock = await db.execute(
+            select(Membership).where(
+                Membership.id == body.to_membership_id,
+                Membership.deleted_at.is_(None),
+            ).with_for_update(),
+        )
+        if to_lock.scalar_one_or_none() is None:
+            raise NotFoundError(
+                "membership.not_found",
+                "errors.membership.not_found",
+                f"Membership '{body.to_membership_id}' not found",
+            )
+    else:
+        to_node_lock = await db.execute(
+            select(CorridorNode).where(
+                CorridorNode.id == body.to_corridor_node_id,
+                CorridorNode.deleted_at.is_(None),
+            ).with_for_update(),
+        )
+        if to_node_lock.scalar_one_or_none() is None:
+            raise NotFoundError(
+                "corridor_node.not_found",
+                "errors.corridor_node.not_found",
+                f"CorridorNode '{body.to_corridor_node_id}' not found",
+            )
+
+    # Check for existing edge (active or soft-deleted). Match the
+    # full 4-column endpoint tuple so node-inclusive edges dedupe
+    # against themselves; the legacy uq_corridors_active_edge index
+    # only catches the M<->M triple.
     result = await db.execute(
         select(Corridor).where(
             Corridor.office_id == body.office_id,
             Corridor.from_membership_id == body.from_membership_id,
             Corridor.to_membership_id == body.to_membership_id,
+            Corridor.from_corridor_node_id == body.from_corridor_node_id,
+            Corridor.to_corridor_node_id == body.to_corridor_node_id,
         ),
     )
     existing = result.scalars().first()
@@ -331,7 +391,7 @@ async def create_corridor(
             raise ConflictError(
                 "corridor.duplicate",
                 "errors.corridor.duplicate",
-                "Corridor already exists between these memberships",
+                "Corridor already exists between these endpoints",
             )
         # Undelete and reactivate
         existing.deleted_at = None
@@ -340,25 +400,38 @@ async def create_corridor(
         await db.refresh(existing)
         return existing
 
-    # Acyclicity check
-    acyclic = await check_acyclic(
-        db, body.office_id, body.from_membership_id, body.to_membership_id,
-    )
-    if not acyclic:
-        raise ConflictError(
-            "corridor.would_create_cycle",
-            "errors.corridor.would_create_cycle",
-            "Adding this edge would create a cycle",
+    # Acyclicity check is only defined over the membership graph;
+    # corridor nodes are not message-routing principals.
+    if body.from_membership_id is not None and body.to_membership_id is not None:
+        acyclic = await check_acyclic(
+            db, body.office_id, body.from_membership_id, body.to_membership_id,
         )
+        if not acyclic:
+            raise ConflictError(
+                "corridor.would_create_cycle",
+                "errors.corridor.would_create_cycle",
+                "Adding this edge would create a cycle",
+            )
 
     corridor = Corridor(
         office_id=body.office_id,
         from_membership_id=body.from_membership_id,
         to_membership_id=body.to_membership_id,
+        from_corridor_node_id=body.from_corridor_node_id,
+        to_corridor_node_id=body.to_corridor_node_id,
         is_active=True,
     )
     db.add(corridor)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        # Race against the unique index or polymorphic CHECK.
+        await db.rollback()
+        raise ConflictError(
+            "corridor.duplicate",
+            "errors.corridor.duplicate",
+            "Corridor already exists between these endpoints",
+        )
     await db.refresh(corridor)
     return corridor
 

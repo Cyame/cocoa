@@ -4,6 +4,7 @@ autogenerate to detect schema drift.
 """
 
 import app.models.blackboard  # noqa: E402, F401
+import app.models.corridor_node  # noqa: E402, F401
 import app.models.employee  # noqa: E402, F401
 import app.models.event  # noqa: E402, F401
 import app.models.instance  # noqa: E402, F401
