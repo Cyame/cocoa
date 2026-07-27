@@ -1,6 +1,7 @@
 import { AlertCircle, AtSign, LoaderCircle, MessageSquare, Send } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router';
+import { CommandAutocomplete } from '@/components/CommandAutocomplete';
 import { api, ApiError } from '@/lib/api';
 import {
   parse_turn,
@@ -30,6 +31,7 @@ export default function ComposerPage() {
   const [sendError, setSendError] = useState<string | null>(null);
   const [presetCache, setPresetCache] = useState<PresetCache>({});
   const fetchedSlugsRef = useRef<Set<string>>(new Set());
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (officeId !== undefined) {
@@ -171,14 +173,23 @@ export default function ComposerPage() {
           <label htmlFor="composer-text" className="mb-2 block text-sm font-medium text-slate-700">
             Turn text
           </label>
-          <textarea
-            id="composer-text"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Type your turn... use @slug /command to address an employee, @workspace:path to attach content."
-            className="h-80 w-full rounded-lg border border-slate-300 p-4 font-mono text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            spellCheck={false}
-          />
+          <div className="relative">
+            <textarea
+              ref={textareaRef}
+              id="composer-text"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="Type your turn... use @slug /command to address an employee, @workspace:path to attach content."
+              className="h-80 w-full rounded-lg border border-slate-300 p-4 font-mono text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              spellCheck={false}
+            />
+            <CommandAutocomplete
+              textareaRef={textareaRef}
+              text={text}
+              onTextChange={setText}
+              targetSlugs={targetSlugs}
+            />
+          </div>
           <div className="mt-3 flex items-center justify-between">
             <p className="text-xs text-slate-500">
               {directiveCount} directive(s){hasGeneralText ? ' + general text' : ''}
