@@ -6,6 +6,9 @@ side-effect, and emits ``HARNESS_CHECKPOINT`` carrying real
 ``is_k8s_pod_mode()``: local uses in-process ``emit()`` + DB status;
 K8s uses HTTP ``emit_event()`` + ``poll_control()``. P14a preset
 selection defaults to ``mi-shi``.
+
+K8s-mode events (LOOP_STARTED / CHECKPOINT / LOOP_STOPPED) all carry
+``proxy_token`` so the backend can verify pod identity (anti-spoofing).
 """
 
 from __future__ import annotations
@@ -184,7 +187,12 @@ async def run_agent_loop(instance_id: str) -> None:
         register_handler(HARNESS_CONTROL_SENT, _on_control)
 
     async def _emit(event_type: str, payload: dict[str, Any]) -> None:
-        """Emit one event — HTTP in K8s mode, in-process in local mode."""
+        """Emit one event — HTTP in K8s mode, in-process in local mode.
+
+        K8s-mode payloads carry ``proxy_token`` on every event so the
+        backend can attribute and authenticate the pod (anti-spoofing):
+        any K8s event missing the per-instance proxy token is rejected.
+        """
         if k8s_mode:
             await emit_event(
                 event_type,
