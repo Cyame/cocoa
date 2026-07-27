@@ -169,6 +169,7 @@ export type CorridorNode = {
   readonly posx: number;
   readonly posy: number;
   readonly display_name: string;
+  readonly glow_color: string | null;
   readonly status: CorridorNodeStatus;
   readonly created_by: string | null;
   readonly created_at: string;
