@@ -26,9 +26,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.testclient import TestClient
 
+import app.core.db as db_mod
 from app.api.deps import get_db
 from app.api.v1.internal import router as internal_router
-import app.core.db as db_mod
 from app.core.db import get_session_factory
 from app.core.events import _handlers
 from app.models.event import Event
