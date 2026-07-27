@@ -67,3 +67,9 @@ INSTANCE_RESTARTED = "instance.restarted"
 INSTANCE_STOPPED = "instance.stopped"
 INSTANCE_FAILED = "instance.failed"
 INSTANCE_DELETED = "instance.deleted"
+
+# ---------------------------------------------------------------------------
+# Learning (emit points in P10)
+# ---------------------------------------------------------------------------
+
+LEARNING_DISTILLATION_COMPLETED = "learning.distillation_completed"
