@@ -95,6 +95,14 @@ async def _clear_handlers():
         ev_mod._handlers.clear()
         act_mod._pending_daily_report = None
         act_mod._task_queue = None
+        from collections import defaultdict as _dd
+        from app.main import app as _app
+        _stack = _app.middleware_stack
+        while _stack is not None:
+            if hasattr(_stack, "_counters") and isinstance(getattr(_stack, "_counters", None), _dd):
+                _stack._counters.clear()
+                break
+            _stack = getattr(_stack, "app", None)
 
     _reset()
     yield
