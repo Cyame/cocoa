@@ -8,8 +8,8 @@ Cocoa 是多 Agent 控制台（multi-agent control studio）。本仓库已完�
 
 | 组件 | 技术栈 | 状态 |
 |------|--------|------|
-| `cocoa-backend/` | Python 3.12 + FastAPI + SQLAlchemy (async) + asyncpg + Alembic | P2 引入 12 核心域模型；P3.5 加入 Event 模型（审计事件），合计 13 models（12 业务 + 1 审计）+ 3 迁移 + 249 测试 |
-| `cocoa-portal/`  | React 19 + Vite 8 + TypeScript + Tailwind CSS v4 + Bun + lucide-react | P1.5 骨架（RouterProvider 已接入） |
+| `cocoa-backend/` | Python 3.12 + FastAPI + SQLAlchemy (async) + asyncpg + Alembic | P2 引入 12 核心域模型；P3.5 加入 Event 模型；P9 加入 CorridorNode 模型 + glow helper + events 查询端点 + live-status 聚合端点 + Membership 坐标迁移（`hex_q/hex_r` → `posx/posy`），合计 14 models + 315+ 测试 |
+| `cocoa-portal/`  | React 19 + Vite 8 + TypeScript + Tailwind CSS v4 + Bun + lucide-react + Zustand | P9 first UI（14 todos：7 页面 + topology viz + CorridorNode + interaction modes + 零新增 npm 依赖） |
 | `cocoa-artifacts/` | Dockerfile + K8s 清单（Deployment/Service/ConfigMap/PVC/NetworkPolicy） | P7 已完成 |
 | `.github/workflows/` | CI 基础（lint + build） | 骨架 |
 
@@ -178,6 +178,15 @@ Cocoa 后端 API 遵循 `docs/api-architecture.md` 中的完整约定，核心�
 - 黑板系统设计见 `docs/blackboard-system.md`：Blackboard 被动状态模块、BlackboardFile 虚拟文件系统、Vault 归档、MemoryEntry 追加日志、权限模型
 - 实例运行时系统见 `docs/runtime-system.md`：Instance 生命周期模型、CRUD API、K8s 部署脚手架、多实例隔离、Langfuse 集成预留
 - Harness 系统设计见 `docs/harness-system.md`：D11 控制面、Supervisor + 4 个确定性熔断器、Boulder 循环引擎、5 个控制命令、Notepad 契约、Agent Runtime 骨架、Control Downlink 双路径机制
+- Portal 系统设计见 `docs/portal-system.md`：React 19 架构、7 页面路由表、事件查询 API、live-status 聚合端点、CorridorNode CRUD、Composer 分段语义、Topology viz 算法（glow 映射 + 连接动画）
+
+**P9 Portal**: React 19 + Vite 8 + TypeScript + Tailwind CSS v4 + Zustand + react-router v7, 零新增 npm 依赖。7 个页面（Login / Office list / Office detail / Instance detail / Composer / Debug / Topology viz）。Topology viz 是旗舰功能：SVG 圆形节点 + 外框发光（`loop_status` → glow color）+ pan/zoom canvas + 3 种交互模式（Select/Connect/Move）+ 连接线消息传递流光动画。CorridorNode 是 first-class canvas 元素（`posx/posy` + `display_name` + `status`），支持 M<->M / M<->CN / CN<->CN 三种走廊连接。全量前端 type-check + lint + build + vitest 通过；后端 315+ 测试零回归。
+
+**P9 坐标迁移**：`Membership.hex_q → posx`、`Membership.hex_r → posy`（Alembic `op.alter_column` rename，保留数据）。新增 partial unique index `uq_memberships_office_pos` 约束 `(office_id, posx, posy)` 在活跃记录中唯一。`grep -rn "hex_q\|hex_r" cocoa-backend/app cocoa-backend/tests` 应 0 命中（除历史 alembic 迁移文件）。
+
+**P9 CorridorNode 模型**：`corridor_nodes` 表 — `office_id, posx, posy, display_name, glow_color, status`。5 个 CRUD 端点（`GET list / GET id / POST / PATCH / DELETE`）挂在 `/learning/corridor-nodes`。`Corridor` 表多态扩展：`from/to_membership_id` 改为 nullable + 新增 `from/to_corridor_node_id` nullable；CHECK 约束确保每条边两端恰好各一个非空。三种连接：成员 ↔ 成员 / 成员 ↔ 走廊节点 / 走廊节点 ↔ 走廊节点。
+
+**P9 Glow 映射**：`app/core/glow.py::loop_status_to_glow(status)` 返回 `GlowColor(color, intensity)`，覆盖 6 种 LoopStatus（running=#10b981/strong, idle=#eab308/medium, paused=#94a3b8/weak, interrupted=#ef4444/medium, completed=#3b82f6/low, failed=#dc2626/strong）+ 未知兜底。`user_membership_glow()` 固定 #4f46e5/medium。`GET /api/v1/offices/{id}/live-status` 聚合所有 membership 的 glow state，topology viz 每 2 秒轮询。
 
 **P8 Harness**: D11 control plane lives in `app/core/harness_supervisor.py`. In-memory loop-state registry + 4 deterministic circuit breakers. Handler updates ONLY the registry (no DB writes — P3.5 contract). DB mutations happen via `handle_*` direct mutators from the API endpoint layer. Control commands (`/interrupt /pause /resume /status /snapshot`) are the third command category after P4 global scope-ops and per-preset commands.
 

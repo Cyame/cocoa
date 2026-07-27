@@ -8,8 +8,8 @@ Cocoa is a control surface for running multi-agent systems. A web portal pairs w
 
 | Component | State |
 |-----------|-------|
-| `cocoa-backend/` | P8 harness + control plane (Boulder loop engine + Harness Supervisor + control command endpoints + activation consumer + continuation engine + notepad + todo-enforcer) on top of P7 instance runtime; P7.5 fix-and-sync wave landed (audit + doc sync) |
-| `cocoa-portal/`  | P1.5 scaffold (React 19 + Vite 8 + Tailwind CSS v4 + Bun, RouterProvider wired, single Index page placeholder) |
+| `cocoa-backend/` | P9 portal backend: events cursor pagination, live-status glow aggregation, CorridorNode CRUD, Membership posx/posy rename, Corridor polymorphic FK — on top of P8 harness + control plane (Boulder loop engine + Harness Supervisor + control command endpoints + activation consumer + continuation engine + notepad + todo-enforcer) + P7 instance runtime; P7.5 fix-and-sync wave landed |
+| `cocoa-portal/`  | P9 first UI (7 pages + topology viz + CorridorNode + 3 interaction modes + zero new npm deps) |
 | `cocoa-artifacts/` | P7 Instance runtime Dockerfile and K8s manifests (Deployment, Service, ConfigMap, PVC, NetworkPolicy) |
 | CI | Baseline (lint + build on push/PR) |
 
@@ -87,6 +87,20 @@ bun run dev
 ```
 
 Portal at `http://localhost:5173` (Vite default) | `/api` auto-proxies to the backend.
+
+### Portal walkthrough
+
+After `./dev.sh`, open `http://localhost:5173` and follow this path to explore the P9 Portal:
+
+1. **Login** — Register or sign in at `/login`. JWT is persisted to `localStorage` (key `cocoa.session`). Redirects to office list on success.
+2. **Office list** — `/offices` shows a card grid of accessible offices with member and instance counts. Click any card to enter.
+3. **Office detail** — `/offices/:id` has 3 tabs: Employees (lists memberships with roles), Instances (running agents), and Blackboard (shared state). Each instance row links to instance detail.
+4. **Topology** — `/offices/:id/topology` is the flagship SVG canvas. Nodes are rendered as circles with real-time glow halos reflecting their `loop_status` (green=strong=running, yellow=medium=idle, red=strong=failed, etc.). Position is free-form Cartesian `(posx, posy)`. Corridor lines connect nodes. A 3-mode toolbar (Select `V` / Connect `C` / Move `M`) switches interaction behavior. Drag nodes in Move mode; create corridors in Connect mode. Live-status polls every 2 seconds.
+5. **Instance control** — `/offices/:id/instances/:iid` shows an agent's status bar, 5 harness control buttons (Interrupt / Pause / Resume / Status / Snapshot), and a scrollable event panel. Boulder snapshot modal shows the last checkpoint.
+6. **Composer** — `/offices/:id/composer` is a multi-recipient message editor. Type `@slug /command` to segment text into per-recipient compartments with slash command autocomplete (press `/` to see available commands: global, control, and per-preset).
+7. **Debug** — `/debug` is the raw audit event stream. Filter by type prefix (e.g. `harness.`), resource type, resource ID, request ID, or date range. Events poll every 5 seconds. Export to JSON with one click.
+
+For architecture details, see [docs/portal-system.md](docs/portal-system.md).
 
 ## Development
 
