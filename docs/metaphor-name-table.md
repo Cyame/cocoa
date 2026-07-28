@@ -25,7 +25,7 @@ Database columns use the backend names. UI labels use the frontend names. Backen
 | **Instance** | 化身 | Instance (unchanged) | Running pod materialization of an Entity. Ephemeral. |
 | **Membership** | 契印 | Membership (unchanged) | Entity/User membership seal in a Workspace, with posx/posy + role. |
 | **Passage** | 通道 | Corridor | Edge between two endpoints in Workspace topology. CorridorNode dropped. |
-| **Blackboard** | 主脑 | Blackboard (unchanged) | Per-Workspace shared state panel. |
+| **Blackboard** | 穹窿 | Blackboard (unchanged) | Per-Workspace shared state panel. |
 | **Vault** | 冰封库 | Vault (unchanged) | Cold storage archive. |
 | **Memory** | 记忆沉淀 | MemoryEntry | Append-only per-Entity memory log (experience/lesson/decision/problem). |
 | **Event** | 印痕 | Event (unchanged) | Audit log row. |
