@@ -20,6 +20,7 @@ import asyncio
 import json
 import logging
 from dataclasses import asdict, dataclass
+from typing import Final
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -82,7 +83,7 @@ def _dump_deploy_config_snapshot(snapshot: dict[str, object]) -> str:
     return json.dumps(snapshot, default=str, sort_keys=True)
 
 
-PROGRESS_STEP_NAMES = [
+PROGRESS_STEP_NAMES: Final[list[str]] = [
     "ensure_namespace",
     "configmap",
     "secret",
