@@ -376,6 +376,29 @@ User maintains a live test environment on **orbstack** K8s cluster for real-time
 - Secrets: `cocoa-backend-secrets` (DB / JWT / encryption) + `cocoa-postgres-secret` (postgres user/pass/db)
 - See `.omo/evidence/orbstack-operations.md` for full ops doc.
 
+## Persistent Fix Policy (2026-07-28)
+
+User's standing rule for ALL bugfixes and updates to the Cocoa test environment.
+
+- **All bugfixes must be code changes.** Every fix flows through git commit → image rebuild (backend / portal) → K8s rollout restart or image swap. Never use SQL injections, manual DB tweaks, monkey-patches, or ad-hoc live DB writes as a "fix".
+- **The K8s test environment on orbstack is a persistent artifact.** The user gives real-time feedback based on what they see running on the live cluster. The deployment must always reflect the latest committed state — no "good enough for now" workarounds that drift away from master.
+- **Workflow for any bugfix or update**:
+  1. Identify the root cause in the source code (backend `cocoa-backend/app/` or frontend `cocoa-portal/src/`).
+  2. Write the fix as a code change (no shortcuts, no monkey-patches, no live DB updates).
+  3. Add or update tests in `cocoa-backend/tests/` or `cocoa-portal/src/**/*.test.ts(x)`.
+  4. Commit on the appropriate feature branch.
+  5. Merge to master (fast-forward when possible).
+  6. `bash scripts/deploy-to-orbstack.sh` to update the live environment.
+  7. Verify the fix end-to-end via curl + browser on the live cluster.
+  8. Commit evidence to `.omo/evidence/`.
+- **Ad-hoc live SQL is investigation only.** Use `psql` against `cocoa_dev` (or the orbstack postgres pod) only to ask "is the data correct?" — never to "fix" a bug. If a query reveals missing data or wrong state, the next step is a code change + migration, not another SQL statement.
+- **Forbidden shortcuts** (any of these is a process violation):
+  - `INSERT / UPDATE / DELETE` against the live DB to mask a bug
+  - Disabling tests to make CI green
+  - "I'll fix it later" todos for runtime-affecting issues
+  - Skipping `scripts/deploy-to-orbstack.sh` after a code change
+- **Source of truth:** `master` branch on the local clone. The K8s cluster should be a deployment artifact of master, not an independent mutable environment.
+
 ## 仓库结构快查
 
 ```
