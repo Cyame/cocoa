@@ -1,0 +1,59 @@
+# Cocoa Portal Deployment for OrbStack.
+#
+# Wave 1 of P14b: nginx serving the React SPA built by Dockerfile.portal.
+# The container exposes /healthz for kubelet probes; SPA routes fall back to
+# /index.html. Service is ClusterIP for in-cluster access; expose via Ingress
+# or port-forward from the host as needed.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cocoa-portal
+  namespace: cocoa
+  labels:
+    app: cocoa-portal
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cocoa-portal
+  template:
+    metadata:
+      labels:
+        app: cocoa-portal
+    spec:
+      containers:
+        - name: portal
+          image: cocoa-portal:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 5173
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 5173
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 5173
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cocoa-portal
+  namespace: cocoa
+spec:
+  type: ClusterIP
+  selector:
+    app: cocoa-portal
+  ports:
+    - port: 5173
+      targetPort: 5173

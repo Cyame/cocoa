@@ -1,0 +1,80 @@
+# Cocoa Backend Deployment for OrbStack.
+#
+# Wave 1 of P14b: OrbStack-ready backend with HTTP health probes and secrets
+# sourced from `cocoa-backend-secrets`. The Secret must be created out-of-band
+# (e.g. `kubectl create secret generic cocoa-backend-secrets -n cocoa ...`)
+# with the keys: DATABASE_URL, JWT_SECRET, ENCRYPTION_KEY, COCOA_K8S_DISABLED.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cocoa-backend
+  namespace: cocoa
+  labels:
+    app: cocoa-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cocoa-backend
+  template:
+    metadata:
+      labels:
+        app: cocoa-backend
+    spec:
+      containers:
+        - name: backend
+          image: cocoa-backend:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 4510
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: cocoa-backend-secrets
+                  key: DATABASE_URL
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: cocoa-backend-secrets
+                  key: JWT_SECRET
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: cocoa-backend-secrets
+                  key: ENCRYPTION_KEY
+            - name: COCOA_K8S_DISABLED
+              valueFrom:
+                secretKeyRef:
+                  name: cocoa-backend-secrets
+                  key: COCOA_K8S_DISABLED
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 4510
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 4510
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cocoa-backend
+  namespace: cocoa
+spec:
+  type: ClusterIP
+  selector:
+    app: cocoa-backend
+  ports:
+    - port: 4510
+      targetPort: 4510
