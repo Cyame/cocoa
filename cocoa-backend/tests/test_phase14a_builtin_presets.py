@@ -62,6 +62,10 @@ def test_all_presets_have_valid_provider_config():
     # Manifest invariants that P14a must preserve.
     for preset in BUILTIN_PRESETS:
         assert preset["version"] == "1.0.0", f"{preset['slug']}: version must stay 1.0.0"
-        assert preset["manifest"]["prompt"] == "TODO P14a", (
-            f"{preset['slug']}: prompt placeholder must be 'TODO P14a'"
+        prompt = preset["manifest"]["prompt"]
+        assert prompt and prompt != "TODO P14a", (
+            f"{preset['slug']}: prompt must be a real system prompt, not the 'TODO P14a' placeholder"
+        )
+        assert len(prompt) >= 80, (
+            f"{preset['slug']}: prompt too short ({len(prompt)} chars); expected at least 80"
         )
