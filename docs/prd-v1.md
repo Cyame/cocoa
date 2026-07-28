@@ -473,6 +473,155 @@ interface Capability {
 
 ---
 
+## §6.U 首次运行引导 UI 详写（start-work 落地用）
+
+### 6.U.1 Modal 容器
+
+**触发条件**（已在 §6.1 定义）：Workspace 空态 + 从未创建过任何 Entity
+
+**容器规格**：
+- 桌面 ≥768px：`max-w-2xl`（672px）× auto height，居中 fixed，`z-50`
+- 移动端 <768px：全屏 bottom sheet（top: 10vh, bottom: 0, border-t rounded）
+- 背景 overlay：`bg-slate-950/50`，点击 overlay 关闭 modal（可关闭，已在 §6.2 确认）
+- 内容区：white bg + rounded-xl + shadow-2xl + p-6（desktop）/ p-4（mobile）
+- Enter 键 = 当前步"下一步"/"完成"（如果 button enabled）
+
+**步骤指示器**：右上角 pill-style `步骤 1/3`（灰色）+ 当前步高亮（蓝色 ring）
+
+**错误态全步骤统一**：
+- 网络错误 modal → 背景 dim 30% + 当前步骤不清空 + 顶部 red banner "网络错误，请重试" + 「重试」按钮
+- 提交错误（409 slug 冲突等）→ 表单字段下方红字 + "重试" 按钮停在当前步
+- 意外错误（5xx）→ 黄色 warning banner "抱歉，召唤失败。已记录错误，后台处理中。" + 「关闭 + 稍后再说」
+
+### 6.U.2 Step 1 神职选择 UI
+
+**神职卡片 grid**：
+
+| 桌面 | 平板 | 移动 |
+|---|---|---|
+| 3 列 (`grid-cols-3`) | 2 列 | 1 列 + 水平 swipe |
+
+**每卡片尺寸**：280×320px（desktop）/ 240×300px（tablet）/ full width（mobile）
+
+**卡片视觉层次（顶→底）**：
+```
+┌──────────────────────────┐
+│   神职图标（24px lucide）│
+│   神职 display name (H3) │
+│   slug (mono, 灰色)      │
+│                          │
+│   1 句话职能描述 (14px)  │
+│                          │
+│   ┌─ 命令 chips ─┐      │
+│   │ /plan  /build  │      │
+│   │ /execute        │      │
+│   └───────────────┘      │
+│                          │
+│   组标签 chip(蓝/绿/紫)  │
+│   Provider: claude-3.5   │
+└──────────────────────────┘
+```
+
+**卡片状态**：
+- **默认**：`border-slate-200 bg-white`
+- **选中**：`border-blue-500 ring-2 ring-blue-500/20 shadow-md translate-y-[-2px]`
+- **hover**：`border-slate-400 shadow-md`（非选中）/ `border-blue-600`（已选中）
+- **disabled**（v1 无这一级；保留以便 P16d 扩展）
+
+**命令 chips**：
+- 3 个 chips 水平排列，间距 1
+- 每个 chip：`border-blue-100 bg-blue-50 text-blue-700 font-mono text-xs rounded-full px-2 py-0.5`
+- hover → 显示该命令的完整 description tooltip（在 chip 上方 8px，白底灰边）
+
+**分组 filter pills**（顶部，可选）：
+```
+[全部] [策划] [执行] [审视]
+```
+- active pill: `bg-blue-600 text-white`，rest: `bg-slate-100 text-slate-600 hover:bg-slate-200`
+- 选择某个组 → 只显示该组的卡片（宽度短，居中）
+
+**键盘操作**：
+- `Tab` 选择下一个 card
+- `Arrow` 上下左右导航
+- `Enter` 选中 + focus "下一步"
+- `Esc` 取消选择
+
+**底部操作**：
+- 「下一步」按钮：`disabled:opacity-50` + tooltip "请选择一个神职"（当未选中） / `bg-blue-600 text-white`（选中）
+- 「稍后再说」链接：`text-slate-500 underline` → 关闭 modal + toast "已跳过引导"
+
+### 6.U.3 Step 2 眷族创建表单 UI
+
+**表单布局**：
+```
+┌───────────────────────────────────────┐
+│ ┌─ 眷族显示名 ────────────────────┐  │
+│ │ [____________________________]  │  │  实时去重：已占用 → 红框 + "该 workspace 已有同名眷族"
+│ │ 例如：奈亚探子、克总助理         │  │
+│ └──────────────────────────────────┘  │
+│                                        │
+│ ┌─ Slug (自动生成) ──────────────┐   │
+│ │ [nai-ya-tan-zi_____________]   │  │  自动生成：当用户输入 display_name 时
+│ │ kebab-case，小写字母开头         │  │  自动 slugify（去空格转小写插连字符）
+│ └──────────────────────────────────┘  │
+│                                        │
+│ ┌─ Rank 选择 (radio) ─────────────┐  │
+│ │ ◉ 深潜者（researcher）                │  │  默认选项
+│ │   AI 持久化 + Memory 跨化身 ──────  │
+│ │ ○ 浅识者（intern）                     │  │
+│ │   AI 无状态，每次重启              │  │
+│ └──────────────────────────────────┘  │
+│                                        │
+│ ┌─ 创建后冻结提示 ────────────────┐  │
+│ │ ⚠ 上述属性创建后将冻结。如需改 │  │
+│ │ 变，请新建 Entity。             │  │
+│ └──────────────────────────────────┘  │
+│                                        │
+│         [上一步]    [召唤眷族]       │
+└───────────────────────────────────────┘
+```
+
+**表单验证规则**：
+| 字段 | 验证 | 反馈 |
+|---|---|---|
+| display_name | 必填 1-32 字符；同 workspace 不可重名 | 实时去重 + 红色 tooltip |
+| slug | 自动生成非空；手动编辑时匹配 `/^[a-z][a-z0-9-]*$/`；同 namespace 全局 unique | 红色 tooltip + SlugInput 自带 invalid shaker animation |
+| rank | 2 选 1（无必填校验，总是默认深潜者） | — |
+
+**右侧预览区**（desktop/tablet only，移动端折叠到下方）：
+- 实时渲染该 Entity spawn 后的化身卡片（含 rank badge + display_name + 神职 chip）
+- 用静态 SVG preview（非真正 API call）
+
+**「召唤眷族」按钮状态机**：
+1. **disabled**（表单任一字段 valid 未过）→ 置灰 + "请完成所有必填项"
+2. **enabled** → 蓝色 + "召唤眷族"
+3. **submitting** → spinner + "召唤中..."
+4. **success** → 绿色 check + auto-advance 到 Step 3（delay 500ms）
+5. **error** → 表单不动，顶部 red banner + retry
+
+### 6.U.4 Step 3 打招呼 + 首发消息 UI
+
+**聊天区域**：
+- textarea（不可编辑，只读显示 `@<slug> 你好，认识一下。`）
+- 不可删除 / undo / insert
+- 「发送」按钮（默认 disabled——用户必须点"发送"才开始 talk）
+
+**"发送"后行为**：
+1. loading spinner + "化身回复中..."
+2. 一旦收到响应 → 显示该化身的首次回应（完整 markdown，可选中复制）
+3. 回复区域自动 scroll to bottom
+4. delay 500ms → "再发一条" + "完成" 两个并排按钮出现
+
+**错误态**：
+- 化身没回应（timeout 15s）→ "无响应" banner + retry（POST 同一消息）+ skip（"直接跳到新化身页面"）
+- 网络错误 → "发送失败" toast + 「重试」按钮
+
+**按钮**：
+- 「再发一条」→ 清空回复 + 重置发送区域为 clean state
+- 「完成」→ 关闭 modal + 跳 `/workspaces/:id?focus=memory&entity=:eid`（workspace dashboard 记忆 tab 定位新眷族）
+
+---
+
 ## §7 AppShell + Sidebar 框架（VSCode 风）
 
 > **15d 重构（2026-07-28）**：从"3-tab 详情页"转向"VSCode 风 IDE 布局"——Workspace dashboard 默认画布 = 拓扑图，常驻右侧 Composer panel，可折叠左侧 Sidebar 活动栏，节点点击弹大窗。
@@ -763,6 +912,148 @@ interface Capability {
 
 ---
 
+## §8.U Workspace 召唤 + 管理 UI 详写（start-work 落地用）
+
+### 8.U.1 Workspace tab 卡片
+
+**统计总览**（namespace 主页 Workspace tab 顶部 stats bar）：
+```
+┌──────────────────────────────────────────────────────────┐
+│ 当前 namespace: 1 workspace · 5 眷族 · 3 化身 · 主脑活跃  │
+│ [刷新]                                           [召唤新眷族] │
+└──────────────────────────────────────────────────────────┘
+```
+
+- 「刷新」：手动 refetch workspace stats（不轮询，手动触发）
+- 「召唤新眷族」：主 CTA → 触发 §6 modal（如果 workspace 是空态则直接展示 Step 1）
+
+**Workspace 卡片渲染**（3 列 desktop grid）：
+
+每卡内容：
+```
+┌──────────────────────────────────────┐
+│ 大标题 (H2)        [健康度 badge]      │
+│ slug (mono, 灰色)                     │
+│                                       │
+│ 4 项统计 grid (2×2)                  │
+│ ┌──────────┐ ┌──────────┐            │
+│ │ 眷族: 5  │ │ 化身: 3  │            │
+│ └──────────┘ └──────────┘            │
+│ ┌──────────┐ ┌──────────┐            │
+│ │ 契印: 2  │ │ 主脑: 240KB│          │
+│ └──────────┘ └──────────┘            │
+│                                       │
+│ [进入 Workspace →]                    │
+└──────────────────────────────────────┘
+```
+
+健康度 badge：左边 colored circle 8px + 文字 small：
+- 绿 = 所有化身 running / idle
+- 黄 = 有 paused / interrupted 化身
+- 红 = 有 failed 化身
+
+点击任意位置 → 进入该 workspace dashboard（`/workspaces/:id`）。
+
+### 8.U.2 Workspace 空态（namespace 主页 Workspace tab 为 0 时）
+
+```
+┌──────────────────────────────────────────────┐
+│ 🏢                                           │
+│ 还没有 Workspace                          │
+│ 召唤第一个眷族，让 AI 化身给你干活 →        │
+│                                              │
+│ [召唤首位眷族]  (触发 §6 modal)               │
+│                                               │
+│ 或者浏览神职市场，先了解 11 位 AI 专家 ▸     │
+└──────────────────────────────────────────────┘
+```
+
+- 居中，与 §6 引导一致的视觉风格
+- "或者浏览神职市场" → 跳 `/namespaces?tab=base-classes`
+
+### 8.U.3 Workspace 详情（dashboard）顶部 header
+
+**Header 条**（workspace dashboard 顶部，sticky）：
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│ │ Workspace 显示名                        [召唤眷族]  [⋯]  │
+│ │ slug · 创建于 1 天前 · 你                                  │
+│ │ 5 眷族 · 3 化身 · 主脑 240KB         [健康度 / 全屏 / 刷新] │
+└──────────────────────────────────────────────────────────────┘
+```
+
+- 「召唤眷族」：primary 按钮 → 触发 §6 modal（pre-fill 当前 workspace 上下文）
+- 「⋯」菜单（需 `can_manage_workspace`）：编辑名 / slug / 软删除（30 天）+ "批量重启 outdated 化身"（如果有）
+- 健康度 badge：同 card 一样的逻辑
+- 全屏按钮：点击 → workspace dashboard 全屏（隐藏 sidebar / status bar / composer panel；点击同一按钮 / Esc 退出全屏）
+
+### 8.U.4 批量重启 outdated 化身 UI
+
+**触发**：Header 「⋯」→ 批量重启 outdated 化身
+
+**全屏 modal**（desktop 800px wide / mobile bottom sheet）：
+
+```
+┌──────────────────────────────────────────────┐
+│ 批量重启 outdated 化身                        ✕ │
+│ 当前 2 / 5 化身 hash 不匹配                  │
+│                                              │
+│ 化身列表：                                   │
+│ □ AI-1 (paused#abc12345)      outdated 3h   │  ← 选中
+│ □ AI-2 (idle#def67890)        outdated 1d   │  ← 选中
+│ ☐ AI-3 (running#ghi90123)     active 2m     │  ← 跳过（正在运行，禁选）
+│                                              │
+│ [全部选中 / 全不选]               [确认重启 2 个化身] │
+│                                              │
+│ 确认后：化身将停止当前 loop，pod 重创建，新 │
+│ 能力自动装入。Memory 不会被回收。           │
+└──────────────────────────────────────────────┘
+```
+
+- 每个化身行右侧显示 running/idle/paused/failed + outdated 时间戳
+- **禁选**：running 状态的化身不参与批量重启（正在运行，需要用户先手动停止）
+- hiking 逻辑：选中项默认 sorted by outdated duration（最旧排第一）
+- 「确认重启 N 个化身」→ spinner + progress bar（每个化身一个 step）→ 完成 green toast
+
+**单化重重启**（拓扑图 outdated 节点浮窗 →「重启以更新」按钮）：
+- 与该化身 outdated 节点浮窗共享同一个 RESTART endpoint
+- 弹 modal 确认："重启 Instance #XXX？当前 loop 将停止，pod 重创建"——等同于批量重启的单例版本
+
+### 8.U.5 空态召唤（workspace 无眷族时主画布 CTA）
+
+如果 workspace dashboard 有 0 眷族，主画布（当前 tab）应显示召唤 CTA：
+
+```
+┌──────────────────────────────────────────┐
+│ 该 Workspace 还没有 AI 眷族             │
+│ 召唤第一位眷族，从 11 神职中挑选 →     │
+│                                          │
+│ [召唤首位眷族]  [跳过进入 workspace 概览]   │
+└──────────────────────────────────────────┘
+```
+
+- 所有 4 个 tab（拓扑 / 契印 / 化身 / 记忆）都显示同一个空态 CTA
+- 「召唤首位眷族」→ 触发 §6 modal
+- 「跳过进入 workspace 概览」→ 切到 Workspace 页面（namespace Workspace tab）保持空态
+
+### 8.U.6 删除 Workspace 确认
+
+**触发**：Header 「⋯」→ 软删除 workspace
+
+**确认 modal**：
+```
+确认删除 [workspace name]？
+该 workspace 内所有眷族 (5)、化身 (3)、记忆、契印都将保留，
+但其 members 将不再能访问。30 天内可恢复。
+[取消]  [确认软删除]
+```
+
+- 确认 → toast "Workspace 已软删除" + 跳 `/namespaces`
+- 取消 → 返回 workspace
+
+---
+
 ## §9 Workspace Dashboard（`/workspaces/:id`）
 
 ### 9.1 页面定位
@@ -975,6 +1266,195 @@ workspace 进入后的主页面 = VSCode 风 dashboard，**默认主画布是拓
 | **Workspace 节点 / Link** | (rare) | 跳该 workspace dashboard 全屏模式 |
 
 **实现**：所有跳转用 `react-router-dom` `<Link>` 或 `useNavigate()`，保留 dashboard 上下文（焦点状态）。
+
+---
+
+## §11.U 拓扑 Dashboard UI 详写（start-work 落地用）
+
+### 11.U.1 节点渲染系统（SVG）
+
+**ViewBox**：`-1000 -1000 2000 2000`（user coords），`preserveAspectRatio="xMidYMid meet"`
+
+**基础节点圆**：
+- 半径：40px（core）、52px（halo 外环）
+- Core 填充：`#e2e8f0`（AI 节点默认灰底） / `#3b82f6`（AI 化身上的蓝底）
+- Core 描边：2px + `node.glowColor` + opacity 按 `intensityStrokeOpacity`（0.4-1）
+
+**节点类型映射到 SVG 渲染**：
+
+| 节点类型 | 形状 | 尺寸 | 内部图标 | 外圈（halo） | Core 颜色 |
+|---|---|---|---|---|---|
+| AI 眷族 | 圆 | 40px | `Bot` (20px, lucide) | glow 按 loop_status 颜色 | `#e2e8f0` |
+| AI 化身 | 嵌套双圆 | external=52px, core=40px | `Cpu` (20px) | glow 动态 + outdated-dashed 叠加 | `#3b82f6` |
+| 真人契印 | 圆 | 40px | `User` (20px) | 无 halo | `#e2e8f0` |
+| 主脑节点 | 大六边形 | 60×52 | `Brain` (24px) | 紫红渐变 glow | `#7c3aed`→`#eab308` |
+
+**Glow 外环（halo）**：
+```tsx
+{haloOpacity > 0 ? (
+  <circle r={52} stroke={node.glowColor} strokeOpacity={haloOpacity}
+    strokeWidth={8} filter="url(#topology-glow-blur)" />
+) : null}
+```
+
+Glow filter：`<feGaussianBlur stdDeviation="4" />`（defined in `<defs>` via `TopologyGlowDefs` component）。
+
+**Outdated 叠加**（当 `Instance.active_hash != Entity.promotion_migration_hash` 时）：
+```tsx
+{node.outdated ? (
+  <circle r={58} stroke="#eab308" strokeWidth={2} strokeDasharray="6 3" fill="none" />
+  { /* 右上角黄色角标 */ }
+  <foreignObject x={18} y={-46} width={28} height={16}>
+    <span class="text-xs text-white bg-amber-500 rounded px-1.5 py-0.5 font-mono">outd.</span>
+  </foreignObject>
+) : null}
+```
+
+### 11.U.2 节点 hover tooltip（3 档逐层展开）
+
+**触发**：鼠标悬停 ≥ 500ms
+
+**tooltip 规格**：
+- 位置：节点中心上方偏移 60px，白底 + 灰边
+- 宽度：自动 fit content（min 160px, max 320px）
+- 3 层信息（按行数递增）：
+
+| 层 | 显示 | 所有类型 | 特殊情况 |
+|---|---|---|---|
+| **L1** 基本 | label + loop_status badge + slug（mono） | ✓ | |
+| **L2** 扩展 | 续命次数 / 最后 checkpoint / outdated?（是 → 红色提示） | AI 化身 only |
+| **L3** 操作 | "查看详情" / "在 Composer 里聊" / "重启以更新" / "移除契印" 等 1-2 个操作链接 | 按类型 | L3 按钮仅在非 outdated 正常状态下活跃 |
+
+**L3 按钮列表（按节点类型）**：
+| 节点类型 | L3 操作 |
+|---|---|
+| AI 化身 | 「查看详情」（→ click 浮窗） / 「在 Composer 里聊」/ 「重启以更新」（仅 outdated） |
+| AI 眷族 | 「进入记忆」 |
+| 真人契印 | 「查看用户信息」 / 「移除契印」（仅超管） |
+| 主脑 | 「进入主脑」 / 「进入穹窿 / 额叶 / 脑干」 |
+
+**实现**：使用 SVG `<foreignObject>` 内嵌 HTML（方便样式复用 + 键盘可达）。
+
+### 11.U.3 click 浮窗（模态浮层）
+
+**触发**：单击节点（非 dblclick 计时器内）
+
+**动画**：
+- 主画布 (`.topology-canvas`) 添加 CSS filter `blur(8px)` + opacity `30%`，duration 200ms ease-out
+- 浮窗从节点中心位置 scale(0) → scale(1) 放大弹出（300ms spring）
+- 关闭：反向动画 scale(1)→scale(0) + blur/opacity 恢复
+
+**浮窗尺寸**：920×640（desktop / tablet 可缩放），移动端全屏 sheet
+
+**浮窗结构**（取决于节点类型）：
+- **AI 化身浮窗**：化身详情（compact）+ 3 个操作 card（5 控制 button / 当前记忆 info / outdated? → 重启CTA）+ "回 Topology"
+- **AI 眷族浮窗**：同 §13.2.U.2 眷族详情浮窗（7 tab 完整）
+- **真人契印浮窗**：用户信息 + 觉醒基因 chip + 操作（「查看用户」→ 全局契印详情 / 「移除契印」）
+- **主脑浮窗**：4 脑区状态卡片（small each）+ "进入主脑"
+
+**关闭**：
+- 浮窗外任意点击 / Esc / 右上 × / "回到 Topology" 按钮
+- 关闭后 node 回到"未选中"状态（淡出选中 halo）
+
+**焦点管理**：浮窗 trap 焦点（Tab 在浮窗内循环），Esc 关闭并恢复焦点到该节点 `g[data-topology-node]`。
+
+### 11.U.4 dblclick → 持久化 tab
+
+**触发**：双击节点（dblclick 间隔 300ms 去重）
+
+**Tab 注册**：`tabStore.addTab({ id: \`instance-\${iid}\`, label: node.label, content: <InstanceDetailPanel /> })`
+
+**渲染**：
+- 主画布 tab 栏 header 新增 tab 项（右侧 `×` 关闭）
+- 渲染内容的组件：`<InstanceDetailPanel instanceId={...} />`（复用 §9 化身详情页的内容，但去掉 header + 面包屑导航——全部内容用 dashboard 主画布区域）
+- 内容加载时显示 skeleton + "Loading instance detail..."
+- 内容错误时显示 error banner + retry
+
+**Tab 关闭**：`×` 按钮 → 从 tabStore 移除该 tab，自动回到上一个活跃 tab（默认为 topology tab）
+
+**持久化**：即使用户切到其他 workspace / namespace，只要 session 不关，tab 一直保留（`sessionStorage` 或 `tabStore` 持活）
+
+**深度链接**：`/workspaces/:id?tab=instance-xxx` 可直接打开带该 tab 的 dashboard
+
+### 11.U.5 三模式交互 UI 详写
+
+**Toolbar 渲染**（固定在主画布左上角）：
+3 个 `<button role="radio">` 的 pill 样式 toolbar：
+```
+┌─────────────────────┐
+│ [选择 V] [连接 C] [移动 M]  │
+└─────────────────────┘
+```
+
+- 当前 mode 高亮：`bg-blue-600 text-white`
+- 其他模式：`bg-white text-slate-600 border border-slate-200`
+- 不可重复选中同一个 mode
+- keyboard shortcut 实时切换（V / C / M）
+
+**模式切换时**：
+- 如果是 `connect` → 取消任何`move` drag 状态
+- 如果是 `select` → 清除任何 pending 连接
+- cursor 跟随模式：`cursor-pointer`(select) / `cursor-crosshair`(connect) / `cursor-move`(move)
+
+**连接模式 创建走廊** (
+):
+1. 用户在 `connect` 模式点源节点 → 节点外圈变橙色 dashed border + 顶部 status bar 显示 "点击目标节点"
+2. 用户点目标节点 → POST `/api/v1/central-hubs/{wid}/passage`（之前 `/messaging/corridors`） → 新 edge 出现在 canvas
+3. 成功 → 源节点恢复正常 + green toast "通道已建立"
+4. 失败 → 源节点回退橙色 + red toast "通道创建失败: <error>"
+5. 取消：点空白 / Esc
+
+### 11.U.6 节点拖拽（move 模式）UI
+
+- 拖拽中：节点跟随鼠标（实时渲染，无操作节流）
+- **不持久化**：松手时再 PATCH `/api/v1/messaging/memberships/:mid`（拖拽过程不产生请求）
+- 405 / 409（pos already used）→ node revert 到拖拽前位置 + toast "坐标 (x, y) 已被占用"
+
+### 11.U.7 实时刷新系统
+
+**2s 心跳（live status）**：
+```ts
+// GET /api/v1/central-hubs/{wid}/live-status
+// returns: LiveStatusItem[]
+{
+  "membership_id": "uuid-xxx",
+  "posx": 42,
+  "posy": 99,
+  "glow": { "color": "#10b981", "intensity": "strong" },
+  "outdated": false,
+  "active_hash": "sha256:..."
+}
+```
+
+Scheduler: `useEffect` 2s interval + cleanup。Response 更新每个节点的 `glow` + `outdated` state。
+
+**5s 消息激活刷新** (particle animation)：
+```ts
+// GET /api/v1/events?type_prefix=messaging.&since=5s_ago&limit=20
+```
+找到 `messaging.message_sent` event → 取 `payload.corridor_id` → 往 `activeCorridors` Map 里 set(corridorId, Date.now() + 1000) → `<animateMotion>` 被触发（1s 粒子动画）。
+
+**过期清理**：每 200ms tick 清理 `activeCorridors` 中 expired 的键。
+
+### 11.U.8 边界与错误（拓扑 canvas）
+
+- Canvas 空态（0 节点）：显示 "还没有契印或化身——召唤第一个眷族" 文字 CTA
+- 画布加载失败（API error）："加载拓扑失败" error banner + retry
+- Outdated 节点的 restart 按钮触发 workflow：
+  1. 弹 confirm modal："重启 Instance #abc？当前 loop 将停止，pod 重新创建，新能力自动装入"
+  2. 确认 → POST `/api/v1/instances/:iid/restart` → 2s poll live-status 检查新 hash → 成功 green toast / 失败 red toast
+- 连接模式未完成 target：取消（点空白 / Esc）
+- drag 出边界（>1000 / <-1000）：node 弹回内缩放
+
+### 11.U.9 Keyboard 快捷键拓扑侧
+
+| 快捷键 | 模式 | 行为 |
+|---|---|---|
+| `V` / `C` / `M` | 全局 | 切换 select / connect / move 模式 |
+| `Esc` | 全局 | 清 pending connection / drag / 关闭浮窗 |
+| `Cmd+Z` | 全局 | undo last node move（v1 可选） |
+| `↑ ↓ ← →` | move | 微调选中节点位置（±10px per keypress） |
+| `Enter` | select | 触发 click（打开浮窗） |
 
 ---
 
