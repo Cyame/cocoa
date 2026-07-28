@@ -330,6 +330,52 @@ chore(repo): 初始化根目录约定与启动脚本
 
 其他远期：参见 `.omo/plans/cocoa-v2-roadmap.md` §4 (P14+ 候选 wave 队列 13 个) + §5 (long-term directions)。
 
+## Cocoa Deployment Operations Rules (2026-07-28)
+
+User maintains a live test environment on **orbstack** K8s cluster for real-time inspection. The 4 rules below are non-negotiable for any worker / planner touching deployment.
+
+### Rule 1 — Never delete the `cocoa` namespace
+
+- The `cocoa` namespace on orbstack holds live backend + postgres + portal pods for real-time user inspection.
+- After any deploy / verification / smoke, **leave the pods running**.
+- DO NOT run `kubectl delete namespace cocoa`.
+- The deploy script `scripts/deploy-to-orbstack.sh` is idempotent — re-run it instead of deleting.
+- If a test needs isolated state, use **other namespaces** (e.g. `cocoa-test-<uuid>`).
+
+### Rule 2 — Don't touch `cocoa_dev` in `local-pgvector`
+
+- `cocoa_dev` is the shared dev database on the `local-pgvector` container (port 5432).
+- All pytest use `cocoa_test_template` + `cocoa_test_<uuid>` clones — they do NOT touch `cocoa_dev`.
+- Ad-hoc integration tests must use `cocoa_test_<uuid>` or other test DB names — **never** `cocoa_dev`.
+- `scripts/deploy-to-orbstack.sh` deploys its own postgres pod with its own `cocoa_dev` database — completely separate from the shared `local-pgvector` one.
+
+### Rule 3 — After every phase, re-deploy
+
+- Every phase that touches backend code, deployment manifests, or service config MUST invoke `scripts/deploy-to-orbstack.sh` before merge.
+- Commit the changes → run the script → verify pods are Ready → commit any additional evidence → merge.
+- This keeps the user's inspection environment in sync with master.
+
+### Rule 4 — Use orbstack for testing, not local-pgvector
+
+- When a real K8s test is needed (multi-pod networking, service discovery, K8s mounts), use the orbstack cluster.
+- When a single-process DB test is needed, use `local-pgvector` `cocoa_test_*` clones (per pytest convention).
+- The two environments are independent. Do not assume `local-pgvector`'s state matches orbstack's state or vice versa.
+
+### Deploy script
+
+```bash
+./scripts/deploy-to-orbstack.sh           # full deploy (idempotent)
+./scripts/deploy-to-orbstack.sh --status  # show current state
+./scripts/deploy-to-orbstack.sh --logs    # tail backend logs (last 200 lines, last 1h)
+```
+
+### Cocoa namespace facts
+
+- Pods: `cocoa-backend-xxx`, `cocoa-portal-xxx`, `cocoa-postgres-xxx` (Deployment-managed)
+- PVC: `cocoa-postgres-data` (10Gi, local-path)
+- Secrets: `cocoa-backend-secrets` (DB / JWT / encryption) + `cocoa-postgres-secret` (postgres user/pass/db)
+- See `.omo/evidence/orbstack-operations.md` for full ops doc.
+
 ## 仓库结构快查
 
 ```
