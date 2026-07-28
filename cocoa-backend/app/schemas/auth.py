@@ -42,7 +42,15 @@ class LoginRequest(BaseModel):
 
 
 class TokenResponse(BaseModel):
-    """JWT access token returned on successful register/login."""
+    """JWT access token returned on successful register/login.
+
+    ``office_id`` is populated by ``POST /auth/register`` so the portal can
+    navigate the freshly registered user directly into their auto-created
+    personal workspace (P14b-onboard3). ``POST /auth/login`` does not set
+    this field — login clients must fetch ``GET /offices`` and pick the
+    first entry (or fall through to the empty state).
+    """
 
     access_token: str
     token_type: str = "bearer"
+    office_id: str | None = None
