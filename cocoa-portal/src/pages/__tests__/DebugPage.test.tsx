@@ -108,13 +108,13 @@ describe('DebugPage', () => {
 
     mockedApi.mockClear();
 
-    const typePrefixInput = screen.getByLabelText('Filter by type prefix');
+    const typePrefixInput = screen.getByLabelText('Type prefix');
     fireEvent.change(typePrefixInput, { target: { value: 'messaging.' } });
 
-    const resourceTypeSelect = screen.getByLabelText('Filter by resource type');
+    const resourceTypeSelect = screen.getByLabelText('Resource type');
     fireEvent.change(resourceTypeSelect, { target: { value: 'message' } });
 
-    const requestIdInput = screen.getByLabelText('Filter by request id');
+    const requestIdInput = screen.getByLabelText('Request ID');
     fireEvent.change(requestIdInput, { target: { value: 'req-abc' } });
 
     fireEvent.click(screen.getByRole('button', { name: /apply/i }));

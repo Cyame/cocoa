@@ -1,5 +1,6 @@
 import { Bug, Download, Filter, LoaderCircle, RefreshCw } from 'lucide-react';
 import { Fragment, useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ApiError, api } from '@/lib/api';
 import type { Event, JsonObject } from '@/lib/types';
 
@@ -75,6 +76,7 @@ function previewPayload(payload: JsonObject): string {
 }
 
 export default function DebugPage() {
+  const { t } = useTranslation();
   const [draftFilters, setDraftFilters] = useState<FilterState>(INITIAL_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState<FilterState>(INITIAL_FILTERS);
   const [events, setEvents] = useState<readonly Event[]>([]);
@@ -167,18 +169,15 @@ export default function DebugPage() {
         </span>
         <div className="flex-1">
           <p className="text-xs font-semibold uppercase tracking-widest text-slate-600">
-            Audit stream
+            {t('debug.title')}
           </p>
           <h1
             id="debug-page-title"
             className="mt-1 text-3xl font-semibold tracking-tight text-slate-950"
           >
-            Debug
+            {t('debug.title')}
           </h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-            Raw audit event stream with cursor pagination. Auto-refreshes every 5 seconds; events
-            may be delayed up to 5s.
-          </p>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{t('debug.tagline')}</p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <button
@@ -187,7 +186,7 @@ export default function DebugPage() {
             className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
             <RefreshCw className="size-4" aria-hidden="true" />
-            Refresh
+            {t('debug.refresh')}
           </button>
           <button
             type="button"
@@ -195,7 +194,7 @@ export default function DebugPage() {
             className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
             <Download className="size-4" aria-hidden="true" />
-            Export
+            {t('debug.export')}
           </button>
         </div>
       </header>
@@ -203,22 +202,22 @@ export default function DebugPage() {
       <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           <label className="flex flex-col gap-1 text-xs font-medium text-slate-700">
-            <span>Type prefix</span>
+            <span>{t('debug.typePrefix')}</span>
             <input
               type="text"
               value={draftFilters.typePrefix}
               onChange={(e) => updateFilter('typePrefix', e.target.value)}
               placeholder="harness."
-              aria-label="Filter by type prefix"
+              aria-label={t('debug.typePrefix')}
               className="rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </label>
           <label className="flex flex-col gap-1 text-xs font-medium text-slate-700">
-            <span>Resource type</span>
+            <span>{t('debug.resourceType')}</span>
             <select
               value={draftFilters.resourceType}
               onChange={(e) => updateFilter('resourceType', e.target.value)}
-              aria-label="Filter by resource type"
+              aria-label={t('debug.resourceType')}
               className="rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
               <option value="">(all)</option>
@@ -230,44 +229,44 @@ export default function DebugPage() {
             </select>
           </label>
           <label className="flex flex-col gap-1 text-xs font-medium text-slate-700">
-            <span>Resource ID</span>
+            <span>{t('debug.resourceId')}</span>
             <input
               type="text"
               value={draftFilters.resourceId}
               onChange={(e) => updateFilter('resourceId', e.target.value)}
               placeholder="uuid"
-              aria-label="Filter by resource id"
+              aria-label={t('debug.resourceId')}
               className="rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </label>
           <label className="flex flex-col gap-1 text-xs font-medium text-slate-700">
-            <span>Request ID</span>
+            <span>{t('debug.requestId')}</span>
             <input
               type="text"
               value={draftFilters.requestId}
               onChange={(e) => updateFilter('requestId', e.target.value)}
               placeholder="uuid"
-              aria-label="Filter by request id"
+              aria-label={t('debug.requestId')}
               className="rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </label>
           <label className="flex flex-col gap-1 text-xs font-medium text-slate-700">
-            <span>Since</span>
+            <span>{t('debug.since')}</span>
             <input
               type="datetime-local"
               value={draftFilters.since}
               onChange={(e) => updateFilter('since', e.target.value)}
-              aria-label="Filter events since this timestamp"
+              aria-label={t('debug.since')}
               className="rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </label>
           <label className="flex flex-col gap-1 text-xs font-medium text-slate-700">
-            <span>Until</span>
+            <span>{t('debug.until')}</span>
             <input
               type="datetime-local"
               value={draftFilters.until}
               onChange={(e) => updateFilter('until', e.target.value)}
-              aria-label="Filter events until this timestamp"
+              aria-label={t('debug.until')}
               className="rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </label>
@@ -279,7 +278,7 @@ export default function DebugPage() {
             className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
             <Filter className="size-4" aria-hidden="true" />
-            Apply
+            {t('debug.apply')}
           </button>
           <p className="text-xs text-slate-500">
             {lastUpdated !== null
@@ -296,7 +295,7 @@ export default function DebugPage() {
         >
           <Bug className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
           <div>
-            <p className="font-semibold">Failed to load events</p>
+            <p className="font-semibold">{t('debug.loadFailed')}</p>
             <p className="mt-1 text-red-700">{errorMessage}</p>
           </div>
         </div>

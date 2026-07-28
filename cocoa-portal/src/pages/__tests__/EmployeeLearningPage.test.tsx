@@ -97,9 +97,7 @@ describe('EmployeeLearningPage', () => {
   it('renders summary counts and sample lessons from the API', async () => {
     renderLearningPage();
 
-    expect(
-      await screen.findByRole('heading', { name: 'Learning & distillation' }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Employee learning' })).toBeInTheDocument();
 
     expect(screen.getByTestId('count-experience')).toHaveTextContent('3');
     expect(screen.getByTestId('count-lesson')).toHaveTextContent('5');
@@ -127,9 +125,9 @@ describe('EmployeeLearningPage', () => {
     });
 
     renderLearningPage();
-    await screen.findByRole('heading', { name: 'Learning & distillation' });
+    await screen.findByRole('heading', { name: 'Employee learning' });
 
-    fireEvent.change(screen.getByLabelText(/Target skill slug/i), {
+    fireEvent.change(screen.getByLabelText(/Skill slug/i), {
       target: { value: 'code-review' },
     });
     fireEvent.change(screen.getByLabelText(/Source preset slug/i), {
@@ -170,9 +168,9 @@ describe('EmployeeLearningPage', () => {
 
   it('disables submit and shows validation error for invalid skill slug', async () => {
     renderLearningPage();
-    await screen.findByRole('heading', { name: 'Learning & distillation' });
+    await screen.findByRole('heading', { name: 'Employee learning' });
 
-    const slugInput = screen.getByLabelText(/Target skill slug/i);
+    const slugInput = screen.getByLabelText(/Skill slug/i);
     fireEvent.change(slugInput, { target: { value: 'Invalid Skill' } });
     fireEvent.blur(slugInput);
 

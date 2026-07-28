@@ -1,5 +1,6 @@
 import { Terminal } from 'lucide-react';
 import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { api } from '@/lib/api';
 import type { EmployeePreset } from '@/lib/types';
 
@@ -57,6 +58,7 @@ export function CommandAutocomplete({
   onTextChange,
   targetSlugs,
 }: CommandAutocompleteProps) {
+  const { t } = useTranslation();
   const [cursor, setCursor] = useState(0);
   const [highlighted, setHighlighted] = useState(0);
   const [dismissedStart, setDismissedStart] = useState<number | null>(null);
@@ -90,9 +92,9 @@ export function CommandAutocomplete({
 
   const groups = useMemo<readonly CommandGroup[]>(() => {
     const base: CommandGroup[] = [
-      { label: 'Global', commands: GLOBAL_COMMANDS },
-      { label: 'Control', commands: CONTROL_COMMANDS },
-      { label: 'Learning', commands: LEARNING_COMMANDS },
+      { label: t('topology.commandGroupGlobal'), commands: GLOBAL_COMMANDS },
+      { label: t('topology.commandGroupControl'), commands: CONTROL_COMMANDS },
+      { label: t('topology.commandGroupLearning'), commands: LEARNING_COMMANDS },
     ];
     if (targetSlugs.length === 0) return base;
     const perPreset: CommandGroup[] = [];
@@ -103,7 +105,7 @@ export function CommandAutocomplete({
       }
     }
     return [...base, ...perPreset];
-  }, [targetSlugs, presetCommands]);
+  }, [targetSlugs, presetCommands, t]);
 
   const activeToken = useMemo(() => findActiveToken(text, cursor), [text, cursor]);
 

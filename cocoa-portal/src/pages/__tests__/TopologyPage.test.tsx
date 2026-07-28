@@ -467,7 +467,9 @@ describe('TopologyPage', () => {
     fireEvent.click(screen.getByTestId('topology-node-membership-1'));
 
     await waitFor(() => {
-      expect(screen.getByTestId('topology-connect-hint')).toHaveTextContent('点击目标节点');
+      expect(screen.getByTestId('topology-connect-hint')).toHaveTextContent(
+        'Click the target node',
+      );
     });
 
     const postSpy = vi.fn().mockResolvedValue({

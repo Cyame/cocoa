@@ -9,6 +9,7 @@ import {
   X,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router';
 import { ApiError, api } from '@/lib/api';
 import type {
@@ -23,24 +24,30 @@ import { cn } from '@/lib/utils';
 const SLUG_PATTERN = /^[a-z][a-z0-9-]*$/;
 const LESSON_PREVIEW_LENGTH = 80;
 
-const MEMORY_KIND_OPTIONS: ReadonlyArray<{
-  readonly value: MemoryKind;
-  readonly label: string;
-  readonly Icon: typeof FlaskConical;
-}> = [
-  { value: 'experience', label: 'Experience', Icon: FlaskConical },
-  { value: 'lesson', label: 'Lesson', Icon: Lightbulb },
-  { value: 'decision', label: 'Decision', Icon: BadgeIcon },
-  { value: 'problem', label: 'Problem', Icon: AlertTriangle },
-];
-
 function truncateLesson(content: string): string {
   if (content.length <= LESSON_PREVIEW_LENGTH) return content;
   return `${content.slice(0, LESSON_PREVIEW_LENGTH)}...`;
 }
 
 export default function EmployeeLearningPage() {
+  const { t } = useTranslation();
   const { employeeId } = useParams<{ employeeId: string }>();
+
+  const MEMORY_KIND_OPTIONS = useMemo<
+    ReadonlyArray<{
+      readonly value: MemoryKind;
+      readonly label: string;
+      readonly Icon: typeof FlaskConical;
+    }>
+  >(
+    () => [
+      { value: 'experience', label: t('learning.experience'), Icon: FlaskConical },
+      { value: 'lesson', label: t('learning.lesson'), Icon: Lightbulb },
+      { value: 'decision', label: t('learning.decision'), Icon: BadgeIcon },
+      { value: 'problem', label: t('learning.problem'), Icon: AlertTriangle },
+    ],
+    [t],
+  );
   const [summary, setSummary] = useState<MemorySummaryOut | null>(null);
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -92,12 +99,12 @@ export default function EmployeeLearningPage() {
   const isSlugValid = useMemo(() => SLUG_PATTERN.test(targetSkillSlug), [targetSkillSlug]);
   const slugErrorMessage = useMemo(() => {
     if (!slugTouched && targetSkillSlug === '') return null;
-    if (targetSkillSlug === '') return 'Skill slug is required.';
+    if (targetSkillSlug === '') return t('learning.skillSlugRequired');
     if (!isSlugValid) {
-      return 'Skill slug must be kebab-case: start with a lowercase letter, then lowercase letters, digits, or hyphens.';
+      return t('learning.skillSlugPattern');
     }
     return null;
-  }, [targetSkillSlug, isSlugValid, slugTouched]);
+  }, [targetSkillSlug, isSlugValid, slugTouched, t]);
   const canSubmit = isSlugValid && targetSkillSlug.length > 0 && !isSubmitting;
 
   function toggleKind(kind: MemoryKind) {
@@ -149,7 +156,7 @@ export default function EmployeeLearningPage() {
   }
 
   if (employeeId === undefined) {
-    return <p className="p-6 text-sm text-red-700">Employee identifier is missing.</p>;
+    return <p className="p-6 text-sm text-red-700">{t('learning.employeeIdMissing')}</p>;
   }
 
   return (
@@ -165,7 +172,7 @@ export default function EmployeeLearningPage() {
               id="learning-title"
               className="mt-1 truncate text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl"
             >
-              Learning &amp; distillation
+              {t('learning.title')}
             </h1>
             <p className="mt-2 text-sm leading-6 text-slate-600">
               Review aggregated memory and distill a reusable skill into a new preset.
@@ -176,7 +183,7 @@ export default function EmployeeLearningPage() {
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
         <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-          <h2 className="text-sm font-semibold text-slate-900">Memory summary</h2>
+          <h2 className="text-sm font-semibold text-slate-900">{t('learning.memorySummary')}</h2>
 
           {summaryError !== null ? (
             <div
@@ -191,7 +198,7 @@ export default function EmployeeLearningPage() {
           {isLoading ? (
             <div className="mt-6 flex min-h-32 items-center justify-center gap-3 text-sm text-slate-500">
               <LoaderCircle className="size-5 animate-spin" aria-hidden="true" />
-              Loading summary
+              {t('common.loading')} summary
             </div>
           ) : null}
 
@@ -226,7 +233,7 @@ export default function EmployeeLearningPage() {
                   Sample lessons
                 </h3>
                 {summary.sample_lessons.length === 0 ? (
-                  <p className="mt-2 text-sm text-slate-500">No lesson entries recorded yet.</p>
+                  <p className="mt-2 text-sm text-slate-500">{t('learning.noEntries')}</p>
                 ) : (
                   <ul className="mt-2 space-y-2">
                     {summary.sample_lessons.slice(0, 5).map((lesson) => (
@@ -250,7 +257,9 @@ export default function EmployeeLearningPage() {
               <Sparkles className="size-4" aria-hidden="true" />
             </span>
             <div>
-              <h2 className="text-sm font-semibold text-slate-900">Distill a new skill</h2>
+              <h2 className="text-sm font-semibold text-slate-900">
+                {t('learning.distillHeading')}
+              </h2>
               <p className="text-xs text-slate-500">
                 Aggregate memories into a new employee preset.
               </p>
@@ -263,7 +272,7 @@ export default function EmployeeLearningPage() {
                 htmlFor="target-skill-slug"
                 className="block text-xs font-semibold uppercase tracking-wide text-slate-600"
               >
-                Target skill slug
+                {t('learning.skillSlugLabel')}
               </label>
               <input
                 id="target-skill-slug"
@@ -273,7 +282,7 @@ export default function EmployeeLearningPage() {
                 value={targetSkillSlug}
                 onChange={(event) => setTargetSkillSlug(event.target.value)}
                 onBlur={() => setSlugTouched(true)}
-                placeholder="e.g. code-review"
+                placeholder={t('learning.skillSlugPlaceholder')}
                 pattern="[a-z][a-z0-9-]*"
                 aria-invalid={slugErrorMessage !== null}
                 aria-describedby={slugErrorMessage !== null ? 'skill-slug-error' : undefined}
@@ -379,7 +388,7 @@ export default function EmployeeLearningPage() {
               ) : (
                 <Sparkles className="size-4" aria-hidden="true" />
               )}
-              {isSubmitting ? 'Distilling...' : 'Distill'}
+              {isSubmitting ? `${t('learning.distillSubmit')}...` : t('learning.distillSubmit')}
             </button>
           </form>
         </article>

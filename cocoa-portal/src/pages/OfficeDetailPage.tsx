@@ -8,6 +8,7 @@ import {
   Users,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 import { ApiError, api } from '@/lib/api';
 import type { Instance, Membership, Office } from '@/lib/types';
@@ -28,13 +29,8 @@ type Blackboard = {
   readonly created_at: string;
 };
 
-const TABS = [
-  { id: 'employees', label: 'Employees', Icon: Users },
-  { id: 'instances', label: 'Instances', Icon: Cpu },
-  { id: 'blackboard', label: 'Blackboard', Icon: Notebook },
-] as const;
-
 export default function OfficeDetailPage() {
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const setOfficeId = useSelectedStore((state) => state.setOfficeId);
   const [office, setOffice] = useState<Office | null>(null);
@@ -44,6 +40,12 @@ export default function OfficeDetailPage() {
   const [blackboard, setBlackboard] = useState<Blackboard | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const TABS = [
+    { id: 'employees' as const, label: t('officeDetail.tabEmployees'), Icon: Users },
+    { id: 'instances' as const, label: t('officeDetail.tabInstances'), Icon: Cpu },
+    { id: 'blackboard' as const, label: t('officeDetail.tabBlackboard'), Icon: Notebook },
+  ];
 
   useEffect(() => {
     if (id === undefined) return;
@@ -108,7 +110,7 @@ export default function OfficeDetailPage() {
   }, [activeTab, id, office]);
 
   if (id === undefined) {
-    return <p className="p-6 text-sm text-red-700">Office identifier is missing.</p>;
+    return <p className="p-6 text-sm text-red-700">{t('office.officeIdMissing')}</p>;
   }
 
   return (
@@ -119,16 +121,16 @@ export default function OfficeDetailPage() {
             <Building2 className="size-6" aria-hidden="true" />
           </span>
           <div className="min-w-0">
-            <p className="font-mono text-xs text-slate-500">{office?.slug ?? 'Loading office'}</p>
+            <p className="font-mono text-xs text-slate-500">
+              {office?.slug ?? t('common.loading')}
+            </p>
             <h1
               id="office-title"
               className="mt-1 truncate text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl"
             >
-              {office?.name ?? 'Office detail'}
+              {office?.name ?? t('office.officeDetailFallback')}
             </h1>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              Read-only operational view of membership, runtime, and shared state.
-            </p>
+            <p className="mt-2 text-sm leading-6 text-slate-600">{t('officeDetail.tagline')}</p>
           </div>
         </div>
       </header>
@@ -137,7 +139,7 @@ export default function OfficeDetailPage() {
         <div className="overflow-x-auto border-b border-slate-200">
           <div
             role="tablist"
-            aria-label="Office detail sections"
+            aria-label={t('officeDetail.tablist')}
             className="flex min-w-max gap-1 px-3 pt-3"
           >
             {TABS.map(({ id: tabId, label, Icon }) => (
@@ -181,7 +183,7 @@ export default function OfficeDetailPage() {
           {isLoading ? (
             <div className="flex min-h-52 items-center justify-center gap-3 text-sm text-slate-500">
               <LoaderCircle className="size-5 animate-spin" aria-hidden="true" />
-              Loading {activeTab}
+              {t('common.loading')} {activeTab}
             </div>
           ) : null}
 
@@ -208,8 +210,8 @@ export default function OfficeDetailPage() {
             ) : (
               <EmptyState
                 Icon={Users}
-                title="No employees"
-                detail="This office has no active memberships."
+                title={t('officeDetail.emptyEmployeesTitle')}
+                detail={t('officeDetail.emptyEmployeesDetail')}
               />
             )
           ) : null}
@@ -239,8 +241,8 @@ export default function OfficeDetailPage() {
             ) : (
               <EmptyState
                 Icon={Cpu}
-                title="No instances"
-                detail="No active runtime is assigned to this office."
+                title={t('officeDetail.emptyInstancesTitle')}
+                detail={t('officeDetail.emptyInstancesDetail')}
               />
             )
           ) : null}
@@ -249,21 +251,25 @@ export default function OfficeDetailPage() {
             blackboard === null ? (
               <EmptyState
                 Icon={Notebook}
-                title="No blackboard"
-                detail="Shared office context has not been initialized."
+                title={t('officeDetail.emptyBlackboardTitle')}
+                detail={t('officeDetail.emptyBlackboardDetail')}
               />
             ) : (
               <div className="grid gap-4 lg:grid-cols-2">
                 <article className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                  <h2 className="text-sm font-semibold text-slate-900">Shared context</h2>
+                  <h2 className="text-sm font-semibold text-slate-900">
+                    {t('officeDetail.sharedContext')}
+                  </h2>
                   <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-600">
-                    {blackboard.content ?? 'No shared context recorded.'}
+                    {blackboard.content ?? t('officeDetail.noSharedContext')}
                   </p>
                 </article>
                 <article className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                  <h2 className="text-sm font-semibold text-slate-900">Manual notes</h2>
+                  <h2 className="text-sm font-semibold text-slate-900">
+                    {t('officeDetail.manualNotes')}
+                  </h2>
                   <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-600">
-                    {blackboard.manual_notes ?? 'No manual notes recorded.'}
+                    {blackboard.manual_notes ?? t('officeDetail.noManualNotes')}
                   </p>
                 </article>
               </div>

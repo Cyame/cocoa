@@ -1,5 +1,7 @@
 import { BookOpen, Bug, Building2, LogOut, Network, Pencil, User } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Navigate, NavLink, Outlet, useParams } from 'react-router';
+import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { cn } from '@/lib/utils';
 import { useSelectedStore } from '@/stores/selected';
 import { useSessionStore } from '@/stores/session';
@@ -10,6 +12,7 @@ const MOBILE_LINK_CLASS =
   'flex min-w-0 flex-col items-center gap-1 px-2 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500';
 
 export default function AppShell() {
+  const { t } = useTranslation();
   const token = useSessionStore((state) => state.token);
   const user = useSessionStore((state) => state.user);
   const clearToken = useSessionStore((state) => state.clearToken);
@@ -23,35 +26,35 @@ export default function AppShell() {
 
   const navigationItems = [
     {
-      label: 'Office list',
+      label: t('nav.offices'),
       href: '/offices',
       Icon: Building2,
       end: true,
       isDisabled: false,
     },
     {
-      label: 'Debug',
+      label: t('nav.debug'),
       href: '/debug',
       Icon: Bug,
       end: true,
       isDisabled: false,
     },
     {
-      label: 'Topology',
+      label: t('nav.topology'),
       href: officeId === null ? '/offices' : `/offices/${officeId}/topology`,
       Icon: Network,
       end: true,
       isDisabled: officeId === null,
     },
     {
-      label: 'Composer',
+      label: t('nav.composer'),
       href: officeId === null ? '/offices' : `/offices/${officeId}/composer`,
       Icon: Pencil,
       end: true,
       isDisabled: officeId === null,
     },
     {
-      label: 'Learning',
+      label: t('nav.learning'),
       href: '/employees',
       Icon: BookOpen,
       end: true,
@@ -67,8 +70,8 @@ export default function AppShell() {
             <Building2 className="size-5" aria-hidden="true" />
           </span>
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold tracking-tight">Cocoa</p>
-            <p className="truncate text-xs text-slate-400">Control studio</p>
+            <p className="truncate text-sm font-semibold tracking-tight">{t('common.appName')}</p>
+            <p className="truncate text-xs text-slate-400">{t('common.controlStudio')}</p>
           </div>
         </div>
 
@@ -103,21 +106,24 @@ export default function AppShell() {
       <div className="flex min-w-0 flex-1 flex-col md:min-h-0">
         <header className="flex h-16 shrink-0 items-center justify-between gap-4 border-b border-slate-200 bg-white px-4 sm:px-6">
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-slate-900">Operator console</p>
-            <p className="truncate text-xs text-slate-500">Cocoa portal</p>
+            <p className="truncate text-sm font-semibold text-slate-900">
+              {t('common.operatorConsole')}
+            </p>
+            <p className="truncate text-xs text-slate-500">{t('common.portalSubtitle')}</p>
           </div>
 
           <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+            <LanguageSwitcher />
             <div className="flex min-w-0 items-center gap-2">
               <span className="grid size-8 shrink-0 place-items-center rounded-full bg-slate-100 text-slate-600">
                 <User className="size-4" aria-hidden="true" />
               </span>
               <div className="hidden min-w-0 sm:block">
                 <p className="max-w-48 truncate text-sm font-medium text-slate-800">
-                  {user?.user_id ?? 'Authenticated user'}
+                  {user?.user_id ?? t('common.authenticatedUser')}
                 </p>
                 <p className="text-xs text-slate-500">
-                  {user?.is_super_admin === true ? 'Super admin' : 'Operator'}
+                  {user?.is_super_admin === true ? t('common.superAdmin') : t('common.operator')}
                 </p>
               </div>
             </div>
@@ -125,8 +131,8 @@ export default function AppShell() {
               type="button"
               onClick={clearToken}
               className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 active:bg-slate-200"
-              aria-label="Log out"
-              title="Log out"
+              aria-label={t('common.logOut')}
+              title={t('common.logOut')}
             >
               <LogOut className="size-4" aria-hidden="true" />
             </button>

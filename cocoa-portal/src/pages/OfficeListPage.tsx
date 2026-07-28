@@ -1,5 +1,6 @@
 import { AlertCircle, Building2, Cpu, LoaderCircle, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link, Navigate } from 'react-router';
 import { ApiError, api } from '@/lib/api';
 import type { Office } from '@/lib/types';
@@ -23,6 +24,7 @@ type CountPage = {
 };
 
 export default function OfficeListPage() {
+  const { t } = useTranslation();
   const [offices, setOffices] = useState<readonly OfficeSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isUnauthorized, setIsUnauthorized] = useState(false);
@@ -81,17 +83,15 @@ export default function OfficeListPage() {
         </span>
         <div>
           <p className="text-xs font-semibold uppercase tracking-widest text-blue-700">
-            Workspace index
+            {t('office.workspaceIndex')}
           </p>
           <h1
             id="office-list-title"
             className="mt-1 text-3xl font-semibold tracking-tight text-slate-950"
           >
-            Offices
+            {t('office.title')}
           </h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-            Select an office to inspect its employees, running instances, and shared blackboard.
-          </p>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">{t('office.tagline')}</p>
         </div>
       </header>
 
@@ -108,17 +108,17 @@ export default function OfficeListPage() {
       {isLoading ? (
         <div className="flex items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-6 py-16 text-sm text-slate-500">
           <LoaderCircle className="size-5 animate-spin" aria-hidden="true" />
-          Loading offices
+          {t('office.loadingOffices')}
         </div>
       ) : null}
 
       {!isLoading && errorMessage === null && offices.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center">
           <Building2 className="mx-auto size-8 text-slate-400" aria-hidden="true" />
-          <h2 className="mt-4 text-base font-semibold text-slate-900">No offices available</h2>
-          <p className="mt-2 text-sm text-slate-500">
-            Your account does not have an active office yet.
-          </p>
+          <h2 className="mt-4 text-base font-semibold text-slate-900">
+            {t('office.noOfficesTitle')}
+          </h2>
+          <p className="mt-2 text-sm text-slate-500">{t('office.noOfficesDetail')}</p>
         </div>
       ) : null}
 
@@ -128,7 +128,7 @@ export default function OfficeListPage() {
             <Link
               key={office.id}
               to={`/offices/${office.id}`}
-              aria-label={`Open ${office.name}`}
+              aria-label={t('office.openOffice', { name: office.name })}
               className="group rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-[border-color,box-shadow,transform] hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             >
               <div className="flex items-start justify-between gap-4">
@@ -145,11 +145,12 @@ export default function OfficeListPage() {
               <div className="mt-5 grid grid-cols-2 gap-3 border-t border-slate-100 pt-4 text-sm text-slate-600">
                 <span className="flex items-center gap-2">
                   <Users className="size-4 text-slate-400" aria-hidden="true" />
-                  {memberCount} {memberCount === 1 ? 'member' : 'members'}
+                  {memberCount} {memberCount === 1 ? t('office.member') : t('office.members')}
                 </span>
                 <span className="flex items-center gap-2">
                   <Cpu className="size-4 text-slate-400" aria-hidden="true" />
-                  {instanceCount} {instanceCount === 1 ? 'instance' : 'instances'}
+                  {instanceCount}{' '}
+                  {instanceCount === 1 ? t('office.instance') : t('office.instances')}
                 </span>
               </div>
             </Link>

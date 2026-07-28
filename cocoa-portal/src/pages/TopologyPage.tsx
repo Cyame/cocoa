@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 import TopologyGlowDefs, { GLOW_INTENSITY_OPACITY } from '@/components/TopologyGlow';
 import TopologyToolbar from '@/components/TopologyToolbar';
@@ -195,6 +196,10 @@ export default function TopologyPage() {
   const [isStaticLoading, setIsStaticLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Hook order matters — useTranslation must be called at component scope,
+  // before any async callbacks or conditional branches.
+  const { t } = useTranslation();
+
   // ---- Interaction state (Todo 9) ----
   const [selectedNode, setSelectedNode] = useState<NodeSummary | null>(null);
   const [pendingConnection, setPendingConnection] = useState<PendingConnection | null>(null);
@@ -253,7 +258,7 @@ export default function TopologyPage() {
         }
       } catch (error) {
         if (isActive) {
-          const message = error instanceof Error ? error.message : 'Failed to load topology';
+          const message = error instanceof Error ? error.message : t('topology.failedLoad');
           setErrorMessage(message);
         }
       } finally {
@@ -265,7 +270,7 @@ export default function TopologyPage() {
     return () => {
       isActive = false;
     };
-  }, [officeId]);
+  }, [officeId, t]);
 
   // ---- Live status polling (every 2s) ----
   useEffect(() => {
@@ -379,7 +384,9 @@ export default function TopologyPage() {
         glow: { color: '#94a3b8', intensity: 'static' },
       };
       const effective = status ?? fallbackStatus;
-      const label = isUser ? (m.user_id ?? 'user') : (m.instance_id ?? 'instance');
+      const label = isUser
+        ? (m.user_id ?? t('topology.userLabel'))
+        : (m.instance_id ?? t('topology.instanceLabel'));
       return {
         kind: 'membership',
         id: m.id,
@@ -408,7 +415,7 @@ export default function TopologyPage() {
     }));
 
     return [...membershipNodes, ...corridorNodeNodes];
-  }, [staticData, liveStatus]);
+  }, [staticData, liveStatus, t]);
 
   const resolvedCorridors = useMemo<readonly ResolvedCorridor[]>(() => {
     if (staticData === null) return [];
@@ -590,7 +597,7 @@ export default function TopologyPage() {
         setActionError(null);
       } catch (error) {
         if (cancelled) return;
-        const message = error instanceof Error ? error.message : 'Failed to create corridor';
+        const message = error instanceof Error ? error.message : t('topology.failedCreate');
         setActionError(message);
       }
     }
@@ -599,7 +606,7 @@ export default function TopologyPage() {
     return () => {
       cancelled = true;
     };
-  }, [pendingConnectionCompletion, officeId]);
+  }, [pendingConnectionCompletion, officeId, t]);
 
   // ---- Move mode: drag handlers ----
 
@@ -700,7 +707,7 @@ export default function TopologyPage() {
             ? `Position (${patchBody.posx}, ${patchBody.posy}) is already used in this office`
             : error instanceof Error
               ? error.message
-              : 'Failed to move node';
+              : t('topology.failedMove');
         setActionError(message);
       }
     }
@@ -711,7 +718,7 @@ export default function TopologyPage() {
       window.removeEventListener('mousemove', handleMove);
       window.removeEventListener('mouseup', handleUp);
     };
-  }, [dragState, officeId]);
+  }, [dragState, officeId, t]);
 
   useEffect(() => {
     if (interactionMode !== 'connect') setPendingConnection(null);
@@ -748,13 +755,11 @@ export default function TopologyPage() {
               id="topology-title"
               className="truncate text-lg font-semibold tracking-tight text-slate-950"
             >
-              Topology
+              {t('topology.title')}
             </h1>
           </div>
         </div>
-        <p className="hidden text-xs text-slate-500 sm:block">
-          Drag to pan. Wheel to zoom. Events refresh every 2 seconds.
-        </p>
+        <p className="hidden text-xs text-slate-500 sm:block">{t('topology.tagline')}</p>
       </header>
 
       <TopologyToolbar />
@@ -768,7 +773,7 @@ export default function TopologyPage() {
           <span className="grid size-4 place-items-center rounded-full bg-amber-500 text-white">
             <Link className="size-2.5" aria-hidden="true" />
           </span>
-          <span>点击目标节点</span>
+          <span>{t('topology.clickTargetHint')}</span>
         </div>
       ) : null}
 
@@ -784,7 +789,7 @@ export default function TopologyPage() {
             type="button"
             onClick={() => setActionError(null)}
             className="inline-flex size-6 shrink-0 items-center justify-center rounded text-red-600 hover:bg-red-100"
-            aria-label="Dismiss error"
+            aria-label={t('topology.dismissError')}
           >
             <X className="size-3.5" aria-hidden="true" />
           </button>
@@ -809,7 +814,7 @@ export default function TopologyPage() {
           {isStaticLoading ? (
             <div className="flex items-center justify-center gap-3 text-sm text-slate-500">
               <LoaderCircle className="size-5 animate-spin" aria-hidden="true" />
-              Loading topology
+              {t('topology.loading')}
             </div>
           ) : null}
 
@@ -817,7 +822,7 @@ export default function TopologyPage() {
             <svg
               ref={svgRef}
               role="img"
-              aria-label={`Topology canvas for office ${officeId}`}
+              aria-label={t('topology.canvasAria', { officeId: officeId ?? '' })}
               data-testid="topology-canvas"
               viewBox={VIEW_BOX}
               preserveAspectRatio="xMidYMid meet"
@@ -907,7 +912,7 @@ export default function TopologyPage() {
                 setSelectedNode(null);
                 setActionError(null);
               } catch (error) {
-                const message = error instanceof Error ? error.message : 'Failed to delete node';
+                const message = error instanceof Error ? error.message : t('topology.failedDelete');
                 setActionError(message);
               }
             }}

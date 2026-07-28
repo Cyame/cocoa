@@ -1,5 +1,6 @@
 import { Link, MousePointer, Move } from 'lucide-react';
-import { type ReactElement, useEffect } from 'react';
+import { type ReactElement, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { type InteractionMode, useSelectedStore } from '@/stores/selected';
 
@@ -10,19 +11,23 @@ type ModeConfig = {
   readonly Icon: typeof MousePointer;
 };
 
-const MODES: readonly ModeConfig[] = [
-  { id: 'select', label: 'Select', shortcut: 'V', Icon: MousePointer },
-  { id: 'connect', label: 'Connect', shortcut: 'C', Icon: Link },
-  { id: 'move', label: 'Move', shortcut: 'M', Icon: Move },
-];
-
 type TopologyToolbarProps = {
   readonly className?: string;
 };
 
 export default function TopologyToolbar({ className }: TopologyToolbarProps): ReactElement {
+  const { t } = useTranslation();
   const interactionMode = useSelectedStore((state) => state.interactionMode);
   const setInteractionMode = useSelectedStore((state) => state.setInteractionMode);
+
+  const MODES = useMemo<readonly ModeConfig[]>(
+    () => [
+      { id: 'select', label: t('topology.selectMode'), shortcut: 'V', Icon: MousePointer },
+      { id: 'connect', label: t('topology.connectMode'), shortcut: 'C', Icon: Link },
+      { id: 'move', label: t('topology.moveMode'), shortcut: 'M', Icon: Move },
+    ],
+    [t],
+  );
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -47,7 +52,7 @@ export default function TopologyToolbar({ className }: TopologyToolbarProps): Re
         className,
       )}
       role="toolbar"
-      aria-label="Topology interaction mode"
+      aria-label={t('topology.toolbarAria')}
       data-testid="topology-toolbar"
     >
       {MODES.map(({ id, label, shortcut, Icon }) => {

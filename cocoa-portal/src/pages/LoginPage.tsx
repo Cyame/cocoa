@@ -1,5 +1,6 @@
 import { AlertCircle, Building2, LoaderCircle, LogIn, UserPlus } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router';
 import { ApiError, api } from '@/lib/api';
 import { useSessionStore } from '@/stores/session';
@@ -12,6 +13,7 @@ type TokenResponse = {
 type Mode = 'sign-in' | 'register';
 
 export default function LoginPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const token = useSessionStore((state) => state.token);
@@ -66,14 +68,10 @@ export default function LoginPage() {
     }
   }
 
-  const heading = mode === 'register' ? 'Create your account' : 'Sign in';
-  const tagline =
-    mode === 'register'
-      ? 'Register to bootstrap an office. The first user becomes super admin.'
-      : 'Use your operator credentials to access office control surfaces.';
-  const submitLabel = mode === 'register' ? 'Create account' : 'Sign in';
-  const switchLabel =
-    mode === 'register' ? 'Already have an account? Sign in' : "Don't have an account? Register";
+  const heading = mode === 'register' ? t('login.registerHeading') : t('login.signInHeading');
+  const tagline = mode === 'register' ? t('login.registerTagline') : t('login.signInTagline');
+  const submitLabel = mode === 'register' ? t('login.createAccount') : t('login.submit');
+  const switchLabel = mode === 'register' ? t('login.switchToSignIn') : t('login.switchToRegister');
   const switchTo: Mode = mode === 'register' ? 'sign-in' : 'register';
   const switchHref = switchTo === 'register' ? '/login?mode=register' : '/login';
 
@@ -85,8 +83,8 @@ export default function LoginPage() {
             <Building2 className="size-6" aria-hidden="true" />
           </span>
           <div>
-            <p className="text-sm font-semibold tracking-tight">Cocoa</p>
-            <p className="text-xs text-slate-400">Multi-agent control studio</p>
+            <p className="text-sm font-semibold tracking-tight">{t('common.appName')}</p>
+            <p className="text-xs text-slate-400">{t('common.appTagline')}</p>
           </div>
         </div>
 
@@ -108,7 +106,7 @@ export default function LoginPage() {
         <form className="space-y-5" onSubmit={handleSubmit}>
           <div>
             <label htmlFor="username" className="mb-2 block text-sm font-medium text-slate-200">
-              Username
+              {t('login.username')}
             </label>
             <input
               id="username"
@@ -125,7 +123,7 @@ export default function LoginPage() {
           {mode === 'register' ? (
             <div>
               <label htmlFor="email" className="mb-2 block text-sm font-medium text-slate-200">
-                Email
+                {t('login.email')}
               </label>
               <input
                 id="email"
@@ -142,7 +140,7 @@ export default function LoginPage() {
 
           <div>
             <label htmlFor="password" className="mb-2 block text-sm font-medium text-slate-200">
-              Password
+              {t('login.password')}
             </label>
             <input
               id="password"
@@ -156,7 +154,7 @@ export default function LoginPage() {
               className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none transition-colors placeholder:text-slate-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
             />
             {mode === 'register' ? (
-              <p className="mt-1.5 text-xs text-slate-500">At least 8 characters.</p>
+              <p className="mt-1.5 text-xs text-slate-500">{t('login.passwordHint')}</p>
             ) : null}
           </div>
 

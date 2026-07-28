@@ -10,7 +10,8 @@ import {
   Power,
   RefreshCw,
 } from 'lucide-react';
-import { type ReactElement, useCallback, useEffect, useRef, useState } from 'react';
+import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router';
 import { ApiError, api } from '@/lib/api';
 import type { BoulderSnapshot, Event, InstanceLoopState, LoopStatus } from '@/lib/types';
@@ -33,6 +34,14 @@ type Toast = {
 
 type ControlId = 'interrupt' | 'pause' | 'resume' | 'status' | 'snapshot';
 
+type ControlButton = {
+  readonly id: ControlId;
+  readonly label: string;
+  readonly Icon: typeof Power;
+  readonly method: 'POST' | 'GET';
+  readonly path: 'interrupt' | 'pause' | 'resume' | 'status' | 'snapshot';
+};
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -42,32 +51,6 @@ const EVENT_POLL_INTERVAL_MS = 2000;
 const TOAST_AUTO_DISMISS_MS = 3000;
 const EVENT_LIMIT = 50;
 
-const STATUS_BADGE: ReadonlyRecord<LoopStatus, { label: string; className: string }> = {
-  idle: { label: 'idle', className: 'bg-yellow-50 text-yellow-800 border-yellow-200' },
-  running: { label: 'running', className: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
-  paused: { label: 'paused', className: 'bg-slate-100 text-slate-700 border-slate-200' },
-  interrupted: {
-    label: 'interrupted',
-    className: 'bg-orange-50 text-orange-800 border-orange-200',
-  },
-  completed: { label: 'completed', className: 'bg-blue-50 text-blue-800 border-blue-200' },
-  failed: { label: 'failed', className: 'bg-red-50 text-red-800 border-red-200' },
-};
-
-const CONTROL_BUTTONS: ReadonlyArray<{
-  readonly id: ControlId;
-  readonly label: string;
-  readonly Icon: typeof Power;
-  readonly method: 'POST' | 'GET';
-  readonly path: 'interrupt' | 'pause' | 'resume' | 'status' | 'snapshot';
-}> = [
-  { id: 'interrupt', label: 'Interrupt', Icon: Power, method: 'POST', path: 'interrupt' },
-  { id: 'pause', label: 'Pause', Icon: Pause, method: 'POST', path: 'pause' },
-  { id: 'resume', label: 'Resume', Icon: Play, method: 'POST', path: 'resume' },
-  { id: 'status', label: 'Status', Icon: Activity, method: 'GET', path: 'status' },
-  { id: 'snapshot', label: 'Snapshot', Icon: Camera, method: 'POST', path: 'snapshot' },
-];
-
 type ReadonlyRecord<K extends string, V> = { readonly [key in K]: V };
 
 // ---------------------------------------------------------------------------
@@ -75,6 +58,7 @@ type ReadonlyRecord<K extends string, V> = { readonly [key in K]: V };
 // ---------------------------------------------------------------------------
 
 export default function InstanceDetailPage() {
+  const { t } = useTranslation();
   const { id: officeId, iid: instanceId } = useParams<{ id: string; iid: string }>();
   const setOfficeId = useSelectedStore((state) => state.setOfficeId);
   const setInstanceId = useSelectedStore((state) => state.setInstanceId);
@@ -87,6 +71,59 @@ export default function InstanceDetailPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
   const [busyButton, setBusyButton] = useState<ControlId | null>(null);
+
+  const STATUS_BADGE: ReadonlyRecord<LoopStatus, { label: string; className: string }> = useMemo(
+    () => ({
+      idle: {
+        label: t('instance.statusIdle'),
+        className: 'bg-yellow-50 text-yellow-800 border-yellow-200',
+      },
+      running: {
+        label: t('instance.statusRunning'),
+        className: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+      },
+      paused: {
+        label: t('instance.statusPaused'),
+        className: 'bg-slate-100 text-slate-700 border-slate-200',
+      },
+      interrupted: {
+        label: t('instance.statusInterrupted'),
+        className: 'bg-orange-50 text-orange-800 border-orange-200',
+      },
+      completed: {
+        label: t('instance.statusCompleted'),
+        className: 'bg-blue-50 text-blue-800 border-blue-200',
+      },
+      failed: {
+        label: t('instance.statusFailed'),
+        className: 'bg-red-50 text-red-800 border-red-200',
+      },
+    }),
+    [t],
+  );
+
+  const CONTROL_BUTTONS: ReadonlyArray<ControlButton> = useMemo(
+    () => [
+      {
+        id: 'interrupt',
+        label: t('instance.interrupt'),
+        Icon: Power,
+        method: 'POST',
+        path: 'interrupt',
+      },
+      { id: 'pause', label: t('instance.pause'), Icon: Pause, method: 'POST', path: 'pause' },
+      { id: 'resume', label: t('instance.resume'), Icon: Play, method: 'POST', path: 'resume' },
+      { id: 'status', label: t('instance.status'), Icon: Activity, method: 'GET', path: 'status' },
+      {
+        id: 'snapshot',
+        label: t('instance.snapshot'),
+        Icon: Camera,
+        method: 'POST',
+        path: 'snapshot',
+      },
+    ],
+    [t],
+  );
 
   // Refs so the polling closures always read the latest instance id without
   // re-subscribing on every status update (which would reset the interval).
@@ -139,7 +176,7 @@ export default function InstanceDetailPage() {
         await refreshAll(iid);
       } catch (error) {
         if (!isActive) return;
-        const message = error instanceof Error ? error.message : 'Failed to load instance status';
+        const message = error instanceof Error ? error.message : t('instance.loadStatusFailed');
         setErrorMessage(message);
       } finally {
         if (isActive) setIsLoading(false);
@@ -150,7 +187,7 @@ export default function InstanceDetailPage() {
     return () => {
       isActive = false;
     };
-  }, [instanceId, refreshAll]);
+  }, [instanceId, refreshAll, t]);
 
   // ---- Status polling (every 2s, best-effort) ----
   useEffect(() => {
@@ -218,9 +255,9 @@ export default function InstanceDetailPage() {
       setBusyButton(button.id);
       const verb =
         button.id === 'snapshot'
-          ? 'Snapshot captured'
+          ? t('instance.snapshotCaptured')
           : button.id === 'status'
-            ? 'Status refreshed'
+            ? t('instance.statusRefreshed')
             : `${button.label} sent`;
       try {
         if (button.id === 'snapshot') {
@@ -243,13 +280,14 @@ export default function InstanceDetailPage() {
         // Refresh events so the operator sees the audit trail immediately.
         await fetchEvents(iid).catch(() => {});
       } catch (error) {
-        const message = error instanceof ApiError ? error.message : 'Control request failed';
+        const message =
+          error instanceof ApiError ? error.message : t('instance.controlRequestFailed');
         setToast({ kind: 'error', message });
       } finally {
         setBusyButton(null);
       }
     },
-    [fetchStatus, fetchEvents],
+    [fetchStatus, fetchEvents, t],
   );
 
   const closeSnapshot = useCallback(() => {
@@ -261,18 +299,18 @@ export default function InstanceDetailPage() {
     const text = JSON.stringify(snapshot.boulder_snapshot, null, 2);
     try {
       await navigator.clipboard.writeText(text);
-      setToast({ kind: 'success', message: 'Snapshot copied to clipboard' });
+      setToast({ kind: 'success', message: t('instance.snapshotCopied') });
     } catch {
-      setToast({ kind: 'error', message: 'Clipboard unavailable' });
+      setToast({ kind: 'error', message: t('instance.clipboardUnavailable') });
     }
-  }, [snapshot]);
+  }, [snapshot, t]);
 
   // ---- Render: guards ----
   if (instanceId === undefined || officeId === undefined) {
     return (
       <section className="mx-auto w-full max-w-6xl p-6 lg:p-8">
         <p className="rounded-lg border border-dashed border-red-300 bg-red-50 px-6 py-12 text-center text-sm text-red-700">
-          Instance identifier is missing.
+          {t('instance.noInstance')}
         </p>
       </section>
     );
@@ -286,7 +324,7 @@ export default function InstanceDetailPage() {
           className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 transition-colors hover:text-slate-900"
         >
           <ArrowLeft className="size-4" aria-hidden="true" />
-          Back to office
+          {t('instance.backToOffice')}
         </Link>
         <div className="mt-3 flex items-start gap-4">
           <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-slate-900 text-white">
@@ -319,7 +357,7 @@ export default function InstanceDetailPage() {
         </div>
       ) : null}
 
-      <StatusBar status={status} isLoading={isLoading} />
+      <StatusBar status={status} isLoading={isLoading} badgeMap={STATUS_BADGE} />
 
       <ControlToolbar
         buttons={CONTROL_BUTTONS}
@@ -344,11 +382,12 @@ export default function InstanceDetailPage() {
 type StatusBarProps = {
   readonly status: InstanceLoopState | null;
   readonly isLoading: boolean;
+  readonly badgeMap: ReadonlyRecord<LoopStatus, { label: string; className: string }>;
 };
 
-function StatusBar({ status, isLoading }: StatusBarProps): ReactElement {
+function StatusBar({ status, isLoading, badgeMap }: StatusBarProps): ReactElement {
   const breaker = status?.breaker_config;
-  const badge = status !== null ? (STATUS_BADGE[status.loop_status] ?? null) : null;
+  const badge = status !== null ? (badgeMap[status.loop_status] ?? null) : null;
 
   return (
     <section
@@ -458,8 +497,6 @@ function Placeholder({ isLoading }: { isLoading: boolean }): ReactElement {
     </span>
   );
 }
-
-type ControlButton = (typeof CONTROL_BUTTONS)[number];
 
 type ControlToolbarProps = {
   readonly buttons: ReadonlyArray<ControlButton>;

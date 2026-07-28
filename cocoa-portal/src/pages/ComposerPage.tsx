@@ -1,5 +1,6 @@
 import { AlertCircle, AtSign, LoaderCircle, MessageSquare, Send } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 import { CommandAutocomplete } from '@/components/CommandAutocomplete';
 import { ApiError, api } from '@/lib/api';
@@ -22,6 +23,7 @@ type MessageSendResult = {
 type PresetCache = Record<string, EmployeePreset | null>;
 
 export default function ComposerPage() {
+  const { t } = useTranslation();
   const { id: officeId } = useParams<{ id: string }>();
   const setOfficeId = useSelectedStore((state) => state.setOfficeId);
   const [text, setText] = useState('');
@@ -46,10 +48,10 @@ export default function ComposerPage() {
     try {
       return { turn: parse_turn(text), error: null };
     } catch (e) {
-      const msg = e instanceof SlashParserError ? e.message : 'Parse error';
+      const msg = e instanceof SlashParserError ? e.message : t('composer.parseError');
       return { turn: null, error: msg };
     }
-  }, [text]);
+  }, [text, t]);
 
   useEffect(() => {
     setParseError(error);
@@ -123,7 +125,7 @@ export default function ComposerPage() {
       });
       setSendResult(result);
     } catch (e) {
-      setSendError(e instanceof ApiError ? e.message : 'Send failed');
+      setSendError(e instanceof ApiError ? e.message : t('composer.sendFailed'));
     } finally {
       setSending(false);
     }
@@ -136,7 +138,7 @@ export default function ComposerPage() {
     <section className="mx-auto w-full max-w-6xl p-6 lg:p-8">
       <header className="mb-6 flex items-center gap-3">
         <MessageSquare className="h-6 w-6 text-slate-700" />
-        <h1 className="text-2xl font-semibold text-slate-900">Composer</h1>
+        <h1 className="text-2xl font-semibold text-slate-900">{t('composer.title')}</h1>
       </header>
 
       {parseError !== null && (
@@ -177,7 +179,7 @@ export default function ComposerPage() {
               id="composer-text"
               value={text}
               onChange={(e) => setText(e.target.value)}
-              placeholder="Type your turn... use @slug /command to address an employee, @workspace:path to attach content."
+              placeholder={t('composer.placeholder')}
               className="h-80 w-full rounded-lg border border-slate-300 p-4 font-mono text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               spellCheck={false}
             />
@@ -203,7 +205,7 @@ export default function ComposerPage() {
               ) : (
                 <Send className="h-4 w-4" />
               )}
-              {sending ? 'Sending...' : 'Send'}
+              {sending ? t('composer.sending') : t('composer.send')}
             </button>
           </div>
         </div>
