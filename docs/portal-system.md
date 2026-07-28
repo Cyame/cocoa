@@ -1,6 +1,17 @@
 # Cocoa Portal System
 
-The P9 Portal is Cocoa's operator console — a React 19 single-page application that visualizes the backend control plane (P3.5 event stream, P5 message topology, P8 Harness Supervisor, P4 preset registry, Membership coordinates, CorridorNode canvas elements, and glow-mapped loop-status states). This document covers the architecture, page inventory, backend API surface, and visualization algorithms that any contributor or downstream phase (P9.5 polish, P10 learning) must internalize before editing the portal or its data contracts.
+> **15d naming convention** (effective 2026-07-28): This document uses the 15d naming scheme.
+> | Old term | New term | Display |
+> |----------|----------|---------|
+> | Office | Workspace | — |
+> | Employee | Entity | — |
+> | EmployeePreset | BaseClass | — |
+> | Corridor | Passage | 通道 |
+> | CorridorNode | *(dropped)* | — |
+>
+> React component names and API route paths remain unchanged. Only prose descriptions and conceptual labels use the new terms.
+
+The P9 Portal is Cocoa's operator console — a React 19 single-page application that visualizes the backend control plane (P3.5 event stream, P5 message topology, P8 Harness Supervisor, P4 preset registry, Membership coordinates, and glow-mapped loop-status states). This document covers the architecture, page inventory, backend API surface, and visualization algorithms that any contributor or downstream phase (P9.5 polish, P10 learning) must internalize before editing the portal or its data contracts.
 
 ## 1. Portal Architecture
 
@@ -27,13 +38,13 @@ The portal is a client-side React application with zero additional npm dependenc
 |  fetch wrapper   |  backend schema  |  parser.ts  |
 |  + ApiError      |  mirror          |  TS mirror  |
 +------------------+------------------+-------------+
-                          |
-                    Vite proxy /api -> backend:4510
-                          |
-              +-----------+-----------+
-              |   FastAPI Backend     |
-              |   /api/v1/*           |
-              +-----------------------+
+                           |
+                     Vite proxy /api -> backend:4510
+                           |
+               +-----------+-----------+
+               |   FastAPI Backend     |
+               |   /api/v1/*           |
+               +-----------------------+
 ```
 
 **Key architectural decisions:**
@@ -41,37 +52,39 @@ The portal is a client-side React application with zero additional npm dependenc
 - **API client**: `src/lib/api.ts` — a typed `fetch` wrapper that injects `Authorization: Bearer <token>`, auto-redirects to `/login` on 401, and throws typed `ApiError`.
 - **State management**: Zustand with `persist` middleware. `useSessionStore` holds JWT in localStorage. `useSelectedStore` holds `officeId`, `instanceId`, and `interactionMode` (persisted as `cocoa.topology.mode`).
 - **Routing**: `react-router` v7 with `createBrowserRouter`. The root path `/` redirects to `/login` (unauthenticated) or `/offices` (authenticated). Nine nested routes live under the `App` layout shell (`/login` is outside).
-- **Topology rendering**: Pure SVG with `<svg viewBox>`, `<g transform="translate(pan_x, pan_y) scale(zoom)">`, and `<defs><filter>` for glow effects. Mouse wheel zoom + drag-to-pan via React state.
+- **Topology rendering**: Pure SVG with `<svg viewBox>`, `<g transform="translate(pan_x, pan_y) scale(zoom)">`, and `<defs><filter>` for glow effects. Mouse wheel zoom + drag-to-pan via React state. Nodes are exclusively User Memberships and Instance Memberships — CorridorNode was dropped in 15d.
 - **Live status polling**: `setInterval` at 2-second intervals on `GET /offices/{id}/live-status`. No WebSocket or SSE — debug-first simplicity.
-- **Connection animation**: Polls `GET /events?type_prefix=messaging.&since=<5 seconds ago>` to detect message flow; renders SVG `<animateMotion>` particles on matching corridor `<line>` elements for 1 second.
+- **Connection animation**: Polls `GET /events?type_prefix=messaging.&since=<5 seconds ago>` to detect message flow; renders SVG `<animateMotion>` particles on matching passage `<line>` elements for 1 second.
 
 ## 2. Page Inventory
 
-The portal has 10 route-level pages and 4 shared components. Each page maps to one or more backend endpoints. (P9 当期 7 页面；P10 加 Employee Learning → 8；P15b 加 Employees list + Members list → 10 当前状态。)
+The portal has 10 route-level pages and 4 shared components. Each page maps to one or more backend endpoints. (P9 original 7 pages; P10 added Entity Learning → 8; P15b added Entities list + Members list → 10 current state.)
 
 ### Route Table
 
 | Path | Page Component | Purpose | Backend Endpoints Used |
 |------|---------------|---------|------------------------|
-| `/login` | `LoginPage` | Username/password authentication (P15b 加 register 模式) | `POST /auth/login`, `POST /auth/register` |
-| `/offices` | `OfficeListPage` | Card grid of accessible offices | `GET /offices` |
-| `/offices/:id` | `OfficeDetailPage` | Office tabs: Employees, Instances, Blackboard | `GET /messaging/memberships?office_id=`, `GET /instances`, `GET /blackboards` |
-| `/offices/:id/employees` | `EmployeesListPage` (P15b) | Per-office employee roster with role / preset / instance count | `GET /employees?office_id=`, `GET /instances?office_id=` |
-| `/offices/:id/members` | `MembersListPage` (P15b) | Per-office membership roster with role display | `GET /messaging/memberships?office_id=` |
+| `/login` | `LoginPage` | Username/password authentication (P15b added register mode) | `POST /auth/login`, `POST /auth/register` |
+| `/offices` | `OfficeListPage` | Card grid of accessible workspaces | `GET /offices` |
+| `/offices/:id` | `OfficeDetailPage` | Workspace tabs: Entities, Instances, Blackboard | `GET /messaging/memberships?office_id=`, `GET /instances`, `GET /blackboards` |
+| `/offices/:id/employees` | `EmployeesListPage` (P15b) | Per-workspace entity roster with role / BaseClass / instance count | `GET /employees?office_id=`, `GET /instances?office_id=` |
+| `/offices/:id/members` | `MembersListPage` (P15b) | Per-workspace membership roster with role display | `GET /messaging/memberships?office_id=` |
 | `/offices/:id/instances/:iid` | `InstanceDetailPage` | Instance status bar + harness control buttons + event panel | `GET /instances/{id}/status`, `POST /instances/{id}/{interrupt,pause,resume,snapshot}`, `GET /events` |
-| `/offices/:id/topology` | `TopologyPage` | Interactive SVG canvas: circle nodes with glow, corridor lines, pan/zoom, 3-mode toolbar | `GET /messaging/memberships`, `GET /messaging/corridors`, `GET /learning/corridor-nodes`, `GET /offices/{id}/live-status`, `GET /events`, `PATCH /messaging/memberships/{id}`, `PATCH /learning/corridor-nodes/{id}`, `POST /messaging/corridors` |
+| `/offices/:id/topology` | `TopologyPage` | Interactive SVG canvas: circle nodes (User + Instance Memberships) with glow, passage lines, pan/zoom, 3-mode toolbar | `GET /messaging/memberships`, `GET /messaging/corridors`, `GET /offices/{id}/live-status`, `GET /events`, `PATCH /messaging/memberships/{id}`, `POST /messaging/corridors` |
 | `/offices/:id/composer` | `ComposerPage` | Multi-`@` compartmentalized message editor + slash command autocomplete | `POST /messaging/messages`, `GET /employee-presets/{slug}` |
-| `/employees/:employeeId/learning` | `EmployeeLearningPage` (P10) | Per-employee memory summary + distill form + manifest preview modal | `GET /learning/memories/{id}/summary`, `POST /learning/employees/{id}/distill`, `GET /learning/presets/{id}` |
+| `/employees/:employeeId/learning` | `EmployeeLearningPage` (P10) | Per-entity memory summary + distill form + manifest preview modal | `GET /learning/memories/{id}/summary`, `POST /learning/employees/{id}/distill`, `GET /learning/presets/{id}` |
 | `/debug` | `DebugPage` | Full-width event table with filter bar, polling, and JSON export | `GET /events` |
+
+**Topology note (15d):** CorridorNode was dropped. The topology canvas now renders only two node types: User Memberships (human operators) and Instance Memberships (agent instances). Passage edges connect memberships directly. The CorridorNode CRUD endpoints (`/learning/corridor-nodes`) are deprecated and no longer consumed by the portal.
 
 ### Component Inventory
 
 | Component | File | Purpose |
 |-----------|------|---------|
-| `AppShell` | `src/components/AppShell.tsx` | Layout wrapper: left navigation (Office list / Employees / Members / Learning / Topology / Composer / Debug links) + top bar (user info + i18n switcher + logout) |
+| `AppShell` | `src/components/AppShell.tsx` | Layout wrapper: left navigation (Workspace list / Entities / Members / Learning / Topology / Composer / Debug links) + top bar (user info + i18n switcher + logout) |
 | `TopologyToolbar` | `src/components/TopologyToolbar.tsx` | Three-mode switch: Select (`<MousePointer />`) / Connect (`<Link />`) / Move (`<Move />`) with keyboard shortcuts `V`/`C`/`M` |
 | `TopologyGlow` | `src/components/TopologyGlow.tsx` | SVG `<defs>` filter generator: produces `feGaussianBlur` + `feFlood` + `feComposite` filters per glow color at the correct intensity |
-| `CommandAutocomplete` | `src/components/CommandAutocomplete.tsx` | Dropdown popup triggered by `/` in the composer: shows GLOBAL_COMMANDS + CONTROL_COMMANDS + per-preset manifest.commands, with keyboard navigation |
+| `CommandAutocomplete` | `src/components/CommandAutocomplete.tsx` | Dropdown popup triggered by `/` in the composer: shows GLOBAL_COMMANDS + CONTROL_COMMANDS + per-BaseClass manifest.commands, with keyboard navigation |
 
 ### Zustand Stores
 
@@ -82,7 +95,7 @@ The portal has 10 route-level pages and 4 shared components. Each page maps to o
 
 ## 3. Event Query API
 
-`GET /api/v1/events` serves as the audit-log backbone for three portal features: the Debug page's raw event table, the Instance detail page's per-instance event panel, and the Topology viz's corridor-animation detection.
+`GET /api/v1/events` serves as the audit-log backbone for three portal features: the Debug page's raw event table, the Instance detail page's per-instance event panel, and the Topology viz's passage-animation detection.
 
 ### Endpoint Signature
 
@@ -121,7 +134,7 @@ The events table is append-only (P3.5 contract). No `deleted_at` filter is appli
 
 ## 4. Live-Status API
 
-`GET /api/v1/offices/{office_id}/live-status` provides the per-node glow state that the Topology viz polls at 2-second intervals. The endpoint aggregates all active memberships in the office and joins each against the `instance_loop_states` table to derive a glow color and intensity.
+`GET /api/v1/offices/{office_id}/live-status` provides the per-node glow state that the Topology viz polls at 2-second intervals. The endpoint aggregates all active memberships in the workspace and joins each against the `instance_loop_states` table to derive a glow color and intensity.
 
 ### Endpoint Signature
 
@@ -131,7 +144,7 @@ Authorization: Bearer <token>
 → 200: LiveStatusItemOut[]
 ```
 
-Permission: `require_office_role(..., "viewer")` — any office member can read.
+Permission: `require_office_role(..., "viewer")` — any workspace member can read.
 
 ### LiveStatusItemOut Schema
 
@@ -167,61 +180,38 @@ For **instance memberships** (`node_type: "instance"`): the `InstanceLoopState.l
 
 The mapping lives in `app/core/glow.py` as a `dict[str, GlowColor]` lookup. The `GlowIntensity` enum has 5 levels (`static`/`weak`/`low`/`medium`/`strong`), each mapped to an SVG filter `flood-opacity` in the `TopologyGlow` component.
 
-## 5. CorridorNode API
+## 5. Passage (Corridor) API
 
-CorridorNodes are first-class canvas elements introduced in P9 Todo 8 — named, positioned anchors that corridors can attach to. They are **not** office members (no user/instance FK, no role); they exist solely as structural topology nodes, analogous to nodeskclaw's `CorridorHex`.
+Passages are the connectivity edges of Cocoa's messaging fabric (originally called Corridors in P5). They connect two Membership records and carry messages between them under the neighbor-only delivery rule.
 
 ### Model
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `id` | `string` (UUID) | Primary key |
-| `office_id` | `string` (UUID FK) | Owning office |
-| `posx` | `int` | X canvas coordinate |
-| `posy` | `int` | Y canvas coordinate |
-| `display_name` | `string` (64) | Human-readable label on the canvas |
-| `glow_color` | `string \| null` (7) | Optional hex color override (the topology viz applies its own glow; this is the node's base identity color) |
+| `office_id` | `string` (UUID FK) | Owning workspace |
+| `from_membership_id` | `string` (UUID FK) | Source membership |
+| `to_membership_id` | `string` (UUID FK) | Target membership |
 | `status` | `"active" \| "paused" \| "archived"` | Lifecycle state |
-| `created_by` | `string \| null` (UUID FK) | User who created the node |
+| `metadata` | `JsonObject \| null` | Arbitrary key-value annotations |
 
-Unique constraint: `uq_corridor_nodes_office_pos` — `(office_id, posx, posy)` unique among active rows (`deleted_at IS NULL`), preventing two nodes from sharing a canvas cell.
+**15d note:** In P9, corridors supported three edge shapes (M↔M, M↔CN, CN↔CN) via polymorphic `from_corridor_node_id` / `to_corridor_node_id` columns. With CorridorNode dropped in 15d, only membership-to-membership edges remain. The polymorphic FK columns and their CHECK constraints are deprecated.
 
 ### CRUD Endpoints
 
-All endpoints live under `/api/v1/learning/corridor-nodes` (shares the `/learning` namespace with P10; may be refactored to `/topology` in P9.5).
+All endpoints live under `/api/v1/messaging/corridors`.
 
 | Method | Path | Permission | Response |
 |--------|------|-----------|----------|
-| `GET` | `/learning/corridor-nodes?office_id=&limit=&cursor=` | `viewer` | `CorridorNodeListOut { items, next_cursor, total }` |
-| `GET` | `/learning/corridor-nodes/{id}` | `viewer` | `CorridorNodeOut` |
-| `POST` | `/learning/corridor-nodes` | `editor` | `201 CorridorNodeOut` |
-| `PATCH` | `/learning/corridor-nodes/{id}` | `editor` | `CorridorNodeOut` |
-| `DELETE` | `/learning/corridor-nodes/{id}` | `editor` | `204 No Content` |
+| `GET` | `/messaging/corridors?office_id=&limit=&cursor=` | `viewer` | `CorridorListOut { items, next_cursor, total }` |
+| `GET` | `/messaging/corridors/{id}` | `viewer` | `CorridorOut` |
+| `POST` | `/messaging/corridors` | `editor` | `201 CorridorOut` |
+| `PATCH` | `/messaging/corridors/{id}` | `editor` | `CorridorOut` |
+| `DELETE` | `/messaging/corridors/{id}` | `editor` | `204 No Content` |
 
-- **POST body**: `{ office_id, posx, posy, display_name, glow_color?, status? }`
+- **POST body**: `{ office_id, from_membership_id, to_membership_id, status?, metadata? }`
 - **PATCH body**: Partial update — only provided fields are changed.
-- **409 Conflict**: When creating or moving a node to an occupied `(office_id, posx, posy)` cell — surfaced via the partial unique index's `IntegrityError`.
-- **Soft delete**: `DELETE` sets `deleted_at` on the row. Corridors that reference a deleted node keep their FK pointers valid (Postgres does not reject soft-deleted FK targets).
-
-### Corridor Polymorphic Connection
-
-P9 extends the existing P5 `Corridor` model to accept **three edge shapes**:
-
-- **M <-> M**: Both endpoints are `Membership` records (original P5 design).
-- **M <-> CN**: One endpoint is a `Membership`, the other is a `CorridorNode`.
-- **CN <-> CN**: Both endpoints are `CorridorNode` records.
-
-The `corridors` table has been altered with two CHECK constraints:
-
-```sql
--- from side: exactly one of from_membership_id / from_corridor_node_id is non-null
-CHECK ((from_membership_id IS NOT NULL)::int + (from_corridor_node_id IS NOT NULL)::int = 1)
-
--- to side: same constraint
-CHECK ((to_membership_id IS NOT NULL)::int + (to_corridor_node_id IS NOT NULL)::int = 1)
-```
-
-The P5 acyclicity check (BFS on the membership graph) skips `CorridorNode` endpoints — they are not principals and do not participate in message routing. CorridorNodes that include such edges therefore do not affect message delivery semantics; they exist purely for visual grouping on the topology canvas.
+- **Soft delete**: `DELETE` sets `deleted_at` on the row.
 
 ## 6. Composer Compartmentalization Semantics
 
@@ -256,15 +246,17 @@ The `CommandAutocomplete` component hooks into the `/{command}` parsing:
 - Keyboard navigation: up/down arrows + Enter to select.
 - Selected command is auto-inserted into the text area at cursor position.
 
-The per-preset commands are cached in the session store after the first fetch for a given slug.
+The per-BaseClass commands are cached in the session store after the first fetch for a given slug.
 
 ## 7. Topology Visualization Algorithm
 
-The Topology page (`/offices/:id/topology`) is P9's flagship feature — an interactive SVG canvas that renders the office's agent topology as a graph of circular nodes with real-time glow status, connection lines between them, and three interaction modes.
+The Topology page (`/offices/:id/topology`) is P9's flagship feature — an interactive SVG canvas that renders the workspace's agent topology as a graph of circular nodes with real-time glow status, passage lines between them, and three interaction modes.
 
 ### Coordinate System
 
-The canvas uses SVG `viewBox="-1000 -1000 2000 2000"` with a `g` element transformed by `translate(pan_x, pan_y) scale(zoom)`. Node positions come directly from `Membership.posx/posy` and `CorridorNode.posx/posy` — the coordinates are free-form Cartesian pixels, not hex-grid cells. The origin `(0, 0)` is at canvas center.
+The canvas uses SVG `viewBox="-1000 -1000 2000 2000"` with a `g` element transformed by `translate(pan_x, pan_y) scale(zoom)`. Node positions come directly from `Membership.posx/posy` — the coordinates are free-form Cartesian pixels, not hex-grid cells. The origin `(0, 0)` is at canvas center.
+
+**15d note:** CorridorNode is dropped. Only User Memberships and Instance Memberships appear as nodes. The `CorridorNode.posx/posy` coordinate field no longer exists.
 
 ### Node Rendering
 
@@ -302,19 +294,19 @@ The glow ring's `stroke` and `stroke-opacity` come from `GET /offices/{id}/live-
 | `medium` | 0.45 | Visible glow |
 | `strong` | 0.70 | Bright pulsing aura |
 
-### Connection Lines
+### Passage Lines
 
-Corridor edges are rendered as `<line>` elements from the source node's `(posx, posy)` to the target node's `(posx, posy)`. Default stroke is `#94a3b8` (slate-400) at `stroke-width="2"`. Lines are completely static in the absence of message traffic.
+Passage edges are rendered as `<line>` elements from the source node's `(posx, posy)` to the target node's `(posx, posy)`. Default stroke is `#94a3b8` (slate-400) at `stroke-width="2"`. Lines are completely static in the absence of message traffic.
 
 ### Connection Animation (Streaming)
 
-The Topology page polls `GET /events?type_prefix=messaging.&since=<5 seconds ago ISO>` every 2 seconds. When an event matching a corridor is found (by `resource_type=corridor` + `resource_id=<corridor.id>`), the corresponding `<line>` is temporarily restyled:
+The Topology page polls `GET /events?type_prefix=messaging.&since=<5 seconds ago ISO>` every 2 seconds. When an event matching a passage is found (by `resource_type=corridor` + `resource_id=<corridor.id>`), the corresponding `<line>` is temporarily restyled:
 
 1. The line's stroke changes to `#10b981` (green) at `stroke-width="3"` with `stroke-dasharray="4 2"`.
-2. An SVG `<circle r="4" fill="#10b981">` particle is added with `<animateMotion path="M x1 y1 L x2 y2" dur="1s" />`, tracing the corridor path.
+2. An SVG `<circle r="4" fill="#10b981">` particle is added with `<animateMotion path="M x1 y1 L x2 y2" dur="1s" />`, tracing the passage path.
 3. After 1 second, both the styling and the particle are removed, returning the line to its default static appearance.
 
-This gives operators a real-time visual indicator of which corridors are actively carrying messages, without the overhead of a persistent connection.
+This gives operators a real-time visual indicator of which passages are actively carrying messages, without the overhead of a persistent connection.
 
 ### Pan and Zoom
 
@@ -327,28 +319,27 @@ The `TopologyToolbar` component switches between three modes, persisted to `loca
 | Mode | Key | Behavior |
 |------|-----|----------|
 | **Select** | `V` | Click a node to open a right-side drawer showing node details (type, name, status, glow). Click the canvas background to deselect. |
-| **Connect** | `C` | Click source node A (highlighted) → click target node B → `POST /messaging/corridors` is called (body supports polymorphic endpoints per Section 5). Click the canvas background to cancel the pending connection. |
-| **Move** | `M` | Mouse-down on a node enters drag mode. `mousemove` updates local `posx/posy` with `requestAnimationFrame` throttling. `mouseup` calls `PATCH /messaging/memberships/{id}` or `PATCH /learning/corridor-nodes/{id}` to persist. On 409 (position conflict), a toast displays the error and the node snaps back to its original position. |
+| **Connect** | `C` | Click source membership node A (highlighted) → click target membership node B → `POST /messaging/corridors` is called. Click the canvas background to cancel the pending connection. |
+| **Move** | `M` | Mouse-down on a membership node enters drag mode. `mousemove` updates local `posx/posy` with `requestAnimationFrame` throttling. `mouseup` calls `PATCH /messaging/memberships/{id}` to persist. On 409 (position conflict), a toast displays the error and the node snaps back to its original position. |
 
 ## 8. P9.5 Follow-ups
 
 The following items are deferred to P9.5 (polish wave). Nothing in P9 blocks them, but they are not yet implemented:
 
 - **Memory viewer**: A dedicated page or panel to browse `MemoryEntry` records (P6) — currently accessible only via API.
-- **Drag-to-reassign**: Drag an instance node from one `Membership` to another to reassign its office role — the composer only displays compartments, it does not mutate memberships.
+- **Drag-to-reassign**: Drag an instance node from one `Membership` to another to reassign its workspace role — the composer only displays compartments, it does not mutate memberships.
 - **SSE real-time channel**: Replace the 2-second polling loops with a Server-Sent Events endpoint for live-status and event streaming.
 - **3D mode**: Alternative rendering of the topology canvas using Three.js or WebGL for spatial depth — P9 is purely 2D SVG.
-- **Corridor reroute algorithm**: Allow operators to visually rewire corridors by dragging endpoints, with automatic `PATCH` to the corridor record.
 - **Topology auto-layout**: Algorithmic node positioning (force-directed graph) as an alternative to manual drag placement.
-- **/topology prefix refactor**: Move CorridorNode CRUD endpoints from `/learning/corridor-nodes` to a dedicated `/topology/corridor-nodes` prefix.
+- **Passage reroute algorithm**: Allow operators to visually rewire passage edges by dragging endpoints, with automatic `PATCH` to the corridor record.
 
 ## Related Documents
 
 - [Harness System](harness-system.md) — D11 control plane, Boulder loop engine, circuit breakers, control commands
-- [Messaging System](messaging-system.md) — Message topology, neighbor-only delivery, corridor CRUD, directive routing
+- [Messaging System](messaging-system.md) — Message topology, neighbor-only delivery, passage (corridor) CRUD, directive routing
 - [API Architecture](api-architecture.md) — REST conventions, error envelope, pagination, action endpoints
 - [Runtime System](runtime-system.md) — Instance lifecycle model, K8s scaffolding
-- [Preset System](preset-system.md) — EmployeePreset manifest schema, slash parser grammar
+- [Preset System](preset-system.md) — BaseClass (EmployeePreset) manifest schema, slash parser grammar
 - [Blackboard System](blackboard-system.md) — Passive state, virtual filesystem, vault archiving
 - [Observability](observability.md) — Event constants and dispatcher semantics
 - [AGENTS.md](../AGENTS.md) — Development guide and commit conventions

@@ -1,5 +1,7 @@
 # Cocoa API 架构约定
 
+> **Code rename pending (15d-rename wave)**: This doc describes target architecture (15d+). Current code uses old naming.
+
 > P3 落地的后端 API 权威参考。P4-P10 所有业务端点必须遵循本文约定；调整约定时先改本文、再改代码。
 > 代码位置：`cocoa-backend/app/` —— 路由 `app/api/`、中间件 `app/core/middleware/`、错误 `app/core/errors.py`、分页 `app/core/pagination.py`、OpenAPI `app/core/openapi.py`。
 
@@ -17,8 +19,8 @@ snake_case 端到端：Pydantic 字段名即线上字段名，**无别名转换�
 
 ### 1.3 资源命名（R3）
 
-- 复数 + kebab-case：`/api/v1/employees`、`/api/v1/employee-presets`。
-- 嵌套最多 2 层：`/api/v1/offices/{office_id}/employees` 合法；更深层级用查询参数拍平，如 `GET /api/v1/employees?office_id=<uuid>`。
+- 复数 + kebab-case：`/api/v1/entities`、`/api/v1/base-classes`。
+- 嵌套最多 2 层：`/api/v1/workspaces/{workspace_id}/entities` 合法；更深层级用查询参数拍平，如 `GET /api/v1/entities?workspace_id=<uuid>`。
 - 路径参数统一 UUID：`/api/v1/instances/{instance_id}`，不暴露自增整数主键。
 
 ### 1.4 动作端点（R4）
@@ -42,7 +44,7 @@ snake_case 端到端：Pydantic 字段名即线上字段名，**无别名转换�
 
 ### 1.6 查询参数约定
 
-- 过滤：按字段名直接过滤，`?status=active&office_id=<uuid>`。
+- 过滤：按字段名直接过滤，`?status=active&workspace_id=<uuid>`。
 - 排序：`?sort=-created_at`（`-` 前缀为降序），多字段逗号分隔 `?sort=-priority,created_at`。
 - 分页：游标分页 `?limit=50&cursor=<opaque>`，偏移分页 `?limit=50&offset=0`（见第 4 节）。
 - 时间戳：请求与响应中的时间一律 ISO 8601 UTC（如 `2026-07-25T08:30:00Z`）。
@@ -60,12 +62,12 @@ snake_case 端到端：Pydantic 字段名即线上字段名，**无别名转换�
 | URL | 说明 |
 |-----|------|
 | `GET /health` | 运维探针，根路径不版本化 |
-| `GET /api/v1/offices?limit=50&cursor=abc` | 列表 + 游标分页 |
-| `POST /api/v1/offices` | 创建，返 201 |
-| `GET /api/v1/offices/{office_id}` | 读单条 |
-| `GET /api/v1/offices/{office_id}/employees` | 2 层嵌套列表 |
+| `GET /api/v1/workspaces?limit=50&cursor=abc` | 列表 + 游标分页 |
+| `POST /api/v1/workspaces` | 创建，返 201 |
+| `GET /api/v1/workspaces/{workspace_id}` | 读单条 |
+| `GET /api/v1/workspaces/{workspace_id}/entities` | 2 层嵌套列表 |
 | `POST /api/v1/instances/{instance_id}/archive` | 动作端点 |
-| `DELETE /api/v1/employees/{employee_id}` | 软删除，返 204 |
+| `DELETE /api/v1/entities/{entity_id}` | 软删除，返 204 |
 
 ## 2. 中间件管道
 
@@ -236,7 +238,7 @@ class OffsetPage(BaseModel, Generic[T]):
 - 游标分页响应应同时给出 `Link` 头（RFC 8288），便于客户端不解析 body 即可翻页：
 
 ```
-Link: </api/v1/employees?limit=50&cursor=2026-07-25T08%3A30%3A00Z>; rel="next"
+Link: </api/v1/entities?limit=50&cursor=2026-07-25T08%3A30%3A00Z>; rel="next"
 ```
 
 - 偏移分页不返 `Link` 头，总数由 body 的 `total` 字段提供。
@@ -251,7 +253,7 @@ from sqlalchemy import select
 from app.core.pagination import OffsetPage, paginate_offset
 from app.models.employee import Employee
 
-async def list_employees(db: DB, offset: int, limit: int) -> OffsetPage[Employee]:
+async def list_entities(db: DB, offset: int, limit: int) -> OffsetPage[Employee]:
     query = select(Employee).where(Employee.deleted_at.is_(None))
     return await paginate_offset(db, query, offset=offset, limit=limit)
 ```
@@ -293,18 +295,18 @@ async def list_memory(db: DB, cursor: str | None, limit: int) -> CursorPage[Memo
 from app.api.deps import DB, CurrentUserDep, PaginationParams
 from app.core.errors import ForbiddenError
 
-@router.get("/offices/{office_id}/employees")
-async def list_office_employees(
-    office_id: str,
+@router.get("/workspaces/{workspace_id}/entities")
+async def list_workspace_entities(
+    workspace_id: str,
     db: DB,
     current_user: CurrentUserDep,
     page: PaginationParams,
 ) -> OffsetPage[Employee]:
     if not current_user.is_super_admin:
         raise ForbiddenError(
-            "office.forbidden",
-            "errors.office.forbidden",
-            "Only super-admins may list office employees",
+            "workspace.forbidden",
+            "errors.workspace.forbidden",
+            "Only super-admins may list workspace entities",
         )
     query = (
         select(Employee)
@@ -319,7 +321,7 @@ async def list_office_employees(
 
 - 文档入口（根路径、不版本化）：Swagger UI `/docs`，ReDoc `/redoc`，schema `/openapi.json`。
 - 应用元数据在 `app/main.py` 的 `FastAPI(...)` 构造中：`title="Cocoa API"`、`version="1.0.0"`、`swagger_ui_parameters={"defaultModelsExpandDepth": -1}`（默认折叠 model 区，保持端点列表可读）。
-- 标签组织（`openapi_tags`）：`Health`、`Auth`、`EmployeePresets`、`Employees`、`Offices`、`Instances`、`Messaging`、`Blackboard`、`Learning`（共 9 个）。每个子路由文件用 `APIRouter(prefix="/employees", tags=["Employees"])` 对齐其一，禁止自造新标签名。
+- 标签组织（`openapi_tags`）：`Health`、`Auth`、`BaseClasses`、`Entities`、`Workspaces`、`Instances`、`Messaging`、`Blackboard`、`Learning`（共 9 个）。每个子路由文件用 `APIRouter(prefix="/entities", tags=["Entities"])` 对齐其一，禁止自造新标签名。
 - 标准错误响应：`app/core/openapi.py` 的 `STANDARD_ERROR_RESPONSES` 定义了 401 / 403 / 404 / 422 / 500 五个状态码的信封示例。每个业务路由注册一次：
 
 ```python
@@ -327,11 +329,11 @@ from fastapi import APIRouter
 
 from app.core.openapi import add_error_responses
 
-router = APIRouter(prefix="/employees", tags=["Employees"])
+router = APIRouter(prefix="/entities", tags=["Entities"])
 add_error_responses(router)  # 一次性为整个路由登记 401/403/404/422/500
 
-@router.get("/{employee_id}")
-async def get_employee(employee_id: str):
+@router.get("/{entity_id}")
+async def get_entity(entity_id: str):
     ...
 ```
 
@@ -352,7 +354,7 @@ from app.core.errors import NotFoundError
 from app.core.openapi import add_error_responses
 from app.core.pagination import OffsetPage, paginate_offset
 
-router = APIRouter(prefix="/widgets", tags=["Offices"])
+router = APIRouter(prefix="/widgets", tags=["Workspaces"])
 add_error_responses(router)
 
 
@@ -403,8 +405,8 @@ async def archive_widget(widget_id: str, db: DB, current_user: CurrentUserDep) -
 ```python
 from app.core.errors import ConflictError, NotFoundError
 
-raise NotFoundError("office.not_found", "errors.office.not_found", f"Office '{slug}' not found")
-raise ConflictError("office.slug_taken", "errors.office.slug_taken", f"Slug '{slug}' is taken")
+raise NotFoundError("workspace.not_found", "errors.workspace.not_found", f"Workspace '{slug}' not found")
+raise ConflictError("workspace.slug_taken", "errors.workspace.slug_taken", f"Slug '{slug}' is taken")
 ```
 
 ### 7.3 分页调用

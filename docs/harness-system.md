@@ -1,5 +1,7 @@
 # Cocoa Harness System
 
+> **Code rename pending (15d-rename wave)**: This doc describes target architecture (15d+). Current code uses old naming.
+
 The P8 Harness layer is Cocoa's D11 **control plane** — the active counterpart to P6's passive Blackboard. Where Blackboard stores collaboration state, the Harness decides when an Instance runs, when it stops, and how external commands reach it. This document covers the seven reference points that any contributor or downstream phase (P9 portal, P10 learning) must internalize before editing `app/core/harness_supervisor.py` or any sibling module.
 
 ## 1. D11 Control Plane Architecture
@@ -19,7 +21,7 @@ P11's D11 split places the harness in the role of a **process-local control regi
 |   Supervisor    | <---------->-----> |  Instance (DB row   |
 | _registry: dict |  direct calls      |   + agent process)  |
 |  metrics +      |                    |                     |
-|  breakers       |                    |  InstanceLoopState  |
+|  breakers       |                    |  LoopState          |
 +-----------------+                    |  (1:1 per instance) |
         |                              +----------+----------+
         |                                         |
@@ -39,8 +41,8 @@ P11's D11 split places the harness in the role of a **process-local control regi
 **Three-party contract**:
 
 - The Supervisor's only persistent side effect is ``HARNESS_BREAKER_TRIPPED`` -> ``HARNESS_LOOP_STOPPED`` -> ``HARNESS_CONTROL_SENT(action=kill)``, emitted through the same short-lived session that ``_trip_breaker`` opens.
-- The Instance is the source of ``HARNESS_LOOP_STARTED`` / ``HARNESS_CHECKPOINT`` / ``HARNESS_LOOP_STOPPED``; the runtime writes to its own ``InstanceLoopState`` row through its own sessions.
-- Direct mutators (``handle_interrupt`` / ``handle_pause`` / ``handle_resume`` / ``capture_snapshot``) live on the Supervisor instance and are called by API endpoints; they update ``InstanceLoopState`` and emit corresponding events in the **caller's** session so the endpoint commits atomically.
+- The Instance is the source of ``HARNESS_LOOP_STARTED`` / ``HARNESS_CHECKPOINT`` / ``HARNESS_LOOP_STOPPED``; the runtime writes to its own ``LoopState`` row through its own sessions.
+- Direct mutators (``handle_interrupt`` / ``handle_pause`` / ``handle_resume`` / ``capture_snapshot``) live on the Supervisor instance and are called by API endpoints; they update ``LoopState`` and emit corresponding events in the **caller's** session so the endpoint commits atomically.
 
 ## 2. Boulder Loop Engine
 
@@ -68,7 +70,7 @@ Each ``HARNESS_CHECKPOINT`` payload carries:
 {
     "token_estimate": int,
     "snapshot": {
-        "plan_slug": "<InstanceLoopState.current_plan_ref>",
+        "plan_slug": "<LoopState.current_plan_ref>",
         "iteration": int,
         "todos": [...]  # validated by app.core.todo_enforcer
     }
@@ -81,7 +83,7 @@ The supervisor never calls the agent back directly. Idle detection is delegated 
 
 ```python
 # Continuation flow (skip-emit semantics)
-state = await session.scalar(select(InstanceLoopState).where(instance_id == ...))
+state = await session.scalar(select(LoopState).where(instance_id == ...))
 reason = await supervisor._check_breakers(state.instance_id, session)
 if reason is None and (now - state.last_checkpoint_at) > state.idle_timeout_seconds:
     await emit(HARNESS_CONTINUATION_INJECTED, payload={
@@ -103,7 +105,7 @@ The plan defines the canonical wording as: **"上下文要点先落 notepad（no
 
 ## 3. Four Deterministic Circuit Breakers
 
-The supervisor guards every running loop with four breakers. They are checked in a fixed order so the first to trip wins; subsequent breakers for the same checkpoint are skipped. All four read configuration from the same ``InstanceLoopState`` row, so changing one breaker (e.g. via operator UI in P9+) does not require restarting the loop.
+The supervisor guards every running loop with four breakers. They are checked in a fixed order so the first to trip wins; subsequent breakers for the same checkpoint are skipped. All four read configuration from the same ``LoopState`` row, so changing one breaker (e.g. via operator UI in P9+) does not require restarting the loop.
 
 | # | Breaker | Config Field | Trigger Condition | Source |
 |---|---------|--------------|-------------------|--------|
@@ -242,7 +244,7 @@ t=2.0  emit HARNESS_LOOP_STOPPED
 The kill path is split:
 
 - **Control downlink kill** (``HARNESS_CONTROL_SENT(action=kill)``): the per-loop handler flips ``stop_flag`` -> checked at the top of every iteration -> loop breaks -> ``HARNESS_LOOP_STOPPED`` is emitted on the way out.
-- **DB status kill** (``InstanceLoopState.loop_status in {interrupted, paused}``): the loop also reads the row each iteration and self-terminates if the status no longer says running. This is the safety net for cases where the kill event was missed.
+- **DB status kill** (``LoopState.loop_status in {interrupted, paused}``): the loop also reads the row each iteration and self-terminates if the status no longer says running. This is the safety net for cases where the kill event was missed.
 
 ## 7. Control Downlink Dual Paths
 
@@ -251,7 +253,7 @@ The agent runtime reacts to control commands through TWO independent paths. The 
 | Path | Trigger | Delivery | Latency | Failure Mode |
 |------|---------|----------|---------|--------------|
 | Event path | ``HARNESS_CONTROL_SENT`` via ``emit()`` -> dispatcher -> ``register_handler`` callback | In-process (zero network) | Sub-millisecond | If handler missed (e.g. GC delay), loop continues until next check |
-| DB path | ``InstanceLoopState.loop_status`` row write | Through SQLAlchemy session | One read-tx per iteration (~200ms) | Always wins on next iteration even if event lost |
+| DB path | ``LoopState.loop_status`` row write | Through SQLAlchemy session | One read-tx per iteration (~200ms) | Always wins on next iteration even if event lost |
 
 ### When Each Wins
 

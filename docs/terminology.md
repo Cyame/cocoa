@@ -1,56 +1,102 @@
-# Cocoa Terminology Glossary
+# Cocoa Terminology Glossary (15d)
 
-One-line definitions for every Cocoa code-term, concept, and protocol entity. Derived from the metaphor name table (the anchor) and the core domain model. Code-terms stay English; display-names in parentheses are for product UI reference.
+> **Canonical source**: Naming decisions locked in `.omo/drafts/phase-15d-naming-system.md`. All 36 decisions (N1-N10, D1-D6, B1-B6, U1-U8, DOC1-DOC5) are approved.
+> **Code rename pending**: This doc describes the target architecture (15d+). The current codebase (P0-P15b) still uses old naming; a dedicated rename wave (15d-rename) is deferred until after P16d Org model decision.
 
-## Structure Terms
+One-line definitions for every Cocoa code-term (backend), display-name (frontend Cthulhu-themed), and protocol entity. Derived from the naming system and the core domain model. Code-terms stay English; display-names in parentheses are for product UI reference.
 
-- **Office** (菌落) -- Organizational container for a workspace, holding multiple employee instances within a bounded colony.
-- **Employee** (细胞) -- Persistent role identity defined by a preset manifest and shared cross-instance memory; one Employee can have N Instances.
-- **Instance** (分身) -- A materialization of an Employee in one Office, with its own isolated workspace and runtime state.
-- **Preset** (灵格) -- Employee template defining skills, tools, model, and instructions; selected at Employee creation time.
-- **Gene** (基因) -- Learnable skill module, injectable into an Employee preset, produced by `/distill` from Memory.
-- **Memory** (基因组) -- Employee-shared cumulative experience, appended cross-instance, not hot-loaded into session context.
-- **Blackboard** (共生面) -- Per-Office shared real-time collaboration panel with permission-gated file read/write.
-- **Vault** (冰封库) -- Cold storage archive for long-term preservation, written by `/archive` command.
-- **Corridor** (突触) -- Adjacency edge between two Memberships in an Office, defining the selectable neighbor set for messaging.
-- **Ring** (环) -- Explicit collaboration ring with bounded context scope; deferred to P3/P4, current placeholder.
+---
 
-## Presets
+## Structure Terms (3-Layer Tenant + 3-Tier Entity)
 
-- **Planner** (密士) -- Plans and decomposes tasks; preset registry owns `/plan`.
-- **Worker** (铸金) -- Executes and builds; stateless or persistent depending on rank.
-- **Oracle** (灵视) -- Reviews and verifies outputs; preset registry owns `/review`.
-- **Explorer** (游魂) -- Explores and researches; preset registry owns `/search`.
-- **Reviewer** (衡判) -- Judges and adjudicates; preset registry owns `/judge`.
-- **Human** (总监) -- Human operator at Director rank, holds approval authority.
+### Tenant Hierarchy
 
-## Lab Ranks
+- **Organization** (世界) — Top-level isolation unit. Deferred to P16d; single-tenant singleton for now.
+- **Namespace** (次元) — Within an Organization, e.g. dev/staging/prod. Deferred to P16d; single-tenant singleton "default" for now.
+- **Workspace** (空间) — Within a Namespace, where agents collaborate. This is the current "Office" model, to be renamed in 15d-rename wave. Single-tenant default: one Workspace shared by all users. Starts empty (no auto-preloaded Entities).
 
-- **Intern** (实习生) -- Stateless hot-load rank: no persistent session, no memory read, fresh invocation each time.
-- **Researcher** (研究员) -- Full preset plus memory rank: persistent, accumulates experience across invocations.
-- **Director** (总监) -- Human operator rank: highest authority, approval and forwarding rights.
+### Entity Hierarchy (the "agent stack")
 
-## Sub-entities
+- **BaseClass** (神职) — Preset template defining rules, prompt, commands, tools, and provider config. Created by humans or distilled from Entity experience. Persists across Workspaces. 11 built-in BaseClasses defined in §4 of the naming system.
+- **Entity** (眷族) — Instantiation of a BaseClass in a Workspace, with identity + accumulated Memory + Blackboard writes. Per-Workspace scope. Can be promoted to BaseClass via 炼化 (transmutation).
+- **Instance** (化身) — Running materialization of an Entity. One Instance per pod. Ephemeral runtime state (LoopState). Restarts lose memory, re-reads from Entity.
 
-Code-term-only data-layer entities from the P2 core domain model. No product UI display-names.
+### Structural Concepts
 
-- **User** -- Human authentication identity: username, email, password hash; the login entity.
-- **EmployeePreset** -- Persisted preset record storing slug, manifest JSONB, and version; forward contract to P3.
-- **Membership** -- Employee or User membership in an Office, with hex coordinates, role, and permissions; exclusive-FK (exactly one of user_id or instance_id).
-- **BlackboardFile** -- File record on a Blackboard, with storage key, content type, and directory tree metadata.
-- **VaultEntry** -- Archived entry in a Vault, recording source type, source reference, and archival timestamp.
-- **MemoryEntry** -- Append-only memory log entry per Employee, indexed by kind and time; no updated_at column.
+- **Membership** — Entity or User membership in a Workspace, with position coordinates (posx/posy), role, and permissions. Exclusive-FK: exactly one of user_id or instance_id.
+- **Passage** (通道) — Adjacency edge between two Memberships or between any two points in the Workspace, defining the selectable neighbor set for messaging. Simplified in 15d: any two points can connect directly; CorridorNode concept dropped.
+- **Blackboard** (主脑) — Per-Workspace shared real-time state panel with permission-gated file read/write.
+- **Vault** (冰封库) — Cold storage archive for long-term preservation, written by `/archive` command.
+- **Memory** (记忆沉淀) — Append-only per-Entity memory log, indexed by kind (experience/lesson/decision/problem) and time. No `updated_at` column. Accumulates across Instances.
+
+### Runtime Concepts
+
+- **LoopState** (心智状态) — Harness runtime state for an Instance: loop_status (6 states), continuation_count, breaker_config, last_checkpoint_at.
+- **DeployRecord** (降世记录) — K8s deployment lifecycle record: 9-step pipeline from build to pod-ready.
+- **InstanceProviderConfig** — LLM provider configuration for an Instance (openai-compatible, anthropic, etc.). Internal config, no UI equivalent.
+- **Topology** (心灵图景) — Spatial visualization of Workspace members as SVG nodes with glow halos, 3 interaction modes (Select/Connect/Move), and message-flow particle animation.
+
+---
+
+## BaseClasses (11 Built-in 神职)
+
+Per naming system §4. Slug = kebab-case identifier (DB layer). Display = i18n key (UI layer). DB does not store display_name column.
+
+| # | Slug | Display | Role | omo Agent Source |
+|---|---|---|---|---|
+| 1 | `mi-shi` | 密士 | Interview planner, plan mode sticky, `.omo` plan writer | Prometheus (Strategic Planner) |
+| 2 | `huan-ling` | 唤灵 | Intent analysis, pre-planner before Prometheus | Metis (Pre-planning Consultant) |
+| 3 | `an-xing` | 暗行 | Solo full-stack coder, boulder-pusher | Sisyphus (Main Coder) |
+| 4 | `an-ying` | 暗影 | Junior coder, cheap/fast | Sisyphus-Junior |
+| 5 | `zhu-jin` | 铸金 | Autonomous deep worker, goal-driven | Hephaestus |
+| 6 | `ling-shi` | 灵视 | Read-only architecture / hard debugging | Oracle (High-IQ Reasoning) |
+| 7 | `heng-pan` | 衡判 | Quality gate: review/approve/reject | Momus (Critic) |
+| 8 | `you-hun` | 游魂 | Codebase grep / exploration | Explore |
+| 9 | `qian-zhi` | 潜知 | External reference + multi-repo + docs | Librarian |
+| 10 | `bai-tong` | 百瞳 | Visual / media / audio analysis | Multimodal-Looker |
+| 11 | `jiu-ri` | 旧日 | Top-level delegation / monitoring / approval | Atlas (Orchestrator) |
+
+---
+
+## Lab Ranks (克苏鲁神秘系)
+
+Progression from shallow perception → deep knowledge → awakened mastery.
+
+- **Intern** (浅识者) — Stateless hot-load rank: no persistent session, no memory read, fresh invocation each time. Barely glimpsed the cosmic truth.
+- **Researcher** (深潜者) — Full BaseClass plus memory rank: persistent, accumulates experience across invocations. Diving ever deeper into the mysteries.
+- **Director** (觉醒者) — Human operator rank: highest authority, approval and forwarding rights. Fully awakened to direct others. Not a BaseClass; human users hold this.
+
+---
+
+## Sub-entities (Data Layer)
+
+Code-term-only entities from the core domain model. No product UI display-names.
+
+- **User** — Human authentication identity: username, email, password hash; the login entity.
+- **BaseClass** (was EmployeePreset) — Persisted preset record storing slug, manifest JSONB, and version.
+- **Entity** (was Employee) — Per-Workspace identity referencing a BaseClass, with accumulated memory.
+- **Membership** (契印) — Entity or User membership seal in a Workspace, with posx/posy coordinates, role, and permissions.
+- **BlackboardFile** — File record on a Blackboard, with storage key, content type, and directory tree metadata.
+- **VaultEntry** — Archived entry in a Vault, recording source type, source reference, and archival timestamp.
+- **Memory** (was MemoryEntry) — Append-only memory log entry per Entity, indexed by kind and time.
+
+---
 
 ## Concepts
 
-- **Employee-as-role-identity** -- Employee is a persistent role identity composed of a preset manifest plus shared cross-instance memory; it grows as memory accumulates.
-- **Instance=materialization** -- An Instance is a concrete materialization of an Employee in one Office, with isolated workspace and runtime.
-- **near-neighbor messaging** -- Messaging restricted to corridor-defined adjacent nodes only; no broadcast fan-out, unlike flat log-based group chat.
-- **corridor** -- The editable neighbor set of a node; defines the selectable recipient list for directed messaging within an Office.
-- **activation trigger** -- Event that causes a node to sync topology and state: daily-report self-sync, on-mention, or scheduled task invocation.
-- **/distill** -- Slash command that consolidates Memory entries into a learnable Gene, injectable into the Employee's preset.
-- **slash-protocol** -- Structured turn-based command grammar: a Turn is a list of Directives, each with optional target, command, args, and content-ref.
-- **directive** -- A single command unit within a Turn: target_employee, cmd, args, content_ref, and raw_text (Pydantic schema in `app/schemas/slash.py`).
-- **command-registry** -- Dual registry of global commands (scope ops: `/read`, `/list`, `/write`, `/archive`) and per-preset commands defined in each preset manifest (forward contract to P3).
-- **content-ref** -- A scope-qualified reference to content: mandatory scope prefix (workspace|blackboard|vault|memory) with optional path (Pydantic schema in `app/schemas/slash.py`).
-- **composer compartmentalization** -- The P8 composer UI splits a message into per-employee compartments before send; the user sees and confirms what each employee receives, emitted as a structured Turn.
+- **Entity-as-role-identity** — Entity is a persistent role identity composed of a BaseClass manifest plus shared cross-instance Memory; it grows as memory accumulates.
+- **Instance=materialization** — An Instance is a concrete materialization of an Entity in one Workspace, with isolated workspace and runtime.
+- **near-neighbor messaging** — Messaging restricted to passage-defined adjacent nodes only; no broadcast fan-out, unlike flat log-based group chat.
+- **passage** — The editable neighbor set of a node; defines the selectable recipient list for directed messaging within a Workspace.
+- **activation trigger** — Event that causes a node to sync topology and state: daily-report self-sync, on-mention, or scheduled task invocation.
+- **promotion (晋升)** — Instance → Entity: capture Instance runtime state + Memory back into the Entity. In-place enhancement.
+- **transmutation (炼化)** — Entity → BaseClass: distill accumulated Entity Memory into a new reusable BaseClass. Creates a new slug, available across Workspaces.
+- **slash-protocol** — Structured turn-based command grammar: a Turn is a list of Directives, each with optional target, command, args, and content-ref.
+- **directive** — A single command unit within a Turn: target_entity, cmd, args, content_ref, and raw_text.
+- **command-registry** — Registry of four command families: GLOBAL (/read, /list, /write, /archive), PER-PRESET (defined in manifest.commands), CONTROL (/interrupt, /pause, /resume, /status, /snapshot), LEARNING (/distill, /consolidate, /reflect). Priority-ordered in directive_router.py::route_turn().
+- **content-ref** — A scope-qualified reference to content: mandatory scope prefix (workspace|blackboard|vault|memory) with optional path.
+- **composer compartmentalization** — The Composer UI splits a message into per-entity compartments before send; the user sees and confirms what each entity receives, emitted as a structured Turn.
+
+---
+
+*Derived from `.omo/drafts/phase-15d-naming-system.md` (2026-07-28). Code rename pending 15d-rename wave (after P16d Org model decision).*

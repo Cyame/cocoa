@@ -1,12 +1,14 @@
 # Blackboard System
 
+> **Code rename pending (15d-rename wave)**: This doc describes target architecture (15d+). Current code uses old naming.
+
 Cocoa P6 storage, vault, and memory layer — the passive data surface that records collaboration context and agent learning.
 
 ## 1. Blackboard Data Model
 
 The Blackboard is a **passive state module** per D11 architecture. It stores no active control logic — behavior control belongs to P8 Harness Supervisor.
 
-Each Office has exactly one Blackboard (1:1), created lazily on first access. The Blackboard exposes two text fields:
+Each Workspace has exactly one Blackboard (1:1), created lazily on first access. The Blackboard exposes two text fields:
 
 | Field | Purpose |
 |-------|---------|
@@ -25,11 +27,11 @@ class Blackboard(BaseModel, Base):
 
 **Lazy creation**: `GET /api/v1/blackboard/{office_id}` auto-creates both the Blackboard and its corresponding Vault if they don't exist. No separate initialization endpoint needed.
 
-**Partial unique index**: `uq_blackboards_office` on `(office_id)` with `WHERE deleted_at IS NULL` — only one active Blackboard per office.
+**Partial unique index**: `uq_blackboards_office` on `(office_id)` with `WHERE deleted_at IS NULL` — only one active Blackboard per workspace.
 
 ## 2. BlackboardFile Virtual Filesystem
 
-A hierarchical, path-based virtual filesystem inside each Office's Blackboard. Files are addressed by `parent_path` + `name`, forming a tree:
+A hierarchical, path-based virtual filesystem inside each Workspace's Blackboard. Files are addressed by `parent_path` + `name`, forming a tree:
 
 ```
 / (root)
@@ -63,7 +65,7 @@ A hierarchical, path-based virtual filesystem inside each Office's Blackboard. F
 
 ## 3. Vault Archiving
 
-The Vault provides long-term cold storage for BlackboardFiles (and future workspace files in P7). Each Office has one Vault (1:1), created lazily.
+The Vault provides long-term cold storage for BlackboardFiles (and future workspace files in P7). Each Workspace has one Vault (1:1), created lazily.
 
 ### Archive Flow (hot-to-cold migration)
 
@@ -72,7 +74,7 @@ POST /{office_id}/files/{file_id}/archive
 
 1. Verify file exists (non-directory, not deleted)
 2. Lock the file row (`SELECT ... FOR UPDATE`)
-3. Find or create the Office's Vault
+3. Find or create the Workspace's Vault
 4. Create VaultEntry(source_type="blackboard_file", source_ref=file_id, archived_key=file.storage_key)
 5. Soft-delete the BlackboardFile
 6. Commit — entire operation is atomic within a single DB transaction
@@ -97,9 +99,9 @@ class VaultEntry(BaseModel, Base):
 - Physical file storage (storage_key is a logical reference)
 - File content upload/download
 
-## 4. MemoryEntry Append-Log
+## 4. Memory Append-Log
 
-Employee-indexed, append-only memory records. Entries are **immutable** — no update or delete endpoints.
+Entity-indexed, append-only memory records. Entries are **immutable** — no update or delete endpoints.
 
 ### Memory Kinds
 
@@ -116,7 +118,7 @@ Employee-indexed, append-only memory records. Entries are **immutable** — no u
 - **Keyed lookup**: `?key=some-key` returns the latest entry for that key (ordered by `created_at DESC`, limit 1)
 - **Cursor pagination**: `?cursor=<base64>` with ascending `created_at` order
 - **Kind filter**: `?kind=experience` restricts to a specific kind
-- **Employee-scoped**: All queries require `employee_id`
+- **Entity-scoped**: All queries require `employee_id`
 
 ```python
 class MemoryEntry(BaseModel, Base):
@@ -131,11 +133,11 @@ class MemoryEntry(BaseModel, Base):
 
 `ix_memory_entries_employee_created` on `(employee_id, created_at)` supports efficient cursor-based listing.
 
-### P6 P6 allows any authenticated user to write any employee's memory. P7 will tighten this via `instance_proxy_token` when agents write their own memory.
+### P6 P6 allows any authenticated user to write any entity's memory. P7 will tighten this via `instance_proxy_token` when agents write their own memory.
 
 ## 5. Permission Model
 
-Office-scoped, role-gated access control. Every Blackboard/BlackboardFile/Vault/Memory endpoint verifies the authenticated user's membership role in the target office.
+Workspace-scoped, role-gated access control. Every Blackboard/BlackboardFile/Vault/Memory endpoint verifies the authenticated user's membership role in the target workspace.
 
 ### Role Hierarchy
 
@@ -214,7 +216,7 @@ All endpoints return the standard Cocoa error envelope:
 {
     "error_code": "office.not_member",
     "message_key": "errors.office.not_member",
-    "message": "You are not a member of this office",
+    "message": "You are not a member of this workspace",
     "details": {"user_id": "...", "office_id": "..."},
     "request_id": "..."
 }
@@ -224,7 +226,7 @@ Common P6 error codes:
 
 | Code | HTTP | Trigger |
 |------|------|---------|
-| `office.not_member` | 403 | User has no membership in target office |
+| `office.not_member` | 403 | User has no membership in target workspace |
 | `office.insufficient_role` | 403 | User's role is below required minimum |
 | `blackboard.file_not_found` | 404 | File ID does not exist or is deleted |
 | `blackboard.directory_not_found` | 404 | Parent directory path does not exist |

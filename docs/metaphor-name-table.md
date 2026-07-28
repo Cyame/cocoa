@@ -1,62 +1,92 @@
-# Cocoa Metaphor Name Table
+# Cocoa Metaphor Name Table (15d)
+
+> **Canonical source**: `.omo/drafts/phase-15d-naming-system.md` §3 (backend→frontend naming map) + §4 (11 BaseClasses). All decisions approved 2026-07-28.
+> **Code rename pending**: This table describes the target architecture. Current code (P0-P15b) still uses old naming.
 
 ## Preamble
 
-Cocoa uses a **Hybrid metaphor system**: the product skin (what users see) is cultural, drawing on biological and mystical/alchemical imagery, while the internals (code, database schemas, API identifiers) stay technical English. This table is the single source of truth for every concept name in the Cocoa domain. Downstream documents (terminology, domain model, preset manifests, UI) derive their identifiers from the rows below.
+Cocoa uses a **two-axis naming system**: backend uses strict technical English, frontend uses Cthulhu/Lovecraft-themed Chinese. This table is the single source of truth mapping every concept from code-term → frontend display-name. Downstream documents (terminology, domain model, preset manifests, UI) derive their identifiers from the rows below.
 
-The table is organized into four sections: **structure terms** (biological metaphor for the office-employee topology), **presets** (mystical/alchemical names for agent roles), **lab ranks** (seniority axis orthogonal to presets), and **code-term-only sub-entities** (technical identifiers with no display name in P1). Each row maps a code-level identifier to its biological metaphor name, its product-skin display name, and a short description of its role in the system.
+Database columns use the backend names. UI labels use the frontend names. Backend code internally uses backend names. DB does NOT store display_name columns — the UI layer resolves display via i18n JSON keys.
 
-Some concepts are marked **deferred**: Ring=环 exists as a placeholder because the ring topology is a P3/P4 concern, but the name is locked here so downstream work can reference it. Code-term-only rows have empty bio-name and display-name cells; they are internal identifiers the P2 data layer uses but do not yet surface in the product UI.
+---
 
 ## Name Table
 
-### Structure Terms
+### Structure Terms (Tenant + Entity Hierarchy)
 
-| code-term | bio-name | display-name | role |
-|-----------|----------|-------------|------|
-| Office | 菌落 | 菌落 | 工作空间的组织单元，容纳多个员工实例的边界容器 |
-| Employee | 细胞 | 细胞 | 持久的角色身份，由灵格预设和共享记忆定义，一个员工可有多个分身 |
-| Instance | 分身 | 分身 | 员工在某个菌落中的具体化身，拥有独立工作区和运行时状态 |
-| Preset | 灵格 | 灵格 | 员工的预设模板，定义技能、工具、模型和指令 |
-| Gene | 基因 | 基因 | 可学习的技能模块，可注入员工灵格，由 /distill 从记忆中提炼 |
-| Memory | 基因组 | 基因组 | 员工共享的累积经验，跨实例持久化，追加写入，不自动加载到会话上下文 |
-| Blackboard | 共生面 | 黑板 | 菌落内共享的实时协作面板，权限控制，支持文件读写 |
-| Vault | 冰封库 | 冰封库 | 冷存储归档库，长期保存，由 /archive 命令写入 |
-| Corridor | 突触 | 突触 | 员工间的邻接关系边，定义可通信的邻居集合，近邻消息路由 |
-| Ring | 环 | 环 | 显式协作环，限定上下文的作用域（P3/P4 实现，当前占位） |
+| Backend (code/DB) | Frontend Display | Old Name (P0-P15) | Description |
+|---|---|---|---|
+| **Organization** | 世界 | (none, deferred) | Top-level isolation unit. Singleton for now, deferred to P16d. |
+| **Namespace** | 次元 | (none, deferred) | Within Organization. Singleton "default" for now, deferred to P16d. |
+| **Workspace** | 空间 | Office | Within Namespace, where agents collaborate. Current "Office" model. |
+| **BaseClass** | 神职 | EmployeePreset | Preset template: prompt, commands, tools, provider config. 11 built-in. |
+| **Entity** | 眷族 | Employee | Per-Workspace identity with BaseClass ref + accumulated Memory. |
+| **Instance** | 化身 | Instance (unchanged) | Running pod materialization of an Entity. Ephemeral. |
+| **Membership** | 契印 | Membership (unchanged) | Entity/User membership seal in a Workspace, with posx/posy + role. |
+| **Passage** | 通道 | Corridor | Edge between two endpoints in Workspace topology. CorridorNode dropped. |
+| **Blackboard** | 主脑 | Blackboard (unchanged) | Per-Workspace shared state panel. |
+| **Vault** | 冰封库 | Vault (unchanged) | Cold storage archive. |
+| **Memory** | 记忆沉淀 | MemoryEntry | Append-only per-Entity memory log (experience/lesson/decision/problem). |
+| **Event** | 印痕 | Event (unchanged) | Audit log row. |
+| **LoopState** | 心智状态 | InstanceLoopState | Harness runtime state: status, continuations, breakers. |
+| **DeployRecord** | 降世记录 | DeployRecord (unchanged) | K8s deployment lifecycle record. |
+| **Topology** | 心灵图景 | Topology (unchanged) | Spatial visualization canvas with glow nodes + particle animation. |
 
-### Presets
+### BaseClasses (11 Built-in 神职)
 
-| code-term | bio-name | display-name | role |
-|-----------|----------|-------------|------|
-| Planner | | 密士 | 规划与分解任务的预设角色 |
-| Worker | | 铸金 | 执行与构建的预设角色 |
-| Oracle | | 灵视 | 审查与验证的预设角色 |
-| Explorer | | 游魂 | 探索与调研的预设角色 |
-| Reviewer | | 衡判 | 评审与判定的预设角色 |
-| Human | | 总监 | 人类操作者，总监级别，拥有审批权 |
+Slug = kebab-case identifier (DB unique). Display = i18n key. Commands = per-class command surface.
 
-### Lab Ranks
+| Slug | Display | Role | Commands | omo Agent Source |
+|---|---|---|---|---|
+| `mi-shi` | 密士 | Strategic planner, plan mode sticky | /plan /decompose /prioritize | Prometheus |
+| `huan-ling` | 唤灵 | Intent analysis, pre-planner | /analyze /clarify /propose | Metis |
+| `an-xing` | 暗行 | Solo full-stack coder | /plan /execute /build /test | Sisyphus |
+| `an-ying` | 暗影 | Junior coder, cheap/fast | /execute /build /test | Sisyphus-Junior |
+| `zhu-jin` | 铸金 | Autonomous deep worker, goal-driven | /execute /build /test | Hephaestus |
+| `ling-shi` | 灵视 | Read-only architecture / debugging | /analyze /predict /review | Oracle |
+| `heng-pan` | 衡判 | Quality gate: review/approve/reject | /review /approve /reject | Momus |
+| `you-hun` | 游魂 | Codebase grep / exploration | /search /survey /report | Explore |
+| `qian-zhi` | 潜知 | External reference + multi-repo + docs | /search /reference /survey | Librarian |
+| `bai-tong` | 百瞳 | Visual / media / audio analysis | /look /analyze /describe | Multimodal-Looker |
+| `jiu-ri` | 旧日 | Top-level delegation / monitoring | /delegate /monitor /approve | Atlas |
 
-| code-term | bio-name | display-name | role |
-|-----------|----------|-------------|------|
-| Intern | | 实习生 | 无状态热加载，不记往事，每次调用全新启动 |
-| Researcher | | 研究员 | 完整预设加记忆，持久化，可积累经验 |
-| Director | | 总监 | 人类操作者，最高权限，审批和转发 |
+**Gap note**: All 11 omo non-Sisyphus-Junior agents are now BaseClasses. Human operators are users, not a BaseClass. `User.is_super_admin` covers some Atlas semantics, but Atlas itself remains a distinct BaseClass.
 
-### Code-term-only Sub-entities
+### Lab Ranks (克苏鲁神秘系)
 
-| code-term | bio-name | display-name | role |
-|-----------|----------|-------------|------|
-| User | | | 人类用户的认证身份（P2 数据层实体） |
-| EmployeePreset | | | 预设的持久化记录，存储 manifest 和版本信息（P2 数据层实体） |
-| Membership | | | 员工或用户在菌落中的成员关系，含坐标和权限（P2 数据层实体） |
-| BlackboardFile | | | 黑板上的文件记录，含存储键和元数据（P2 数据层实体） |
-| VaultEntry | | | 冰封库中的归档条目，记录来源和归档时间（P2 数据层实体） |
-| MemoryEntry | | | 记忆的追加日志条目，按员工和时间索引（P2 数据层实体） |
+Progression from shallow perception → deep knowledge → awakened mastery.
 
-> **Footnote:** The six code-term-only rows above are internal identifiers for the P2 core domain model. They have no bio-name or display-name in P1 because they are data-layer entities that do not surface as independently named concepts in the product UI. They may acquire display names in later phases when the portal visualizes them.
+| Backend | Display | Description |
+|---|---|---|
+| Intern | 浅识者 | Stateless hot-load, no memory, fresh invocation each time. Barely glimpsed the cosmic truth. |
+| Researcher | 深潜者 | Full BaseClass + memory, persistent, accumulates experience across invocations. Diving ever deeper. |
+| Director | 觉醒者 | Human operator, highest authority, approval and forwarding rights. Fully awakened to direct others. |
 
-## Collision Verification
+### Sub-entities (Data Layer, No Display Name)
 
-No preset display-name (密士, 铸金, 灵视, 游魂, 衡判, 总监) equals any structure display-name (菌落, 细胞, 分身, 灵格, 基因, 基因组, 黑板, 冰封库, 突触, 环). The display-name 总监 appears in both the Human preset and the Director rank; this is intentional because the Human preset is the Director rank, a single concept viewed from two angles (preset selection and seniority axis). All other display-name values are unique across the named roles in this table. Verified by inspection of the table above.
+| Backend | Old Name | Description |
+|---|---|---|
+| User | User (unchanged) | Human auth identity |
+| BaseClass | EmployeePreset | Persisted preset: slug, manifest JSONB, version |
+| Entity | Employee | Per-Workspace identity with BaseClass ref + memory |
+| Membership | Membership (unchanged) | Workspace membership with posx/posy + role |
+| BlackboardFile | BlackboardFile (unchanged) | File on a Blackboard |
+| VaultEntry | VaultEntry (unchanged) | Archived entry in Vault |
+| Memory | MemoryEntry | Append-only memory log per Entity |
+| InstanceProviderConfig | InstanceProviderConfig (unchanged) | LLM provider config (internal, no UI) |
+
+---
+
+## Design Rules
+
+1. **Slug = unique identifier (DB layer)**. Display = i18n key (UI layer). DB does not store display_name columns.
+2. **Backend code uses backend names**. Frontend UI uses display names resolved from i18n.
+3. **Decision rule**: If a concept is not in this table, it doesn't exist yet.
+4. **CorridorNode dropped in 15d** — edges simplified to any two points connecting directly. No intermediary anchor nodes.
+5. **6 old presets deprecated** — replaced by 11 BaseClasses. Old P1 slugs (mi-shi, zhu-jin, ling-shi, you-hun, heng-pan) retained; new slugs (huan-ling, an-xing, an-ying, qian-zhi, bai-tong, jiu-ri) added. zong-jian (总监) retired as a preset.
+6. **Distillation actions** — Instance→Entity = 晋升 (promotion, in-place capture); Entity→BaseClass = 炼化 (transmutation, creates new reusable 神职).
+
+---
+
+*Derived from `.omo/drafts/phase-15d-naming-system.md` §3-§4 (2026-07-28).*
