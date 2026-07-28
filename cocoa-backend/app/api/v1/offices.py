@@ -7,7 +7,7 @@ index and is checked for conflicts on both create and update.
 Routes (all require authentication):
     GET    /api/v1/offices       — List all active offices (offset page)
     GET    /api/v1/offices/{id}  — Get a single office
-    POST   /api/v1/offices       — Create a new office
+    POST   /api/v1/offices       — Create a new office (auto-adds creator as owner)
     PATCH  /api/v1/offices/{id}  — Update an existing office
     DELETE /api/v1/offices/{id}  — Soft-delete an office
 """
@@ -21,7 +21,7 @@ from app.api.deps import DB, CurrentUserDep
 from app.core.errors import ConflictError, NotFoundError
 from app.core.openapi import add_error_responses
 from app.core.pagination import OffsetPage, paginate_offset
-from app.models.office import Office
+from app.models.office import Membership, MembershipRole, Office
 from app.schemas.office import OfficeCreate, OfficeOut, OfficeUpdate
 
 router = APIRouter(prefix="/offices", tags=["Offices"])
@@ -72,6 +72,12 @@ async def create_office(
 ) -> Office:
     """Create a new office.
 
+    The authenticated creator is automatically added as a :class:`Membership`
+    with ``role='owner'`` so that the office is immediately usable by the
+    creator (P14b-onboard2 onboarding fix).  Without this, the creator
+    would hit "not a member of office" when fetching the office detail
+    view.
+
     Raises 409 if an office with the same slug already exists (active).
     """
     existing = await db.execute(
@@ -92,6 +98,20 @@ async def create_office(
         slug=body.slug,
     )
     db.add(office)
+    await db.flush()  # need office.id before creating the membership
+
+    # P14b-onboard2: auto-create the creator as owner so the office is
+    # immediately navigable. (0, 0) is fine because the owner is the first
+    # membership in a fresh office.
+    owner_membership = Membership(
+        office_id=office.id,
+        user_id=current_user.user_id,
+        posx=0,
+        posy=0,
+        role=MembershipRole.owner.value,
+    )
+    db.add(owner_membership)
+
     await db.commit()
     await db.refresh(office)
     return office
