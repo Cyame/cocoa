@@ -4,17 +4,11 @@ import { useTranslation } from 'react-i18next';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { ApiError, api } from '@/lib/api';
-import type { Office } from '@/lib/types';
 import { useSessionStore } from '@/stores/session';
 
 type TokenResponse = {
   readonly access_token: string;
   readonly token_type: string;
-  readonly office_id?: string;
-};
-
-type OfficePage = {
-  readonly items: readonly Office[];
 };
 
 type Mode = 'sign-in' | 'register';
@@ -56,9 +50,7 @@ export default function LoginPage() {
         body: JSON.stringify(body),
       });
       setToken(response.access_token);
-
-      const destination = await resolvePostAuthDestination(response.office_id);
-      navigate(destination, { replace: true });
+      navigate('/offices', { replace: true });
     } catch (error) {
       if (error instanceof ApiError) {
         const apiMessage =
@@ -75,24 +67,6 @@ export default function LoginPage() {
     } finally {
       setIsSubmitting(false);
     }
-  }
-
-  async function resolvePostAuthDestination(registerOfficeId: string | undefined): Promise<string> {
-    if (typeof registerOfficeId === 'string' && registerOfficeId.length > 0) {
-      return `/offices/${registerOfficeId}`;
-    }
-    try {
-      const page = await api<OfficePage>('/offices');
-      const first = page.items[0];
-      if (first !== undefined) {
-        return `/offices/${first.id}`;
-      }
-    } catch (error) {
-      if (!(error instanceof ApiError)) {
-        throw error;
-      }
-    }
-    return '/offices';
   }
 
   const heading = mode === 'register' ? t('login.registerHeading') : t('login.signInHeading');

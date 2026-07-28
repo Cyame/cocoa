@@ -9,14 +9,12 @@ Three production issues were fixed in P14b-onboard2:
 3. The portal "Members" nav link points to the new ``/offices/:id/members``
    (``MembersListPage``).
 
-P14b-onboard3 (auto personal workspace) reuses the same test file since
-the change is a strict extension of the onboarding surface — see
-:class:`TestRegisterAutoPersonalWorkspace` at the bottom of this file.
+These tests cover the backend half (Fix 1) plus a secondary scenario for
+the ``POST /messaging/memberships`` pathway (which still works for adding
+editors/viewers to an office after the owner is auto-created).
 """
 
 from __future__ import annotations
-
-import uuid
 
 import pytest
 import pytest_asyncio
@@ -24,7 +22,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.testclient import TestClient
 
-from app.models.office import Membership, MembershipRole, Office
 from app.models.user import User
 
 # ---------------------------------------------------------------------------
@@ -372,182 +369,3 @@ class TestPortalRoutesAvailable:
         assert "items" in body
         assert "total" in body
         assert body["items"] == []
-
-
-# ---------------------------------------------------------------------------
-# P14b-onboard3: auto-create personal workspace on POST /auth/register
-# ---------------------------------------------------------------------------
-
-
-class TestRegisterAutoPersonalWorkspace:
-    """``POST /auth/register`` must create a personal Office + owner Membership."""
-
-    def _fresh_username(self) -> str:
-        """UUID-suffixed username so test order / parallelism cannot collide."""
-        return f"p14b3-{uuid.uuid4().hex[:10]}"
-
-    def test_register_response_includes_office_id(
-        self, client: TestClient,
-    ) -> None:
-        """Register response now carries ``office_id`` (the personal workspace)."""
-        username = self._fresh_username()
-        resp = client.post(
-            "/api/v1/auth/register",
-            json={
-                "username": username,
-                "email": f"{username}@test.local",
-                "password": "password123",
-            },
-        )
-        assert resp.status_code == 201
-        body = resp.json()
-        assert "access_token" in body
-        assert "office_id" in body, (
-            f"register response missing office_id: {body}"
-        )
-        office_id = body["office_id"]
-        assert isinstance(office_id, str) and len(office_id) > 0
-
-    def test_register_auto_creates_personal_workspace(
-        self, client: TestClient,
-    ) -> None:
-        """After register, GET /offices for the new user returns the personal office."""
-        username = self._fresh_username()
-        reg = client.post(
-            "/api/v1/auth/register",
-            json={
-                "username": username,
-                "email": f"{username}@test.local",
-                "password": "password123",
-            },
-        )
-        assert reg.status_code == 201
-        body = reg.json()
-        token = body["access_token"]
-        office_id = body["office_id"]
-
-        offices = client.get(
-            "/api/v1/offices", headers=_auth(token),
-        )
-        assert offices.status_code == 200
-        items = offices.json()["items"]
-        assert len(items) == 1, (
-            f"expected exactly 1 office for fresh user, got {len(items)}: {items}"
-        )
-        only = items[0]
-        assert only["id"] == office_id
-        assert only["name"] == f"{username}'s workspace"
-        assert only["slug"] == f"{username}-workspace"
-
-    def test_register_creates_owner_membership(
-        self, client: TestClient,
-    ) -> None:
-        """The fresh user holds an owner Membership in their personal office."""
-        username = self._fresh_username()
-        reg = client.post(
-            "/api/v1/auth/register",
-            json={
-                "username": username,
-                "email": f"{username}@test.local",
-                "password": "password123",
-            },
-        )
-        assert reg.status_code == 201
-        token = reg.json()["access_token"]
-        office_id = reg.json()["office_id"]
-
-        members = client.get(
-            f"/api/v1/messaging/memberships?office_id={office_id}",
-            headers=_auth(token),
-        )
-        assert members.status_code == 200
-        items = members.json()["items"]
-        assert len(items) == 1, (
-            f"expected exactly 1 owner membership, got {len(items)}: {items}"
-        )
-        only = items[0]
-        assert only["role"] == MembershipRole.owner.value
-        assert only["office_id"] == office_id
-        assert only["posx"] == 0
-        assert only["posy"] == 0
-
-    async def test_personal_office_persists_in_db(
-        self, client: TestClient, session: AsyncSession,
-    ) -> None:
-        """The personal Office + Membership are actually persisted in the DB."""
-        username = self._fresh_username()
-        reg = client.post(
-            "/api/v1/auth/register",
-            json={
-                "username": username,
-                "email": f"{username}@test.local",
-                "password": "password123",
-            },
-        )
-        assert reg.status_code == 201
-        office_id = reg.json()["office_id"]
-
-        office = await session.get(Office, office_id)
-        assert office is not None and office.deleted_at is None
-        assert office.name == f"{username}'s workspace"
-        assert office.slug == f"{username}-workspace"
-
-        user_row = (
-            await session.execute(select(User).where(User.username == username))
-        ).scalars().one()
-        membership_result = await session.execute(
-            select(Membership).where(
-                Membership.office_id == office_id,
-                Membership.user_id == user_row.id,
-            )
-        )
-        ms = membership_result.scalars().one()
-        assert ms.role == MembershipRole.owner.value
-
-    def test_register_duplicate_username_does_not_create_office(
-        self, client: TestClient,
-    ) -> None:
-        """Re-registering an existing username returns 409 and creates no office."""
-        username = self._fresh_username()
-        first = client.post(
-            "/api/v1/auth/register",
-            json={
-                "username": username,
-                "email": f"{username}@test.local",
-                "password": "password123",
-            },
-        )
-        assert first.status_code == 201
-
-        second = client.post(
-            "/api/v1/auth/register",
-            json={
-                "username": username,
-                "email": f"{username}@test.local",
-                "password": "password123",
-            },
-        )
-        assert second.status_code == 409
-        assert "office_id" not in second.json()
-
-    def test_login_response_does_not_set_office_id(
-        self, client: TestClient,
-    ) -> None:
-        """POST /auth/login returns no ``office_id`` (clients must fetch /offices)."""
-        username = self._fresh_username()
-        client.post(
-            "/api/v1/auth/register",
-            json={
-                "username": username,
-                "email": f"{username}@test.local",
-                "password": "password123",
-            },
-        )
-        resp = client.post(
-            "/api/v1/auth/login",
-            json={"username": username, "password": "password123"},
-        )
-        assert resp.status_code == 200
-        body = resp.json()
-        assert "access_token" in body
-        assert body.get("office_id") is None
