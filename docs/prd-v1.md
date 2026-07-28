@@ -1149,20 +1149,175 @@ URL：`/base-classes/:slug`
 | **L3** | **Gene**（基因 = 能力包） | `ai_genes` 表 / `BaseClass.installed_gene_slugs[]` | 4 类（`tool-gene / meta-gene / genome / workflow-gene`）| 命名打包的能力集合。一个基因 = 多个 Capability |
 | **L4** | **BaseClass**（神职 = AI 角色模板） | `base_classes` 表 | 系统级 / 自定义 | Entity 身份 + Memory + 完整能力集 + prompt 的整合体。**跨 workspace 复用** |
 
-### 13.6.2 5 个动作的精确边界
+### 13.6.2 6 个动作的精确边界
+
+> **核心修正**（用户原话："你回收就是 memory 转 capability 回收给当前 instance，然后同步写能力市场；你回收之后晋升，才会写 entity 否则 entity 是不做同步的"）：
+>
+> 之前我把"回收 + 晋升"合并成一个动作——**错的**。这是 2 个**独立**动作，必须分开看。
 
 | # | 动作 | 名称 | 起点 | 终点 | 模型 | 边界（用户操作时会得到什么） |
 |---|---|---|---|---|---|---|
 | 1 | **采集** | 自动写入 | 化身 runtime 事件 | `Memory` 条目 | 自动（loop hook 监听 `EventLog`）| 用户**不可操作**，系统自动 |
-| 2 | **回收** | Memory → Capability | 1 条 / 多条 Memory 条目 | 1 条 `Capability`（"从此 Memory 学到了 X 能力"）| **回收 = 把"经验"蒸馏成"可执行能力"** | v1 用户不可见（内部步骤）；通过 晋升 触发，能力双写到 Entity + 能力市场 |
+| 2 | **回收** | Memory → Capability | 当前 Instance 的 1 条 / 多条 Memory 条目 | (a) Instance 私有新增 capability + (b) 同步上架 capability_market | **回收 = 单步能力沉淀**：从"经验"蒸馏出"能力"，归当前 Instance 私有 + 公开到市场 | 用户得到 1 条新 capability（Instance 用 + 市场可被引用）。**Entity 不变** |
 | 3 | **装载** | Gene + Capability → Instance runtime | Capability / Gene manifest | 写入容器（skill dir / tool registry / mcp process / lsp client）| GeneInstallAdapter | 用户得到"runtime 可用" |
 | 4 | **组合** | 多 Capability → 1 Gene | 多条 capability + 自命名 | 1 个新 Gene (`ai_genes` insert) | 用户操作 / 系统 auto-suggest | 用户得到"命名打包的能力集，可被多个 BaseClass 引用" |
-| 5 | **晋升** | Instance runtime → Entity 能力系统 + 能力市场 | 当前 Instance runtime 增量的 capability + prompt snapshot | **双写**: (a) Entity.capabilities 新增 + (b) capability_market 上架 + prompt_regen + migration_hash bump | 晋升 = 双层动作（Entity 私有 + 能力市场公开）。**不写 Memory**。详见 §13.6.3 + §13.6.10 |
-| 6 | **炼化** | Entity 完整身份 → 新 BaseClass | Entity 的 Capability + Memory + prompt snapshot | 1 个新 BaseClass record | **炼化 ≠ 只升 capability**。是完整 Entity 转神职模板，跨 workspace 复用。详见 §13.6.4 |
+| 5 | **晋升** | Instance cap 集 → Entity 共享层 | 当前 Instance 的全部 capability（含 BaseClass 默认 + 回收新增 + gene 装入） | Entity.capabilities 新增（add 操作，幂等 by name） + Entity.migration_hash bump | **晋升 = 单步能力共享**：把 Instance 当前能用的能力"提升"到 Entity 层，让同 Entity 其他 Instance 共享。**不写 capability_market**（这条是 Entity 内部共享，不是市场公开） | 用户得到 Entity cap 集变更。同 Entity 的其他 Instance 进入 outdated 状态（不主动重启） |
+| 6 | **炼化** | Entity 完整身份 → 新 BaseClass | Entity 当前 cap 集 + Entity.prompt_regen_snapshot + 默认 god_gene 列表 | 1 个新 BaseClass record | **炼化 ≠ 晋升**。是 Entity 整体身份 → 跨 workspace 神职模板。**不**含 Memory，**不**写 capability_market（这条是公开模板，不是公开原子） | 用户得到新 BaseClass record。现有 Entity / Instance / 现有 BaseClass 绑定的 Entity **都不变** |
 
-> **重点澄清**：晋升（动作 5）和炼化（动作 6）是两个不同层级跳。**晋升是 Entity 内部升级**（同一个 Entity 变强），**炼化是跨 Workspace 资产生产**（一个 Entity 蒸馏出可给任何 AI 用的神职模板）。
+> **重点澄清**：
+> - **回收 vs 晋升**：回收是"沉淀给当前 Instance + 上架市场"，晋升是"提升到 Entity 共享"。**不晋升，Entity 不动**。
+> - **晋升 vs 炼化**：晋升是 Entity 内部共享，炼化是跨 workspace 资产生产。
+> - 3 个写入位置（Entity / capability_market / 容器）的清晰分工：
+>   - **回收** → Instance 私有 + capability_market（不写 Entity）
+>   - **晋升** → Entity 共享（不写 capability_market）
+>   - **炼化** → 新 BaseClass（不写 Entity，不写 capability_market）
 
-### 13.6.3 晋升 (promote) — Instance runtime → Entity 层能力系统升级
+### 13.6.3 回收 (reap) — Memory → Capability（单 Instance 私有 + 公开市场）
+
+#### 13.6.3.1 核心定义
+
+回收 = **把当前 Instance 的 Memory 条目蒸馏成 capability 原子**，归 Instance 私有 + 同步到全局能力市场。
+
+> 这是 **Instance 视角的"自我提升"**——单一 Instance 跑出来的新能力，只有它自己用 + 全局市场可见。Entity 不知道这件事（不写 Entity）。
+
+#### 13.6.3.2 完整效果
+
+| 维度 | 回收前 | 回收后 |
+|---|---|---|
+| **Instance 私有 capabilities** | BaseClass 默认 + 之前回收的 + gene 装入的 | **新增**：本次蒸馏出的 capability 原子（add 幂等 by name） |
+| **capability_market** | 之前已上架的 | **新增**：每条本次蒸馏出的 capability（如果 name 不已存在；不覆盖） |
+| **Entity.capabilities** | 不变 | **不变**（Entity 不知道这件事） |
+| **Entity.migration_hash** | 不变 | **不变**（不 bump） |
+| **Entity.prompt_regen_snapshot** | 不变 | **不变** |
+| **同 Entity 其他 Instance** | 不变 | **不变**（不知道有这条新能力） |
+
+#### 13.6.3.3 API 形态
+
+**Endpoint**：`POST /api/v1/learning/instances/:iid/reap`
+
+**Body**（v1）：
+```json
+{
+  "memory_kind_filter": ["lesson", "decision"],   // 可选，默认全选
+  "max_capabilities": 10,                          // 上限保护，默认 10
+  "snapshot_only": false                           // true = 预览（不写库）
+}
+```
+
+**响应**：
+```json
+{
+  "status": "ok",
+  "reaped_at": "2026-07-28T...",
+  "instance_id": "uuid-of-instance",
+  "memory_consumed": 12,                          // 蒸馏消耗的 Memory 条数
+  "capability_distilled": [
+    {
+      "name": "workflow-design-patterns",
+      "type": "skill",
+      "description": "...",
+      "tags": ["auto-distilled"]
+    },
+    {
+      "name": "data-fetching-tool",
+      "type": "tool",
+      "description": "...",
+      "tags": ["auto-distilled"]
+    }
+  ],
+  "capability_market_uploaded": 2,                // 新上架到能力市场的条数（0 = 全已存在）
+  "instance_local_added": 2,                      // Instance 私有新增条数
+  "entity_changed": false                         // 恒为 false（Entity 不知道）
+}
+```
+
+#### 13.6.3.4 "刚 spawn 立刻回收"特例
+
+| 场景 | 行为 |
+|---|---|
+| 刚 spawn → 立刻回收 | Instance runtime 此时**没 Memory**（Memory 还没生成）；回收结果：memory_consumed=0，capability_distilled=[]，无副作用 |
+
+**意义**：回收是"声明此次有可蒸馏的 Memory"，无 Memory 则无变化。**Entity 永远不变**（无 Memory 蒸馏、无 cap 上架）。
+
+#### 13.6.3.5 UI 入口（与晋升独立显示）
+
+| 入口 | UI 形态 |
+|---|---|
+| 化身详情页 Header | 「回收 Memory」+「晋升到 Entity」两个**独立**按钮（不再合并） |
+| workspace dashboard 记忆 tab 眷族卡 | 该眷族下每个 Instance 行：「回收」/「晋升」/「回收+晋升」三选一 |
+| 眷族详情浮窗 "当前化身" tab | 每行化身 row 末尾：「回收」/「晋升」两个独立按钮 |
+| namespace tab 眷族详情 | "回收+晋升"批量操作（v2 后续） |
+
+#### 13.6.3.6 「回收+晋升」二合一按钮（推荐 UX）
+
+虽然两个动作独立，但用户视角经常想"做了回收立刻晋升"。提供**快捷按钮**「回收+晋升」：
+
+- 点击 → 后端先执行 reap（回收）→ 立即执行 promote（晋升），**两次 API 调用一次 button**
+- 进度反馈：步骤 1 回收中（spinner）→ 步骤 2 晋升中（spinner）→ 完成 toast
+- **任何一步失败** → rollback 提示（已回收的部分保留，已晋升的部分回滚到回收前状态）
+
+### 13.6.4 晋升 (promote) — Instance cap 集 → Entity 共享层
+
+#### 13.6.4.1 核心定义
+
+晋升 = **把当前 Instance 的 cap 集"提升"到 Entity 共享层**。让同 Entity 的其他 Instance 共享这次的能力。
+
+> 这是 **Entity 视角的"同步给同 Entity 其他人"**。Instance 自己不变（已经装了的 cap 还是装着的），Entity 共享层多 1 条记录。
+
+> **重要修正**：晋升**不**写 capability_market（之前 v1 误判）——这条能力是 Entity 内部共享，不是市场公开。Entity 共享和市场公开是两个独立写入。
+
+#### 13.6.4.2 完整效果表
+
+| 维度 | 晋升前 | 晋升后 |
+|---|---|---|
+| **Entity.capabilities** | 之前的 | **新增**：本次晋升的 Instance 当前的 cap 集（add 幂等 by name） |
+| **Entity.prompt_regen_snapshot** | 旧的 | **新快照**：基于 BaseClass manifest + Entity 升后 capability 集重计算 |
+| **Entity.promotion_migration_hash** | 旧的 | **新 hash**（包含时间戳 + cap 集摘要 + prompt 摘要 SHA-256） |
+| **Entity.Memory** | 不变 | **不变**（Memory 是事实日志） |
+| **capability_market** | 不变 | **不变**（**晋升不写市场**——和市场是 2 个独立写入动作） |
+| **Instance.runtime** | 用旧 hash / 旧 prompt | **不主动重启**；下次启动 / 重启时检测 hash mismatch |
+| **同 Entity 其他 Instance** | 旧 hash | **outdated 状态**（不主动重启） |
+| **BaseClass 关联 / rank / 身份** | 不变 | **不变** |
+
+#### 13.6.4.3 "刚 spawn 立刻晋升"特例
+
+| 场景 | 行为 |
+|---|---|
+| 刚 spawn → 立刻晋升 | Instance 当前 cap = BaseClass 默认；晋升 = 把这些默认 cap add 到 Entity.capabilities（如果已存在则幂等无 diff）；prompt_regen_snapshot 重新计算（值与初始一致）；migration_hash 仍 bump（**任何晋升都 bump hash**，即便内容无变化） |
+
+**意义**：bump 让其他 Instance 进入 outdated 状态 → 用户看到 "promoted at <时间>" + "outdated" 徽章 → 主动决定是否批量重启 Instance → 不强行打断。
+
+#### 13.6.4.4 API 形态
+
+**Endpoint**：`POST /api/v1/learning/entities/:eid/promote`
+
+**Body**（v1）：
+```json
+{
+  "from_instance_id": "uuid-of-instance",  // 默认当前 context Instance
+  "include_prompt_regen": true,             // 默认 true
+  "snapshot_only": false                    // true = 预览
+}
+```
+
+> 注意：晋升**不**接收 `memory_kind_filter`——晋升不消费 Memory（回收才消费 Memory）。晋升只读 Instance 当前 cap 集。
+
+**响应**：
+```json
+{
+  "status": "ok",
+  "promoted_at": "2026-07-28T...",
+  "entity_id": "uuid-of-entity",
+  "entity_promotion_migration_hash": "sha256:abc...",
+  "capability_promoted_count": 5,           // 写进 Entity.capabilities 的条数（含幂等去重）
+  "prompt_regenerated": true,
+  "new_prompt_preview": "...",
+  "outdated_instances_count": 2,            // 同 Entity 其他 Instance 数（已进入 outdated）
+  "capability_market_uploaded": 0          // 恒为 0（晋升不写市场）
+}
+```
+
+### 13.6.5 炼化 (transmute) — Entity → 新 BaseClass（神职模板）
 
 #### 13.6.3.1 核心定义（边界澄清）
 
@@ -1239,215 +1394,6 @@ URL：`/base-classes/:slug`
 - 但 `promotion_migration_hash` 永远 bump（**这是关键**——"印章"作用）
 
 **意义**：bump 让其他 Instance 进入 outdated 状态 → 用户看到 "promoted at <时间>" + "outdated" 徽章 → 主动决定是否批量重启 Instance → 不强行打断
-
-### 13.6.4 炼化 (transmute) — Entity 累计能力系统 → 新 BaseClass（神职模板）
-
-#### 13.6.4.1 核心定义（边界澄清）
-
-炼化 = **把 Entity 累计的能力系统蒸馏成 1 个新 BaseClass 模板**。
-
-> **修正之前版本**：旧版说"炼化 = Entity 完整身份 → 新 BaseClass，含 prompt + 累积 Memory 摘要 + capability 集"——**含 Memory 摘要**是错的。炼化**不含 Memory**（Memory 不参与跨 workspace 流转）。
-
-#### 13.6.4.2 完整效果表
-
-| 维度 | 炼化前（Entity 内） | 炼化后 |
-|---|---|---|
-| **原 Entity（身份 + 配置 + Memory）** | 完整 | **完整不变**（Entity 不删，不影响当前/未来 spawn） |
-| **原 Entity capability 集** | 不变 | **不变**（炼化 = 复制当前能力集做模板；不消耗原集） |
-| **原 Entity Memory** | 不变 | **不变**（Memory 是 Entity 私有，不外流） |
-| **新 BaseClass record** | n/a | 1 个新 BaseClass 创建 |
-| **新 BaseClass manifest.provenance** | n/a | 记录来源 + 时间戳（"炼化自 Entity `xxx` at `2026-07-28`"） |
-
-#### 13.6.4.3 新 BaseClass 影响范围
-
-| 维度 | 影响 |
-|---|---|
-| **已被该 BaseClass 绑定的现有 Entity** | **不受影响**（Entity 创建后绑死；BaseClass manifest 改了不会传播到现有 Entity） |
-| **该 BaseClass 绑定的现有 Instance** | **不受影响**（Instance 启动时复制 BaseClass manifest，之后 Entity / Instance 自己维护） |
-| **之后新召唤（基于该 BaseClass 新建 Entity）** | ✓ 拿到新 manifest（含新 capability + 新 prompt） |
-| **该 BaseClass manifest 版本号** | bump（`BaseClass.manifest_version` 或 `migration_hash`） |
-
-**核心原则**：**BaseClass 是模板，不是动态配置源**。改 BaseClass 仅影响未来 spawn 的实例。
-
-#### 13.6.4.4 API 形态
-
-**Endpoint**：`POST /api/v1/learning/entities/:eid/distill?action=transmute`
-
-**Body**（v1）：
-```json
-{
-  "target_slug": "jin-xi-you-zi",                   // 必填，新 BaseClass 的 slug
-  "target_name": "某某眷族的技艺",                 // 必填
-  "include_prompt_template": true,                  // 提取 prompt 为 BaseClass 默认 system_prompt（默认 true）
-  "include_capability_extraction": true,            // 提取 Entity 当前 capability 集到 BaseClass 默认依赖（默认 true）
-  "auto_install_default_genes": true,               // 自动用 Entity 的深海基因作为新 BaseClass 默认依赖（默认 true）
-  "snapshot_only": false                            // true = 预览，不创建
-}
-```
-
-> 注意：v1 **不**包含 `memory_kind_filter`——因为炼化不消费 Memory。
-
-**响应**：
-```json
-{
-  "status": "ok",
-  "new_base_class_id": "uuid-xxx",
-  "new_base_class_slug": "jin-xi-you-zi",
-  "provenance": {
-    "source_entity_id": "uuid-of-source-entity",
-    "source_entity_slug": "ai-xi-you-zi",
-    "transmuted_at": "2026-07-28T...",
-    "transmuted_by_user_id": "uuid-of-user"
-  },
-  "manifest_summary": {
-    "prompt_chars": 1245,
-    "extracted_capabilities_count": 8,
-    "auto_installed_genes": ["nodeskclaw-tool-routing", "akr-decomposer"]
-  }
-}
-```
-
-#### 13.6.4.5 完成后 UI 跳转
-
-提交 → 成功 → 跳 `/base-classes/<new_slug>`（神职市场该神职的详情页）。
-
-### 13.6.5 Entity.migration_hash 机制（不主动重启实例）
-
-#### 13.6.5.1 字段定义
-
-`Entity` 表新增字段：
-
-| 字段 | 类型 | 触发变更 |
-|---|---|---|
-| `promotion_migration_hash` | string (sha256 摘要) | 每次晋升都 bump（即便内容无变化） |
-| `last_promoted_at` | datetime | 同上 |
-| `last_promoted_by_instance_id` | uuid | 哪个 Instance 触发了最近一次晋升 |
-| `last_promoted_by_user_id` | uuid | 哪个真人用户提交了晋升请求 |
-
-#### 13.6.5.2 Instance 启动 / 重启时检测
-
-每个 Instance 在 spawn / restart 时记录自己的"快照标识"：
-
-```
-Instance.active_hash = sha256({
-  entity_migration_hash: Entity.promotion_migration_hash,
-  instance_spawned_at: Instance.created_at,
-  capabilities: Entity.capabilities @ that spawn time,
-  prompt_snapshot: Entity.prompt_regen_snapshot @ that spawn time
-})
-```
-
-启动时 / 运行时每隔 30 秒轮询对比：
-- `Instance.active_hash` vs `Entity.promotion_migration_hash`
-- 不 match → 该 Instance 进入 **outdated** 状态
-
-#### 13.6.5.3 Instance outdated 状态行为
-
-| 维度 | outdated 状态 |
-|---|---|
-| **运行** | 继续运行（不主动打断） |
-| **能力** | 用旧的 capability 集（旧 capability 不丢） |
-| **拓扑节点显示** | 节点描边黄色 + 徽章 "outdated" + hover tooltip "基于旧 hash，迁移到新 hash 后将获得 N 个新能力" |
-| **化身详情页** | 顶部 banner "⚠️ 此化身基于旧 hash 启动 — 主动重启以更新" + 「重启并更新」按钮 |
-| **批量更新入口** | workspace dashboard 契印 tab + namespace 主页契印 tab 提供：「批量重启 outdated 化身」按钮（按 Workspace / 按 Entity 过滤） |
-| **手动重启确认** | 弹 modal："重启将 stop 当前 loop，pod 重新创建，新能力自动装入。Memory 不会被回收（已写到 Entity）。继续？" |
-| **重启耗时** | 默认 30-60s（P15c DeployService 已有 K8s 操作）|
-| **重启失败** | Instance status → "restart_failed" + 化身详情页显示重试按钮 |
-
-#### 13.6.5.4 批量重启 UX（workspace dashboard 契印 tab 顶部 CTA）
-
-```
-[批量重启 outdated 化身]
-  过滤: [Workspace ▾] [Entity ▾]   选中 N 个
-  列表:
-    □ 化身 #abc12345  (outdated 4h)  [跳过] 
-    □ 化身 #def67890  (outdated 1d)  [跳过]
-    ...
-  [跳过已选中]  [确认重启 5 个化身]
-```
-
-确认 → spinner + progress bar（每个化身一个 step） + toast "已重启 N 个化身（M 个失败，已 retry）"
-
-### 13.6.6 边界澄清：能力线 vs 记忆线 vs 设置
-
-用户原话："**记忆线是记忆线 然后神职眷族化身是能力线**"——确认这个分离。
-
-| 维度 | 能力线 | 记忆线 | 设置线（眷族配置） |
-|---|---|---|---|
-| **包含什么** | capability + prompt + system_prompt + provider config | 化身跑过的事件 / 教训 / 决策 | name / slug / display_name / description |
-| **存储** | Entity / BaseClass / Instance 共享层 | Memory 表（Entity 维度）| Entity 字段 |
-| **写入路径** | 晋升 / 炼化 / spawn 时注入 | 化身 runtime 自动写（v1 不人工直接编辑） | 用户直接编辑 |
-| **读取路径** | Instance runtime 用 | 晋升 / 蒸馏时消费（晋升不消费记忆，蒸馏消费） | 跨页面显示 |
-| **跨 workspace 复用** | BaseClass 是唯一复用机制 | **永不跨 workspace 流转** | 不复用 |
-
-**关键判断**：
-- 用户看 "Entity 有 N 个 Memory" → 那是**事实记录**，不是"能力"。看 "Entity 有 N 个 capability" → 那是**真的能用的能力**。
-- 用户看 "BaseClass 提供 capability X" → 那意味着任何基于该 BaseClass 新召唤的 Entity 都将继承 X。
-
-### 13.6.7 完整数据流图
-
-```
-[化身 runtime 事件]
-        ↓ (v1 系统自动 hook；用户不可见)
-
-M: Memory 条目  ──────────────────────────────┐
-   (Entity 私有事实日志)                       │
-                                              │ 蒸馏 (v1 用户不可见，晋升的内部步骤)
-   L1: 不可再上                    ↓
-                                  L2: Capability  (经晋升写 Entity.capabilities)
-                                        ↓ 组合 (v1 用户不可见)
-                                  L3: Gene  (深海基因，命名打包 → Entity 通过 BaseClass 引用)
-                                        ↓
-
-[晋升 (promote)]
-   输入: 当前 Instance runtime
-   写入: Entity.capabilities 新增 + Entity.prompt_regen_snapshot
-   副作用: bump Entity.promotion_migration_hash（**永远 bump**即便无变化）
-          → 同 Entity 的其他 Instance 进入 outdated 状态（不主动重启）
-
-[Instance 重启 / 启动]
-   检查 Instance.active_hash vs Entity.promotion_migration_hash
-   不 match → outdated → 化身详情页显示重启 CTA → 用户决定（单实例 / 批量）
-
-[炼化 (transmute)]
-   输入: Entity 当前累计 capability 集 + prompt + 默认深海基因
-   写入: 1 个新 BaseClass record（含 Entity.provenance 字段）
-   副作用: 现有 Entity 不变；现有 BaseClass 绑定的 Entity / Instance 不变
-            仅**之后**基于该 BaseClass 新建的 Entity 拿到新 manifest
-
-[BaseClass 改 manifest]
-   现有 Entity / Instance: **不变**（BaseClass 是模板不是配置源）
-   未来 spawn: 拿到最新
-```
-
-### 13.6.8 与 §13.4 (蒸馏 2 动作) 的关系
-
-| 旧概念 (PRD v1 早期) | 现在澄清（v2，按用户反馈修正） |
-|---|---|
-| 晋升 = Memory + Capability + prompt 三件事 | 晋升 = Entity 层能力系统升级（**Capability + prompt + migration_hash bump**）——**不**含 Memory |
-| 炼化 = Entity 完整身份 + Memory 摘要 + capability | 炼化 = Entity **能力系统** → 新 BaseClass 模板；**不**含 Memory；**不影响**现有 Entity |
-| 蒸馏（晋升的内部步骤，未明确）| 蒸馏 = Memory → Capability，是晋升的内部子步骤，用户不可见 |
-| 回收 vs 蒸馏 | **回收**（v1: 不可见）= 采集 → Memory；**蒸馏**（v1: 不可见）= Memory → Capability。两者都是内部流转，用户操作只能看到 晋升 / 炼化 |
-
-### 13.6.9 v1 实施边界（start-work 时明确范围）
-
-| 阶段 | 实现 | 说明 |
-|---|---|---|
-| **v1 必做** | 动作 5 晋升 | 写 Entity 层 capability + bump migration hash，**不**包含 Memory |
-| **v1 必做** | 动作 6 炼化 | 写新 BaseClass（仅能力系统），**不**含 Memory，**不**影响现有 Entity |
-| **v1 必做** | Entity.migration_hash 字段 + Instance outdated 检测 | 不主动重启；提供 UI 重启入口 |
-| **v1 必做** | 批量重启 CTA（workspace 契印 tab） | 按 Workspace / Entity 过滤；含确认 modal |
-| **v1 必做** | 拓扑节点显示 outdated 徽章 | hover tooltip 写明"重启以更新"+ N 个新能力 |
-| **v1 可选** | BaseClass manifest 改后仅影响未来 spawn | v1 不主动迁移现有 Entity（已创建即稳定） |
-| **v2 后续** | 动作 4 组合（Gene 自动建议）| 待 Phase 16d 后 |
-| **v2 后续** | 动作 2 回收 → 1 采集的合并 / 优化 | 待 Phase 16d 后 |
-
-**v1 PRD 落地建议**：
-- 晋升按钮按下 → 后端实际执行「Memory（**不**消费）+ Instance runtime capability → Entity.capabilities + bump migration hash」
-- 炼化按钮按下 → 后端执行「Entity 当前 capability → 新 BaseClass（不含 Memory）」
-- 用户不需要看到「回收」按钮 — 它是晋升的内部步骤
-- 用户不需要看到「蒸馏」按钮 — 它也是晋升的内部步骤
-- 用户永远不会自动触发 Memory 的删除 / 升级 — Memory 是事实日志
 
 ### 13.6.10 3 层能力市场（神职 / 能力 / 基因）— 用户原话澄清
 
@@ -1586,95 +1532,6 @@ class CapabilityMarketEntry(BaseModel, Base):
 - 晋升按钮按下 → 后端实际执行「Instance runtime 新 capability → 写 Entity.capabilities + 写 capability_market + bump migration hash」
 - 炼化按钮按下 → 后端执行「Entity 当前 capability → 新 BaseClass（不含 Memory，不写能力市场 — capability_market 的写只走晋升）」
 - 用户不直接操作能力市场创建（除非是超管手动）
-
----
-
-### 13.6.5 边界澄清：能力 vs 记忆 vs 基配置
-
-用户原话："**一个是不是能力系统和各项设置的保存**？另一个就是记忆？"
-
-明确分：
-
-| 维度 | 是什么 | 在哪存 | 怎么改 |
-|---|---|---|---|
-| **能力系统（Capability + Gene 集合）** | 当前 Entity 装的 capability 列表 + 引用的深海基因 | `Entity.capabilities[]` + `BaseClass.installed_gene_slugs[]` | 眷族详情浮窗「能力系统」/「深海基因」tab 直接编辑 |
-| **各项设置（眷族配置）** | 基本属性：name/slug/display_name/description | `Entity` 表字段 | 眷族详情浮窗「基本属性」tab |
-| **记忆** | 化身跑过的事 | `Memory` 表 | 通过晋升/炼化"蒸馏"出去，**不能直接编辑**（可删除：仅 super_admin） |
-
-**核心**：能力系统 + 设置 → **眷族详情浮窗直接编辑**；记忆 → **通过蒸馏动作消费**。这两者是不同的"边界"。
-
-### 13.6.6 能力"组合成基因"的流程（用户原话"能力组合成为基因"）
-
-> 这是用户提的"第 4 级跳"——多个 capability 命名打包成 1 个 gene。但**这是深海基因管理**的概念，不是普通用户操作。
-
-**Gene 创建路径**：
-
-| 路径 | 触发者 | 描述 |
-|---|---|---|
-| **A. 手动创建** | 系统超管 | 在 §14b 深海基因管理 UI 里「+ 新建基因」，手动选择 1 组 capability + manifest |
-| **B. 蒸馏产物自动建议** | 系统 | 炼化某 Entity 时检测到"这组 capability 在 2+ workspace 都使用" → 自动建议"是否打包为新 Gene 沉淀？" → 超管 accept 后自动生成 ai_genes row |
-| **C. 用户手动提议** | any user with can_suggest_gene | 在能力系统 tab 「提议打包为基因」按钮 → 创建提案（写到 §14b 收件箱）超管 accept 后入库 |
-
-**Gene 的引用关系**（v1 修正）：
-- `ai_genes` 表（全局，每个 Gene 一行）
-- `BaseClass.installed_gene_slugs[]`（N:N，一个 BaseClass 可引用多个 Gene）
-- `Gene.manifest.capability_market_refs[]`（Gene 内部打包一组 capability **名字** —— 这些名字必须已存在于能力市场）
-
-> 替代了之前 `Entity.additional_gene_slugs[]`：v1 Entity 层不单独存 gene 引用，全部从 BaseClass 来 + 额外添加 capability（直接从能力市场引用）。
-
-### 13.6.7 完整数据流图（含 3 层市场）
-
-```
-[化身跑过的事件]
-        ↓ (系统自动 hook)
-   L1: Memory 条目  (事实日志，不参与后续流转)
-        ↓ (永远不显式升级——Memory 是事实日志)
-
-L1.5: Instance runtime capability 增量 (临时，私有不进市场)
-        ↓ (用户操作: 晋升 = 双写)
-┌─────────────────────────────────────┐
-│ 双写产物:                              │
-│  (1) Entity.capabilities 新增        │
-│  (2) capability_market 新增           │
-└─────────────────────────────────────┘
-
-L2: Capability (单个原子能力，从 L1.5 蒸馏出来；存在于能力市场)
-        ↓ (组合动作 / 系统建议)
-L3: Gene (能力包，引用多个 capability_market 名字)
-        ↓ (BaseClass 引用 Gene)
-L4: BaseClass (神职模板)
-        ↓ (新眷族召唤)
-L5: Instance runtime 可用能力集 = BaseClass 默认 + 额外 gene + 额外 capability_market 引用
-```
-
-#### 13.6.7.1 3 层市场也包含进来后
-
-```
-L1 → 能力市场 (capability_market /namespaces?tab=capability-market)
-L3 → 基因市场 (ai_genes /namespaces?tab=genes)
-L4 → 神职市场 (base_classes /namespaces?tab=base-classes)
-```
-
-### 13.6.8 与 §13.4 (蒸馏 2 动作) 的关系
-
-| 旧概念 (PRD v1 早期) | 现在澄清（v2，按用户反馈修正） |
-|---|---|
-| 晋升 = Memory 回写 | 晋升 = Entity 层能力系统升级（Capability 双写到 Entity + 能力市场 + prompt_regen + migration_hash bump），**不**写 Memory |
-| 炼化 = Entity 完整身份 + Memory 摘要 + capability | 炼化 = Entity **能力系统** → 新 BaseClass 模板；**不**含 Memory，**不**影响现有 Entity |
-| 蒸馏（晋升的内部步骤，未明确）| 蒸馏 = Memory → Capability，是晋升的内部子步骤，用户不可见 |
-| 回收 vs 蒸馏 | **回收**（v1: 不可见）= 采集 → Memory；**蒸馏**（v1: 不可见）= Memory → Capability。两者都是内部流转，用户操作只能看到 晋升 / 炼化 |
-
-### 13.6.9 v1 实施边界（修订 — 含 §13.6.10）
-
-| 阶段 | 实现 | 说明 |
-|---|---|---|
-| **v1 必做** | 动作 1 采集 / 动作 5 晋升 / 动作 6 炼化 | 三个核心循环 |
-| **v1 必做** | §13.6.10 能力市场（capability_market 表 + namespace tab）| 晋升双写时自动上架 |
-| **v1 必做** | Gene 引用 capability_market（`Gene.manifest.capability_market_refs[]`）| 替代之前 `Entity.additional_gene_slugs[]` 方案 |
-| **v1 必做** | Entity 层「从能力市场添加 capability」按钮（手动）| 不实现自动根据 Gene 推 capability（避免循环） |
-| **v1 可选** | BaseClass 引用 capability_market（v1 走 gene 间接引用）| v2 候选 |
-| **v2 后续** | 动作 4 组合（Gene 自动建议）| 待 Phase 16d 后 |
-| **v2 后续** | 能力市场分 namespace 级别 | v2 才需要 |
 
 ---
 
