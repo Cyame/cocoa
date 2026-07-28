@@ -40,7 +40,7 @@ import uuid
 # ---------------------------------------------------------------------------
 _spec = importlib.util.spec_from_file_location(
     "app.agent_runtime._compat_module",
-    "/tmp/p14a-worktree/cocoa-backend/app/agent_runtime/__init__.py",
+    "***REMOVED***cocoa-backend/app/agent_runtime/__init__.py",
 )
 _agent_runtime_compat = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_agent_runtime_compat)

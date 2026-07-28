@@ -44,7 +44,7 @@ from app.core.event_types import (
 
 _spec = importlib.util.spec_from_file_location(
     "app._agent_runtime_legacy_for_tests",
-    "/tmp/p14a-worktree/cocoa-backend/app/agent_runtime/__init__.py",
+    "***REMOVED***cocoa-backend/app/agent_runtime/__init__.py",
 )
 _pkg_mod = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_pkg_mod)

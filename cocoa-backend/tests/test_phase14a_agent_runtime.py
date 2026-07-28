@@ -38,7 +38,7 @@ from app.services.llm.llm_client import LLMResponse
 
 _spec = importlib.util.spec_from_file_location(
     "app._agent_runtime_legacy_for_tests",
-    "/tmp/p14a-worktree/cocoa-backend/app/agent_runtime.py",
+    "***REMOVED***cocoa-backend/app/agent_runtime.py",
 )
 _legacy = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_legacy)

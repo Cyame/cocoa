@@ -399,7 +399,7 @@ def _load_agent_runtime_module():
     """Load the legacy agent_runtime.py under a stable test alias."""
     spec = importlib.util.spec_from_file_location(
         "app._agent_runtime_for_integration",
-        "/tmp/p14a-worktree/cocoa-backend/app/agent_runtime.py",
+        "***REMOVED***cocoa-backend/app/agent_runtime.py",
     )
     mod = importlib.util.module_from_spec(spec)
     sys.modules["app._agent_runtime_for_integration"] = mod
