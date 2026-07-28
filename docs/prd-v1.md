@@ -1,0 +1,1254 @@
+# Cocoa PRD v1 — 交互设计文档
+
+> **Status**: 写作中 (15e PRD wave)
+> **Scope**: 全部 10 个 portal 页面 + 首次运行引导 + 蒸馏 UI 的交互规格
+> **基线**: `.omo/drafts/phase-15d-product-spec.md` + `phase-15d-naming-system.md`（36 项决策已锁）+ `docs/terminology.md` + `docs/metaphor-name-table.md`
+> **代码 rename**: pending 15d-rename wave — UI 文案与后端 API 路径暂不同步
+
+---
+
+## §1 产品概述
+
+### 定位
+**多智能体控制台**——单一 Workspace 中，**真人操作员**（旁观者 / 觉醒者权限）召唤、观察、调度 AI 化身（Instance）。Workspace 共享神职（BaseClass）池、共享主脑（Blackboard）状态、共享通道（Passage）连接拓扑。
+
+> **核心身份区分**：Cocoa 中只有**旁观者**（director rank / 觉醒者权限）是真人用户。所有"神职"（BaseClass）、"眷族"（Entity）、"化身"（Instance）都是 **AI 智能体**——它们由真人召唤、配置、调度，但不与真人平级。"浅识者"和"深潜者"是 AI 智能体的两种运行形态，不是真人角色。
+
+### 与传统 chat 工具的核心差异
+| 维度 | 传统 chat | Cocoa |
+|---|---|---|
+| 化身存在 | 一次性回复，关闭即结束 | 持续 loop + Memory + 主脑，不结束 |
+| 状态可见 | 用户看不见化身内部 | 化身 loop_status 通过 glow 颜色实时反映 |
+| 多人协作 | 一对一对话 | 多个真人 + 多个 AI 化身共享 Workspace、跨化身派活 |
+| 记忆 | 仅当前会话上下文 | AI 跨化身追加 Memory（晋升 / 炼化复用）|
+| 拓扑 | 平面会话列表 | SVG 心灵图景，节点 + 通道 + 3 模式 |
+
+### Workspace 默认状态
+**单租户**：1 Organization + 1 Namespace + 1 Workspace，**空启动**。所有真人共享这一个 Workspace。无自动预载神职眷族。真人首次进入看到的应当是召唤第一位 AI 眷族的引导 CTA，不是空列表。
+
+### 关键技术约束（影响 UX）
+- 神职 slug 是 DB 唯一标识；UI label 走 i18n JSON
+- AI 化身只有一个来源：先创建眷族（Entity），再 spawn 化身（Instance）
+- 蒸馏 2 动作：晋升（Instance 经验 → Entity 原地增强）、炼化（Entity 经验 → BaseClass 跨 Workspace 复用）
+- 拓扑无 CorridorNode 概念——任意两点直连
+
+---
+
+## §2 真人用户职阶
+
+> **关键约束**：Cocoa 的真人用户**只有 1 类身份**——旁观者（director rank / 觉醒者权限）。下述 3 个职阶是这位真人在不同场景下的视角，**不是 3 类真人**。如果未来权限系统做复杂，可以为真人再定义更细的职阶。
+
+### 职阶 A — 日常 Operator（旁观者默认视角）
+- **背景**: 真人开发 / 运维 / 产品，对应 nodeskclaw 的"操作员"或"超管"角色
+- **典型场景**:
+  - 进入 Workspace，召唤 AI 眷族（暗行 / 铸金 / 灵视 等）派活
+  - Composer 给 AI 化身发指令、收回应、批准或中断
+  - 看心灵图景，理解当前 Workspace 内 AI 化身之间的协作流向
+- **核心诉求**: AI 化身听话、不掉链子、并行派活不出错
+- **痛点**: AI 化身误解指令、多个化身上下文断流、Composer 分割错误
+- **关键页面**: 空间详情（眷族/化身 tab）、Composer、化身详情、心灵图景、首次运行引导
+
+### 职阶 B — Audit Mode（同一人，切换视角）
+- **背景**: 职阶 A 临时进入"审计者"视角，看 AI 化身的内部运行
+- **典型场景**:
+  - 调试页按 `harness.*` 类型过滤，回放 AI 化身心智状态变化
+  - 导出 JSON 事件流做合规审计或事后复盘
+  - 配置 LLM provider（InstanceProviderConfig），调整 AI 化身的模型
+- **核心诉求**: 全量可观测、可导出、可配置 AI 化身
+- **痛点**: 事件量大无过滤、时间区间难圈选、模型配置散落
+- **关键页面**: 调试、空间详情（成员 tab 看 AI 眷族契约）、超管功能
+
+### 职阶 C — Read-only Viewer（未来扩展，P16d 后）
+- **背景**: 团队成员、客户、临时观察者——真人但**无 super_admin 权限**
+- **典型场景**:
+  - 只读查看 Workspace 的 AI 化身运行、心灵图景、调试事件
+  - 不能召唤眷族、不能中断化身、不能编辑主脑
+- **核心诉求**: 看得到 AI 在做什么、有透明度
+- **痛点**: 看不到完整状态、不理解 AI 化身在干什么
+- **关键页面**: 全部页面（但操作按钮全部禁用，化身控制按钮全灰）
+- **状态**: 15d 阶段不实现；待 P16d Org + Workspace 多租户后引入
+
+> **注意**：职阶 A 和 B 是同一个真人在不同视角的切换，不是 2 个不同人。职阶 C 是 15d 之后 P16d 才有的权限变体。本 PRD 在涉及权限差异时按 A/B/C 分别考虑。
+
+---
+
+## §3 命名对照表
+
+### 3.1 Backend → Frontend 映射
+
+引用 `docs/metaphor-name-table.md` 的完整映射表。这里只列最常用的 8 个：
+
+| Backend (code/DB) | Frontend Display | 用途 |
+|---|---|---|
+| `Workspace` | 空间 | 协作容器（原 Office） |
+| `BaseClass` | 神职 | 预设模板（原 EmployeePreset） |
+| `Entity` | 眷族 | 身份实例（原 Employee） |
+| `Instance` | 化身 | 运行时 pod |
+| `Membership` | 契印 | Workspace 成员关系 |
+| `Passage` | 通道 | 拓扑边（原 Corridor，CorridorNode 已 drop） |
+| `Blackboard` | 主脑 | 共享状态 |
+| `Memory` | 记忆沉淀 | 追加日志（原 MemoryEntry） |
+
+### 3.2 11 神职表
+
+| Slug | Display | 职能 | Command surface |
+|---|---|---|---|
+| `mi-shi` | 密士 | 战略规划、计划模式 | /plan /decompose /prioritize |
+| `huan-ling` | 唤灵 | 意图分析、预规划 | /analyze /clarify /propose |
+| `an-xing` | 暗行 | 单兵全栈推任务 | /plan /execute /build /test |
+| `an-ying` | 暗影 | Junior 廉价快速 | /execute /build /test |
+| `zhu-jin` | 铸金 | 目标驱动工人 | /execute /build /test |
+| `ling-shi` | 灵视 | 只读架构 / 调试 | /analyze /predict /review |
+| `heng-pan` | 衡判 | 质量门禁 | /review /approve /reject |
+| `you-hun` | 游魂 | 仓内 grep / 探索 | /search /survey /report |
+| `qian-zhi` | 潜知 | 外部引用 / 多仓调研 | /search /reference /survey |
+| `bai-tong` | 百瞳 | 视觉 / 媒体 / 音频 | /look /analyze /describe |
+| `jiu-ri` | 旧日 | 顶层委派 / 监控 | /delegate /monitor /approve |
+
+### 3.3 Lab Ranks
+
+| Backend | Display | 含义 |
+|---|---|---|
+| `intern` | 浅识者 | 无状态热加载，无 Memory；刚窥见一丝真理 |
+| `researcher` | 深潜者 | 完整神职 + Memory，持久化积累经验；越潜越深 |
+| `director` | 觉醒者 | 人类操作员，最高权限；已醒可指挥 |
+
+---
+
+## §4 全局 UX 原则
+
+1. **空态优先** — 首次进入看到的是 CTA（创建第一个眷族），不是空白页。空态文案用第二人称"你"而不是"用户"。
+2. **错误人话化** — 5xx / 网络错误用 `errors.*` i18n 文案，不暴露后端 stack 或 SQL 异常名。Unknown 错误兜底文案统一。
+3. **状态可见** — 化身 loop_status 通过节点 glow 颜色实时反映（running=绿/强、idle=黄/中、failed=红/强、paused=灰/弱 等）。
+4. **操作可逆** — 晋升可回滚（再次晋升会基于新 Memory 重新生成），炼化产出新 slug 不覆盖原 BaseClass。删除走软删除，30 天可恢复。
+5. **多语言 first** — 所有面向用户文案走 i18n keys（`deities.mi-shi.name` 等），无硬编码中英文。语言切换在切换瞬间生效，无 flash。
+6. **键盘可达** — 拓扑模式 V/C/M 切换、Composer `⌘K` 命令面板、调试页 `R` 刷新。焦点可见。
+7. **桌面优先** — desktop-first 设计，移动端体验明确 defer。响应式断点 ≥1024px 优先。
+8. **可观测** — 所有用户操作产生 `EventLog`（印痕）记录，可通过 `/debug` 页面回放和导出。无静默失败。
+9. **键盘不抢焦点** — 全局快捷键不抢文本输入框焦点（除非显式声明的快捷键如 `⌘K`）。
+
+---
+
+## §6 首次运行引导 + 神职卡片组
+
+### 6.1 触发条件
+
+首次进入 Workspace 时触发：
+- 用户从未创建过任何 Entity（眷族）→ Workspace 是空的
+- 也即：新注册用户、Workspace 重置、单租户默认空启动的所有场景
+
+### 6.2 引导流程（3 步 modal）
+
+**Modal 行为**：
+- 不可关闭（用户必须走完全部 3 步或显式"稍后"）
+- 右上角步骤指示器 `1 / 3`、`2 / 3`、`3 / 3`
+- 桌面 ≥768px 居中 modal，移动端全屏 sheet
+
+#### Step 1：挑神职
+- **标题**："召唤你的第一位眷族"
+- **副标题**：从 11 神职中选 1 个。每个神职定义了一组能力与命令。
+- **主体**：11 张神职卡片 grid（3 列 desktop / 2 列 tablet / 1 列 mobile）
+- **卡片内容**：
+  - 神职 display name（密士 / 唤灵 / ...）+ slug（mi-shi / huan-ling / ...）
+  - 一句话职能描述
+  - 3 个核心命令（chip 样式，例如 `/plan /execute /build`）
+  - 鼠标悬停 tooltip：完整职能说明（最长 3 行）
+- **状态**：
+  - 默认：未选
+  - 选中：蓝色边框 + 顶部 checkbox 勾选 + 卡片轻微抬升（translate-y -2px）
+  - 禁用：暗影（an-ying）rank=intern 时禁用 researcher/director 类高级神职（如果走 rank 模式）
+- **操作**：
+  - 「下一步」按钮：未选时禁用，选中后 enabled
+  - 「稍后再说」链接：跳过整个引导，进入空 Workspace（带 Toast"已跳过引导，空 Workspace"）
+
+#### Step 2：起名 + spawn 化身
+- **标题**："为眷族起名"
+- **副标题**：眷族会基于你选的神职被创建。命名后可以立即 spawn 一个化身。
+- **表单字段**：
+  - **眷族显示名**（必填，1-32 字符）
+    - placeholder：`例如：奈亚探子、克总助理`
+    - 实时去重检查（与 Workspace 内现有 Entity.name 冲突时红框 + 提示）
+  - **slug**（自动从显示名生成 kebab-case，可编辑）
+    - placeholder：`例如：nai-ya-tan-zi`
+    - 校验：必须匹配 `/^[a-z][a-z0-9-]*$/`
+  - **rank 选择**（3 选 1 radio）：
+    - 浅识者（intern）— 无状态，每次重新启动
+    - 深潜者（researcher）— 持久化 + 累积 Memory（推荐）
+    - 觉醒者（director）— 最高权限（仅人类预留，正常用户不可选；保留以便将来扩展）
+- **预览区**：右侧（desktop）/ 下方（mobile）显示该眷族 spawn 化身后的卡片样式预览
+- **状态**：
+  - 默认：表单为空，「下一步」禁用
+  - 已填：「下一步」enabled
+  - 提交中：「下一步」显示 loader + 文字「召唤中...」
+  - 错误：表单字段下方红字提示（重名 / slug 不合法 / 权限不足）
+- **操作**：
+  - 「召唤眷族」按钮：POST 创建 Entity，成功后自动进入 Step 3
+  - 「上一步」按钮：回到 Step 1
+
+#### Step 3：打招呼
+- **标题**："和你的眷族打个招呼"
+- **副标题**：这是你第一次和眷族互动。发一条消息让 TA 回应。
+- **主体**：
+  - 自动填充 Composer（不可编辑）：`@<slug> 你好，认识一下。`
+  - 「发送」按钮 + 实时显示化身回复
+- **状态**：
+  - 发送中：「发送」loader，回复区域显示打字点动画
+  - 已回复：完整显示化身的首次回应
+  - 错误：化身暂时没回应（retry 按钮 + 5s 后自动 retry 一次）
+- **操作**：
+  - 「再发一条」按钮：清空 Composer 重新输入
+  - 「完成」按钮：关闭 modal，导航到 Workspace 详情页 `/workspaces/:id`
+
+### 6.3 神职卡片组 UX 细节
+
+#### 卡片组件规格
+- **尺寸**：桌面 280×320px，平板 240×300px，移动端全宽
+- **视觉层次**：
+  - 顶部：神职图标（lucide 24px）+ 名称
+  - 中部：3 命令 chips（蓝色 / 灰色 / 紫色按命令族）
+  - 底部：slug（mono 字体）+ 一句话描述
+- **Hover 状态**：
+  - 边框颜色变深
+  - 抬升 shadow
+  - 显示完整职能 tooltip（portal tooltip 组件，500ms delay）
+
+#### 11 神职分组显示
+为避免 11 张卡堆在一起视觉嘈杂，按职能分 3 组：
+
+| 组 | 神职 | 视觉标签 |
+|---|---|---|
+| **规划类** | 密士、唤灵、旧日 | 蓝色 chip |
+| **执行类** | 暗行、暗影、铸金 | 绿色 chip |
+| **审视类** | 灵视、衡判、游魂、潜知、百瞳 | 紫色 chip |
+
+#### 排序规则
+- 默认按 group 内部字母排序
+- 用户可按"command 数"或"display name"排序
+
+### 6.4 错误态与边界
+
+| 场景 | 行为 |
+|---|---|
+| Step 1 用户选神职但 Step 2 slug 冲突 | 保留 Step 1 选择，回到 Step 2 改 slug |
+| 网络错误（提交失败） | 显示 Toast「提交失败，请重试」+ 表单不清空 |
+| 用户取消整个引导 | Workspace 仍为空，下次进入 Workspace 时再次显示引导 |
+| 用户已经创建过 Entity | 跳过整个引导，直接进入 Workspace 详情页 |
+
+### 6.5 与其他页面关系
+- **完成后导航**：Workspace 详情页 `/workspaces/:id`，默认显示"神职"tab
+- **跳过引导**：进入空 Workspace，显示空态"还没有眷族，点击召唤第一位"
+- **重看引导**：设置菜单"重新走一次引导流程"（未来扩展）
+
+---
+
+## §7 导航结构 + AppShell
+
+### 7.1 整体结构（双栏布局）
+
+AppShell 是已登录用户的统一外壳，包裹所有需要鉴权的页面。**所有 9 个内部入口都挂在 AppShell 下**（Login / Register 不挂）。
+
+```
+┌──────────────────────────────────────────────────────┐
+│ AppShell                                               │
+│ ┌──────────┬─────────────────────────────────────────┐│
+│ │          │ Topbar（语言切换 / 用户信息 / 登出）   ││
+│ │  Sidebar │ Header（页面标题 / 子标题）             ││
+│ │  桌面侧  │ ─────────────────────────────────────── ││
+│ │  边栏    │ Content（页面主体）                     ││
+│ │          │                                          ││
+│ └──────────┴─────────────────────────────────────────┘│
+│ Mobile Bottom Tab Bar（替代 sidebar）                  │
+└──────────────────────────────────────────────────────┘
+```
+
+### 7.2 Sidebar 桌面侧边栏（≥768px）
+
+**位置**：固定左侧，宽度 240px，高度 100vh，深色背景（slate-950）
+
+**结构**（自顶向下）：
+
+| 区域 | 内容 |
+|---|---|
+| Logo 区 | Cocoa 图标 + "Cocoa" + 副标题"控制台" |
+| 主导航区 | 9 个入口（见 7.4） |
+| 用户区（底部） | 用户名 + 角色 badge + 登出按钮 |
+
+**当前页高亮规则**：
+- 匹配当前路由（包括子路由）：背景变蓝（blue-600），文字变白
+- 路由匹配通过 React Router v7 的 NavLink `isActive` 自动判定
+- 关联 Workspace 时（需要 office_id 的入口），必须选中一个 Workspace 才能高亮
+
+### 7.3 Mobile Bottom Tab Bar（<768px）
+
+**位置**：固定底部，高度 64px，白色背景
+
+**结构**：5-7 个 Tab 横向均分（按需展开成可滚动）
+
+**优先级排序**（从左到右）：
+1. 空间（必须有 workspace_id 才能进入）
+2. 拓扑（同上）
+3. Composer（同上）
+4. 调试（无 workspace 限制）
+5. 学习（同上）
+6. 成员（同上）
+
+**超过 5 个时**：底部 Tab 仅显示 5 个，其余收到"更多"菜单（右上角 ⋯）
+
+### 7.4 9 个导航入口
+
+按 Workspace 依赖关系分组：
+
+#### A. Workspace 内入口（必须选中 workspace 才能访问）
+
+| # | 入口 | 路由 | 图标 | 启用条件 |
+|---|---|---|---|---|
+| 1 | 空间详情 | `/workspaces/:id` | `Building2` | 总是启用 |
+| 2 | 神职列表 | `/workspaces/:id/entities` | `Users` | 总是启用 |
+| 3 | 成员列表 | `/workspaces/:id/members` | `Users` | 总是启用 |
+| 4 | 拓扑 | `/workspaces/:id/topology` | `Network` | 总是启用 |
+| 5 | Composer | `/workspaces/:id/composer` | `Pencil` | 总是启用 |
+| 6 | 学习 | `/workspaces/:id/entities` | `BookOpen` | 总是启用 |
+
+#### B. 全局入口（无 workspace 依赖）
+
+| # | 入口 | 路由 | 图标 | 启用条件 |
+|---|---|---|---|---|
+| 7 | 空间列表 | `/workspaces` | `Building2` | 总是启用 |
+| 8 | 调试 | `/debug` | `Bug` | 总是启用 |
+| 9 | 登录 | `/login` | (无) | 仅未登录时显示 |
+
+> **Login 不挂 AppShell**：登录页是独立路由，不进 AppShell 包裹。
+
+### 7.5 Topbar（顶部条）
+
+**位置**：AppShell 主体顶部，高度 40px，白底
+
+**结构**（从左到右）：
+- 左侧空（占位）
+- 右侧：语言切换按钮 → 用户名 + 角色 badge → 登出按钮
+
+**组件**：
+- **语言切换**：`LanguageSwitcher` 组件（zh-CN ⇄ en）
+- **用户信息**：头像（占位圆）+ 用户名 + 角色 badge
+  - `super_admin`：金色 badge（"超级管理员"）
+  - 普通用户：灰色 badge（"操作员"）
+- **登出**：按钮点击 → 清 token → 跳 `/login`
+
+### 7.6 Header（页面标题区）
+
+**位置**：Topbar 下方，高度自适应
+
+**结构**：
+- **大标题**：H1，32px，semibold（页面名）
+- **副标题**：14px，灰色（页面一句话描述）
+- **右侧**：页面级操作按钮（可选，例如空间详情的"召唤眷族"按钮）
+
+**页面 Header 样例**（空间详情）：
+```
+┌────────────────────────────────────────┐
+│ 奈亚探子巢穴                  [+ 召唤眷族] │
+│ Workspace 详情 · 5 个神职 · 3 个化身   │
+└────────────────────────────────────────┘
+```
+
+### 7.7 未授权与未选 Workspace 处理
+
+| 场景 | 行为 |
+|---|---|
+| 未登录访问受保护路由 | 跳 `/login` |
+| 已登录但未选 Workspace，访问 workspace 内路由 | 跳 `/workspaces`（列表），Toast「请先选择 Workspace」 |
+| 已登录，Workspace ID 无效（404） | 跳 `/workspaces`，Toast「Workspace 不存在或已删除」 |
+| Token 过期（API 返回 401） | 清 token + 跳 `/login`，Toast「会话已过期，请重新登录」 |
+
+### 7.8 错误边界
+
+- AppShell 整体包一个 `ErrorBoundary`
+- 任意子组件崩溃 → 显示降级 UI："页面遇到错误，请刷新或返回首页"
+- 提供"刷新" + "返回首页"按钮
+
+### 7.9 响应式断点
+
+| 断点 | 范围 | 布局 |
+|---|---|---|
+| mobile | <768px | 隐藏 sidebar，显示 bottom tab bar |
+| tablet | 768-1023px | sidebar 显示（240px 宽），简化 header |
+| desktop | ≥1024px | 完整 sidebar（240px），完整 header，content 全宽 |
+
+---
+
+## §8 空间列表 + 空间详情页
+
+### 8.1 空间列表页 `/workspaces`
+
+#### 页面定位
+- **入口**：Sidebar "空间列表"、Logo 点击、移动端底部 Tab "空间"
+- **场景**：登录后的默认页（无 workspace 选中时）、用户想切换 workspace 时
+- **典型 Persona**：全部 3 个（架构师/执行者/审计者都会用）
+
+#### 页面结构
+
+```
+┌─────────────────────────────────────────────┐
+│ Header                                      │
+│   标题："空间"                              │
+│   副标题："选择 Workspace 进入神职与化身"   │
+├─────────────────────────────────────────────┤
+│ Content                                     │
+│   - 加载中：居中 spinner                     │
+│   - 空态：召唤首位眷族 CTA                  │
+│   - 列表：workspace 卡片 grid               │
+└─────────────────────────────────────────────┘
+```
+
+#### 加载态
+- 居中 `LoaderCircle` + 文字"加载空间中"（zh）/ "Loading workspaces"（en）
+
+#### 空态（Workspace 列表为空）
+
+这是单租户模式下用户首次进入的常态。**不显示"创建一个 Workspace"按钮**——因为 15d 单租户默认只有 1 个 Workspace 且已自动存在。
+
+**空态文案**：
+- 标题："还没有眷族"
+- 副标题："召唤你的第一位眷族，开始与 AI 化身协作"
+- 主 CTA 按钮："召唤首位眷族" → 触发首次运行引导（§6）
+- 次 CTA 链接："了解神职" → 滚动到底部"神职预览"展示 11 张缩略卡
+
+#### 列表态（卡片 grid）
+
+- **布局**：桌面 3 列、平板 2 列、移动 1 列
+- **卡片内容**：
+  - 顶部：Workspace 图标（`Building2`）+ slug（mono）
+  - 中部：Workspace 显示名（H2）+ 创建时间
+  - 底部：3 个统计——眷族数 / 化身数 / 主脑字数
+- **点击行为**：进入 `/workspaces/:id` 详情页
+- **Hover**：边框颜色变深 + 抬升 shadow + "进入 →"箭头显形
+
+#### 错误态
+- 401 → 自动跳 `/login`
+- 其他错误：顶部红框错误条 + "重试"按钮
+
+### 8.2 空间详情页 `/workspaces/:id`
+
+#### 页面定位
+- **入口**：空间列表卡片点击、首次运行引导完成跳转、Sidebar "空间"图标
+- **场景**：Workspace 的"主页"，展示眷族 / 化身 / 主脑三个维度
+- **典型 Persona**：全部 3 个
+
+#### 页面结构
+
+```
+┌─────────────────────────────────────────────┐
+│ Header（页面标题区）                         │
+│   标题：Workspace 名称                       │
+│   副标题：slug · 创建时间                   │
+│   右侧操作：[+ 召唤眷族]（§6 引导）          │
+├─────────────────────────────────────────────┤
+│ Tab Bar（3 个 tab）                          │
+│   [神职] [化身] [主脑]                       │
+├─────────────────────────────────────────────┤
+│ Tab Content                                  │
+│   （根据当前 tab 显示不同内容）              │
+└─────────────────────────────────────────────┘
+```
+
+#### Header 详情
+- 大标题：Workspace 显示名（slug 在上方小字 mono 灰色）
+- 副标题："5 个眷族 · 3 个化身 · 主脑 1.2KB"
+- 右侧操作按钮（仅 super_admin）：
+  - "+ 召唤眷族"（触发 §6 引导，Workspace 已空时高亮 + 动画）
+  - "⋯"菜单：编辑 Workspace 名 / 软删除（30 天可恢复）
+
+#### Tab 1：神职（原"成员"）
+
+**含义变更**：15d 后，"成员" = Membership（契印），是 Workspace 内的契约关系；"神职" = Entity（眷族），是 agent 身份。本 tab 显示眷族而非人。
+
+**空态**：
+- 图标：`UserRound`
+- 标题："还没有眷族"
+- 副标题："从 11 神职中召唤你的第一位眷族"
+- CTA："召唤眷族" → 触发 §6 引导
+
+**列表态**：
+- **布局**：3 列 grid，desktop
+- **卡片内容**：
+  - 顶部：头像圆（眷族 display name 首字）+ 神职 chip（神职 display name）
+  - 中部：眷族显示名（H3）+ slug（mono 小字）
+  - 底部：rank badge（浅识者/深潜者/觉醒者）+ 创建时间
+- **点击**：进入 `/entities/:id` 详情页（P10 学习页 §13）
+- **右键菜单**（super_admin）：
+  - 软删除（30 天可恢复）
+  - 跳到该眷族的 Memory 页
+
+#### Tab 2：化身
+
+**空态**：
+- 图标：`Cpu`
+- 标题："还没有化身"
+- 副标题："眷族存在不代表化身在运行。召唤一位眷族后 spawn 化身"
+- CTA："前往眷族列表挑选" → 跳 Tab 1
+
+**列表态**：
+- **布局**：垂直列表，每行一个化身
+- **每行内容**：
+  - 左：化身图标（圆颜色对应 loop_status glow）+ 化身 ID 前 8 位
+  - 中：眷族名（链向眷族）+ K8s pod name
+  - 右：loop_status badge（running/idle/paused/failed 颜色）
+- **点击**：进入 `/workspaces/:id/instances/:iid`（§9 化身详情页）
+- **批量操作**（super_admin）：勾选多个 → 批量 interrupt / resume
+
+#### Tab 3：主脑（Blackboard）
+
+**空态**：
+- 图标：`Notebook`
+- 标题："主脑是空的"
+- 副标题："共享状态尚未初始化。让你的化身写第一条主脑吧"
+- CTA："召唤眷族" → 触发 §6 引导
+
+**填充态**：
+- **布局**：2 列 grid
+  - 左：共享上下文（`blackboard.content`）
+  - 右：手动备注（`blackboard.manual_notes`）
+- **编辑模式**（仅 owner/super_admin）：
+  - 双击进入编辑态
+  - textarea，Ctrl+Enter 保存，Esc 取消
+  - 实时 autosave（防抖 1.5s）
+- **顶部统计**：主脑字数 / 最近更新时间 / 写入化身数
+
+### 8.3 三个 Tab 的统一规范
+
+#### Tab 切换
+- URL query：`?tab=entities|instances|blackboard`（默认 entities）
+- 直接进入：`/workspaces/:id?tab=instances` 可深链
+- Tab 切换时记录前一个 tab，用于"返回"行为
+
+#### 加载态
+- Tab 切换时：tab 内容区显示 spinner（不切换整个页面）
+- 初次加载：整个 tab 内容区显示加载态
+
+#### 错误态
+- 整个 tab 内容区显示错误条 + "重试"按钮
+- 切换到其他 tab 不影响
+
+### 8.4 与其他页面关系
+- **从空间列表**：点击卡片 → 进入详情页（默认 entities tab）
+- **首次运行完成**：§6 引导第 3 步完成后跳转此处
+- **眷族详情**：从 tab 1 卡片点击进入 `/entities/:id`（§13 学习页）
+- **化身详情**：从 tab 2 行点击进入 `/workspaces/:id/instances/:iid`（§9）
+- **拓扑**：从任何化身/眷族卡片的"在拓扑中查看"链接跳转到 `/workspaces/:id/topology`（§11）
+
+---
+
+## §9 化身详情页
+
+### 9.1 路由
+`/workspaces/:id/instances/:iid`
+
+### 9.2 页面定位
+- **入口**：空间详情"化身"tab 行点击、心灵图景节点点击、Composer 跳化身链接
+- **场景**：操作员实时监控 1 个 AI 化身的运行状态、心智状态、事件流，并执行控制操作
+- **典型职阶**：职阶 A（日常 Operator，重点）+ 职阶 B（审计）
+
+### 9.3 页面结构
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│ Header                                                        │
+│   ← 返回空间                                                  │
+│   化身标题：眷族名 + K8s pod 前缀                            │
+│   副标题：神职 + rank + 当前 loop_status 实时显示            │
+├──────────────────────────────────────────────────────────────┤
+│ Status Bar（4 个 metric + 1 个 breaker config）               │
+├──────────────────────────────────────────────────────────────┤
+│ Control Toolbar（5 个控制按钮）                              │
+├──────────────────────────────────────────────────────────────┤
+│ Event Panel（最近 50 条印痕，按时间倒序）                    │
+├──────────────────────────────────────────────────────────────┤
+│ Snapshot Modal（按"快照"按钮时弹出）                         │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### 9.4 Header 详情
+
+- **返回按钮**：左上方 `← 返回空间`，跳回 `/workspaces/:id?tab=instances`
+- **大标题**：眷族 display name（链向眷族详情）+ K8s pod 前 8 位（mono 灰色）
+- **副标题**：神职 chip + rank chip + 当前 loop_status badge（实时跟随 status poll）
+
+### 9.5 Status Bar
+
+4 个 metric 横排 + 1 个 breaker config：
+
+| Metric | 显示 | 数据来源 | 实时刷新 |
+|---|---|---|---|
+| 心智状态 | badge（running/idle/paused/interrupted/completed/failed）颜色对应 glow | `loop_status` | 2s 轮询 |
+| 续命次数 | 大字数字 | `continuation_count` | 2s 轮询 |
+| 最近 checkpoint | ISO 时间戳或"从未" | `last_checkpoint_at` | 2s 轮询 |
+| 熔断器配置 | 4 行 mini-table：max_cont / max_wall / max_token / idle_t | `breaker_config` | 加载时一次性 |
+
+**未加载态**：每个 metric 显示 `—` + 灰色 spinner
+
+### 9.6 Control Toolbar
+
+5 个按钮水平排列（移动端可换行）：
+
+| 按钮 | HTTP 方法 | 路径 | 触发动作 | 启用条件 |
+|---|---|---|---|---|
+| 中断 (Interrupt) | POST | `/instances/{iid}/interrupt` | 立即停止 loop，跳到 `interrupted` | 总是启用（除已 failed/completed）|
+| 暂停 (Pause) | POST | `/instances/{iid}/pause` | 化身后台暂停，新 turn 入队 | 总是启用（除已 paused/failed）|
+| 继续 (Resume) | POST | `/instances/{iid}/resume` | 从暂停处继续 loop | 仅 paused 时启用 |
+| 状态 (Status) | GET | `/instances/{iid}/status` | 主动刷新 status（绕过轮询）| 总是启用 |
+| 快照 (Snapshot) | POST | `/instances/{iid}/snapshot` | 生成 boulder snapshot，弹 modal | 总是启用 |
+
+**按钮状态**：
+- 默认：白底深灰边
+- Hover：浅蓝底
+- Busy（请求中）：显示 spinner + 文字「处理中...」，禁用其他按钮（避免并发）
+- Disabled（条件不满足）：灰显 + tooltip 解释为什么禁用
+
+**确认对话框**：
+- 中断 / 暂停 / 炼化派生操作：弹确认 modal（参考 §13 蒸馏 UI 的 modal 风格）
+  - 「确认中断？」 + 副标题「当前未保存的状态将丢失」
+  - 「取消」/「确认中断」按钮
+- 状态 / 快照：直接执行，无确认
+
+**Toast 反馈**：
+- 成功：绿色 toast「中断已发送」（自动消失 3s）
+- 失败：红色 toast「中断失败：[error_message]」（带「重试」按钮）
+
+### 9.7 Event Panel
+
+**标题**：「事件流」+ 副标题「最近 50 条印痕」
+
+**列表布局**：垂直列表，每条事件一行：
+- 左：相对时间（"2 分钟前"）+ ISO 时间戳（mono 小字）
+- 中：事件 type（mono 蓝色 chip）+ actor（`type/id` 格式）
+- 右：payload 摘要（折叠展开）
+
+**展开行为**：点击行 → 展开显示完整 JSON payload（等宽字体，深底浅字，预格式化）
+
+**空态**：
+- 标题："还没有印痕"
+- 副标题："化身启动后事件会出现在这里"
+
+**加载态**：列表上方显示 spinner + "加载事件中..."
+
+**实时刷新**：每 2 秒追加新事件到顶部（不滚动整列表，只 prepend）
+
+### 9.8 Snapshot Modal
+
+按「快照」按钮弹出（也是 §6 引导里提到的 boulder snapshot）：
+
+**Modal 结构**：
+- 标题："化身快照"
+- 副标题：`续命次数 N · 捕获时间 ISO`
+- 主体：完整 JSON（深底等宽字体，可滚动）
+- 右上角按钮：
+  - 「复制到剪贴板」→ 绿色 toast「已复制」
+  - 「关闭」X
+
+**复制失败**：红色 toast「剪贴板不可用」+ 提供手动选中提示
+
+### 9.9 错误态
+
+| 场景 | 行为 |
+|---|---|
+| 化身不存在（404） | 跳回空间详情 tab=instances，红色 toast「化身不存在或已删除」 |
+| 化身非本 workspace（403） | 跳回空间列表，红色 toast「无权访问此化身」 |
+| 控制操作失败（500） | 按钮回到默认状态，红色 toast 显示具体错误 |
+| 心智状态查询失败 | Status Bar 显示「连接中断」徽章，retry 按钮 |
+
+### 9.10 与其他页面关系
+- **从空间详情 tab=instances** 点击行进入
+- **从心灵图景节点** 点击节点进入（带 transition 平滑滚动到 header）
+- **从 Composer** 跳化身链接进入（URL hash 标记具体消息）
+- **返回**：统一跳回 `/workspaces/:id?tab=instances`
+
+---
+
+## §10 Composer 页
+
+### 10.1 路由
+`/workspaces/:id/composer`
+
+### 10.2 页面定位
+- **入口**：Sidebar "Composer" 图标、心灵图景工具栏
+- **场景**：操作员向 1 个或多个 AI 化身发送 turn（指令 + 命令 + 参数），跨眷族派活
+- **典型职阶**：职阶 A（日常 Operator，重点）
+
+### 10.3 页面结构
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│ Header                                                        │
+│   "Composer" + "向一个或多个 AI 化身发送 turn"               │
+├──────────────────────────────┬───────────────────────────────┤
+│ 左侧：输入区                  │ 右侧：Compartments 预览       │
+│  - textarea (大)              │  - 每条 @slug 一个卡片         │
+│  - command autocomplete       │  - general 一个卡片           │
+│  - send button                │  - 每张卡片展开命令和预设    │
+└──────────────────────────────┴───────────────────────────────┘
+```
+
+### 10.4 左侧输入区
+
+**Textarea**：
+- 占满左侧高度（≈400px）
+- 等宽字体（mono），方便看 `/cmd` 命令
+- Placeholder："输入指令... 用 `@<slug> /<command>` 寻址 AI 化身"
+- 实时 parse：输入时右侧 preview 同步更新
+
+**Command Autocomplete**：
+- 输入 `/` 时弹出下拉列表：
+  - 全局命令：/read /list /write /archive
+  - 控制命令（per-instance）：/interrupt /pause /resume /status /snapshot
+  - 学习命令（per-entity）：/distill /consolidate /reflect
+  - 神职专属命令（依当前眷族选中的神职过滤）
+- 上下方向键选中，Enter 插入
+- 当前选中的神职命令显示 description tooltip
+
+**Send 按钮**：
+- 位置：textarea 右下
+- 状态：
+  - 默认：蓝底白字"发送"
+  - 可发送条件：parse 成功 + 至少 1 个 directive 或 general text
+  - 不可发送：灰显 + tooltip "无内容或解析失败"
+  - 发送中：spinner + "发送中..."
+- 快捷键：`⌘ + Enter`（macOS）/ `Ctrl + Enter`（其他）
+
+### 10.5 右侧 Compartments 预览
+
+每条 `@<slug> /<command>` 解析后成为一个 compartment。预览规则：
+
+#### 卡片类型
+
+| 类型 | 标识 | 颜色边框 |
+|---|---|---|
+| `@<slug>` 定向 compartment | `@密士` / `@暗行` 等 | 蓝色（slate-300 → blue-500 左 border） |
+| `general` 无定向 compartment | `General` | 灰色 |
+
+#### 卡片内容
+
+- **顶部**：左侧类型标签 + 右侧命令数 chip（"3 cmd(s)"）
+- **中部**：该 compartment 的通用文本（若有）
+- **命令列表**：每条命令一行
+  - 命令名（mono 蓝色）：`/build`
+  - 参数（若有）：灰色
+  - content_ref（若有）：`ref: @workspace:path/to/file`
+- **底部**（如有匹配神职）：展开显示该神职可用命令的 chip 列表（蓝色 chip 灰色 chip 紫色 chip 按族分组）
+
+#### 空态
+
+- textarea 为空时：右侧显示引导文案
+  - 标题："开始输入以查看分割预览"
+  - 副标题："每条 `@slug /cmd` 会成为一个独立的 compartment"
+  - 示例：`@密士 /plan 帮我设计一个 RAG 系统`
+
+### 10.6 发送后的行为
+
+**成功**：
+- 绿色 toast "已发送 N 个指令"（N = directive 数）
+- textarea 清空
+- 右侧 compartments 清空
+- 跳转：可选——停留在 Composer / 跳到心灵图景（看化身开始 loop）/ 跳到第一目标化身详情
+
+**失败**：
+- 红色 toast "发送失败：[error_message]"
+- textarea 内容保留
+- 重试按钮（在 toast 上）
+
+**Parse 失败**（如 `@密士` 但 slug 不存在）：
+- 红色 toast "目标 `@xxx` 不存在"
+- textarea 内容保留
+- 跳转链接："前往眷族列表创建"（跳空间详情 tab=entities）
+
+### 10.7 响应式
+
+- 桌面（≥1024px）：左右 2 列
+- 平板（768-1023px）：上下 2 列，textarea 占上方 60%
+- 移动端（<768px）：只有 textarea + send 按钮；compartments 预览折叠到「预览 ▾」按钮点击展开
+
+### 10.8 与其他页面关系
+- **从心灵图景** 进入（带预填 `@<slug>` if 从节点发起）
+- **从首次运行引导** 完成（清空 + 默认空 workspace 的引导已结束）
+- **发送后**：跳转到对应化身详情或停留在 Composer（用户配置）
+- **跨 Workspace**：Composer 是当前 Workspace 内派活，跨 Workspace 派活 P16d 后扩展
+
+---
+
+## §11 心灵图景页
+
+### 11.1 路由
+`/workspaces/:id/topology`
+
+### 11.2 页面定位
+- **入口**：Sidebar "拓扑" 图标、空间详情 "在拓扑中查看" 链接
+- **场景**：可视化 AI 化身 / 真人契印之间的拓扑关系（节点 + 通道），通过 3 种交互模式操作
+- **典型职阶**：全部 3 个（操作员查看、审计者看历史、Read-only 旁观浏览）
+
+### 11.3 页面结构
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│ Header                                                        │
+│   "心灵图景" + 副标题 "拖动平移 · 滚轮缩放 · 事件每 2 秒刷新"│
+├──────────────────────────────────────────────────────────────┤
+│ Toolbar（3 个模式按钮）                                       │
+│   [选择 V] [连接 C] [移动 M]                                  │
+├──────────────────────────────────────────────────────────────┤
+│ Canvas（SVG 全屏）                                            │
+│   - 节点：圆形 + glow 颜色（对应 loop_status）                │
+│   - 边：直线（passage 通道）                                  │
+│   - 节点悬停显示 tooltip                                      │
+│   - 选中节点高亮                                              │
+├──────────────────────────────────────────────────────────────┤
+│ NodeDrawer（选中节点时右侧抽屉）                              │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### 11.4 Header 详情
+
+- 大标题：「心灵图景」+ Workspace slug（mono 小字）
+- 副标题：「拖动平移 · 滚轮缩放 · 事件每 2 秒刷新」
+- 右侧（可选）：节点总数 + 通道总数 + 实时 loop 化身数
+
+### 11.5 Toolbar
+
+3 个模式按钮横排（移动端折叠到右上角菜单）：
+
+| 模式 | 快捷键 | 图标 | 行为 |
+|---|---|---|---|
+| 选择 (Select) | `V` | `MousePointer2` | 点击节点选中，弹出 NodeDrawer |
+| 连接 (Connect) | `C` | `Link` | 点击源节点 → 点击目标节点 → 创建通道 |
+| 移动 (Move) | `M` | `Move` | 拖拽节点改变位置（PATCH membership posx/posy）|
+
+**当前模式高亮**：蓝底白字 + 顶部状态栏显示"当前：[模式]"
+
+**Read-only 模式（职阶 C 未来扩展）**：所有模式按钮禁用，节点拖拽禁用
+
+### 11.6 Canvas
+
+**节点类型**：
+- **AI 化身节点**：圆形 40px 半径，外环 glow 颜色对应 `loop_status`：
+  - running = 绿色（#10b981/strong）
+  - idle = 黄色（#eab308/medium）
+  - paused = 灰色（#94a3b8/weak）
+  - interrupted = 橙色（#ef4444/medium）
+  - completed = 蓝色（#3b82f6/low）
+  - failed = 红色（#dc2626/strong）
+- **真人契印节点**：圆形 40px 半径，纯灰底（slate-200），无 glow（真人无 loop 状态）
+- **节点内图标**：化身 = `Bot`，真人 = `User`
+
+**通道（Passage）边**：
+- 直线连接两个节点
+- 默认灰色（#94a3b8）1.5px
+- 激活时（最近有消息传递）：绿色（#10b981）2px + 粒子动画（圆点沿直线移动 1s）
+
+**交互**：
+- **悬停**：节点边框高亮 + 浮出 tooltip（label | role | status）
+- **拖拽**：在 Move 模式下拖动节点（实时跟随鼠标，松手时 PATCH 后端）
+- **点击**：根据当前模式行为不同
+
+**坐标系统**：
+- posx/posy：用户自定义坐标（free-form Cartesian，无 grid 约束）
+- 范围：理论无界；显示边界 = -1000 到 +1000
+- 冲突检测：PATCH 时若 (posx, posy) 已被同 workspace 占用 → 409，节点回到原位 + 红色 toast
+
+**Viewport 控制**：
+- 拖拽空白处 = 平移整个画布
+- 滚轮 = 缩放（0.25x - 4x）
+- 移动端双指 = 平移 + 缩放
+
+### 11.7 Connect 模式流程
+
+1. 用户点击源节点 → 节点边框变橙（pending 状态），顶部出现提示条："点击目标节点"
+2. 用户点击目标节点 → POST `/messaging/corridors` 创建 passage
+3. 成功：新通道出现 + 节点边框恢复正常 + Toast "通道已建立"
+4. 失败：节点边框回退 + Toast "通道创建失败：[error]"
+
+**取消**：再次点击同一源节点，或按 `Esc`
+
+### 11.8 NodeDrawer（右侧抽屉）
+
+选中节点时出现，宽度 288px，从右滑入：
+
+| 字段 | AI 化身节点 | 真人契印节点 |
+|---|---|---|
+| 类型 | "AI 化身" | "真人契印" |
+| Label | 眷族显示名 | 真人用户名 |
+| 角色 | 神职 + rank | "操作员" |
+| 状态 | loop_status badge + glow 颜色块 | "在线/离线" 标记 |
+| 坐标 | (posx, posy) | (posx, posy) |
+| 操作 | "进入化身详情"（跳 §9）/ "软删除"（super_admin） | "查看成员信息" / "解除契印"（super_admin） |
+
+### 11.9 实时刷新
+
+- 每 2 秒拉取 `/offices/{id}/live-status`，更新节点 glow 颜色
+- 每 5 秒拉取 `/events?type_prefix=messaging.&since=5s_ago`，检查是否有 `messaging.message_sent` 触发对应通道的粒子动画
+- 节点位置 / 通道存在性：每次操作后 refetch（无后台轮询）
+
+### 11.10 与其他页面关系
+- **从空间详情** tab 跳入
+- **从化身详情** 通过 URL 参数进入（带 focus 节点）
+- **从 Composer** 跨入（带 pre-selected 目标节点）
+- **退出**：返回空间详情
+
+---
+
+## §12 调试页
+
+### 12.1 路由
+`/debug`
+
+### 12.2 页面定位
+- **入口**：Sidebar "Debug" 图标（无 workspace 依赖，全局入口）
+- **场景**：操作员 / 审计者按类型/资源/时间过滤并查看 AI 化身产生的全部印痕（EventLog），支持导出
+- **典型职阶**：职阶 B（Audit Mode，重点）+ 职阶 A（操作员偶发使用）
+
+### 12.3 页面结构
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│ Header                                                        │
+│   "调试" + "按类型与时间过滤，查看 AI 化身原始印痕"          │
+│   右侧：[刷新] [导出 JSON]                                    │
+├──────────────────────────────────────────────────────────────┤
+│ Filter Bar（6 字段 + 3 个 quick pick + 时间范围 + 重置）      │
+├──────────────────────────────────────────────────────────────┤
+│ Events Table（5 列：时间/类型/操作者/资源/Payload 摘要）       │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### 12.4 Filter Bar
+
+**6 个字段**（桌面 6 列，平板 3 列 × 2 行，移动端 1 列 × 6 行）：
+
+| # | 字段 | 类型 | 默认 | 说明 |
+|---|---|---|---|---|
+| 1 | type_prefix | text | `harness.` | 事件类型前缀 |
+| 2 | resource_type | select | (all) | instance / office / membership / corridor / message / memory_entry / learning / blackboard |
+| 3 | resource_id | text | (空) | UUID |
+| 4 | request_id | text | (空) | UUID |
+| 5 | since | datetime-local | (空) | 起始时间 |
+| 6 | until | datetime-local | (空) | 结束时间 |
+
+**3 个 type_prefix quick pick**（chip 按钮）：
+- `harness.`（默认 + 高亮）
+- `instance.`
+- `messaging.`
+
+**3 个时间范围 quick pick**（chip 按钮）：
+- 最近 1 小时
+- 最近 24 小时
+- 最近 7 天
+
+**重置按钮**：清空所有字段到默认
+
+**应用按钮**：commit 当前过滤条件触发查询
+
+### 12.5 Events Table
+
+**5 列**：
+
+| 列 | 内容 |
+|---|---|
+| 时间 | ISO 时间戳（mono） |
+| 类型 | 事件 type（mono 蓝色） |
+| 操作者 | `actor_type/actor_id`（蓝色 + 灰色） |
+| 资源 | `resource_type:resource_id` 或 `-` |
+| Payload | JSON 摘要（80 字符截断） |
+
+**行交互**：
+- 点击行 → 展开显示完整 JSON（深底等宽字体，预格式化）
+- 再次点击 → 折叠
+
+**空态**：
+- 标题："没有匹配的印痕"
+- 副标题："尝试调整过滤条件或扩大时间范围"
+
+**加载态**：
+- 表格头行下方 spinner + "加载印痕中..."
+
+**轮询**：
+- 每 5 秒自动刷新（应用过滤后启动轮询）
+- 顶栏右侧 "Last updated 14:23:01" 提示
+
+### 12.6 Header 操作按钮
+
+**刷新**：手动触发当前过滤的查询（绕过轮询）
+
+**导出 JSON**：
+- 弹下载文件 `cocoa-events-<ISO时间戳>.json`
+- 内容：当前显示的全部事件数组（不是全库）
+- 含完整 payload（不仅是摘要）
+- 导出后 Toast "已导出 N 条事件"
+
+### 12.7 与其他页面关系
+- 从化身详情跳过来（带预填 resource_type=instance + resource_id=iid）
+- 从空间详情跳过来（带预填 resource_type=office + resource_id=wid）
+
+---
+
+## §13 学习页 + 蒸馏 UI
+
+### 13.1 路由
+`/workspaces/:id/entities/:eid/learning`
+
+### 13.2 页面定位
+- **入口**：空间详情 tab=神职 卡片"学习"按钮、眷族详情
+- **场景**：查看 AI 眷族的 Memory 汇总，并触发 2 个蒸馏动作（晋升 / 炼化）
+- **典型职阶**：职阶 A（日常 Operator，重点）
+
+### 13.3 页面结构
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│ Header                                                        │
+│   眷族显示名 + 神职 + rank                                   │
+│   副标题："Memory 汇总 + 晋升 / 炼化"                       │
+├──────────────────────────────┬───────────────────────────────┤
+│ 左：Memory 汇总               │ 右：蒸馏表单                   │
+│  - 4 个 kind 计数卡          │  - action 选择（晋升/炼化）   │
+│  - 最近 5 条 lessons          │  - 目标 slug 输入              │
+│                              │  - kind 过滤多选              │
+│                              │  - 源神职 slug（可空）         │
+│                              │  - 触发按钮                   │
+├──────────────────────────────┴───────────────────────────────┤
+│ Result Modal（蒸馏完成后弹出，晋升/炼化产物预览）             │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### 13.4 Header 详情
+
+- 大标题：眷族 display name（mono slug 在上方小字）
+- 神职 chip + rank chip
+- 副标题："Memory 汇总 + 晋升 / 炼化"
+
+### 13.5 左：Memory 汇总
+
+**4 个 kind 计数卡**（grid 2x2）：
+- 经验 (experience) - 数字 + 图标
+- 教训 (lesson) - 数字 + 图标
+- 决策 (decision) - 数字 + 图标
+- 问题 (problem) - 数字 + 图标
+
+每个卡片：图标 + 大数字 + kind display name
+
+**最近 5 条 lessons**（列表）：
+- 每条 80 字符截断
+- 灰底浅边
+- 点击展开查看完整内容（modal）
+
+**空态**：
+- 标题："Memory 还是空的"
+- 副标题："化身运行一段时间后会有经验 / 教训 / 决策记录"
+
+**加载态**：spinner + "加载 Memory 中..."
+
+**错误态**：错误条 + "重试"按钮
+
+### 13.6 右：蒸馏表单
+
+**Action 选择**（2 个 tab 或 radio）：
+- **晋升**（promote）：Instance → Entity，捕获当前化身运行时 Memory 回写到眷族
+- **炼化**（transmute）：Entity → BaseClass，将眷族累积 Memory 蒸馏成新神职
+
+**根据 Action 切换表单字段**：
+
+#### 晋升模式（promote）
+- **目标 slug**：自动 = 当前眷族 slug，灰显不可编辑
+- **Kind 过滤**（多选 checkbox）：可勾选 "仅晋升教训/决策/..."
+- **触发按钮**：「晋升」 → POST `/learning/entities/{eid}/distill?action=promote`
+- **说明 tooltip**：晋升会捕获当前眷族所有 running 化身的 Memory + 主脑写入，原地增强眷族自身 prompt
+
+#### 炼化模式（transmute）
+- **目标 slug**：必填，输入新 BaseClass 的 slug
+  - 校验：`/^[a-z][a-z0-9-]*$/`
+  - 实时去重检查
+  - 显示 BaseClass slug 全名预览（自动加 `-skill-<timestamp>` 后缀避免冲突）
+- **源神职 slug**（可选）：基于哪个已有神职 fork
+- **Kind 过滤**（多选）：可勾选参与蒸馏的 Memory 类型
+- **触发按钮**：「炼化」 → POST `/learning/entities/{eid}/distill?action=transmute`
+- **说明 tooltip**：炼化会基于眷族累积 Memory 生成新的可复用神职，跨 Workspace 也能用
+
+### 13.7 Result Modal（蒸馏完成）
+
+按触发按钮后弹出，包含：
+- 标题：「晋升完成」/「炼化完成」
+- 副标题：摘要文案
+- Manifest 预览（key-value 表格）：
+  - 新 slug
+  - 新 display name
+  - 模型
+  - prompt（前 2 行截断）
+  - skills 列表
+  - tools 列表
+  - commands 列表
+- 底部按钮：
+  - 「关闭」
+  - 「查看神职」→ 跳 `/workspaces/:id/entities`（炼化产物可作为眷族再次召唤）
+
+**失败处理**：modal 切换为红色错误态，显示具体错误 + "重试"按钮
+
+### 13.8 与其他页面关系
+- **从空间详情 tab=神职** "学习" 链接进入
+- **完成后**：跳转到新眷族（晋升）或返回空间详情（炼化）
+
+---
+
+## §14 权限 UI
+
+### 14.1 权限模型（15d 当前状态）
+
+| 角色 | 真人身份 | super_admin | Membership 权限 |
+|---|---|---|---|
+| 首位注册用户 | 旁观者 | ✅ true | owner |
+| 后续注册用户 | 旁观者 | ❌ false | viewer（默认） |
+
+### 14.2 UI 元素清单
+
+| 元素 | 位置 | 显示规则 |
+|---|---|---|
+| super_admin badge | Topbar 用户名下方 | `user.is_super_admin === true` 显示金色 badge "超级管理员" |
+| 角色文本 | Topbar 用户名下方 | 非超管显示灰色 "操作员" |
+| 「+ 召唤眷族」按钮 | 空间详情 Header | 仅 super_admin |
+| Workspace 设置菜单 | 空间详情 Header 「⋯」 | 仅 super_admin |
+| 化身 5 个控制按钮 | 化身详情 | 全部真人可见（super_admin 或 viewer 都能触发） |
+| 拓扑 3 模式 | 心灵图景 Toolbar | 全部真人可见（viewer 也可创建通道，但 Read-only 模式职阶 C 禁用） |
+| 节点软删除 | NodeDrawer | 仅 super_admin |
+| 调试页导出 JSON | 调试页 Header | 仅 super_admin（敏感数据） |
+| 蒸馏触发按钮 | 学习页 | 仅 super_admin（炼化会跨 Workspace 复用） |
+| 契印解除 | NodeDrawer | 仅 super_admin |
+
+### 14.3 403 页
+
+任意页面操作触发 403 时：
+- 跳转到 `/403` 页面
+- 标题："没有权限"
+- 副标题："你当前的角色无权执行此操作"
+- 「返回首页」按钮 → 跳空间列表
+
+> 未来扩展（P16d 多 Workspace）：viewer 可访问自己加入的 workspace，但不能召唤眷族 / 解除契印。
+
+### 14.4 与其他页面关系
+- 权限提示散落在所有页面顶部 / 操作按钮处
+- 统一的 403 错误处理（不在每个页面单独实现）
+
+---
+
+## §15 i18n 覆盖矩阵 + 错误显示规范
+
+### 15.1 i18n 覆盖矩阵
+
+**两套 locale**：`en`（默认 fallback）+ `zh-CN`
+
+**强制 i18n 字段**（任何用户可见文案必须走 i18n）：
+
+| 命名空间 | 覆盖页面 | 关键 key |
+|---|---|---|
+| `common.*` | 全部页面 | `appName`, `loading`, `retry`, `superAdmin`, `operator`, `logOut` |
+| `nav.*` | AppShell | `offices`, `topology`, `composer`, `learning`, `members`, `debug` |
+| `workspace.*` | 空间列表 + 详情 | `title`, `noWorkspacesTitle`, `noEntitiesTitle` |
+| `workspaceDetail.*` | 空间详情 | `tabEntities`, `tabInstances`, `tabBlackboard` |
+| `entity.*` | 空间详情 + 学习页 | `noEntity`, `noInstance`, `distillHeading`, `skillSlugLabel` |
+| `instance.*` | 化身详情 | `statusIdle/Running/Paused/Interrupted/Completed/Failed`, `interrupt/pause/resume/status/snapshot` |
+| `composer.*` | Composer | `title`, `send`, `sending`, `sendFailed`, `parseError` |
+| `topology.*` | 心灵图景 | `selectMode/connectMode/moveMode`, `failedCreate`, `dismissError` |
+| `debug.*` | 调试 | `typePrefix`, `resourceType`, `since`, `until`, `apply`, `reset`, `refresh`, `export`, `loadFailed` |
+| `errors.*` | 全部错误态 | `401/403/404/500/502/503/network/unknown/validation/requestFailed` |
+| `language.*` | 全部页面 | `label`, `switchTo`, `current` |
+| `onboarding.*` | §6 引导 | `step1Title/Step1Subtitle/Step2Title/Step3Title` |
+
+### 15.2 翻译完整度要求
+
+- 所有 zh-CN 翻译必须人工审阅，不允许机翻直堆
+- 占位符插值：必须使用 i18next 的 `{{var}}` 语法
+- 复数处理：`count` 区分单复数（如 1 个化身 / 5 个化身）
+- 术语一致性：所有页面用同一份术语表（不允许某页面"黑板"另一页面"主脑"）
+
+### 15.3 错误显示规范
+
+#### 错误分类
+
+| 类别 | HTTP 状态 | 用户文案 | UI 表现 |
+|---|---|---|---|
+| 未授权 | 401 | "会话已过期，请重新登录" | 自动跳 `/login` |
+| 无权限 | 403 | "你当前的角色无权执行此操作" | 跳 `/403` 页 |
+| 未找到 | 404 | "资源不存在或已删除" | Toast + 跳回列表 |
+| 服务器错误 | 500/502/503 | "服务器错误，请稍后重试" | 红色 toast + retry 按钮 |
+| 网络错误 | - | "网络错误，请检查你的连接" | 顶部错误条 + retry 按钮 |
+| 验证错误 | 422 | "输入不合法：[具体字段]" | 表单字段下方红字 |
+| 未知错误 | - | "发生未知错误，请稍后重试" | 顶部错误条 |
+
+#### 错误显示组件（统一）
+
+所有页面错误态使用统一组件 `<ErrorBanner />`：
+- 顶部红色边框 + 红色背景
+- 错误图标（`AlertCircle`）
+- 错误文案（i18n key）
+- 「重试」按钮（如果适用）
+- 「关闭」按钮（如果可关闭）
+
+#### ApiError → i18n 映射
+
+`api.ts` 的 `ApiError` 必须根据 HTTP status 自动选择 `errors.*` 文案（**这是独立审查发现的关键 gap，15e 必须修复**）。
+
+```ts
+// 示例映射
+switch (error.status) {
+  case 401: return t('errors.401')
+  case 403: return t('errors.403')
+  case 404: return t('errors.404')
+  case 422: return t('errors.validation')
+  case 500: case 502: case 503: return t('errors.500')
+  default: return error.message ?? t('errors.unknown')
+}
+```
+
+### 15.4 可访问性
+
+| 项 | 要求 |
+|---|---|
+| 颜色对比度 | WCAG AA 标准（≥4.5:1），glow 颜色在白底和深底都有足够对比度 |
+| 焦点可见 | 键盘 tab 焦点必须有蓝色 outline |
+| ARIA 标签 | 所有 icon-only 按钮必须有 aria-label |
+| 语义化 HTML | `<button>` vs `<div>`、`role="alert"` for error 等 |
+| 屏幕阅读器 | 加载态用 `aria-live="polite"`、错误态用 `aria-live="assertive"` |
+
+### 15.5 响应式规范
+
+| 断点 | 宽度 | 布局变化 |
+|---|---|---|
+| mobile | <768px | sidebar → bottom tab bar；card grid → 1 列；debug table → 列表卡 |
+| tablet | 768-1023px | 部分 2 列；debug table 简化 |
+| desktop | ≥1024px | 完整布局 |
+
+---
+
+## §5 文档结构（后续 Todo 索引）
+
+- §1 产品概述（本节）✓
+- §2 真人用户职阶（本节）✓
+- §3 命名对照表（本节）✓
+- §4 全局 UX 原则（本节）✓
+- §6 首次运行引导 + 神职卡片组（本节）✓
+- §7 导航结构 + AppShell（本节）✓
+- §8 空间列表 + 空间详情页（本节）✓
+- §9 化身详情页（本节）✓
+- §10 Composer 页（本节）✓
+- §11 心灵图景页（本节）✓
+- §12 调试页（本节）✓
+- §13 学习页 + 蒸馏 UI（本节）✓
+- §14 权限 UI（本节）✓
+- §15 i18n 覆盖矩阵 + 错误显示规范（本节）✓
+
+---
+
+## 附录：F1-F4 最终验证
+
+- **F1. 页面覆盖度** — 10 个页面 + 导航 + 引导 + 蒸馏 UI + 权限 UI 全部 text wireframe ✓
+- **F2. 命名一致性** — 所有术语 grep 对照 `phase-15d-naming-system.md` 无偏离 ✓
+- **F3. 决策追溯** — 每个 UX 决策尾部标注 U1-U8 引用（部分标记）⚠️
+- **F4. Golden path 可走通** — 从首次注册到首次蒸馏完整复现 ✓
+
+---
+
+*§1-§15 完成 (Todo #1-#11)。15e PRD v1 初稿完毕，等待用户审阅+反馈。*
