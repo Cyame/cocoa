@@ -10,14 +10,14 @@
 ## §1 产品概述
 
 ### 定位
-**多智能体控制台**——单一 Workspace 中，**真人操作员**（旁观者 / 觉醒者权限）召唤、观察、调度 AI 化身（Instance）。Workspace 共享神职（BaseClass）池、共享穹窿（Blackboard）状态、共享通道（Passage）连接拓扑。
+**多智能体控制台**——单一 Workspace 中，**真人操作员**（旁观者 / 觉醒者权限）召唤、观察、调度 AI 化身（Instance）。Workspace 共享神职（BaseClass）池、共享主脑（CentralHub）状态、共享通道（Passage）连接拓扑。
 
 > **核心身份区分**：Cocoa 中只有**真人用户**（通过觉醒基因管理权限位）——见 §2.2.2。所有"神职"（BaseClass）、"眷族"（Entity）、"化身"（Instance）都是 **AI 智能体**——它们由真人召唤、配置、调度，但不与真人平级。"浅识者"和"深潜者"是 AI 智能体的两种运行形态，不是真人角色。
 
 ### 与传统 chat 工具的核心差异
 | 维度 | 传统 chat | Cocoa |
 |---|---|---|
-| 化身存在 | 一次性回复，关闭即结束 | 持续 loop + Memory + 穹窿，不结束 |
+| 化身存在 | 一次性回复，关闭即结束 | 持续 loop + Memory + 共享主脑，不结束 |
 | 状态可见 | 用户看不见化身内部 | 化身 loop_status 通过 glow 颜色实时反映 |
 | 多人协作 | 一对一对话 | 多个真人 + 多个 AI 化身共享 Workspace、跨化身派活 |
 | 记忆 | 仅当前会话上下文 | AI 跨化身追加 Memory（晋升 / 炼化复用）|
@@ -142,7 +142,7 @@ class HumanGene(BaseModel):
 | `can_spawn_instance` | spawn 化身 | operator |
 | `can_interrupt_instance` | 中断化身 | operator |
 | `can_pause_instance` | 暂停化身 | operator |
-| `can_edit_blackboard` | 编辑穹窿 | operator |
+| `can_edit_central_hub` | 编辑主脑 | operator |
 | `can_view_workspace` | 查看 workspace | operator / viewer / auditor |
 | `can_view_topology` | 查看心灵图景 | operator / viewer / auditor |
 | `can_view_audit_log` | 查看调试印痕 | operator / auditor |
@@ -317,7 +317,7 @@ interface Capability {
 | `Instance` | 化身 | 运行时 pod |
 | `Membership` | 契印 | Workspace 成员关系 |
 | `Passage` | 通道 | 拓扑边（原 Corridor，CorridorNode 已 drop） |
-| `Blackboard` | 穹窿 | 共享状态 |
+| `CentralHub` | 主脑 | 协作中枢容器（4 脑区合成） |
 | `Memory` | 记忆沉淀 | 追加日志（原 MemoryEntry） |
 
 ### 3.2 11 神职表
@@ -651,7 +651,7 @@ AppShell 是已登录用户的统一外壳，包裹所有需要鉴权的页面�
 - **卡片内容**：
   - 顶部：Workspace 图标（`Building2`）+ slug（mono）
   - 中部：Workspace 显示名（H2）+ 创建时间
-  - 底部：3 个统计——眷族数 / 化身数 / 穹窿字数
+  - 底部：3 个统计——眷族数 / 化身数 / 主脑状态
 - **点击行为**：进入 `/workspaces/:id` 详情页
 - **Hover**：边框颜色变深 + 抬升 shadow + "进入 →"箭头显形
 
@@ -663,7 +663,7 @@ AppShell 是已登录用户的统一外壳，包裹所有需要鉴权的页面�
 
 #### 页面定位
 - **入口**：空间列表卡片点击、首次运行引导完成跳转、Sidebar "空间"图标
-- **场景**：Workspace 的"主页"，展示眷族 / 化身 / 穹窿三个维度
+- **场景**：Workspace 的"主页"，展示眷族 / 化身 / 主脑三个维度
 - **典型 Persona**：全部 3 个
 
 #### 页面结构
@@ -676,7 +676,7 @@ AppShell 是已登录用户的统一外壳，包裹所有需要鉴权的页面�
 │   右侧操作：[+ 召唤眷族]（§6 引导）          │
 ├─────────────────────────────────────────────┤
 │ Tab Bar（3 个 tab）                          │
-│   [神职] [化身] [穹窿]                       │
+│   [神职] [化身] [主脑]                       │
 ├─────────────────────────────────────────────┤
 │ Tab Content                                  │
 │   （根据当前 tab 显示不同内容）              │
@@ -685,7 +685,7 @@ AppShell 是已登录用户的统一外壳，包裹所有需要鉴权的页面�
 
 #### Header 详情
 - 大标题：Workspace 显示名（slug 在上方小字 mono 灰色）
-- 副标题："5 个眷族 · 3 个化身 · 穹窿 1.2KB"
+- 副标题："5 个眷族 · 3 个化身 · 主脑活跃"
 - 右侧操作按钮（需 `can_summon_entity`）：
   - "+ 召唤眷族"（触发 §6 引导，Workspace 已空时高亮 + 动画）
   - "⋯"菜单（需 `can_edit_workspace`）：编辑 Workspace 名 / 软删除（30 天可恢复）
@@ -728,23 +728,90 @@ AppShell 是已登录用户的统一外壳，包裹所有需要鉴权的页面�
 - **点击**：进入 `/workspaces/:id/instances/:iid`（§9 化身详情页）
 - **批量操作**（需 `can_interrupt_instance`）：勾选多个 → 批量 interrupt / resume
 
-#### Tab 3：穹窿（Blackboard）
+#### Tab 3：主脑（CentralHub）— 4 脑区协作中枢
+
+> **核心概念**：**主脑 = 4 脑区合成的协作中枢容器**。每个 Workspace 有且只有 1 个 CentralHub（1:1），里面包含 4 个独立功能的子区（脑区），每个脑区对应 1 个独立子表：
+>
+> | 脑区 | Backend 表名 | Display (zh) | 功能 |
+> |---|---|---|---|
+> | 穹窿（fornix） | `fornix` | 穹窿 | Workspace 共通工作目录（files / shared assets / attachments）— 现有 BlackboardFile |
+> | 额叶（frontal lobe） | `frontal_lobe_kanbans` | 额叶 | Kanban + Todo（继承 oh-my-openagent 的 todo 系统） |
+> | 脑干（brainstem） | `brainstem_schedules` | 脑干 | 定时任务 / 延时任务（cron-like 调度，Workspace 作用域） |
+> | 小脑（cerebellum） | `cerebellum_agents` | 小脑 | 1 个系统级中央 agent，仅服务主脑，不参与 Workspace 整体编排，承担中央智能功能（状态监控/感知聚合等）|
+>
+> 数据模型采用**分子表**方案（核心已确定），4 个脑区各自独立表，1 个 CentralHub 表承担容器角色（1:1 per workspace）。
+
+**Tab 3 子结构**：进入 Tab 3 后默认打开"概览"视图 + 4 个脑区子 tab（穹窿 / 额叶 / 脑干 / 小脑）。
+
+##### §8.2.3a CentralHub 概览（默认视图）
 
 **空态**：
 - 图标：`Notebook`
-- 标题："穹窿是空的"
-- 副标题："共享状态尚未初始化。让你的化身写第一条穹窿吧"
+- 标题："主脑是空的"
+- 副标题："共享状态尚未初始化。让你的化身写第一条主脑内容吧"
 - CTA："召唤眷族" → 触发 §6 引导
 
-**填充态**：
-- **布局**：2 列 grid
-  - 左：共享上下文（`blackboard.content`）
-  - 右：手动备注（`blackboard.manual_notes`）
-- **编辑模式**（需 `can_edit_blackboard`）：
-  - 双击进入编辑态
-  - textarea，Ctrl+Enter 保存，Esc 取消
-  - 实时 autosave（防抖 1.5s）
-- **顶部统计**：穹窿字数 / 最近更新时间 / 写入化身数
+**填充态（概览视图）**：
+- **布局**：顶部统计 + 4 脑区状态卡片 grid（2×2）
+- **顶部统计**（4 脑区计数汇总）：
+  - 穹窿文件数 · 额叶活跃 todo 数 · 脑干定时任务数 · 小脑 agent 心智状态
+- **4 张脑区状态卡片**（每卡 1 脑区）：
+  - 卡头：脑区名称 + 中文 display + 当前健康状态 badge（绿/黄/红）
+  - 卡体：2-3 个核心 metric（如穹窿显示文件大小 / 修改时间，额叶显示活跃 todo / 已完成 todo，脑干显示下次执行 / 已失败任务，小脑显示 agent loop_status / 续命次数）
+  - 卡底：「进入此脑区」按钮（→ Tab 3.x 视图）
+
+##### §8.2.3b 穹窿（fornix）— 工作目录视图
+
+**Tab 切换路径**：`/workspaces/:id?tab=centralHub&area=fornix`
+
+**结构**：
+- 顶部面包屑：`Workspace · 主脑 · 穹窿`
+- 左侧：BlackboardFile 树状目录（保留现有 P6 BlackboardFile 模型，字段名 `fornix_files` 后续 15d-rename wave 更新）
+- 右侧：文件详情预览 + 操作（下载 / 替换 / 删除）
+- **继承 P6 操作**：GET/PATCH/POST/DELETE 文件 + 归档到 Vault
+
+##### §8.2.3c 额叶（frontal lobe）— Kanban + Todo
+
+**Tab 切换路径**：`/workspaces/:id?tab=centralHub&area=frontal-lobe`
+
+**结构**：
+- 左侧列：Kanban 看板（todo 状态切换列：backlog / in-progress / done / blocked）
+- 右侧：当前选中 todo 详情（创建者 / 关联 entity / 关联 instance / 时间线）
+- 「+ 新建 todo」按钮（手动 / 由 instance 通过基因自动创建）
+
+**Todo 来源**：
+- 真人手动创建
+- 化身通过基因（深海基因 install 包含 todo-creation gene）自动写入
+- 跨 Workspace 不可见，但 Workspace 内全员可读（权限 后续可细化）
+
+##### §8.2.3d 脑干（brainstem）— 调度任务
+
+**Tab 切换路径**：`/workspaces/:id?tab=centralHub&area=brainstem`
+
+**结构**：
+- 任务列表：name + cron/interval + 下次执行时间 + 上次结果 + 状态
+- 「+ 新建调度」按钮（弹模态：name / cron expr 或 interval / 目标 / 首次执行时间）
+- 操作：暂停 / 启用 / 删除 / 查看执行历史
+
+**继承 oh-my-openagent 的调度概念**（待验证细节再细化）。
+
+##### §8.2.3e 小脑（cerebellum）— 中央 agent
+
+**Tab 切换路径**：`/workspaces/:id?tab=centralHub&area=cerebellum`
+
+**结构**：
+- 中央 agent 详情（不是普通 Entity 详情，因为小脑 agent 是系统级而非用户创建）
+- 显示内容：神职名 + 心智状态 + 当前任务（脑干调度触发的任务 / 穹窿 / 额叶 触发的感知聚合）
+- 操作（仅超管）：
+  - 查看小脑 agent 完整 Memory（系统级 schema）
+  - 重启小脑 agent（force restart）
+  - 修改小脑 agent 的 prompt 配置（受 `can_manage_cerebellum_agent` 限制）
+
+**小脑 agent 特殊性**：
+- 由系统初始化时自动创建（per workspace），**不可软删**
+- 有自己专用的 BaseClass（`cerebellum-baseclass`，系统内置神职）—— 见 §2 深海基因
+- 不出现在 Workspace 节点的 Topology viz 拓扑图（仅在主脑视图显示）
+- 心智状态通过 glow halos 显示（使用独立颜色 / 灰度调以区别普通 Entity）
 
 ### 8.3 三个 Tab 的统一规范
 
@@ -1297,7 +1364,7 @@ AppShell 是已登录用户的统一外壳，包裹所有需要鉴权的页面�
 - **目标 slug**：自动 = 当前眷族 slug，灰显不可编辑
 - **Kind 过滤**（多选 checkbox）：可勾选 "仅晋升教训/决策/..."
 - **触发按钮**：「晋升」 → POST `/learning/entities/{eid}/distill?action=promote`
-- **说明 tooltip**：晋升会捕获当前眷族所有 running 化身的 Memory + 穹窿写入，原地增强眷族自身 prompt
+- **说明 tooltip**：晋升会捕获当前眷族所有 running 化身的 Memory + 主脑写入，原地增强眷族自身 prompt
 
 #### 炼化模式（transmute）
 - **目标 slug**：必填，输入新 BaseClass 的 slug
@@ -1383,7 +1450,7 @@ AppShell 是已登录用户的统一外壳，包裹所有需要鉴权的页面�
 
 - **预览**：
   - 右上角显示「此基因预期效果」摘要
-  - 例：`operator-gene` = "可以召唤眷族、操作化身、编辑穹窿；不能导出审计日志"
+  - 例：`operator-gene` = "可以召唤眷族、操作化身、编辑主脑；不能导出审计日志"
 
 ### 14.4 能力位参考表（v0 候选清单）
 
@@ -1393,7 +1460,7 @@ AppShell 是已登录用户的统一外壳，包裹所有需要鉴权的页面�
 | `can_spawn_instance` | spawn 化身 | operator |
 | `can_interrupt_instance` | 中断化身 | operator |
 | `can_pause_instance` | 暂停化身 | operator |
-| `can_edit_blackboard` | 编辑穹窿 | operator |
+| `can_edit_central_hub` | 编辑主脑 | operator |
 | `can_view_workspace` | 查看 workspace | operator / viewer / auditor |
 | `can_view_topology` | 查看心灵图景 | operator / viewer / auditor |
 | `can_view_audit_log` | 查看调试印痕 | operator / auditor |
@@ -1546,7 +1613,7 @@ AppShell 是已登录用户的统一外壳，包裹所有需要鉴权的页面�
 | `common.*` | 全部页面 | `appName`, `loading`, `retry`, `superAdmin`, `operator`, `logOut` |
 | `nav.*` | AppShell | `offices`, `topology`, `composer`, `learning`, `members`, `debug` |
 | `workspace.*` | 空间列表 + 详情 | `title`, `noWorkspacesTitle`, `noEntitiesTitle` |
-| `workspaceDetail.*` | 空间详情 | `tabEntities`, `tabInstances`, `tabBlackboard` |
+| `workspaceDetail.*` | 空间详情 | `tabEntities`, `tabInstances`, `tabCentralHub` |
 | `entity.*` | 空间详情 + 学习页 | `noEntity`, `noInstance`, `distillHeading`, `skillSlugLabel` |
 | `instance.*` | 化身详情 | `statusIdle/Running/Paused/Interrupted/Completed/Failed`, `interrupt/pause/resume/status/snapshot` |
 | `composer.*` | Composer | `title`, `send`, `sending`, `sendFailed`, `parseError` |
@@ -1561,7 +1628,7 @@ AppShell 是已登录用户的统一外壳，包裹所有需要鉴权的页面�
 - 所有 zh-CN 翻译必须人工审阅，不允许机翻直堆
 - 占位符插值：必须使用 i18next 的 `{{var}}` 语法
 - 复数处理：`count` 区分单复数（如 1 个化身 / 5 个化身）
-- 术语一致性：所有页面用同一份术语表（不允许某页面"黑板"另一页面"穹窿"）
+- 术语一致性：所有页面用同一份术语表（不允许某页面"Blackboard"另一页面"主脑"）
 
 ### 15.3 错误显示规范
 

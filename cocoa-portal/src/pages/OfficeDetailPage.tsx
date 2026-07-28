@@ -14,7 +14,7 @@ import { ApiError, api } from '@/lib/api';
 import type { Instance, Membership, Office } from '@/lib/types';
 import { useSelectedStore } from '@/stores/selected';
 
-type TabId = 'employees' | 'instances' | 'blackboard';
+type TabId = 'employees' | 'instances' | 'centralHub';
 
 type OffsetPage<T> = {
   readonly items: readonly T[];
@@ -44,7 +44,7 @@ export default function OfficeDetailPage() {
   const TABS = [
     { id: 'employees' as const, label: t('officeDetail.tabEmployees'), Icon: Users },
     { id: 'instances' as const, label: t('officeDetail.tabInstances'), Icon: Cpu },
-    { id: 'blackboard' as const, label: t('officeDetail.tabBlackboard'), Icon: Notebook },
+    { id: 'centralHub' as const, label: t('officeDetail.tabCentralHub'), Icon: Notebook },
   ];
 
   useEffect(() => {
@@ -247,12 +247,12 @@ export default function OfficeDetailPage() {
             )
           ) : null}
 
-          {!isLoading && errorMessage === null && activeTab === 'blackboard' ? (
+          {!isLoading && errorMessage === null && activeTab === 'centralHub' ? (
             blackboard === null ? (
               <EmptyState
                 Icon={Notebook}
-                title={t('officeDetail.emptyBlackboardTitle')}
-                detail={t('officeDetail.emptyBlackboardDetail')}
+                title={t('officeDetail.emptyCentralHubTitle')}
+                detail={t('officeDetail.emptyCentralHubDetail')}
               />
             ) : (
               <div className="grid gap-4 lg:grid-cols-2">

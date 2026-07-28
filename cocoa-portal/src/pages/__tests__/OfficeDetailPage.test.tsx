@@ -102,11 +102,11 @@ describe('OfficeDetailPage', () => {
     expect(mockedApi).toHaveBeenCalledWith('/instances?office_id=office-1');
   });
 
-  it('switches to blackboard and renders its summary', async () => {
+  it('switches to central hub tab and renders its summary', async () => {
     renderOfficeDetail();
     await screen.findByRole('heading', { name: 'Research Lab' });
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Blackboard' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Central hub' }));
 
     expect(
       await screen.findByText('Coordinate the quarterly research sprint.'),

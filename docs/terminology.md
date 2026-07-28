@@ -25,7 +25,7 @@ One-line definitions for every Cocoa code-term (backend), display-name (frontend
 
 - **Membership** — Entity or User membership in a Workspace, with position coordinates (posx/posy), role, and permissions. Exclusive-FK: exactly one of user_id or instance_id.
 - **Passage** (通道) — Adjacency edge between two Memberships or between any two points in the Workspace, defining the selectable neighbor set for messaging. Simplified in 15d: any two points can connect directly; CorridorNode concept dropped.
-- **Blackboard** (穹窿) — Per-Workspace shared real-time state panel with permission-gated file read/write.
+- **CentralHub** (主脑) — Per-Workspace 协作中枢容器，含 4 脑区（穹窿 / 额叶 / 脑干 / 小脑）。Display 中文"主脑"，backend 代码名 `CentralHub`。
 - **Vault** (冰封库) — Cold storage archive for long-term preservation, written by `/archive` command.
 - **Memory** (记忆沉淀) — Append-only per-Entity memory log, indexed by kind (experience/lesson/decision/problem) and time. No `updated_at` column. Accumulates across Instances.
 
