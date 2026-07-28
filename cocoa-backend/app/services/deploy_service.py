@@ -69,7 +69,7 @@ def cancel_deploy_task(deploy_id: str) -> bool:
     return False
 
 
-def _load_deploy_config_snapshot(record: DeployRecord) -> dict[str, str | int | dict[str, str]]:  # noqa: DICT_OK
+def _load_deploy_config_snapshot(record: DeployRecord) -> dict[str, str | int | dict[str, str]]:
     """Parse config_snapshot JSONB column into a dictionary."""
     if not record.config_snapshot:
         return {}

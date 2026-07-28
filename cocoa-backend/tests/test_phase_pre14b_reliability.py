@@ -8,8 +8,8 @@ import pytest
 
 from app.models.deploy_record import DeployRecord
 from app.services.deploy_service import (
-    PROGRESS_STEP_NAMES,
     _TASK_REGISTRY,
+    PROGRESS_STEP_NAMES,
     _dump_deploy_config_snapshot,
     _extract_progress_step_names,
     _load_deploy_config_snapshot,
