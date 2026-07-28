@@ -1,6 +1,6 @@
-import { AlertCircle, Building2, LoaderCircle, LogIn } from 'lucide-react';
+import { AlertCircle, Building2, LoaderCircle, LogIn, UserPlus } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
-import { Navigate, useNavigate } from 'react-router';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router';
 import { ApiError, api } from '@/lib/api';
 import { useSessionStore } from '@/stores/session';
 
@@ -9,11 +9,16 @@ type TokenResponse = {
   readonly token_type: string;
 };
 
+type Mode = 'sign-in' | 'register';
+
 export default function LoginPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const token = useSessionStore((state) => state.token);
   const setToken = useSessionStore((state) => state.setToken);
+  const mode: Mode = searchParams.get('mode') === 'register' ? 'register' : 'sign-in';
   const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -28,9 +33,18 @@ export default function LoginPage() {
     setIsSubmitting(true);
 
     try {
-      const response = await api<TokenResponse>('/auth/login', {
+      let endpoint: string;
+      let body: Record<string, string>;
+      if (mode === 'register') {
+        endpoint = '/auth/register';
+        body = { username, email, password };
+      } else {
+        endpoint = '/auth/login';
+        body = { username, password };
+      }
+      const response = await api<TokenResponse>(endpoint, {
         method: 'POST',
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify(body),
       });
       setToken(response.access_token);
       navigate('/offices', { replace: true });
@@ -52,6 +66,17 @@ export default function LoginPage() {
     }
   }
 
+  const heading = mode === 'register' ? 'Create your account' : 'Sign in';
+  const tagline =
+    mode === 'register'
+      ? 'Register to bootstrap an office. The first user becomes super admin.'
+      : 'Use your operator credentials to access office control surfaces.';
+  const submitLabel = mode === 'register' ? 'Create account' : 'Sign in';
+  const switchLabel =
+    mode === 'register' ? 'Already have an account? Sign in' : "Don't have an account? Register";
+  const switchTo: Mode = mode === 'register' ? 'sign-in' : 'register';
+  const switchHref = switchTo === 'register' ? '/login?mode=register' : '/login';
+
   return (
     <main className="grid min-h-dvh place-items-center bg-slate-950 px-4 py-10 text-slate-100">
       <section className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl shadow-black/30 sm:p-8">
@@ -65,11 +90,9 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <div className="mb-6">
-          <h1 className="text-2xl font-semibold tracking-tight">Sign in</h1>
-          <p className="mt-2 text-sm leading-6 text-slate-400">
-            Use your operator credentials to access office control surfaces.
-          </p>
+        <div className="mb-6" role="tablist" aria-label="Authentication mode">
+          <h1 className="text-2xl font-semibold tracking-tight">{heading}</h1>
+          <p className="mt-2 text-sm leading-6 text-slate-400">{tagline}</p>
         </div>
 
         {errorMessage !== null ? (
@@ -99,6 +122,24 @@ export default function LoginPage() {
             />
           </div>
 
+          {mode === 'register' ? (
+            <div>
+              <label htmlFor="email" className="mb-2 block text-sm font-medium text-slate-200">
+                Email
+              </label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                required
+                value={email}
+                onChange={(event) => setEmail(event.currentTarget.value)}
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none transition-colors placeholder:text-slate-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
+              />
+            </div>
+          ) : null}
+
           <div>
             <label htmlFor="password" className="mb-2 block text-sm font-medium text-slate-200">
               Password
@@ -107,12 +148,16 @@ export default function LoginPage() {
               id="password"
               name="password"
               type="password"
-              autoComplete="current-password"
+              autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
               required
+              minLength={8}
               value={password}
               onChange={(event) => setPassword(event.currentTarget.value)}
               className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none transition-colors placeholder:text-slate-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
             />
+            {mode === 'register' ? (
+              <p className="mt-1.5 text-xs text-slate-500">At least 8 characters.</p>
+            ) : null}
           </div>
 
           <button
@@ -123,12 +168,20 @@ export default function LoginPage() {
           >
             {isSubmitting ? (
               <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+            ) : mode === 'register' ? (
+              <UserPlus className="size-4" aria-hidden="true" />
             ) : (
               <LogIn className="size-4" aria-hidden="true" />
             )}
-            Sign in
+            {submitLabel}
           </button>
         </form>
+
+        <p className="mt-6 text-center text-sm text-slate-400">
+          <Link to={switchHref} className="text-blue-400 transition-colors hover:text-blue-300">
+            {switchLabel}
+          </Link>
+        </p>
       </section>
     </main>
   );

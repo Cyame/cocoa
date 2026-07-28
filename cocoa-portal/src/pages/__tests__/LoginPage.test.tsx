@@ -12,9 +12,9 @@ vi.mock('@/lib/api', async (importOriginal) => {
 
 const mockedApi = vi.mocked(api);
 
-function renderLogin() {
+function renderLogin(initialPath = '/login') {
   return render(
-    <MemoryRouter initialEntries={['/login']}>
+    <MemoryRouter initialEntries={[initialPath]}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/offices" element={<p>Office destination</p>} />
@@ -73,5 +73,54 @@ describe('LoginPage', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Invalid username or password');
     expect(useSessionStore.getState().token).toBeNull();
+  });
+
+  it('renders register mode with email field when ?mode=register', () => {
+    renderLogin('/login?mode=register');
+
+    expect(screen.getByRole('heading', { name: 'Create your account' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Email' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create account' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Sign in/i })).toHaveAttribute('href', '/login');
+  });
+
+  it('submits register payload to /auth/register', async () => {
+    mockedApi.mockResolvedValue({ access_token: 'new-jwt', token_type: 'bearer' });
+    renderLogin('/login?mode=register');
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Username' }), {
+      target: { value: 'newbie' },
+    });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Email' }), {
+      target: { value: 'newbie@test.local' },
+    });
+    fireEvent.change(screen.getByLabelText('Password'), {
+      target: { value: 'securepass1' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+
+    await waitFor(() => {
+      expect(mockedApi).toHaveBeenCalledWith('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({
+          username: 'newbie',
+          email: 'newbie@test.local',
+          password: 'securepass1',
+        }),
+      });
+    });
+    expect(useSessionStore.getState().token).toBe('new-jwt');
+    expect(await screen.findByText('Office destination')).toBeInTheDocument();
+  });
+
+  it('renders sign-in mode by default', () => {
+    renderLogin('/login');
+
+    expect(screen.getByRole('heading', { name: 'Sign in' })).toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Email' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Register/i })).toHaveAttribute(
+      'href',
+      '/login?mode=register',
+    );
   });
 });
