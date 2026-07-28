@@ -1,20 +1,24 @@
 # syntax=docker/dockerfile:1.7
 # Cocoa Portal Static Image — built with npmmirror (China) + served by nginx:alpine.
 #
-# Multi-stage build: a node:22-alpine builder runs `bun install --frozen-lockfile`
+# Multi-stage build: an `oven/bun:1.2` builder runs `bun install --frozen-lockfile`
 # and `bun run build` to produce the React SPA, then nginx:alpine serves the
 # resulting `dist/` directory on port 5173 with SPA fallback to /index.html.
 #
 # Build context must be the repository root so `cocoa-portal/...` paths resolve.
 # Build: docker build -t cocoa-portal:latest -f cocoa-artifacts/docker/Dockerfile.portal .
-# Pinned base image (Node 22 LTS — per user direction 2026-07-28).
-# Pull: docker pull node:22.11.0-alpine
-FROM node:22.11.0-alpine AS builder
+# Pinned base images — fix for "bun not in node base image" (pre-14b):
+#   Builder: oven/bun:1.2 (has bun pre-installed; matches Cocoa portal's bun 1.x lockfile)
+#   Runtime: nginx:1.27.4-alpine
+# Pull commands:
+#   docker pull oven/bun:1.2
+#   docker pull nginx:1.27.4-alpine
+FROM oven/bun:1.2 AS builder
 WORKDIR /build
 
-# npmmirror (China) for both npm and bun — bun reads npm-style registry config.
-RUN npm config set registry https://registry.npmmirror.com && \
-    bun config set registry https://registry.npmmirror.com
+# npmmirror (China) for bun. oven/bun reads .npmrc / bunfig.toml; bun 1.2 has
+# no `bun config` CLI subcommand, so we drop a bunfig.toml into /build.
+RUN printf '[install]\nregistry = "https://registry.npmmirror.com"\n' > /build/bunfig.toml
 
 # Install dependencies first to maximise layer caching.
 COPY cocoa-portal/package.json cocoa-portal/bun.lock* ./
