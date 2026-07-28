@@ -12,7 +12,7 @@
 ### 定位
 **多智能体控制台**——单一 Workspace 中，**真人操作员**（旁观者 / 觉醒者权限）召唤、观察、调度 AI 化身（Instance）。Workspace 共享神职（BaseClass）池、共享主脑（Blackboard）状态、共享通道（Passage）连接拓扑。
 
-> **核心身份区分**：Cocoa 中只有**旁观者**（director rank / 觉醒者权限）是真人用户。所有"神职"（BaseClass）、"眷族"（Entity）、"化身"（Instance）都是 **AI 智能体**——它们由真人召唤、配置、调度，但不与真人平级。"浅识者"和"深潜者"是 AI 智能体的两种运行形态，不是真人角色。
+> **核心身份区分**：Cocoa 中只有**真人用户**（通过觉醒基因管理权限位）——见 §2.2.2。所有"神职"（BaseClass）、"眷族"（Entity）、"化身"（Instance）都是 **AI 智能体**——它们由真人召唤、配置、调度，但不与真人平级。"浅识者"和"深潜者"是 AI 智能体的两种运行形态，不是真人角色。
 
 ### 与传统 chat 工具的核心差异
 | 维度 | 传统 chat | Cocoa |
@@ -34,12 +34,25 @@
 
 ---
 
-## §2 真人用户职阶
+## §2 三层正交概念：职阶 / 能力 / 知识
 
-> **关键约束**：Cocoa 的真人用户**只有 1 类身份**——旁观者（director rank / 觉醒者权限）。下述 3 个职阶是这位真人在不同场景下的视角，**不是 3 类真人**。如果未来权限系统做复杂，可以为真人再定义更细的职阶。
+> **关键约束**：本节 3 个概念**完全正交**：
+> - **职阶（Tiers of Operation）** — 真人用户的运行模式，**互斥**
+> - **能力系统（Capabilities）** — "能做什么"，AI 与人类双侧都存在，**多选**
+> - **知识系统（Knowledge）** — 仅对 **Instance** 有效（AI 化身层），与职阶 / 能力完全独立
+>
+> **核心抽象：基因（Gene）** — 共有两类，"基因 = 一组命名打包"是统一的，但结构完全不同：
+> - **觉醒基因**（人类侧）：权限组合，用于能力位管理
+> - **深海基因**（AI 侧）：capability 打包，对应 nodeskclaw 的 `gene_service.py` 4 类形态（tool-gene / meta-gene / genome / workflow-gene）
+>
+> 描述上必须严格区分。详见 §2.2 双侧对照。
 
-### 职阶 A — 日常 Operator（旁观者默认视角）
-- **背景**: 真人开发 / 运维 / 产品，对应 nodeskclaw 的"操作员"或"超管"角色
+### §2.1 职阶（Tiers of Operation）— 互斥
+
+真人用户的**运行模式**——一个时刻只有一种。下述 3 个职阶是同一位真人在不同场景下的视角，**不是 3 类真人**。
+
+#### 职阶 A — 日常 Operator（默认视角）
+- **背景**: 真人开发 / 运维 / 产品
 - **典型场景**:
   - 进入 Workspace，召唤 AI 眷族（暗行 / 铸金 / 灵视 等）派活
   - Composer 给 AI 化身发指令、收回应、批准或中断
@@ -48,7 +61,7 @@
 - **痛点**: AI 化身误解指令、多个化身上下文断流、Composer 分割错误
 - **关键页面**: 空间详情（眷族/化身 tab）、Composer、化身详情、心灵图景、首次运行引导
 
-### 职阶 B — Audit Mode（同一人，切换视角）
+#### 职阶 B — Audit Mode（同一人，切换视角）
 - **背景**: 职阶 A 临时进入"审计者"视角，看 AI 化身的内部运行
 - **典型场景**:
   - 调试页按 `harness.*` 类型过滤，回放 AI 化身心智状态变化
@@ -58,8 +71,8 @@
 - **痛点**: 事件量大无过滤、时间区间难圈选、模型配置散落
 - **关键页面**: 调试、空间详情（成员 tab 看 AI 眷族契约）、超管功能
 
-### 职阶 C — Read-only Viewer（未来扩展，P16d 后）
-- **背景**: 团队成员、客户、临时观察者——真人但**无 super_admin 权限**
+#### 职阶 C — Read-only Viewer（未来扩展，P16d 后）
+- **背景**: 团队成员、客户、临时观察者——真人但**未持有 `can_manage_genes` 等超管能力位**
 - **典型场景**:
   - 只读查看 Workspace 的 AI 化身运行、心灵图景、调试事件
   - 不能召唤眷族、不能中断化身、不能编辑主脑
@@ -68,7 +81,234 @@
 - **关键页面**: 全部页面（但操作按钮全部禁用，化身控制按钮全灰）
 - **状态**: 15d 阶段不实现；待 P16d Org + Workspace 多租户后引入
 
-> **注意**：职阶 A 和 B 是同一个真人在不同视角的切换，不是 2 个不同人。职阶 C 是 15d 之后 P16d 才有的权限变体。本 PRD 在涉及权限差异时按 A/B/C 分别考虑。
+> **注意**：职阶 A 和 B 是同一个真人在不同视角的切换，不是 2 个不同人。职阶 C 是 15d 之后 P16d 才有的变体。本 PRD 在涉及运行模式差异时按 A/B/C 分别考虑。
+> **重要**：职阶 ≠ 能力位（§2.2）。职阶是"作为谁在操作"（互斥模式），能力是"具体能做什么"（多选位）。
+
+---
+
+### §2.2 能力系统 — 双侧各自一套，结构完全不同
+
+> **核心约束**：本节是 §2 中**结构最复杂**的一段。两个 "能力" 概念必须严格区分：
+> - **AI 智能体的能力** = 可调用的工具/技能/MCP/LSP。**打包单位 = 深海基因**（plugin / extension 性质，参考 nodeskclaw `gene_service.py`）
+> - **真人的能力** = 可执行的操作权限位。**打包单位 = 觉醒基因**（权限组 / 角色牌）
+> - 两者**不要混用**。深度参看 nodeskclaw：`/Users/xuwenrui/Documents/Codes/Researches/nodeskclaw/nodeskclaw-backend/app/data/gene_templates/` —— 深海基因有 skill content + tool_allow + scripts + runtime_config 多个字段，比觉醒基因（FK + 字段列表）复杂得多。
+>
+> **Schema 设计**：使用**两张不同的表**——结构差异大，硬塞同一张表会污染 schema。
+> - `human_genes` 表：FK + capability 字段列表（简单）
+> - `ai_genes` 表：完整 manifest（skill content + tool allowlist + scripts + runtime config，覆盖 nodeskclaw 4 类基因形态：tool 基因 / 元基因 / 基因组 / 工作流基因 — 见 §2.2.4）
+
+#### §2.2.1 双侧快速对照
+
+| 维度 | AI 智能体侧（Instance 维度） | 真人侧（User 维度） |
+|---|---|---|
+| 能力原子 | `Capability` 条目（type + name + config） | `Permission` 位（`can_*` 字符串） |
+| 能力单一类型 | 1 个 `CapabilityType` 枚举 `skill / tool / mcp / lsp` | 1 个 `Permission` 字典（key → bool） |
+| 打包机制 | **深海基因**（plugin-like，多字段 manifest） | **觉醒基因**（权限组，多 key 列表） |
+| 打包存储 | `ai_genes` 表（含 skill content / tool allowlist / scripts / runtime_config） | `human_genes` 表（FK + 能力位 list） |
+| 注入时机 | 在 Instance **deploy 时**注入（安装到运行时容器） | 在 User 加入 Workspace 时赋予基因预设 |
+| 实例化 | Capability 列表被 runtime adapter 部署到容器（skill 写到 skill 目录、tool 注册到 LLM、mcp 启动进程、lsp 客户端启动） | 权限位列表 + 当前 `is_super_admin` bit 进行 OR 求和 |
+| 变更高成本 | 高（修改深海基因通常需要 spawn 新 Instance） | 低（修改觉醒基因立即生效，无需重启） |
+
+---
+
+#### §2.2.2 真人侧 — 觉醒基因（Human Gene = Permission Group）
+
+**觉醒基因** = 一组 `can_*` 权限位的命名打包。功能上等价于 nodeskclaw 早期计划的 "role-pack" / "permission-set"。
+
+##### 觉醒基因预设清单（v0 候选）
+
+| 预设名 | 含能力位（示例） | 用途 |
+|---|---|---|
+| `operator-gene`（默认） | `can_summon_entity`, `can_interrupt_instance`, `can_spawn_instance`, `can_edit_blackboard`, `can_view_audit_log` | 日常 Workspace 操作 |
+| `auditor-gene` | `can_view_audit_log`, `can_export_audit_log`, `can_view_all_workspaces` | Audit Mode 自动激活 |
+| `admin-gene`（15d 仅 1 个） | 全部能力位 + `can_create_workspace` + `can_delete_workspace` | 首位注册用户自动获得 |
+| `viewer-gene`（P16d 后） | `can_view_workspace` + `can_view_topology` + `can_view_audit_log` | 职阶 C 默认绑定 |
+
+##### 数据库设计（`human_genes` 表）
+
+```python
+class HumanGene(BaseModel):
+    # 标准字段
+    id, slug, name, description, deleted_at, created_at, updated_at
+    
+    # 核心字段
+    kind: enum("builtin", "custom")           # 内置 4 个 / 自定义
+    permission_keys: list[str]                # can_* 字符串列表
+    tags: list[str]                            # 可选标记
+```
+
+**觉醒基因特性**：
+- 一行存一个基因预设
+- `permission_keys` 是 `can_*` 字符串列表（FK 到 capability registry 表）
+- 内置 4 个（builtin），不可删除，可复制后修改
+- 自定义基因可以创建 / 编辑 / 删除
+
+##### 能力位参考表（v0 候选）
+
+| Key | 描述 | 默认归属基因 |
+|---|---|---|
+| `can_summon_entity` | 召唤眷族 | operator |
+| `can_spawn_instance` | spawn 化身 | operator |
+| `can_interrupt_instance` | 中断化身 | operator |
+| `can_pause_instance` | 暂停化身 | operator |
+| `can_edit_blackboard` | 编辑主脑 | operator |
+| `can_view_workspace` | 查看 workspace | operator / viewer / auditor |
+| `can_view_topology` | 查看心灵图景 | operator / viewer / auditor |
+| `can_view_audit_log` | 查看调试印痕 | operator / auditor |
+| `can_export_audit_log` | 导出印痕 JSON | auditor |
+| `can_manage_genes` | 管理基因预设 | admin |
+| `can_create_workspace` | 创建 workspace | admin |
+| `can_delete_workspace` | 删除 workspace | admin |
+
+---
+
+#### §2.2.3 AI 智能体侧 — 深海基因（AI Gene = Capability Plugin / Extension）
+
+> **名称说明**：此处的 "深海基因" 是 AI 智能体的能力打包单位，对应 nodeskclaw 现有的 4 类基因形态（tool 基因 / meta-gene 元基因 / genome 基因组 / workflow-gene 工作流基因），用于在深海智能体范围内复用与组合。
+>
+> AI 智能体的"intern / researcher" 两种 rank **不再**与不同基因类型绑定——rank 描述的是"AI 智能体在生命周期的形态（无状态 vs 持久化）"，与它装什么基因无关。Intern 与 Researcher 共用同一套深海基因机制。
+
+##### 深海基因 4 类形态（对应 nodeskclaw templates 分类）
+
+| 类别 | 名称 | 用途 | nodeskclaw 例子 |
+|---|---|---|---|
+| 工具基因 | `tool-gene` | 单个 tool / mcp / lsp / skill 容器化 | `nodeskclaw-blackboard-tools.json` |
+| 元基因 | `meta-gene` | 跨工具的横切关注（路由、模式、协作规约） | `meta_gene_tool_routing.json`、`meta_gene_plan_mode.json` |
+| 基因组 | `genome` | 多基因捆绑打包（含 tool-gene + meta-gene） | `genome_ai_employee_basics.json` |
+| 工作流基因 | `workflow-gene` | 多步骤流水线（含阶段编排 + 推荐拓扑） | `workflow_genome_example.json` |
+
+##### 数据库设计（`ai_genes` 表）
+
+```python
+class AiGene(BaseModel):
+    # 标准字段
+    id, slug, name, description, deleted_at, created_at, updated_at
+    
+    # 分类
+    kind: enum("tool-gene", "meta-gene", "genome", "workflow-gene")
+    tags: list[str]
+    
+    # Manifest（节点兼容 nodeskclaw 字段）
+    manifest: dict = {
+        "skill": {                              # 可选：skill content
+            "name": "...",
+            "content": "---\nname: ..."
+        },
+        "tool_allow": [                         # 可选：tool 白名单
+            "nodeskclaw_bpilot",
+            "group:fs"
+        ],
+        "scripts": {                            # 可选：Python CLI 脚本
+            "filename.py": "..."
+        },
+        "runtime_config": {                     # 可选：运行时配置补丁
+            "PROXY_URL": "...",
+            "MAX_TOKENS": 4096
+        }
+    }
+    
+    # 基因组特有
+    gene_slugs: list[str]                       # 仅 genome 类使用，引用其他基因
+    
+    # 通用
+    config_override: dict                       # 模板覆盖配置
+```
+
+**为什么是单独的表？**
+
+1. **schema 完全不像**：觉醒基因只有 FK + permission_keys 列表；深海基因有 manifest 4 字段 + gene_slugs + config_override + scripts 实际代码内容。
+2. **存储空间不同**：觉醒基因几行；深海基因的 `scripts` 字段可能含真实 Python 脚本内容（KB 级别）。
+3. **生命周期不同**：觉醒基因一旦绑定立即生效；深海基因需要 deploy 流程（安装到 Instance 容器，运行时才能用）。
+4. **模板来源不同**：觉醒基因是 Cocoa 内置；深海基因将来可能会从 GeneHub 之类的外部基因市场同步（与 nodeskclaw SEED_GENES 流程一致）。
+5. **跨表用 FK 引用**：Entity 创建时可指定深海基因（深海基因与 BaseClass 是 N:N 关系）。一个深海基因可以被多个 BaseClass 引用，一个 BaseClass 也会引用多个深海基因。
+
+##### 能力原子（`Capability`）
+
+```ts
+type CapabilityType = 'skill' | 'tool' | 'mcp' | 'lsp';
+
+interface Capability {
+  type: CapabilityType;            // 4 选 1
+  name: string;                    // 'fetch_url' (tool) / 'search_code' (skill) / 'github-mcp' (mcp) / 'ts-lsp' (lsp)
+  scope?: 'global' | 'workspace' | 'entity';
+  config?: Record<string, unknown>;
+}
+```
+
+- **skill**：领域知识 / 提示词模版 / 推理技巧（"代码 review checklist"）
+- **tool**：可调用工具（shell, fetch_url, write_file...）
+- **mcp**：Model Context Protocol 服务（外部进程）
+- **lsp**：Language Server Protocol 客户端（代码智能）
+
+具体 capability 集合由 BaseClass manifest 的 `capabilities` 字段在 spawn 时复制到 Instance。
+
+##### 深海基因的安装流程（参考 nodeskclaw `GeneInstallAdapter`）
+
+1. 用户在 BaseClass 编辑界面勾选需要的深海基因
+2. 创建 Entity 时从 BaseClass 复制深海基因列表到 Entity
+3. spawn Instance 时按照 Entity 的深海基因列表：
+   - 写入 `Instance.runtime_config.installed_genes`
+   - runtime adapter（GeneInstallAdapter）逐个把深海基因的 manifest 部署到 Instance 容器：
+     - skill → 写到 skill 目录
+     - tool → 注册到 LLM tool 列表
+     - mcp → 启动 MCP 服务进程
+     - script → 写入容器文件系统并 chmod +x
+     - runtime_config → 浅合并到 openclaw.json
+4. 安装完成生成 `EventLog` 印痕（`installed_genes.{slug}`）
+
+---
+
+#### §2.2.4 关键交互约束
+
+- **觉醒基因 变更**：立即生效（改 `permission_keys` → 用户下次鉴权即生效）。产生 `EventLog` 印痕。
+- **深海基因 变更**：高成本，**新 Instance 才生效**。已运行的 Instance 不受影响；想让它生效需要重启 / 重新 deploy。
+- **跨 Workspace 复用**：两种基因都支持跨 Workspace 复用（深海基因因为是 plugin，是 reusable 性质；觉醒基因因为是角色预设，也是 reusable 性质）。
+- **管理员能力**：超管（首位注册用户的 admin-gene 持有者）可以创建自定义基因，但内置 4 个基因（operator / auditor / admin / viewer）不可删除，可被复制。
+
+---
+
+#### §2.2.5 命名隔离警告（重要）
+
+- **觉醒基因** = 真人权限组合（人类侧）— 简单 FK + 字符串列表
+- **深海基因** = AI capability 打包（AI 侧）— manifest 多字段、可能含 scripts 代码
+- 二者**共享 "基因" 词是因为都是命名打包**，但实质完全不同：
+  - 觉醒基因 = "谁能做什么"（权限位组合）
+  - 深海基因 = "AI 能调用什么"（capability 组合）
+- **严禁混用**：觉醒基因不能包含 AI capability；深海基因不能含人类权限位。
+- 蒸馏动作（晋升 / 炼化）是**另一个维度**的概念——是关于 AI 经验积累 / 输出新神职的，跟基因（打包）正交。蒸馏产物（新 BaseClass）可以引用深海基因作为默认安装包。
+
+---
+
+### §2.3 知识系统（Knowledge）— 仅 Instance 有效
+
+**关键约束**：知识系统与职阶、能力**完全解耦**，且**只对 AI Instance 有效**——对 Entity / BaseClass / 真人 都没有意义（真人不需要"知识注入"，Entity 是身份标识、BaseClass 是模板）。
+
+#### 范围
+- ✅ 仅 `Instance.runtime_config.knowledge` 字段
+- ❌ 不存在于 Entity / BaseClass / User / Membership
+
+#### 当前实际形态（v0）
+
+知识系统的"v0"实现非常朴素：**通过环境变量 + 文件注入**到 Instance 容器。这与 nodeskclaw 当前的做法一致。
+
+| 形态 | 注入方式 | 用途 |
+|---|---|---|
+| `env` | 写入 Instance 容器环境变量（如 `KNOWLEDGE_DOCS_PATH=/workspace/docs`） | 给 LLM context 注入私有知识库路径 |
+| `file` | 把文件挂载到 Instance 容器（PVC 或 configmap） | 注入文档 / schema / 参考资料 |
+
+**v0 操作界面**（简化）：
+- 化身详情页 → "知识" tab → 列出当前已注入的 env / file
+- 「+ 添加 env」按钮 → 输入 key=value → POST Instance runtime config
+- 「+ 上传文件」按钮 → 选择文件 → 上传到 PVC → 关联到 Instance
+- 「移除」按钮 → 解除关联
+- 修改瞬时生效（无需重启 Instance，**破除 v0 与未来版本的一致约束**—— v0 通过环境变量 / 文件挂载，运行时变更）
+
+#### 未来扩展（暂不计划）
+- RAG / 向量数据库（KB 检索）
+- 多模态知识（图谱 / 视频帧）
+- 知识继承（Entity 层的共享知识库）
+
+> **重要**：以上扩展**不在当前 roadmap 中**，等 P16d 后再评估。如果有人来问"知识能不能做 RAG"——告诉他们在 `docs/prd-v1.md` §2.3 显式说不计划。
 
 ---
 
@@ -105,13 +345,19 @@
 | `bai-tong` | 百瞳 | 视觉 / 媒体 / 音频 | /look /analyze /describe |
 | `jiu-ri` | 旧日 | 顶层委派 / 监控 | /delegate /monitor /approve |
 
-### 3.3 Lab Ranks
+### 3.3 Lab Ranks（2 个 AI 形态 + 1 个真人角色 — 命名巧合，范畴不同）
 
-| Backend | Display | 含义 |
-|---|---|---|
-| `intern` | 浅识者 | 无状态热加载，无 Memory；刚窥见一丝真理 |
-| `researcher` | 深潜者 | 完整神职 + Memory，持久化积累经验；越潜越深 |
-| `director` | 觉醒者 | 人类操作员，最高权限；已醒可指挥 |
+> **重要**：以下 3 个名字读音接近、来源系相同（Cthulhu 神秘系深度形态），但**实际是 3 个独立概念**：
+> - 浅识者 / 深潜者 → AI 智能体的生命周期形态（rank 维度，作用于 Instance）
+> - 觉醒者 → 真人概念（role 维度，作用于 User；跟 AI rank 不互通）
+>
+> 详见 §2.2.1 的双侧映射表。
+
+| Backend | Display | 范畴 | 含义 |
+|---|---|---|---|
+| `intern` | 浅识者 | AI Instance rank | 无状态热加载，无 Memory，每次新启动；刚窥见一丝真理 |
+| `researcher` | 深潜者 | AI Instance rank | 完整神职 + Memory，持久化积累经验；越潜越深 |
+| `director` | 觉醒者 | Human user role | 真人操作员，已醒可指挥；是 User.role，不是 Instance.rank |
 
 ---
 
@@ -156,7 +402,7 @@
 - **状态**：
   - 默认：未选
   - 选中：蓝色边框 + 顶部 checkbox 勾选 + 卡片轻微抬升（translate-y -2px）
-  - 禁用：暗影（an-ying）rank=intern 时禁用 researcher/director 类高级神职（如果走 rank 模式）
+  - 禁用：暗影（an-ying）rank=intern 时禁用 researcher 类高级神职（如果走 rank 模式）
 - **操作**：
   - 「下一步」按钮：未选时禁用，选中后 enabled
   - 「稍后再说」链接：跳过整个引导，进入空 Workspace（带 Toast"已跳过引导，空 Workspace"）
@@ -171,10 +417,10 @@
   - **slug**（自动从显示名生成 kebab-case，可编辑）
     - placeholder：`例如：nai-ya-tan-zi`
     - 校验：必须匹配 `/^[a-z][a-z0-9-]*$/`
-  - **rank 选择**（3 选 1 radio）：
-    - 浅识者（intern）— 无状态，每次重新启动
-    - 深潜者（researcher）— 持久化 + 累积 Memory（推荐）
-    - 觉醒者（director）— 最高权限（仅人类预留，正常用户不可选；保留以便将来扩展）
+  - **AI rank 选择**（2 选 1 radio，AI 智能体生命周期形态）：
+    - 浅识者（intern）— AI 智能体的无状态形态，无 Memory，每次重启动
+    - 深潜者（researcher）— AI 智能体的持久化形态，累积 Memory 跨化身复用（推荐）
+    - *觉醒者（director）是真人概念，与此 rank 选择无关*（详见 §2.2.1）
 - **预览区**：右侧（desktop）/ 下方（mobile）显示该眷族 spawn 化身后的卡片样式预览
 - **状态**：
   - 默认：表单为空，「下一步」禁用
@@ -271,7 +517,7 @@ AppShell 是已登录用户的统一外壳，包裹所有需要鉴权的页面�
 |---|---|
 | Logo 区 | Cocoa 图标 + "Cocoa" + 副标题"控制台" |
 | 主导航区 | 9 个入口（见 7.4） |
-| 用户区（底部） | 用户名 + 角色 badge + 登出按钮 |
+| 用户区（底部） | 用户名 + 职阶 chip + 基因预设 chip + 登出按钮 |
 
 **当前页高亮规则**：
 - 匹配当前路由（包括子路由）：背景变蓝（blue-600），文字变白
@@ -325,13 +571,15 @@ AppShell 是已登录用户的统一外壳，包裹所有需要鉴权的页面�
 
 **结构**（从左到右）：
 - 左侧空（占位）
-- 右侧：语言切换按钮 → 用户名 + 角色 badge → 登出按钮
+- 右侧：语言切换按钮 → 用户名 + 职阶 chip + 基因预设 chip → 登出按钮
 
 **组件**：
 - **语言切换**：`LanguageSwitcher` 组件（zh-CN ⇄ en）
-- **用户信息**：头像（占位圆）+ 用户名 + 角色 badge
-  - `super_admin`：金色 badge（"超级管理员"）
-  - 普通用户：灰色 badge（"操作员"）
+- **用户信息**：头像（占位圆）+ 用户名 + 职阶 chip + 基因预设 chip
+  - 职阶 A（日常 Operator）：蓝色 chip
+  - 职阶 B（Audit Mode）：紫色 chip（hover 提示当前 Audit 视角）
+  - 职阶 C（Read-only Viewer，未来）：灰色 chip
+  - 基因预设 chip：显示当前基因名（如 `operator-gene`），hover 显示能力位列表
 - **登出**：按钮点击 → 清 token → 跳 `/login`
 
 ### 7.6 Header（页面标题区）
@@ -454,9 +702,9 @@ AppShell 是已登录用户的统一外壳，包裹所有需要鉴权的页面�
 #### Header 详情
 - 大标题：Workspace 显示名（slug 在上方小字 mono 灰色）
 - 副标题："5 个眷族 · 3 个化身 · 主脑 1.2KB"
-- 右侧操作按钮（仅 super_admin）：
+- 右侧操作按钮（需 `can_summon_entity`）：
   - "+ 召唤眷族"（触发 §6 引导，Workspace 已空时高亮 + 动画）
-  - "⋯"菜单：编辑 Workspace 名 / 软删除（30 天可恢复）
+  - "⋯"菜单（需 `can_edit_workspace`）：编辑 Workspace 名 / 软删除（30 天可恢复）
 
 #### Tab 1：神职（原"成员"）
 
@@ -473,9 +721,9 @@ AppShell 是已登录用户的统一外壳，包裹所有需要鉴权的页面�
 - **卡片内容**：
   - 顶部：头像圆（眷族 display name 首字）+ 神职 chip（神职 display name）
   - 中部：眷族显示名（H3）+ slug（mono 小字）
-  - 底部：rank badge（浅识者/深潜者/觉醒者）+ 创建时间
+  - 底部：AI rank badge（浅识者 / 深潜者）+ 创建时间
 - **点击**：进入 `/entities/:id` 详情页（P10 学习页 §13）
-- **右键菜单**（super_admin）：
+- **右键菜单**（需 `can_summon_entity`）：
   - 软删除（30 天可恢复）
   - 跳到该眷族的 Memory 页
 
@@ -494,7 +742,7 @@ AppShell 是已登录用户的统一外壳，包裹所有需要鉴权的页面�
   - 中：眷族名（链向眷族）+ K8s pod name
   - 右：loop_status badge（running/idle/paused/failed 颜色）
 - **点击**：进入 `/workspaces/:id/instances/:iid`（§9 化身详情页）
-- **批量操作**（super_admin）：勾选多个 → 批量 interrupt / resume
+- **批量操作**（需 `can_interrupt_instance`）：勾选多个 → 批量 interrupt / resume
 
 #### Tab 3：主脑（Blackboard）
 
@@ -508,7 +756,7 @@ AppShell 是已登录用户的统一外壳，包裹所有需要鉴权的页面�
 - **布局**：2 列 grid
   - 左：共享上下文（`blackboard.content`）
   - 右：手动备注（`blackboard.manual_notes`）
-- **编辑模式**（仅 owner/super_admin）：
+- **编辑模式**（需 `can_edit_blackboard`）：
   - 双击进入编辑态
   - textarea，Ctrl+Enter 保存，Esc 取消
   - 实时 autosave（防抖 1.5s）
@@ -874,10 +1122,10 @@ AppShell 是已登录用户的统一外壳，包裹所有需要鉴权的页面�
 |---|---|---|
 | 类型 | "AI 化身" | "真人契印" |
 | Label | 眷族显示名 | 真人用户名 |
-| 角色 | 神职 + rank | "操作员" |
+| 角色 | 神职 + rank | 觉醒基因预设名（如 `operator-gene`） |
 | 状态 | loop_status badge + glow 颜色块 | "在线/离线" 标记 |
 | 坐标 | (posx, posy) | (posx, posy) |
-| 操作 | "进入化身详情"（跳 §9）/ "软删除"（super_admin） | "查看成员信息" / "解除契印"（super_admin） |
+| 操作 | "进入化身详情"（跳 §9）/ "软删除"（需 `can_delete_node`） | "查看成员信息" / "解除契印"（需 `can_remove_membership`） |
 
 ### 11.9 实时刷新
 
@@ -989,6 +1237,14 @@ AppShell 是已登录用户的统一外壳，包裹所有需要鉴权的页面�
 
 ## §13 学习页 + 蒸馏 UI
 
+> **蒸馏 2 动作（命名严格确定）**：
+> - **晋升 (promote)** — Instance → Entity，捕获当前运行中化身的 Memory 回写到所属眷族，原地增强眷族
+> - **炼化 (transmute)** — Entity → BaseClass，将眷族累积的 Memory 蒸馏为新的可复用神职（跨 Workspace 可用）
+>
+> **没有第 3 个动作**（"飞升" / "ascend" 等不存在）。
+>
+> **与基因的关系**：蒸馏动作产生的是 **新 BaseClass（神职）**，不是深海基因。神职和深海基因是两个正交维度——神职定义 AI 的 prompt + commands + provider config；深海基因定义 AI 的 capabilities（skills / tools / mcps / lsps）。新 BaseClass 可以**引用**已存在的深海基因作为其默认安装包，但蒸馏产物本身 ≠ 基因。
+
 ### 13.1 路由
 `/workspaces/:id/entities/:eid/learning`
 
@@ -1094,43 +1350,204 @@ AppShell 是已登录用户的统一外壳，包裹所有需要鉴权的页面�
 
 ---
 
-## §14 权限 UI
+## §14 觉醒基因 UI（人类侧 — 权限组管理）
 
-### 14.1 权限模型（15d 当前状态）
+> **作用域**：本节只讲**觉醒基因** UI（人类权限位组合）+ 职阶 UI + 能力位检查。**深海基因 UI 在 §14b**（AI 侧 capability 打包）。**严禁混为一谈**。
 
-| 角色 | 真人身份 | super_admin | Membership 权限 |
-|---|---|---|---|
-| 首位注册用户 | 旁观者 | ✅ true | owner |
-| 后续注册用户 | 旁观者 | ❌ false | viewer（默认） |
-
-### 14.2 UI 元素清单
+### 14.1 用户身份状态展示（Topbar）
 
 | 元素 | 位置 | 显示规则 |
 |---|---|---|
-| super_admin badge | Topbar 用户名下方 | `user.is_super_admin === true` 显示金色 badge "超级管理员" |
-| 角色文本 | Topbar 用户名下方 | 非超管显示灰色 "操作员" |
-| 「+ 召唤眷族」按钮 | 空间详情 Header | 仅 super_admin |
-| Workspace 设置菜单 | 空间详情 Header 「⋯」 | 仅 super_admin |
-| 化身 5 个控制按钮 | 化身详情 | 全部真人可见（super_admin 或 viewer 都能触发） |
-| 拓扑 3 模式 | 心灵图景 Toolbar | 全部真人可见（viewer 也可创建通道，但 Read-only 模式职阶 C 禁用） |
-| 节点软删除 | NodeDrawer | 仅 super_admin |
-| 调试页导出 JSON | 调试页 Header | 仅 super_admin（敏感数据） |
-| 蒸馏触发按钮 | 学习页 | 仅 super_admin（炼化会跨 Workspace 复用） |
-| 契印解除 | NodeDrawer | 仅 super_admin |
+| 职阶 chip | Topbar 用户名下方 | 当前职阶（A / B / C）显示对应文字 + 颜色：A 蓝、B 紫、C 灰 |
+| 觉醒基因 chip | Topbar 用户名旁 | 当前生效的觉醒基因名（如 `operator-gene` / `admin-gene`），hover 显示能力位列表 |
+| 单能力位 tooltip | 鼠标悬停 | 显示该能力位的描述（"可召唤眷族"等） |
+| 切换职阶按钮 | Topbar 右上角 | 仅在 A↔B 互切可用（职阶 C 不可自切） |
 
-### 14.3 403 页
+### 14.2 觉醒基因设置入口
+
+入口在空间设置菜单（需 `can_manage_genes`）：
+
+```
+空间设置（⋯ 菜单）
+├── 成员管理（Membership）
+│   ├── 列出所有真人契印
+│   ├── 每个成员显示：用户名 + 当前觉醒基因 + 能力位展开/收起
+│   └── 操作：分配新基因 / 编辑能力位覆盖 / 解除契印
+├── 觉醒基因管理
+│   ├── 列出觉醒基因列表（built-in: operator / auditor / admin / viewer）
+│   └── 操作：新建基因 / 编辑能力位组合 / 删除基因（built-in 不可删除）
+└── 深海基因管理（§14b，跳转）
+```
+
+### 14.3 觉醒基因编辑界面
+
+#### 列表视图
+- 表格行：基因名 + 描述 + 能力位数量 + 「编辑」/「复制」/「删除」按钮
+- 顶部「+ 新建觉醒基因」按钮
+
+#### 单基因编辑视图
+
+- **元数据**：
+  - 基因名（必填，kebab-case）
+  - 描述（多行文本，必填）
+  - 标签：内置 / 自定义（只读）
+
+- **能力位列表**（核心）：
+  - 列出所有 `can_*` 能力位，每个有 checkbox
+  - 已勾选的能力位属于此基因
+  - 每行显示能力位 key + 人类语言描述（"召唤眷族" / "中断化身"）
+  - 全选 / 全不选快捷按钮
+
+- **预览**：
+  - 右上角显示「此基因预期效果」摘要
+  - 例：`operator-gene` = "可以召唤眷族、操作化身、编辑主脑；不能导出审计日志"
+
+### 14.4 能力位参考表（v0 候选清单）
+
+| Key | 描述 | 默认归属基因 |
+|---|---|---|
+| `can_summon_entity` | 召唤眷族 | operator |
+| `can_spawn_instance` | spawn 化身 | operator |
+| `can_interrupt_instance` | 中断化身 | operator |
+| `can_pause_instance` | 暂停化身 | operator |
+| `can_edit_blackboard` | 编辑主脑 | operator |
+| `can_view_workspace` | 查看 workspace | operator / viewer / auditor |
+| `can_view_topology` | 查看心灵图景 | operator / viewer / auditor |
+| `can_view_audit_log` | 查看调试印痕 | operator / auditor |
+| `can_export_audit_log` | 导出印痕 JSON | auditor |
+| `can_manage_genes` | 管理基因预设 | admin |
+| `can_create_workspace` | 创建 workspace | admin |
+| `can_delete_workspace` | 删除 workspace | admin |
+
+> 实际能力位清单待 15d-rename wave 后冻结。
+
+### 14.5 运行时能力位检查
+
+任何页面操作触发能力位缺失时：
+
+- **缺失位时** UI 反馈：操作按钮置灰 + tooltip「需要能力位 `xxx`」
+- **强行调用**（API 403）：跳 `/403` 页面
+- **统一的 403 错误处理**（不在每个页面单独实现）
+
+### 14.6 UI 元素权限对应表（觉醒基因侧）
+
+| UI 元素 | 能力位依赖 |
+|---|---|
+| 「+ 召唤眷族」按钮 | `can_summon_entity` |
+| 化身 5 个控制按钮 | 对应能力位（interrupt / pause / resume / status / snapshot 各一） |
+| Workspace 设置菜单 | `can_manage_genes` 或 `can_create_workspace` 等 |
+| 拓扑 3 模式 | 仅节点位置编辑需 `can_move_node`（P16d 后）/ 普通查看用 `can_view_topology` |
+| 节点软删除 | `can_delete_node` |
+| 调试页导出 JSON | `can_export_audit_log` |
+| 蒸馏触发按钮 | `can_distill_entity`（晋升）/ `can_transmute_entity`（炼化） |
+| 契印解除 | `can_remove_membership` |
+| 深海基因编辑（§14b） | `can_manage_ai_genes`（与 `can_manage_genes` 不同） |
+
+### 14.7 /403 页面（觉醒基因侧）
 
 任意页面操作触发 403 时：
 - 跳转到 `/403` 页面
-- 标题："没有权限"
-- 副标题："你当前的角色无权执行此操作"
+- 标题："缺少能力位"
+- 副标题："你当前的职阶 + 觉醒基因预设无权执行此操作。缺失能力位：`[xxx]`"
+- 「申请权限」按钮 → 联系超管（生成 `EventLog` 印痕作为申请记录）
 - 「返回首页」按钮 → 跳空间列表
 
-> 未来扩展（P16d 多 Workspace）：viewer 可访问自己加入的 workspace，但不能召唤眷族 / 解除契印。
-
-### 14.4 与其他页面关系
-- 权限提示散落在所有页面顶部 / 操作按钮处
+### 14.8 与其他页面关系
+- 能力位提示散落在所有页面顶部 / 操作按钮处（灰显 + tooltip）
 - 统一的 403 错误处理（不在每个页面单独实现）
+- 觉醒基因变更产生 `EventLog` 印痕（operator → `EventLog.type = "human_gene.*"`）
+- 职阶切换立即生效（无确认对话框，但产生印痕）
+
+---
+
+## §14b 深海基因 UI（AI 侧 — Capability 打包管理）
+
+> **作用域**：本节讲**深海基因**（AI capability 打包）UI。**严禁**与 §14 觉醒基因混淆——它们是 schema / UI / 生命周期都不同的两套系统。
+>
+> **入口**：空间设置菜单 → 深海基因管理（需 `can_manage_ai_genes`）。或 BaseClass 编辑界面勾选使用的深海基因。
+
+### 14b.1 深海基因列表
+
+入口：`空间设置 → 深海基因管理`
+
+- 表格行：基因名 + kind（tool-gene / meta-gene / genome / workflow-gene）+ tags + 「编辑」/「查看 manifest」/「删除」按钮
+- 顶部「+ 新建深海基因」按钮
+
+### 14b.2 单深海基因编辑视图
+
+#### 基础元数据
+- 基因名（kebab-case）
+- kind（4 选 1：tool-gene / meta-gene / genome / workflow-gene）
+- 描述
+- tags
+
+#### Manifest 字段（按 kind 动态显示）
+
+| 字段 | 适用 kind | 内容 |
+|---|---|---|
+| `skill` | tool-gene / workflow-gene | SKILL.md 完整内容（含 frontmatter：name / description / metadata.openclaw.always） |
+| `tool_allow` | tool-gene / meta-gene | 工具白名单 list（每条 `nodeskclaw_*` 工具名 / OpenClaw 原生工具组） |
+| `scripts` | tool-gene | Python CLI 脚本 dict（filename → 内容）—— 部署到容器文件系统 + chmod +x |
+| `runtime_config` | 全部 | 运行时配置补丁（env + 浅合并到 openclaw.json） |
+| `gene_slugs` | genome only | 引用其他基因 slug（genome 专用） |
+| `config_override` | 全部 | 模板覆盖配置 |
+
+#### 安装预览
+- 「预览」按钮 → 在 mock 容器渲染安装步骤
+  - skill → 写入路径 / 注册目录
+  - tool_allow → 注册到 LLM tool 列表
+  - mcp → 启动进程命令
+  - scripts → 部署路径 + chmod 命令
+  - runtime_config → 生成的 openclaw.json 片段
+
+### 14b.3 BaseClass / Entity 关联
+
+#### BaseClass 编辑界面
+- BaseClass 编辑页多一个 tab：「深海基因」
+- 列表展示所有深海基因，checkbox 勾选"安装到 Entity"
+- 实时预览"勾选后此 BaseClass 派生 Entity 会带哪些 capability"
+
+#### Entity 编辑界面
+- Entity 详情页 readonly 显示已绑定的深海基因（来源 BaseClass）
+- "添加额外基因" 按钮 → 弹模态选择额外添加的深海基因（覆盖默认安装列表）
+
+### 14b.4 Instance 安装状态展示
+
+入口：化身详情页 → "深海基因" tab
+
+- 列出当前已安装到 Instance 容器的深海基因
+- 每行：基因名 + kind + 安装时间 + 状态（installed / failed / uninstalled）
+- 「+ 安装新基因」按钮 → 选择未装基因 → 触发安装流程（高成本，可能需要重启 Instance）
+- 「移除」按钮 → 解除关联（不删除基因本身）
+
+### 14b.5 深海基因来源
+
+未来扩展：从 GeneHub 同步（参考 nodeskclaw `scripts/upload_seeds_to_genehub.py`）。当前 v0 全部本地维护。
+
+---
+
+## §14c 知识 UI（仅 Instance 侧）
+
+> **作用域**：本节讲**知识系统**（仅 Instance 维度的 env / file 注入）。**严禁**与基因 UI 混为一谈——知识 ≠ 深海基因。
+
+### 14c.1 知识列表（化身详情 → 知识 tab）
+
+| 元素 | 描述 |
+|---|---|
+| env 列表 | key + value + 来源（用户手动 / 模板注入） + 「编辑」「删除」按钮 |
+| file 列表 | 文件名 + 路径 + 大小 + 来源 + 「下载」「替换」「删除」按钮 |
+| 「+ 添加 env」按钮 | 弹模态：输入 key=value → POST Instance runtime config |
+| 「+ 上传 file」按钮 | 弹模态：选择文件 → 上传到 PVC → 关联 Instance |
+
+### 14c.2 知识编辑影响
+
+- 修改瞬时生效（无需重启 Instance）
+- 每次变更产生 `EventLog` 印痕
+- 详见 §2.3
+
+### 14c.3 未来扩展（暂不计划）
+
+详见 §2.3「未来扩展（暂不计划）」—— RAG / 向量数据库 / 知识继承均在当前 roadmap 之外。
 
 ---
 
@@ -1226,7 +1643,7 @@ switch (error.status) {
 ## §5 文档结构（后续 Todo 索引）
 
 - §1 产品概述（本节）✓
-- §2 真人用户职阶（本节）✓
+- §2 三层正交概念：职阶 / 能力 / 知识（本节）✓
 - §3 命名对照表（本节）✓
 - §4 全局 UX 原则（本节）✓
 - §6 首次运行引导 + 神职卡片组（本节）✓
@@ -1236,15 +1653,17 @@ switch (error.status) {
 - §10 Composer 页（本节）✓
 - §11 心灵图景页（本节）✓
 - §12 调试页（本节）✓
-- §13 学习页 + 蒸馏 UI（本节）✓
-- §14 权限 UI（本节）✓
+- §13 学习页 + 蒸馏 UI（晋升 + 炼化 2 动作）（本节）✓
+- §14 觉醒基因 UI（人类侧 — 权限组管理）（本节）✓
+- §14b 深海基因 UI（AI 侧 — Capability 打包管理）（本节）✓
+- §14c 知识 UI（仅 Instance 侧）（本节）✓
 - §15 i18n 覆盖矩阵 + 错误显示规范（本节）✓
 
 ---
 
 ## 附录：F1-F4 最终验证
 
-- **F1. 页面覆盖度** — 10 个页面 + 导航 + 引导 + 蒸馏 UI + 权限 UI 全部 text wireframe ✓
+- **F1. 页面覆盖度** — 10 个页面 + 导航 + 引导 + 蒸馏 UI + 觉醒基因 / 深海基因 / 知识 UI 全部 text wireframe ✓
 - **F2. 命名一致性** — 所有术语 grep 对照 `phase-15d-naming-system.md` 无偏离 ✓
 - **F3. 决策追溯** — 每个 UX 决策尾部标注 U1-U8 引用（部分标记）⚠️
 - **F4. Golden path 可走通** — 从首次注册到首次蒸馏完整复现 ✓
