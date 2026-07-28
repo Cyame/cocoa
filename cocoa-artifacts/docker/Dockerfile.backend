@@ -1,0 +1,45 @@
+# syntax=docker/dockerfile:1.7
+# Cocoa Backend Image — built with Aliyun (apt) + Tsinghua TUNA (PyPI) mirrors.
+#
+# Multi-stage build: a `builder` stage resolves + installs runtime deps via uv,
+# then the lean runtime stage copies only site-packages and the application tree.
+#
+# Build context must be the repository root so `cocoa-backend/...` paths resolve.
+# Build: docker build -t cocoa-backend:latest -f cocoa-artifacts/docker/Dockerfile.backend .
+FROM python:3.12-slim AS builder
+WORKDIR /build
+
+# Switch Debian apt sources to Aliyun mirror.
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/*.sources 2>/dev/null || \
+    sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list
+
+# Copy only the lock-aware metadata first to maximise layer caching.
+COPY cocoa-backend/pyproject.toml cocoa-backend/uv.lock ./
+
+# Resolve runtime dependencies and install them into the system site-packages.
+RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple && \
+    pip config set global.trusted-host pypi.tuna.tsinghua.edu.cn && \
+    pip install --no-cache-dir uv && \
+    uv export --frozen --no-dev --no-hashes -o requirements.txt && \
+    pip install --no-cache-dir -r requirements.txt
+
+FROM python:3.12-slim
+WORKDIR /app
+
+# Keep the runtime apt sources on Aliyun for consistency (e.g. debugging tools).
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/*.sources 2>/dev/null || \
+    sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list
+
+# Carry over the resolved dependency tree from the builder stage.
+COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+# Application tree.
+COPY cocoa-backend/app /app/app
+COPY cocoa-backend/alembic /app/alembic
+COPY cocoa-backend/alembic.ini /app/
+COPY cocoa-backend/README.md /app/
+
+ENV PYTHONPATH=/app
+EXPOSE 4510
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "4510"]
