@@ -1,8 +1,42 @@
-# Cocoa Instance Runtime Image
-# P7 scaffolding — actual app.agent_runtime module is implemented in P8.
+# syntax=docker/dockerfile:1.7
+# Cocoa Instance Runtime Image — built with Aliyun (apt) + Tsinghua TUNA (PyPI) mirrors.
+#
+# P7 scaffolding hardened in P14b Wave 1 with the China-source multi-stage
+# pattern. Instance pods run app.agent_runtime and report back to cocoa-backend
+# via the P14b transport layer (Tunnel). Backend wiring is provided per-pod via
+# ConfigMap / Secret (see cocoa-artifacts/k8s/instance/).
+#
 # Build: docker build -t cocoa-instance:latest -f cocoa-artifacts/docker/Dockerfile.instance .
+FROM python:3.12-slim AS builder
+WORKDIR /build
+
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/*.sources 2>/dev/null || \
+    sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list
+
+COPY cocoa-backend/pyproject.toml cocoa-backend/uv.lock ./
+
+RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple && \
+    pip config set global.trusted-host pypi.tuna.tsinghua.edu.cn && \
+    pip install --no-cache-dir uv && \
+    uv export --frozen --no-dev --no-hashes -o requirements.txt && \
+    pip install --no-cache-dir -r requirements.txt
+
 FROM python:3.12-slim
 WORKDIR /app
-COPY cocoa-backend/ /app/
-RUN pip install uv && uv sync --frozen
+
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/*.sources 2>/dev/null || \
+    sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list
+
+COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+COPY cocoa-backend/app /app/app
+COPY cocoa-backend/alembic /app/alembic
+COPY cocoa-backend/alembic.ini /app/
+
+ENV PYTHONPATH=/app
+# Marks the process as running inside an Instance Pod (vs the API-server backend).
+ENV COCOA_POD_MODE=true
+
+EXPOSE 8080
 CMD ["python", "-m", "app.agent_runtime"]
