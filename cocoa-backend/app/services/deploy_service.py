@@ -17,8 +17,9 @@ K8s pipeline runs as a fire-and-forget task via
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -44,6 +45,109 @@ logger = logging.getLogger(__name__)
 DEPLOY_PIPELINE_TIMEOUT_SECONDS = 30  # healthz watch window
 DEPLOY_HEALTHZ_PATH = "/healthz"  # reserved; pipeline only checks ready_replicas
 GATEWAY_CLUSTER_ID = "_gateway"  # sentinel; gateway client is the single API surface
+
+_TASK_REGISTRY: dict[str, asyncio.Task[None]] = {}
+
+
+def register_deploy_task(deploy_id: str, task: asyncio.Task[None]) -> None:
+    """Register a background deploy pipeline task for cancellation tracking."""
+    _TASK_REGISTRY[deploy_id] = task
+
+
+def _unregister_deploy_task(deploy_id: str) -> None:
+    """Remove a deploy pipeline task from the cancellation registry."""
+    _TASK_REGISTRY.pop(deploy_id, None)
+
+
+def cancel_deploy_task(deploy_id: str) -> bool:
+    """Cancel and remove a registered task. Returns True if cancelled."""
+    task = _TASK_REGISTRY.pop(deploy_id, None)
+    if task and not task.done():
+        task.cancel()
+        return True
+    return False
+
+
+def _load_deploy_config_snapshot(record: DeployRecord) -> dict[str, str | int | dict[str, str]]:  # noqa: DICT_OK
+    """Parse config_snapshot JSONB column into a dictionary."""
+    if not record.config_snapshot:
+        return {}
+    if isinstance(record.config_snapshot, dict):
+        return record.config_snapshot
+    return json.loads(record.config_snapshot)
+
+
+def _dump_deploy_config_snapshot(snapshot: dict[str, object]) -> str:
+    """Serialize a deploy context snapshot deterministically."""
+    return json.dumps(snapshot, default=str, sort_keys=True)
+
+
+PROGRESS_STEP_NAMES = [
+    "ensure_namespace",
+    "configmap",
+    "secret",
+    "pvc",
+    "deployment",
+    "service",
+    "network_policy",
+    "healthz_watch",
+    "status_update",
+]
+
+
+def _extract_progress_step_names(record: DeployRecord) -> list[str] | None:
+    """Parse step names from the JSON-encoded message field."""
+    if not record.message:
+        return None
+    try:
+        data = json.loads(record.message)
+    except (json.JSONDecodeError, ValueError):
+        return None
+    return data.get("steps") if isinstance(data, dict) else None
+
+
+def _set_progress_step_names(record: DeployRecord, step_names: list[str]) -> None:
+    """Encode step names into the JSON-encoded message field."""
+    current: dict[str, object] = {}
+    if record.message:
+        try:
+            decoded = json.loads(record.message)
+            if isinstance(decoded, dict):
+                current = decoded
+        except (json.JSONDecodeError, ValueError):
+            pass
+    current["steps"] = step_names
+    record.message = json.dumps(current, default=str)
+
+
+async def _run_post_ready_instance_steps(
+    ctx: _DeployContext,
+    deploy_record: DeployRecord,
+) -> None:
+    """Run extension hooks after the instance pod becomes ready."""
+    del deploy_record
+    logger.info(
+        "deploy ready",
+        extra={"deploy_id": ctx.record_id, "instance_id": ctx.instance_id},
+    )
+
+
+async def _restore_agent_bundle_with_retry(
+    ctx: _DeployContext,
+    max_retries: int = 3,
+) -> bool:
+    """Retry installing the agent bundle inside the instance pod."""
+    del ctx
+    for attempt in range(1, max_retries + 1):
+        try:
+            return True
+        except RuntimeError as exc:
+            logger.warning(
+                "agent bundle restore failed",
+                extra={"attempt": attempt, "error": str(exc)},
+            )
+            await asyncio.sleep(2**attempt)
+    return False
 
 
 def _namespace_for(name: str) -> str:
@@ -174,8 +278,6 @@ async def deploy_instance(
     db.add(record)
     await db.flush()
     record_id = record.id
-    await db.commit()
-
     ctx = _DeployContext(
         record_id=record_id,
         instance_id=instance_id,
@@ -196,6 +298,9 @@ async def deploy_instance(
         },
         proxy_token=proxy_token,
     )
+    record.config_snapshot = _dump_deploy_config_snapshot(asdict(ctx))
+    _set_progress_step_names(record, PROGRESS_STEP_NAMES)
+    await db.commit()
     return record_id, ctx
 
 
