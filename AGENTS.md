@@ -8,7 +8,7 @@ Cocoa 是多 Agent 控制台（multi-agent control studio）。本仓库已完�
 
 | 组件 | 技术栈 | 状态 |
 |------|--------|------|
-| `cocoa-backend/` | Python 3.12 + FastAPI + SQLAlchemy (async) + asyncpg + Alembic | P2 引入 12 核心域模型；P3.5 加入 Event 模型；P8 加入 InstanceLoopState 模型 + 4 熔断器配置 + Boulder snapshot 字段；P9 加入 CorridorNode 模型 + glow helper + events 查询端点 + live-status 聚合端点 + Membership 坐标迁移（`hex_q/hex_r` → `posx/posy`）；P11 加入 DeployRecord 模型 + 9 步 K8s pipeline + SSE 进度推送；P10 加入 Learning 子系统（DistillationEngine Protocol + AggregatingDistiller 启发式引擎 + 3 个 learning API 端点 + LEARNING_COMMANDS 第 4 命令族 + portal Learning 页面 + 零 schema 变更），合计 16 models + 351+ 测试 |
+| `cocoa-backend/` | Python 3.12 + FastAPI + SQLAlchemy (async) + asyncpg + Alembic | P2 引入 12 核心域模型；P3.5 加入 Event 模型；P8 加入 InstanceLoopState 模型 + 4 熔断器配置 + Boulder snapshot 字段；P9 加入 CorridorNode 模型 + glow helper + events 查询端点 + live-status 聚合端点 + Membership 坐标迁移（`hex_q/hex_r` → `posx/posy`）；P11b 加入 DeployRecord 模型 + 9 步 K8s pipeline + SSE 进度推送；P14a 加入 InstanceProviderConfig 模型 + LLMClient (4 provider 类型) + ProviderRouter + ModelCatalog (models.dev + 600s 缓存) + LLMDistiller + 6 preset 升级 manifest；P10 加入 Learning 子系统（DistillationEngine Protocol + AggregatingDistiller 启发式引擎 + 3 个 learning API 端点 + LEARNING_COMMANDS 第 4 命令族 + portal Learning 页面 + 零 schema 变更），合计 **17 models** + **425 backend 测试通过**（P14a merge 状态；6 stale-by-design 失败 + 3 skip 见 `.omo/evidence/cocoa-vs-nodeskclaw-drift.md` §4.4–§4.5） |
 | `cocoa-portal/`  | React 19 + Vite 8 + TypeScript + Tailwind CSS v4 + Bun + lucide-react + Zustand | P9 first UI（14 todos：7 页面 + topology viz + CorridorNode + interaction modes + 零新增 npm 依赖） |
 | `cocoa-artifacts/` | Dockerfile + K8s 清单（Deployment/Service/ConfigMap/PVC/NetworkPolicy） | P7 已完成 |
 | `.github/workflows/` | CI 基础（lint + build） | 骨架 |
@@ -179,7 +179,9 @@ Cocoa 后端 API 遵循 `docs/api-architecture.md` 中的完整约定，核心�
 - 实例运行时系统见 `docs/runtime-system.md`：Instance 生命周期模型、CRUD API、K8s 部署脚手架、多实例隔离、Langfuse 集成预留
 - Harness 系统设计见 `docs/harness-system.md`：D11 控制面、Supervisor + 4 个确定性熔断器、Boulder 循环引擎、5 个控制命令、Notepad 契约、Agent Runtime 骨架、Control Downlink 双路径机制
 - Portal 系统设计见 `docs/portal-system.md`：React 19 架构、7 页面路由表、事件查询 API、live-status 聚合端点、CorridorNode CRUD、Composer 分段语义、Topology viz 算法（glow 映射 + 连接动画）
-- Learning 子系统设计见 `docs/learning-system.md`（P10）：DistillationEngine Protocol 可插拔接口、AggregatingDistiller 启发式算法（按 MemoryKind 分组聚合 + 关键词提取 + 模板生成）、LEARNING_COMMANDS 第 4 命令族（`/distill` `/consolidate` `/reflect`）+ P5 路由优先级表、3 个 Learning API 端点（summary + distill + preset fetch）、portal EmployeeLearningPage + EmployeePreset 零迁移新增 + 351+ 测试
+- Learning 子系统设计见 `docs/learning-system.md`（P10）：DistillationEngine Protocol 可插拔接口、AggregatingDistiller 启发式算法（按 MemoryKind 分组聚合 + 关键词提取 + 模板生成）、LEARNING_COMMANDS 第 4 命令族（`/distill` `/consolidate` `/reflect`）+ P5 路由优先级表、3 个 Learning API 端点（summary + distill + preset fetch）、portal EmployeeLearningPage + EmployeePreset 零迁移新增
+- 当前部署状态（DB / 容器 / 端口）见 `.omo/evidence/cocoa-deployment-state.md`（PG = OrbStack 的 `local-pgvector` 容器，port 5432，共享给 cocoa + browser_pilot + new-api + nodeskclaw）
+- 参考实现差异（Cocoa vs nodeskclaw）见 `.omo/evidence/cocoa-vs-nodeskclaw-drift.md`
 
 **P9 Portal**: React 19 + Vite 8 + TypeScript + Tailwind CSS v4 + Zustand + react-router v7, 零新增 npm 依赖。7 个页面（Login / Office list / Office detail / Instance detail / Composer / Debug / Topology viz）。Topology viz 是旗舰功能：SVG 圆形节点 + 外框发光（`loop_status` → glow color）+ pan/zoom canvas + 3 种交互模式（Select/Connect/Move）+ 连接线消息传递流光动画。CorridorNode 是 first-class canvas 元素（`posx/posy` + `display_name` + `status`），支持 M<->M / M<->CN / CN<->CN 三种走廊连接。全量前端 type-check + lint + build + vitest 通过；后端 315+ 测试零回归。
 
