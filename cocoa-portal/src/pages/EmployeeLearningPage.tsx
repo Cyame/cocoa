@@ -84,7 +84,7 @@ export default function EmployeeLearningPage() {
           if (isActive) setSummaryError(error.message);
           return;
         }
-        throw error;
+        if (isActive) setSummaryError(t('errors.network'));
       } finally {
         if (isActive) setIsLoading(false);
       }
@@ -94,7 +94,7 @@ export default function EmployeeLearningPage() {
     return () => {
       isActive = false;
     };
-  }, [employeeId]);
+  }, [employeeId, t]);
 
   const isSlugValid = useMemo(() => SLUG_PATTERN.test(targetSkillSlug), [targetSkillSlug]);
   const slugErrorMessage = useMemo(() => {
@@ -149,7 +149,9 @@ export default function EmployeeLearningPage() {
         setIsSubmitting(false);
         return;
       }
-      throw error;
+      setIsSubmitting(false);
+      setSubmitError(t('errors.network'));
+      return;
     } finally {
       setIsSubmitting(false);
     }

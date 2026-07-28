@@ -59,7 +59,7 @@ export default function OfficeListPage() {
           if (isActive) setErrorMessage(error.message);
           return;
         }
-        throw error;
+        if (isActive) setErrorMessage(t('errors.network'));
       } finally {
         if (isActive) setIsLoading(false);
       }
@@ -69,7 +69,7 @@ export default function OfficeListPage() {
     return () => {
       isActive = false;
     };
-  }, []);
+  }, [t]);
 
   if (isUnauthorized) {
     return <Navigate to="/login" replace />;

@@ -97,7 +97,7 @@ export default function OfficeDetailPage() {
           if (isActive) setErrorMessage(error.message);
           return;
         }
-        throw error;
+        if (isActive) setErrorMessage(t('errors.network'));
       } finally {
         if (isActive) setIsLoading(false);
       }
@@ -107,7 +107,7 @@ export default function OfficeDetailPage() {
     return () => {
       isActive = false;
     };
-  }, [activeTab, id, office]);
+  }, [activeTab, id, office, t]);
 
   if (id === undefined) {
     return <p className="p-6 text-sm text-red-700">{t('office.officeIdMissing')}</p>;

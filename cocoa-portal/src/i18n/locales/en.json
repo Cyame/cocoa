@@ -152,7 +152,12 @@
     "reset": "Reset",
     "refresh": "Refresh",
     "export": "Export",
-    "loadFailed": "Failed to load events"
+    "loadFailed": "Failed to load events",
+    "quickLabel": "Quick:",
+    "timeLabel": "Time:",
+    "lastHour": "Last hour",
+    "last24h": "Last 24h",
+    "last7d": "Last 7 days"
   },
   "learning": {
     "title": "Employee learning",

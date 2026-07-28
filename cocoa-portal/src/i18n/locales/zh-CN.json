@@ -152,7 +152,12 @@
     "reset": "重置",
     "refresh": "刷新",
     "export": "导出",
-    "loadFailed": "加载事件失败"
+    "loadFailed": "加载事件失败",
+    "quickLabel": "快捷：",
+    "timeLabel": "时间：",
+    "lastHour": "最近一小时",
+    "last24h": "最近24小时",
+    "last7d": "最近7天"
   },
   "learning": {
     "title": "员工学习",

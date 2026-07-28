@@ -85,24 +85,27 @@ export default function DebugPage() {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
-  const loadEvents = useCallback(async (filters: FilterState) => {
-    try {
-      const path = buildEventsPath(filters);
-      const page = await api<EventPage>(path);
-      setEvents(page.items);
-      setLastUpdated(new Date().toISOString());
-      setErrorMessage(null);
-    } catch (error) {
-      if (error instanceof ApiError) {
-        if (error.status === 401) return;
-        setErrorMessage(error.message);
-      } else {
-        throw error;
+  const loadEvents = useCallback(
+    async (filters: FilterState) => {
+      try {
+        const path = buildEventsPath(filters);
+        const page = await api<EventPage>(path);
+        setEvents(page.items);
+        setLastUpdated(new Date().toISOString());
+        setErrorMessage(null);
+      } catch (error) {
+        if (error instanceof ApiError) {
+          if (error.status === 401) return;
+          setErrorMessage(error.message);
+        } else {
+          setErrorMessage(t('errors.network'));
+        }
+      } finally {
+        setIsLoading(false);
       }
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+    },
+    [t],
+  );
 
   useEffect(() => {
     let active = true;
@@ -271,15 +274,68 @@ export default function DebugPage() {
             />
           </label>
         </div>
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          <span className="text-xs font-medium text-slate-500">{t('debug.quickLabel')}</span>
+          {['harness.', 'instance.', 'messaging.', 'learning.', 'auth.'].map((prefix) => (
+            <button
+              key={prefix}
+              type="button"
+              onClick={() => updateFilter('typePrefix', prefix)}
+              className={`rounded-full px-2.5 py-0.5 text-xs font-mono transition-colors ${
+                draftFilters.typePrefix === prefix
+                  ? 'bg-blue-100 text-blue-800 ring-1 ring-blue-300'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              {prefix}
+            </button>
+          ))}
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          <span className="text-xs font-medium text-slate-500">{t('debug.timeLabel')}</span>
+          {(
+            [
+              { key: '1h', label: t('debug.lastHour'), ms: 3600000 },
+              { key: '24h', label: t('debug.last24h'), ms: 86400000 },
+              { key: '7d', label: t('debug.last7d'), ms: 604800000 },
+            ] as const
+          ).map(({ key, label, ms }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => {
+                const sinceIso = new Date(Date.now() - ms).toISOString();
+                updateFilter('since', sinceIso.slice(0, 16));
+                updateFilter('until', '');
+              }}
+              className="rounded-full px-2.5 py-0.5 text-xs transition-colors bg-slate-100 text-slate-600 hover:bg-slate-200"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
         <div className="mt-3 flex items-center justify-between">
-          <button
-            type="button"
-            onClick={handleApply}
-            className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-          >
-            <Filter className="size-4" aria-hidden="true" />
-            {t('debug.apply')}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleApply}
+              className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            >
+              <Filter className="size-4" aria-hidden="true" />
+              {t('debug.apply')}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setDraftFilters(INITIAL_FILTERS);
+                setAppliedFilters(INITIAL_FILTERS);
+              }}
+              className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              aria-label={t('debug.reset')}
+            >
+              {t('debug.reset')}
+            </button>
+          </div>
           <p className="text-xs text-slate-500">
             {lastUpdated !== null
               ? `Last updated ${new Date(lastUpdated).toLocaleTimeString()}`
