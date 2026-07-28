@@ -42,7 +42,7 @@ Cocoa 是多 Agent 控制台（multi-agent control studio）。本仓库已完�
 | 组件 | 技术栈 | 状态 |
 |------|--------|------|
 | `cocoa-backend/` | Python 3.12 + FastAPI + SQLAlchemy (async) + asyncpg + Alembic | P2 引入 12 核心域模型；P3.5 加入 Event 模型；P8 加入 InstanceLoopState 模型 + 4 熔断器配置 + Boulder snapshot 字段；P9 加入 CorridorNode 模型 + glow helper + events 查询端点 + live-status 聚合端点 + Membership 坐标迁移（`hex_q/hex_r` → `posx/posy`）；P11b 加入 DeployRecord 模型 + 9 步 K8s pipeline + SSE 进度推送；P14a 加入 InstanceProviderConfig 模型 + LLMClient (4 provider 类型) + ProviderRouter + ModelCatalog (models.dev + 600s 缓存) + LLMDistiller + 6 preset 升级 manifest；P10 加入 Learning 子系统（DistillationEngine Protocol + AggregatingDistiller 启发式引擎 + 3 个 learning API 端点 + LEARNING_COMMANDS 第 4 命令族 + portal Learning 页面 + 零 schema 变更），合计 **17 models** + **425 backend 测试通过**（P14a merge 状态；6 stale-by-design 失败 + 3 skip 见 `.omo/evidence/cocoa-vs-nodeskclaw-drift.md` §4.4–§4.5） |
-| `cocoa-portal/`  | React 19 + Vite 8 + TypeScript + Tailwind CSS v4 + Bun + lucide-react + Zustand | P10 first UI（8 页面：Login / Office list / Office detail / Instance detail / Composer / Debug / Topology viz / Employee Learning）+ 零新增 npm 依赖；P14a 不改前端（仅后端改造 agent_runtime 调真 LLM） |
+| `cocoa-portal/`  | React 19 + Vite 8 + TypeScript + Tailwind CSS v4 + Bun + lucide-react + Zustand | P10 first UI（8 页面：Login / Office list / Office detail / Instance detail / Composer / Debug / Topology viz / Employee Learning）+ 零新增 npm 依赖；P15b 加 2 个页面（Employees list `/offices/:id/employees` + Members list `/offices/:id/members`）+ zh-CN/en i18n switcher + LoginPage register 模式 + nginx `/api/v1` 反代修复 405；P14a 不动 LLM 核心逻辑 |
 | `cocoa-artifacts/` | Dockerfile + K8s 清单（Deployment/Service/ConfigMap/PVC/NetworkPolicy） | P7 已完成 |
 | `.github/workflows/` | CI 基础（lint + build） | 骨架 |
 
@@ -216,7 +216,7 @@ Cocoa 后端 API 遵循 `docs/api-architecture.md` 中的完整约定，核心�
 - 当前部署状态（DB / 容器 / 端口）见 `.omo/evidence/cocoa-deployment-state.md`（PG = OrbStack 的 `local-pgvector` 容器，port 5432，共享给 cocoa + browser_pilot + new-api + nodeskclaw）
 - 参考实现差异（Cocoa vs nodeskclaw）见 `.omo/evidence/cocoa-vs-nodeskclaw-drift.md`
 
-**P9 Portal**: React 19 + Vite 8 + TypeScript + Tailwind CSS v4 + Zustand + react-router v7, 零新增 npm 依赖。7 个页面（Login / Office list / Office detail / Instance detail / Composer / Debug / Topology viz）。Topology viz 是旗舰功能：SVG 圆形节点 + 外框发光（`loop_status` → glow color）+ pan/zoom canvas + 3 种交互模式（Select/Connect/Move）+ 连接线消息传递流光动画。CorridorNode 是 first-class canvas 元素（`posx/posy` + `display_name` + `status`），支持 M<->M / M<->CN / CN<->CN 三种走廊连接。全量前端 type-check + lint + build + vitest 通过；后端 315+ 测试零回归。
+**P9 Portal** (历史快照：P9 当期 7 个页面): React 19 + Vite 8 + TypeScript + Tailwind CSS v4 + Zustand + react-router v7, 零新增 npm 依赖。P9 落地 7 页面（Login / Office list / Office detail / Instance detail / Composer / Debug / Topology viz）；P10 加 Employee Learning → 8 页面；P15b 加 Employees list + Members list → 当前 **10 页面**。Topology viz 是旗舰功能：SVG 圆形节点 + 外框发光（`loop_status` → glow color）+ pan/zoom canvas + 3 种交互模式（Select/Connect/Move）+ 连接线消息传递流光动画。CorridorNode 是 first-class canvas 元素（`posx/posy` + `display_name` + `status`），支持 M<->M / M<->CN / CN<->CN 三种走廊连接。P9 全量前端 type-check + lint + build + vitest 通过；后端 315+ 测试零回归。
 
 **P9 坐标迁移**：`Membership.hex_q → posx`、`Membership.hex_r → posy`（Alembic `op.alter_column` rename，保留数据）。新增 partial unique index `uq_memberships_office_pos` 约束 `(office_id, posx, posy)` 在活跃记录中唯一。`grep -rn "hex_q\|hex_r" cocoa-backend/app cocoa-backend/tests` 应 0 命中（除历史 alembic 迁移文件）。
 
