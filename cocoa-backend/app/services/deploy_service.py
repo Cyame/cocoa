@@ -314,6 +314,15 @@ async def execute_deploy_pipeline(ctx: _DeployContext) -> None:
 
     Emits SSE ``deploy_progress`` events for each step.
     """
+    register_deploy_task(ctx.record_id, asyncio.current_task())
+    try:
+        await _execute_deploy_pipeline(ctx)
+    finally:
+        _unregister_deploy_task(ctx.record_id)
+
+
+async def _execute_deploy_pipeline(ctx: _DeployContext) -> None:
+    """Run the implementation of the deploy pipeline."""
     api_client = await k8s_manager.get_gateway_client()
     client = K8sClient(api_client)
     labels = build_labels(ctx.name, ctx.image_version)
@@ -411,6 +420,10 @@ async def execute_deploy_pipeline(ctx: _DeployContext) -> None:
                 f"{DEPLOY_PIPELINE_TIMEOUT_SECONDS}s"
             )
         await _publish(8, "done")
+        async with get_session_factory()() as db:
+            record = await db.get(DeployRecord, ctx.record_id)
+            if record is not None:
+                await _run_post_ready_instance_steps(ctx, record)
 
         # 9. mark success
         await _publish(9, "running")
@@ -418,6 +431,7 @@ async def execute_deploy_pipeline(ctx: _DeployContext) -> None:
             record = await db.get(DeployRecord, ctx.record_id)
             if record is not None:
                 record.status = DeployStatus.success.value
+                _set_progress_step_names(record, PROGRESS_STEP_NAMES)
                 await db.commit()
         await _publish(9, "done")
 
@@ -431,8 +445,14 @@ async def execute_deploy_pipeline(ctx: _DeployContext) -> None:
             if record is not None:
                 record.status = DeployStatus.failed.value
                 record.message = str(exc)[:500]
+                logger.error(
+                    "deploy config snapshot",
+                    extra={"record_id": ctx.record_id, "snapshot": _load_deploy_config_snapshot(record)},
+                )
                 await db.commit()
         await _publish(0, "failed", message=str(exc)[:500])
+    finally:
+        await _restore_agent_bundle_with_retry(ctx)
 
 
 # ---------------------------------------------------------------------------
@@ -448,6 +468,7 @@ async def cancel_deploy(record_id: str) -> str:
     teardown are logged but never re-raised — the DB transition is the
     authoritative source of truth.
     """
+    cancel_deploy_task(record_id)
     namespace = ""
     async with get_session_factory()() as db:
         record = await db.get(DeployRecord, record_id)
