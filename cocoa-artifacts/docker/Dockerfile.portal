@@ -33,7 +33,9 @@ RUN bun run build
 FROM nginx:1.27.4-alpine
 WORKDIR /usr/share/nginx/html
 
-# Replace the default nginx site with a minimal SPA + healthz config on port 5173.
+# Replace the default nginx site with a minimal SPA + healthz + backend proxy
+# config on port 5173. The /api/ location proxies to the cocoa-backend service
+# in the same K8s namespace so the SPA can use same-origin fetch without CORS.
 RUN cat > /etc/nginx/conf.d/default.conf <<'EOF'
 server {
     listen 5173;
@@ -41,8 +43,23 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
+    # Static assets: try file, fall back to index.html (SPA).
     location / {
         try_files $uri $uri/ /index.html;
+    }
+
+    # Backend API reverse proxy. Backend runs on port 4510 in-cluster.
+    location /api/ {
+        proxy_pass http://cocoa-backend:4510;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        # SSE support for future P14b composer streaming.
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_set_header Connection '';
+        proxy_http_version 1.1;
     }
 
     location = /healthz {
