@@ -1,4 +1,21 @@
-"""Blackboard and Vault models — Office-scoped collaboration and archival storage."""
+"""CentralHub and Vault models — Office-scoped collaboration and archival storage.
+
+> **15d-rename (2026-07-29)**: Renamed from `blackboard.py`. Class names are now
+> `CentralHub` / `FornixFile` / `Vault` / `VaultEntry`. The underlying table names
+> (`blackboards` / `blackboard_files` / `vaults` / `vault_entries`) are kept as
+> legacy aliases in this wave — a follow-up migration in 15d-rename-2 will rename
+> tables atomically.
+>
+> **CentralHub = 4-脑区协作中枢** (see `docs/blackboard-system.md`):
+> - 穹窿 (fornix) = workspace 共通工作目录 → modeled by `FornixFile`
+> - 额叶 (frontal lobe) = Kanban + todo → table added in 15d-rename-2
+> - 脑干 (brainstem) = scheduled tasks → table added in 15d-rename-2
+> - 小脑 (cerebellum) = central system agent → table added in 15d-rename-2
+>
+> v1: This file ships the **container** (`CentralHub`) and the **fornix
+> virtual filesystem** (`FornixFile`). The remaining 3 brain tables are planned
+> for 15d-rename-2.
+"""
 
 from datetime import datetime
 from enum import Enum
@@ -20,14 +37,15 @@ from app.core.db import Base
 from app.models.base import BaseModel
 
 
-class Blackboard(BaseModel, Base):
+class CentralHub(BaseModel, Base):
     """1:1 shared collaboration context per Office.
 
-    Each office has exactly one Blackboard. content is the system-generated
-    summary; manual_notes are human-annotated notes.
+    Each office has exactly one CentralHub (1:1). Hosts the 4 脑区 (穹窿 /
+    额叶 / 脑干 / 小脑). v1 only persists `content` (system summary) and
+    `manual_notes`; the 4-brain subtables are added in 15d-rename-2.
     """
 
-    __tablename__ = "blackboards"
+    __tablename__ = "blackboards"  # legacy table name — rename in 15d-rename-2
     __table_args__ = (
         Index(
             "uq_blackboards_office",
@@ -48,15 +66,19 @@ class Blackboard(BaseModel, Base):
         return f"<{cls} {self.id!r} office={self.office_id!r}>"
 
 
-class BlackboardFile(BaseModel, Base):
-    """A file or directory within a Blackboard's virtual filesystem.
+class FornixFile(BaseModel, Base):
+    """穹窿 (fornix) = a file or directory within CentralHub's virtual filesystem.
 
     Files are keyed by storage_key (globally unique, not soft-deleted).
     Directory entries have is_directory=True.
     Uploader is either a human user or an Instance -- enforced via CHECK (XOR).
+
+    This is the **穹窿脑区** of the CentralHub. The other 3 brain tables
+    (frontal_lobe_kanbans, brainstem_schedules, cerebellum_agents) are
+    added in 15d-rename-2.
     """
 
-    __tablename__ = "blackboard_files"
+    __tablename__ = "blackboard_files"  # legacy — rename to fornix_files in 15d-rename-2
     __table_args__ = (
         Index(
             "uq_blackboard_files_path",
@@ -104,7 +126,7 @@ class BlackboardFile(BaseModel, Base):
 class VaultEntrySourceType(str, Enum):
     """Origin types for archiving entries into a Vault."""
 
-    blackboard_file = "blackboard_file"
+    fornix_file = "fornix_file"  # 15d+ canonical (was "blackboard_file" pre-rename)
     workspace_file = "workspace_file"
 
 

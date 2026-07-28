@@ -28,7 +28,7 @@ PARITY_INPUTS = [
     "@unknown /plan",
     "broadcast\n@alice /read\n@bob /write @workspace:notes.md",
     "",
-    "@alice /plan arg1 arg2 @blackboard:key",
+    "@alice /plan arg1 arg2 @fornix:key",
     "/global-cmd",
     "@alice /cmd with @vault:doc/path",
     "   \n  \n  ",

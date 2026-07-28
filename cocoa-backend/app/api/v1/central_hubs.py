@@ -1,6 +1,20 @@
-"""Blackboard API routes — collaborative surface, virtual filesystem, and vault.
+"""CentralHub API routes — collaborative surface, virtual filesystem, and vault.
 
-Endpoints:
+> **15d-rename (2026-07-29)**: Renamed from `app/api/v1/blackboard.py`.
+> Served at the new path `/central-hubs/{wid}/...`. No back-compat alias —
+> callers must update URLs. (No prod data yet.)
+
+Endpoints (15d+ canonical path /blackboard/...):
+    GET    /central-hubs/{wid}                        Lazy-get CentralHub (was /blackboard/{wid})
+    PATCH  /central-hubs/{wid}                        Update content/notes
+    GET    /central-hubs/{wid}/fornix/files          List FornixFile (was /blackboard/{wid}/files)
+    GET    /central-hubs/{wid}/fornix/files/{fid}    Get one FornixFile
+    POST   /central-hubs/{wid}/fornix/files          Create file/directory
+    PATCH  /central-hubs/{wid}/fornix/files/{fid}    Rename/move
+    DELETE /central-hubs/{wid}/fornix/files/{fid}    Soft-delete
+    GET    /central-hubs/{wid}/vault                  Lazy-get Vault
+    GET    /central-hubs/{wid}/vault/entries          List vault entries
+    POST   /central-hubs/{wid}/fornix/files/{fid}/archive  Archive file to Vault (was /blackboard/{wid}/files/{fid}/archive)
     GET    /{office_id}                        Lazy-get Blackboard
     PATCH  /{office_id}                        Update content/notes
     GET    /{office_id}/files                  List files (offset page)
@@ -24,28 +38,29 @@ from sqlalchemy import func, select
 from app.api.deps import DB, CurrentUserDep
 from app.core.errors import ConflictError, NotFoundError
 from app.core.event_types import (
-    BLACKBOARD_FILE_ARCHIVED,
-    BLACKBOARD_FILE_CREATED,
-    BLACKBOARD_FILE_UPDATED,
+    FORNIX_FILE_ARCHIVED,
+    FORNIX_FILE_CREATED,
+    FORNIX_FILE_UPDATED,
 )
 from app.core.events import emit
 from app.core.openapi import add_error_responses
 from app.core.pagination import OffsetPage, paginate_offset
 from app.core.permissions import require_office_role
-from app.models.blackboard import Blackboard, BlackboardFile, Vault, VaultEntry
-from app.schemas.blackboard import BlackboardOut, BlackboardUpdate
-from app.schemas.blackboard_file import (
-    BlackboardFileCreate,
-    BlackboardFileOut,
-    BlackboardFileUpdate,
+from app.models.central_hub import CentralHub, FornixFile, Vault, VaultEntry
+from app.schemas.central_hub import CentralHubOut, CentralHubUpdate
+from app.schemas.fornix_file import (
+    FornixFileCreate,
+    FornixFileOut,
+    FornixFileUpdate,
 )
 from app.schemas.vault import VaultEntryOut, VaultOut
 
-router = APIRouter(prefix="/blackboard", tags=["Blackboard"])
+# 15d+ canonical path — no back-compat alias
+router = APIRouter(prefix="/central-hubs", tags=["CentralHub"])
 add_error_responses(router)
 
 
-def _own_path(file: BlackboardFile) -> str:
+def _own_path(file: FornixFile) -> str:
     if file.parent_path:
         return f"{file.parent_path}/{file.name}"
     return file.name
@@ -68,21 +83,21 @@ def _split_parent_path(parent_path: str | None) -> tuple[str | None, str]:
 # ---------------------------------------------------------------------------
 
 
-async def _get_or_create_blackboard(
+async def _get_or_create_central_hub(
     db: DB, office_id: str
 ) -> Blackboard:
     result = await db.execute(
-        select(Blackboard).where(
-            Blackboard.office_id == office_id,
-            Blackboard.deleted_at.is_(None),
+        select(CentralHub).where(
+            CentralHub.office_id == office_id,
+            CentralHub.deleted_at.is_(None),
         )
     )
-    blackboard = result.scalar_one_or_none()
-    if blackboard is None:
-        blackboard = Blackboard(office_id=office_id, content=None, manual_notes=None)
-        db.add(blackboard)
+    central_hub = result.scalar_one_or_none()
+    if central_hub is None:
+        central_hub = CentralHub(office_id=office_id, content=None, manual_notes=None)
+        db.add(central_hub)
         await db.flush()
-    return blackboard
+    return central_hub
 
 
 async def _get_or_create_vault(db: DB, office_id: str) -> Vault:
@@ -107,20 +122,20 @@ async def _validate_parent_directory(
         return
     parent_dir_path, parent_name = _split_parent_path(parent_path)
     result = await db.execute(
-        select(BlackboardFile)
+        select(FornixFile)
         .where(
-            BlackboardFile.office_id == office_id,
-            BlackboardFile.parent_path == parent_dir_path,
-            BlackboardFile.name == parent_name,
-            BlackboardFile.is_directory,
-            BlackboardFile.deleted_at.is_(None),
+            FornixFile.office_id == office_id,
+            FornixFile.parent_path == parent_dir_path,
+            FornixFile.name == parent_name,
+            FornixFile.is_directory,
+            FornixFile.deleted_at.is_(None),
         )
         .with_for_update()
     )
     if result.scalar_one_or_none() is None:
         raise NotFoundError(
-            "blackboard.parent_directory_not_found",
-            "errors.blackboard.parent_directory_not_found",
+            "central_hub.parent_directory_not_found",
+            "errors.central_hub.parent_directory_not_found",
             f"Parent directory '{parent_path}' not found in office '{office_id}'",
             details={"office_id": office_id, "parent_path": parent_path},
         )
@@ -131,43 +146,43 @@ async def _validate_parent_directory(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/{office_id}", response_model=BlackboardOut)
-async def read_blackboard(
+@router.get("/{office_id}", response_model=CentralHubOut)
+async def read_central_hub(
     office_id: str,
     db: DB,
     current_user: CurrentUserDep,
-) -> Blackboard:
+) -> CentralHub:
     await require_office_role(db, current_user.user_id, office_id, "viewer")
-    blackboard = await _get_or_create_blackboard(db, office_id)
+    central_hub = await _get_or_create_central_hub(db, office_id)
     await _get_or_create_vault(db, office_id)
     await db.commit()
-    await db.refresh(blackboard)
-    return blackboard
+    await db.refresh(central_hub)
+    return central_hub
 
 
-@router.patch("/{office_id}", response_model=BlackboardOut)
-async def update_blackboard(
+@router.patch("/{office_id}", response_model=CentralHubOut)
+async def update_central_hub(
     office_id: str,
-    body: BlackboardUpdate,
+    body: CentralHubUpdate,
     db: DB,
     current_user: CurrentUserDep,
-) -> Blackboard:
+) -> CentralHub:
     await require_office_role(db, current_user.user_id, office_id, "editor")
-    blackboard = await _get_or_create_blackboard(db, office_id)
+    central_hub = await _get_or_create_central_hub(db, office_id)
     patch_data = body.model_dump(exclude_unset=True)
     for field, value in patch_data.items():
-        setattr(blackboard, field, value)
+        setattr(central_hub, field, value)
     await db.commit()
-    await db.refresh(blackboard)
-    return blackboard
+    await db.refresh(central_hub)
+    return central_hub
 
 
 # ---------------------------------------------------------------------------
-# BlackboardFile — read
+# FornixFile — read
 # ---------------------------------------------------------------------------
 
 
-@router.get("/{office_id}/files", response_model=OffsetPage[BlackboardFileOut])
+@router.get("/{office_id}/files", response_model=OffsetPage[FornixFileOut])
 async def list_files(
     office_id: str,
     db: DB,
@@ -178,90 +193,90 @@ async def list_files(
 ) -> OffsetPage:
     await require_office_role(db, current_user.user_id, office_id, "viewer")
     stmt = (
-        select(BlackboardFile)
+        select(FornixFile)
         .where(
-            BlackboardFile.office_id == office_id,
-            BlackboardFile.deleted_at.is_(None),
+            FornixFile.office_id == office_id,
+            FornixFile.deleted_at.is_(None),
         )
-        .order_by(BlackboardFile.name)
+        .order_by(FornixFile.name)
     )
     if parent_path is not None:
-        stmt = stmt.where(BlackboardFile.parent_path == parent_path)
+        stmt = stmt.where(FornixFile.parent_path == parent_path)
     return await paginate_offset(db, stmt, offset, limit)
 
 
-@router.get("/{office_id}/files/{file_id}", response_model=BlackboardFileOut)
+@router.get("/{office_id}/files/{file_id}", response_model=FornixFileOut)
 async def get_file(
     office_id: str,
     file_id: str,
     db: DB,
     current_user: CurrentUserDep,
-) -> BlackboardFile:
+) -> FornixFile:
     await require_office_role(db, current_user.user_id, office_id, "viewer")
     result = await db.execute(
-        select(BlackboardFile).where(
-            BlackboardFile.id == file_id,
-            BlackboardFile.office_id == office_id,
-            BlackboardFile.deleted_at.is_(None),
+        select(FornixFile).where(
+            FornixFile.id == file_id,
+            FornixFile.office_id == office_id,
+            FornixFile.deleted_at.is_(None),
         )
     )
     file = result.scalar_one_or_none()
     if file is None:
         raise NotFoundError(
-            "blackboard.file_not_found",
-            "errors.blackboard.file_not_found",
-            f"BlackboardFile '{file_id}' not found",
+            "central_hub.fornix.file_not_found",
+            "errors.central_hub.file_not_found",
+            f"FornixFile '{file_id}' not found",
             details={"file_id": file_id, "office_id": office_id},
         )
     return file
 
 
 # ---------------------------------------------------------------------------
-# BlackboardFile — write
+# FornixFile — write
 # ---------------------------------------------------------------------------
 
 
 @router.post(
     "/{office_id}/files",
-    response_model=BlackboardFileOut,
+    response_model=FornixFileOut,
     status_code=status.HTTP_201_CREATED,
 )
 async def create_file(
     office_id: str,
-    body: BlackboardFileCreate,
+    body: FornixFileCreate,
     db: DB,
     current_user: CurrentUserDep,
-) -> BlackboardFile:
+) -> FornixFile:
     await require_office_role(db, current_user.user_id, office_id, "editor")
     await _validate_parent_directory(db, office_id, body.parent_path)
 
     if body.is_directory and (body.content_type is not None or body.file_size is not None):
         raise ConflictError(
-            "blackboard.directory_cannot_have_content",
-            "errors.blackboard.directory_cannot_have_content",
+            "central_hub.directory_cannot_have_content",
+            "errors.central_hub.directory_cannot_have_content",
             "Directory entries cannot have content_type or file_size",
         )
 
     # Pre-check for duplicate path at the same level
     existing = await db.execute(
-        select(BlackboardFile).where(
-            BlackboardFile.office_id == office_id,
-            BlackboardFile.parent_path == body.parent_path,
-            BlackboardFile.name == body.name,
-            BlackboardFile.deleted_at.is_(None),
+        select(FornixFile).where(
+            FornixFile.office_id == office_id,
+            FornixFile.parent_path == body.parent_path,
+            FornixFile.name == body.name,
+            FornixFile.deleted_at.is_(None),
         )
     )
     if existing.scalar_one_or_none() is not None:
         raise ConflictError(
-            "blackboard.duplicate_path",
-            "errors.blackboard.duplicate_path",
+            "central_hub.fornix.duplicate_path",
+            "errors.central_hub.fornix.duplicate_path",
             f"A file or directory named '{body.name}' already exists at '{body.parent_path or '/'}'",
             details={"office_id": office_id, "parent_path": body.parent_path, "name": body.name},
         )
 
     storage_key = body.storage_key if body.storage_key else str(uuid.uuid4())
 
-    file = BlackboardFile(
+    file = FornixFile(
         office_id=office_id,
         name=body.name,
         parent_path=body.parent_path,
@@ -274,10 +289,10 @@ async def create_file(
     db.add(file)
 
     await emit(
-        BLACKBOARD_FILE_CREATED,
+        FORNIX_FILE_CREATED,
         actor_type="user",
         actor_id=current_user.user_id,
-        resource_type="blackboard_file",
+        resource_type="fornix_file",  # 15d+ canonical (was "blackboard_file" pre-rename)
         resource_id=file.id,
         payload={
             "office_id": office_id,
@@ -293,29 +308,29 @@ async def create_file(
     return file
 
 
-@router.patch("/{office_id}/files/{file_id}", response_model=BlackboardFileOut)
+@router.patch("/{office_id}/files/{file_id}", response_model=FornixFileOut)
 async def update_file(
     office_id: str,
     file_id: str,
-    body: BlackboardFileUpdate,
+    body: FornixFileUpdate,
     db: DB,
     current_user: CurrentUserDep,
-) -> BlackboardFile:
+) -> FornixFile:
     await require_office_role(db, current_user.user_id, office_id, "editor")
 
     result = await db.execute(
-        select(BlackboardFile).where(
-            BlackboardFile.id == file_id,
-            BlackboardFile.office_id == office_id,
-            BlackboardFile.deleted_at.is_(None),
+        select(FornixFile).where(
+            FornixFile.id == file_id,
+            FornixFile.office_id == office_id,
+            FornixFile.deleted_at.is_(None),
         )
     )
     file = result.scalar_one_or_none()
     if file is None:
         raise NotFoundError(
-            "blackboard.file_not_found",
-            "errors.blackboard.file_not_found",
-            f"BlackboardFile '{file_id}' not found",
+            "central_hub.fornix.file_not_found",
+            "errors.central_hub.file_not_found",
+            f"FornixFile '{file_id}' not found",
             details={"file_id": file_id, "office_id": office_id},
         )
 
@@ -327,10 +342,10 @@ async def update_file(
         setattr(file, field, value)
 
     await emit(
-        BLACKBOARD_FILE_UPDATED,
+        FORNIX_FILE_UPDATED,
         actor_type="user",
         actor_id=current_user.user_id,
-        resource_type="blackboard_file",
+        resource_type="fornix_file",  # 15d+ canonical (was "blackboard_file" pre-rename)
         resource_id=file.id,
         payload={"office_id": office_id, "file_id": file_id},
         session=db,
@@ -351,18 +366,18 @@ async def delete_file(
     await require_office_role(db, current_user.user_id, office_id, "editor")
 
     result = await db.execute(
-        select(BlackboardFile).where(
-            BlackboardFile.id == file_id,
-            BlackboardFile.office_id == office_id,
-            BlackboardFile.deleted_at.is_(None),
+        select(FornixFile).where(
+            FornixFile.id == file_id,
+            FornixFile.office_id == office_id,
+            FornixFile.deleted_at.is_(None),
         )
     )
     file = result.scalar_one_or_none()
     if file is None:
         raise NotFoundError(
-            "blackboard.file_not_found",
-            "errors.blackboard.file_not_found",
-            f"BlackboardFile '{file_id}' not found",
+            "central_hub.fornix.file_not_found",
+            "errors.central_hub.file_not_found",
+            f"FornixFile '{file_id}' not found",
             details={"file_id": file_id, "office_id": office_id},
         )
 
@@ -372,16 +387,16 @@ async def delete_file(
         else:
             target_path = f"/{file.name}"
         count_result = await db.execute(
-            select(func.count()).select_from(BlackboardFile).where(
-                BlackboardFile.office_id == office_id,
-                BlackboardFile.parent_path == target_path,
-                BlackboardFile.deleted_at.is_(None),
+            select(func.count()).select_from(FornixFile).where(
+                FornixFile.office_id == office_id,
+                FornixFile.parent_path == target_path,
+                FornixFile.deleted_at.is_(None),
             )
         )
         if count_result.scalar_one() > 0:
             raise ConflictError(
-                "blackboard.directory_not_empty",
-                "errors.blackboard.directory_not_empty",
+                "central_hub.directory_not_empty",
+                "errors.central_hub.directory_not_empty",
                 f"Cannot delete directory '{target_path}' — it still contains files",
                 details={"file_id": file_id, "path": target_path},
             )
@@ -446,26 +461,26 @@ async def archive_file_to_vault(
     await require_office_role(db, current_user.user_id, office_id, "editor")
 
     result = await db.execute(
-        select(BlackboardFile)
+        select(FornixFile)
         .where(
-            BlackboardFile.id == file_id,
-            BlackboardFile.office_id == office_id,
-            BlackboardFile.deleted_at.is_(None),
+            FornixFile.id == file_id,
+            FornixFile.office_id == office_id,
+            FornixFile.deleted_at.is_(None),
         )
         .with_for_update()
     )
     file = result.scalar_one_or_none()
     if file is None:
         raise NotFoundError(
-            "blackboard.file_not_found",
-            "errors.blackboard.file_not_found",
-            f"BlackboardFile '{file_id}' not found",
+            "central_hub.fornix.file_not_found",
+            "errors.central_hub.file_not_found",
+            f"FornixFile '{file_id}' not found",
             details={"file_id": file_id, "office_id": office_id},
         )
     if file.is_directory:
         raise ConflictError(
-            "blackboard.cannot_archive_directory",
-            "errors.blackboard.cannot_archive_directory",
+            "central_hub.fornix.cannot_archive_directory",
+            "errors.central_hub.fornix.cannot_archive_directory",
             f"Cannot archive directory '{file_id}'",
             details={"file_id": file_id},
         )
@@ -484,7 +499,7 @@ async def archive_file_to_vault(
 
     entry = VaultEntry(
         vault_id=vault.id,
-        source_type="blackboard_file",
+        source_type="fornix_file",  # 15d+ canonical (was "blackboard_file" pre-rename)
         source_ref=file_id,
         archived_key=file.storage_key,
         archived_at=func.now(),
@@ -494,10 +509,10 @@ async def archive_file_to_vault(
     file.soft_delete()
 
     await emit(
-        BLACKBOARD_FILE_ARCHIVED,
+        FORNIX_FILE_ARCHIVED,
         actor_type="user",
         actor_id=current_user.user_id,
-        resource_type="blackboard_file",
+        resource_type="fornix_file",  # 15d+ canonical (was "blackboard_file" pre-rename)
         resource_id=file_id,
         payload={
             "office_id": office_id,

@@ -46,9 +46,9 @@ MESSAGING_ACTIVATION_TRIGGERED = "messaging.activation_triggered"
 # Blackboard (emit points in P6)
 # ---------------------------------------------------------------------------
 
-BLACKBOARD_FILE_CREATED = "blackboard.file_created"
-BLACKBOARD_FILE_UPDATED = "blackboard.file_updated"
-BLACKBOARD_FILE_ARCHIVED = "blackboard.file_archived"
+FORNIX_FILE_CREATED = "fornix.file_created"
+FORNIX_FILE_UPDATED = "fornix.file_updated"
+FORNIX_FILE_ARCHIVED = "fornix.file_archived"
 
 # ---------------------------------------------------------------------------
 # Memory (emit points in P6)

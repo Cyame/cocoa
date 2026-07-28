@@ -21,7 +21,7 @@ type OffsetPage<T> = {
   readonly total: number;
 };
 
-type Blackboard = {
+type CentralHub = {
   readonly id: string;
   readonly office_id: string;
   readonly content: string | null;
@@ -37,7 +37,7 @@ export default function OfficeDetailPage() {
   const [activeTab, setActiveTab] = useState<TabId>('employees');
   const [memberships, setMemberships] = useState<readonly Membership[]>([]);
   const [instances, setInstances] = useState<readonly Instance[]>([]);
-  const [blackboard, setBlackboard] = useState<Blackboard | null>(null);
+  const [centralHub, setCentralHub] = useState<CentralHub | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -83,13 +83,13 @@ export default function OfficeDetailPage() {
             setInstances(instancePage.items);
           }
         } else {
-          const [officeResponse, blackboardResponse] = await Promise.all([
+          const [officeResponse, centralHubResponse] = await Promise.all([
             office === null ? api<Office>(`/offices/${officeId}`) : Promise.resolve(office),
-            api<Blackboard>(`/blackboards?office_id=${encodeURIComponent(officeId)}`),
+            api<CentralHub>(`/central-hubs?office_id=${encodeURIComponent(officeId)}`),
           ]);
           if (isActive) {
             setOffice(officeResponse);
-            setBlackboard(blackboardResponse);
+            setCentralHub(centralHubResponse);
           }
         }
       } catch (error) {
@@ -248,7 +248,7 @@ export default function OfficeDetailPage() {
           ) : null}
 
           {!isLoading && errorMessage === null && activeTab === 'centralHub' ? (
-            blackboard === null ? (
+            centralHub === null ? (
               <EmptyState
                 Icon={Notebook}
                 title={t('officeDetail.emptyCentralHubTitle')}
@@ -261,7 +261,7 @@ export default function OfficeDetailPage() {
                     {t('officeDetail.sharedContext')}
                   </h2>
                   <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-600">
-                    {blackboard.content ?? t('officeDetail.noSharedContext')}
+                    {centralHub.content ?? t('officeDetail.noSharedContext')}
                   </p>
                 </article>
                 <article className="rounded-lg border border-slate-200 bg-slate-50 p-4">
@@ -269,7 +269,7 @@ export default function OfficeDetailPage() {
                     {t('officeDetail.manualNotes')}
                   </h2>
                   <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-600">
-                    {blackboard.manual_notes ?? t('officeDetail.noManualNotes')}
+                    {centralHub.manual_notes ?? t('officeDetail.noManualNotes')}
                   </p>
                 </article>
               </div>

@@ -13,14 +13,14 @@
  *     <target>      := "@" <employee-name>   (at line start, followed by whitespace)
  *     <cmd>         := "/" <name>            (lowercase-start, alphanumeric + hyphens)
  *     <content-ref> : "@" <scope> [":" <path>]
- *     scope         := "workspace" | "blackboard" | "vault" | "memory"
+ *     scope         := "workspace" | "fornix" | "vault" | "memory"
  */
 
 // ---------------------------------------------------------------------------
 // Types - mirror app/schemas/slash.py (Pydantic models)
 // ---------------------------------------------------------------------------
 
-export type Scope = 'workspace' | 'blackboard' | 'vault' | 'memory';
+export type Scope = 'workspace' | 'fornix' | 'vault' | 'memory';
 
 export type ContentRef = {
   readonly scope: Scope;
@@ -62,7 +62,7 @@ const RE_CMD = /\/([a-z][a-z0-9-]*)/;
  * required for both matchAll (mirrors Python ``re.finditer``) and replace
  * (mirrors Python ``re.sub``, which is global by default).
  */
-const RE_CONTENT_REF = /@(workspace|blackboard|vault|memory)(?::(\S+))?/g;
+const RE_CONTENT_REF = /@(workspace|fornix|vault|memory)(?::(\S+))?/g;
 
 // ---------------------------------------------------------------------------
 // Parser error

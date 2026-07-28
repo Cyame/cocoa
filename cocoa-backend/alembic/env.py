@@ -19,7 +19,7 @@ from alembic import context
 # Make ``app`` importable when alembic is invoked from the project root.
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-import app.models.blackboard  # noqa: E402, F401
+import app.models.central_hub  # noqa: E402, F401
 import app.models.deploy_record  # noqa: E402, F401
 import app.models.employee  # noqa: E402, F401
 import app.models.event  # noqa: E402, F401

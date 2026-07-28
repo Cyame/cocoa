@@ -1,10 +1,10 @@
-"""Tests for Blackboard, BlackboardFile, Vault, VaultEntry models and VaultEntrySourceType enum."""
+"""Tests for Blackboard, FornixFile, Vault, VaultEntry models and VaultEntrySourceType enum."""
 
 from sqlalchemy import CheckConstraint
 
-from app.models.blackboard import (
-    Blackboard,
-    BlackboardFile,
+from app.models.central_hub import (
+    CentralHub,
+    FornixFile,
     Vault,
     VaultEntry,
     VaultEntrySourceType,
@@ -21,7 +21,7 @@ class TestVaultEntrySourceType:
 
     def test_expected_values_present(self) -> None:
         """Both archival source types must be present."""
-        expected = {"blackboard_file", "workspace_file"}
+        expected = {"fornix_file", "workspace_file"}
         actual = {m.value for m in VaultEntrySourceType}
         assert actual == expected
 
@@ -31,43 +31,43 @@ class TestVaultEntrySourceType:
             assert isinstance(member.value, str)
 
 
-class TestBlackboardModel:
+class TestCentralHubModel:
     """Verify Blackboard SQLAlchemy model structure."""
 
     def test_tablename(self) -> None:
         """Table name must be 'blackboards'."""
-        assert Blackboard.__tablename__ == "blackboards"
+        assert CentralHub.__tablename__ == "blackboards"
 
     def test_imports(self) -> None:
         """Model must be importable and a class."""
-        assert isinstance(Blackboard, type)
+        assert isinstance(CentralHub, type)
 
     def test_office_id_column_exists(self) -> None:
         """office_id FK column must be present and NOT NULL."""
-        col = Blackboard.__table__.columns["office_id"]
+        col = CentralHub.__table__.columns["office_id"]
         assert col is not None
         assert not col.nullable
 
     def test_content_column_nullable(self) -> None:
         """content must allow NULL."""
-        col = Blackboard.__table__.columns["content"]
+        col = CentralHub.__table__.columns["content"]
         assert col.nullable is True
 
     def test_manual_notes_column_nullable(self) -> None:
         """manual_notes must allow NULL."""
-        col = Blackboard.__table__.columns["manual_notes"]
+        col = CentralHub.__table__.columns["manual_notes"]
         assert col.nullable is True
 
     def test_inherits_base_model(self) -> None:
         """Blackboard must have id, created_at, updated_at, deleted_at."""
-        assert "id" in Blackboard.__table__.columns
-        assert "created_at" in Blackboard.__table__.columns
-        assert "updated_at" in Blackboard.__table__.columns
-        assert "deleted_at" in Blackboard.__table__.columns
+        assert "id" in CentralHub.__table__.columns
+        assert "created_at" in CentralHub.__table__.columns
+        assert "updated_at" in CentralHub.__table__.columns
+        assert "deleted_at" in CentralHub.__table__.columns
 
     def test_office_id_foreign_key(self) -> None:
         """office_id must have a ForeignKey to offices.id."""
-        col = Blackboard.__table__.columns["office_id"]
+        col = CentralHub.__table__.columns["office_id"]
         fks = list(col.foreign_keys)
         assert len(fks) == 1
         fk = fks[0]
@@ -75,78 +75,78 @@ class TestBlackboardModel:
 
     def test_office_id_partial_unique_index(self) -> None:
         """office_id must have a partial unique index for 1:1 enforcement."""
-        indexes = {idx.name: idx for idx in Blackboard.__table__.indexes}
+        indexes = {idx.name: idx for idx in CentralHub.__table__.indexes}
         assert "uq_blackboards_office" in indexes
 
 
-class TestBlackboardFileModel:
-    """Verify BlackboardFile SQLAlchemy model structure."""
+class TestFornixFileModel:
+    """Verify FornixFile SQLAlchemy model structure."""
 
     def test_tablename(self) -> None:
         """Table name must be 'blackboard_files'."""
-        assert BlackboardFile.__tablename__ == "blackboard_files"
+        assert FornixFile.__tablename__ == "blackboard_files"
 
     def test_imports(self) -> None:
         """Model must be importable and a class."""
-        assert isinstance(BlackboardFile, type)
+        assert isinstance(FornixFile, type)
 
     def test_office_id_column_exists(self) -> None:
         """office_id FK column must be present and NOT NULL."""
-        col = BlackboardFile.__table__.columns["office_id"]
+        col = FornixFile.__table__.columns["office_id"]
         assert col is not None
         assert not col.nullable
 
     def test_name_column_not_null(self) -> None:
         """name must be NOT NULL."""
-        col = BlackboardFile.__table__.columns["name"]
+        col = FornixFile.__table__.columns["name"]
         assert not col.nullable
 
     def test_parent_path_column_nullable(self) -> None:
         """parent_path must allow NULL."""
-        col = BlackboardFile.__table__.columns["parent_path"]
+        col = FornixFile.__table__.columns["parent_path"]
         assert col.nullable is True
 
     def test_storage_key_column_not_null(self) -> None:
         """storage_key must be NOT NULL."""
-        col = BlackboardFile.__table__.columns["storage_key"]
+        col = FornixFile.__table__.columns["storage_key"]
         assert not col.nullable
 
     def test_content_type_column_nullable(self) -> None:
         """content_type must allow NULL."""
-        col = BlackboardFile.__table__.columns["content_type"]
+        col = FornixFile.__table__.columns["content_type"]
         assert col.nullable is True
 
     def test_file_size_column_nullable(self) -> None:
         """file_size must allow NULL."""
-        col = BlackboardFile.__table__.columns["file_size"]
+        col = FornixFile.__table__.columns["file_size"]
         assert col.nullable is True
 
     def test_is_directory_default(self) -> None:
         """is_directory default is False."""
-        col = BlackboardFile.__table__.columns["is_directory"]
+        col = FornixFile.__table__.columns["is_directory"]
         assert col.default is not None
         assert col.default.arg is False
 
     def test_uploader_user_id_nullable(self) -> None:
         """uploader_user_id must allow NULL."""
-        col = BlackboardFile.__table__.columns["uploader_user_id"]
+        col = FornixFile.__table__.columns["uploader_user_id"]
         assert col.nullable is True
 
     def test_uploader_instance_id_nullable(self) -> None:
         """uploader_instance_id must allow NULL."""
-        col = BlackboardFile.__table__.columns["uploader_instance_id"]
+        col = FornixFile.__table__.columns["uploader_instance_id"]
         assert col.nullable is True
 
     def test_inherits_base_model(self) -> None:
-        """BlackboardFile must have id, created_at, updated_at, deleted_at."""
-        assert "id" in BlackboardFile.__table__.columns
-        assert "created_at" in BlackboardFile.__table__.columns
-        assert "updated_at" in BlackboardFile.__table__.columns
-        assert "deleted_at" in BlackboardFile.__table__.columns
+        """FornixFile must have id, created_at, updated_at, deleted_at."""
+        assert "id" in FornixFile.__table__.columns
+        assert "created_at" in FornixFile.__table__.columns
+        assert "updated_at" in FornixFile.__table__.columns
+        assert "deleted_at" in FornixFile.__table__.columns
 
     def test_office_id_foreign_key(self) -> None:
         """office_id must have a ForeignKey to offices.id."""
-        col = BlackboardFile.__table__.columns["office_id"]
+        col = FornixFile.__table__.columns["office_id"]
         fks = list(col.foreign_keys)
         assert len(fks) == 1
         fk = fks[0]
@@ -154,7 +154,7 @@ class TestBlackboardFileModel:
 
     def test_uploader_user_id_foreign_key(self) -> None:
         """uploader_user_id must have a ForeignKey to users.id."""
-        col = BlackboardFile.__table__.columns["uploader_user_id"]
+        col = FornixFile.__table__.columns["uploader_user_id"]
         fks = list(col.foreign_keys)
         assert len(fks) == 1
         fk = fks[0]
@@ -162,7 +162,7 @@ class TestBlackboardFileModel:
 
     def test_uploader_instance_id_foreign_key(self) -> None:
         """uploader_instance_id must have a ForeignKey to instances.id."""
-        col = BlackboardFile.__table__.columns["uploader_instance_id"]
+        col = FornixFile.__table__.columns["uploader_instance_id"]
         fks = list(col.foreign_keys)
         assert len(fks) == 1
         fk = fks[0]
@@ -170,12 +170,12 @@ class TestBlackboardFileModel:
 
     def test_path_partial_unique_index(self) -> None:
         """(office_id, parent_path, name) partial unique index must exist."""
-        indexes = {idx.name: idx for idx in BlackboardFile.__table__.indexes}
+        indexes = {idx.name: idx for idx in FornixFile.__table__.indexes}
         assert "uq_blackboard_files_path" in indexes
 
     def test_storage_key_global_unique_index(self) -> None:
         """storage_key must have a global (non-partial) unique index."""
-        indexes = {idx.name: idx for idx in BlackboardFile.__table__.indexes}
+        indexes = {idx.name: idx for idx in FornixFile.__table__.indexes}
         assert "uq_blackboard_files_storage_key" in indexes
         # Global unique = no postgresql_where clause
         idx = indexes["uq_blackboard_files_storage_key"]
@@ -185,7 +185,7 @@ class TestBlackboardFileModel:
         """Must have CHECK: exactly one of uploader_user_id or uploader_instance_id is NOT NULL."""
         constraints = {
             c.name: c
-            for c in BlackboardFile.__table__.constraints
+            for c in FornixFile.__table__.constraints
             if isinstance(c, CheckConstraint)
         }
         assert "ck_blackboard_files_exclusive_uploader" in constraints

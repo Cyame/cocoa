@@ -30,23 +30,23 @@ class TestParseDirective:
 
     def test_parse_content_ref(self) -> None:
         """A @scope:path content-ref is parsed into content_ref."""
-        result = parse_directive("/read @blackboard:docs/spec.md")
+        result = parse_directive("/read @fornix:docs/spec.md")
         assert isinstance(result, Directive)
         assert result.cmd == "/read"
         assert result.content_ref is not None
-        assert result.content_ref.scope == "blackboard"
+        assert result.content_ref.scope == "fornix"
         assert result.content_ref.path == "docs/spec.md"
 
     def test_parse_targeted_with_content_ref(self) -> None:
         """@target /cmd @scope:path — all fields populated."""
-        result = parse_directive("@reviewer /review @blackboard:docs/draft.md")
+        result = parse_directive("@reviewer /review @fornix:docs/draft.md")
         assert isinstance(result, Directive)
         assert result.target_employee == "reviewer"
         assert result.cmd == "/review"
         assert result.content_ref is not None
-        assert result.content_ref.scope == "blackboard"
+        assert result.content_ref.scope == "fornix"
         assert result.content_ref.path == "docs/draft.md"
-        assert result.raw_text == "@reviewer /review @blackboard:docs/draft.md"
+        assert result.raw_text == "@reviewer /review @fornix:docs/draft.md"
 
     def test_parse_memory_scope(self) -> None:
         """@memory is a valid content-ref scope."""

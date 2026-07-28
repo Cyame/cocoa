@@ -54,10 +54,11 @@ def workspace_dir(instance_id: str) -> str:
     return f"workspace/{instance_id}/"
 
 
-def blackboard_dir(office_id: str) -> str:
-    """Relative path to the per-office shared blackboard directory.
+def fornix_dir(office_id: str) -> str:
+    """Relative path to the per-office 穹窿 (fornix) shared work directory.
 
-    ``blackboard/<office_id>/`` is the shared read/write space for all
+    The 穹窿 is the file-share brain area inside the per-office CentralHub.
+    ``fornix/<office_id>/`` is the shared read/write space for all
     employees in the same office.
 
     Args:
@@ -67,7 +68,7 @@ def blackboard_dir(office_id: str) -> str:
         Relative path ending with ``/``.
     """
     _validate_no_traversal(office_id)
-    return f"blackboard/{office_id}/"
+    return f"fornix/{office_id}/"
 
 
 def vault_dir(office_id: str) -> str:

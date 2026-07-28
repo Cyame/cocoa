@@ -101,7 +101,7 @@ def _create_employee(client: TestClient, token: str, slug: str, name: str) -> st
 # =========================================================================
 
 
-class TestBlackboard:
+class TestCentralHub:
     def test_lazy_create_blackboard(
         self,
         client: TestClient,
@@ -114,7 +114,7 @@ class TestBlackboard:
             office_name="BB Lazy Office", office_slug="bb-lazy",
         )
 
-        resp1 = client.get(f"/api/v1/blackboard/{office_id}", headers=h)
+        resp1 = client.get(f"/api/v1/central-hubs/{office_id}", headers=h)
         assert resp1.status_code == 200
         body1 = resp1.json()
         assert "id" in body1
@@ -122,7 +122,7 @@ class TestBlackboard:
         assert body1["content"] is None
         assert body1["manual_notes"] is None
 
-        resp2 = client.get(f"/api/v1/blackboard/{office_id}", headers=h)
+        resp2 = client.get(f"/api/v1/central-hubs/{office_id}", headers=h)
         assert resp2.status_code == 200
         assert resp2.json()["id"] == body1["id"]
 
@@ -138,9 +138,9 @@ class TestBlackboard:
             office_name="BB Update Office", office_slug="bb-update",
         )
 
-        client.get(f"/api/v1/blackboard/{office_id}", headers=h)
+        client.get(f"/api/v1/central-hubs/{office_id}", headers=h)
 
-        resp = client.patch(f"/api/v1/blackboard/{office_id}", headers=h, json={
+        resp = client.patch(f"/api/v1/central-hubs/{office_id}", headers=h, json={
             "content": "hello",
             "manual_notes": "notes",
         })
@@ -149,7 +149,7 @@ class TestBlackboard:
         assert body["content"] == "hello"
         assert body["manual_notes"] == "notes"
 
-        resp2 = client.get(f"/api/v1/blackboard/{office_id}", headers=h)
+        resp2 = client.get(f"/api/v1/central-hubs/{office_id}", headers=h)
         assert resp2.status_code == 200
         assert resp2.json()["content"] == "hello"
 
@@ -159,7 +159,7 @@ class TestBlackboard:
 # =========================================================================
 
 
-class TestBlackboardFile:
+class TestCentralHubFile:
     def test_create_directory_and_file(
         self,
         client: TestClient,
@@ -173,7 +173,7 @@ class TestBlackboardFile:
         )
 
         resp = client.post(
-            f"/api/v1/blackboard/{office_id}/files",
+            f"/api/v1/central-hubs/{office_id}/files",
             headers=h,
             json={"office_id": office_id, "name": "docs", "is_directory": True},
         )
@@ -181,7 +181,7 @@ class TestBlackboardFile:
         assert resp.json()["is_directory"] is True
 
         resp = client.post(
-            f"/api/v1/blackboard/{office_id}/files",
+            f"/api/v1/central-hubs/{office_id}/files",
             headers=h,
             json={
                 "office_id": office_id,
@@ -193,7 +193,7 @@ class TestBlackboardFile:
         assert resp.json()["parent_path"] == "/docs"
 
         resp = client.get(
-            f"/api/v1/blackboard/{office_id}/files?parent_path=/docs",
+            f"/api/v1/central-hubs/{office_id}/files?parent_path=/docs",
             headers=h,
         )
         assert resp.status_code == 200
@@ -215,19 +215,19 @@ class TestBlackboardFile:
         payload = {"office_id": office_id, "name": "data.json"}
 
         resp1 = client.post(
-            f"/api/v1/blackboard/{office_id}/files",
+            f"/api/v1/central-hubs/{office_id}/files",
             headers=h,
             json=payload,
         )
         assert resp1.status_code == 201
 
         resp2 = client.post(
-            f"/api/v1/blackboard/{office_id}/files",
+            f"/api/v1/central-hubs/{office_id}/files",
             headers=h,
             json=payload,
         )
         assert resp2.status_code == 409
-        assert resp2.json()["error_code"] == "blackboard.duplicate_path"
+        assert resp2.json()["error_code"] == "central_hub.fornix.duplicate_path"
 
     def test_delete_nonempty_directory_refused(
         self,
@@ -242,7 +242,7 @@ class TestBlackboardFile:
         )
 
         resp = client.post(
-            f"/api/v1/blackboard/{office_id}/files",
+            f"/api/v1/central-hubs/{office_id}/files",
             headers=h,
             json={"office_id": office_id, "name": "tmp", "is_directory": True},
         )
@@ -250,7 +250,7 @@ class TestBlackboardFile:
         dir_id = resp.json()["id"]
 
         resp = client.post(
-            f"/api/v1/blackboard/{office_id}/files",
+            f"/api/v1/central-hubs/{office_id}/files",
             headers=h,
             json={
                 "office_id": office_id,
@@ -262,20 +262,20 @@ class TestBlackboardFile:
         file_id = resp.json()["id"]
 
         resp = client.delete(
-            f"/api/v1/blackboard/{office_id}/files/{dir_id}",
+            f"/api/v1/central-hubs/{office_id}/files/{dir_id}",
             headers=h,
         )
         assert resp.status_code == 409
-        assert resp.json()["error_code"] == "blackboard.directory_not_empty"
+        assert resp.json()["error_code"] == "central_hub.directory_not_empty"
 
         resp = client.delete(
-            f"/api/v1/blackboard/{office_id}/files/{file_id}",
+            f"/api/v1/central-hubs/{office_id}/files/{file_id}",
             headers=h,
         )
         assert resp.status_code == 204
 
         resp = client.delete(
-            f"/api/v1/blackboard/{office_id}/files/{dir_id}",
+            f"/api/v1/central-hubs/{office_id}/files/{dir_id}",
             headers=h,
         )
         assert resp.status_code == 204
@@ -300,7 +300,7 @@ class TestVault:
         )
 
         resp = client.post(
-            f"/api/v1/blackboard/{office_id}/files",
+            f"/api/v1/central-hubs/{office_id}/files",
             headers=h,
             json={"office_id": office_id, "name": "archive_me.txt"},
         )
@@ -308,28 +308,28 @@ class TestVault:
         file_id = resp.json()["id"]
 
         resp = client.post(
-            f"/api/v1/blackboard/{office_id}/files/{file_id}/archive",
+            f"/api/v1/central-hubs/{office_id}/files/{file_id}/archive",
             headers=h,
         )
         assert resp.status_code == 201
         entry = resp.json()
         assert "id" in entry
-        assert entry["source_type"] == "blackboard_file"
+        assert entry["source_type"] == "fornix_file"
         assert entry["source_ref"] == file_id
 
         resp = client.get(
-            f"/api/v1/blackboard/{office_id}/files/{file_id}",
+            f"/api/v1/central-hubs/{office_id}/files/{file_id}",
             headers=h,
         )
         assert resp.status_code == 404
 
         resp = client.get(
-            f"/api/v1/blackboard/{office_id}/vault/entries",
+            f"/api/v1/central-hubs/{office_id}/vault/entries",
             headers=h,
         )
         assert resp.status_code == 200
         entries = resp.json()["items"]
-        assert any(e["source_type"] == "blackboard_file" for e in entries)
+        assert any(e["source_type"] == "fornix_file" for e in entries)
 
 
 # =========================================================================
@@ -448,7 +448,7 @@ class TestPermissions:
         viewer_h = _auth(viewer_token)
 
         resp = client.post(
-            f"/api/v1/blackboard/{office_id}/files",
+            f"/api/v1/central-hubs/{office_id}/files",
             headers=viewer_h,
             json={"office_id": office_id, "name": "should_fail.txt"},
         )
@@ -470,7 +470,7 @@ class TestPermissions:
         nonmember_h = _auth(nonmember_token)
 
         resp = client.get(
-            f"/api/v1/blackboard/{office_id}",
+            f"/api/v1/central-hubs/{office_id}",
             headers=nonmember_h,
         )
         assert resp.status_code == 403

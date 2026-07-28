@@ -37,7 +37,7 @@ describe('OfficeListPage', () => {
               id: 'office-1',
               name: 'Research Lab',
               slug: 'research-lab',
-              blackboard_ref: null,
+              central_hub_ref: null,
               created_at: '2026-07-01T00:00:00Z',
               updated_at: '2026-07-01T00:00:00Z',
             },

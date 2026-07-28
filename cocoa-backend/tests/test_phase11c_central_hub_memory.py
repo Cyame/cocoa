@@ -28,7 +28,7 @@ from app.core.event_types import (
 )
 from app.core.events import emit, register_handler
 from app.core.harness_supervisor import supervisor
-from app.models.blackboard import Blackboard
+from app.models.central_hub import CentralHub
 from app.models.loop_state import LoopStatus
 from app.models.memory import MemoryEntry
 from app.models.office import Membership
@@ -126,7 +126,7 @@ async def test_local_mode_writes_memory(
     assert entry.source_instance_id == instance.id
 
     result = await session.execute(
-        select(Blackboard).where(Blackboard.office_id == office.id)
+        select(CentralHub).where(CentralHub.office_id == office.id)
     )
     blackboard = result.scalar_one()
     assert blackboard.content is not None
@@ -170,7 +170,7 @@ async def test_no_writes_when_loop_interrupted(
     )
 
     blackboard = await session.execute(
-        select(Blackboard).where(Blackboard.office_id == office.id)
+        select(CentralHub).where(CentralHub.office_id == office.id)
     )
     assert blackboard.scalar_one_or_none() is None, (
         "interrupted-only emit must not lazy-create a Blackboard row"

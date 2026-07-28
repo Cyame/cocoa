@@ -31,7 +31,7 @@ beforeEach(() => {
         id: 'office-1',
         name: 'Research Lab',
         slug: 'research-lab',
-        blackboard_ref: null,
+        central_hub_ref: null,
         created_at: '2026-07-01T00:00:00Z',
         updated_at: '2026-07-01T00:00:00Z',
       });
@@ -112,6 +112,6 @@ describe('OfficeDetailPage', () => {
       await screen.findByText('Coordinate the quarterly research sprint.'),
     ).toBeInTheDocument();
     expect(screen.getByText('Review findings every Friday.')).toBeInTheDocument();
-    expect(mockedApi).toHaveBeenCalledWith('/blackboards?office_id=office-1');
+    expect(mockedApi).toHaveBeenCalledWith('/central-hubs?office_id=office-1');
   });
 });

@@ -11,7 +11,7 @@ export type Office = {
   readonly id: string;
   readonly name: string;
   readonly slug: string;
-  readonly blackboard_ref: string | null;
+  readonly central_hub_ref: string | null;
   readonly created_at: string;
   readonly updated_at: string;
 };

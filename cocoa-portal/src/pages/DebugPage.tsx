@@ -15,7 +15,7 @@ const RESOURCE_TYPES = [
   'message',
   'memory_entry',
   'learning',
-  'blackboard',
+  'central_hub',
 ] as const;
 
 type FilterState = {

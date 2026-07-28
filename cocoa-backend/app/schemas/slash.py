@@ -19,7 +19,7 @@ class ContentRef(BaseModel):
             ``workspace``, a key for ``blackboard``, etc.).
     """
 
-    scope: Literal["workspace", "blackboard", "vault", "memory"]
+    scope: Literal["workspace", "fornix", "vault", "memory"]
     path: str | None = None
 
     @field_validator("scope")

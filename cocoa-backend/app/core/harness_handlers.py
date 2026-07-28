@@ -56,7 +56,7 @@ async def handle_checkpoint_writes(**kwargs: object) -> None:
     from sqlalchemy import select
 
     from app.core.db import get_session_factory
-    from app.models.blackboard import Blackboard
+    from app.models.central_hub import CentralHub
     from app.models.instance import Instance
     from app.models.loop_state import InstanceLoopState, LoopStatus
     from app.models.memory import MemoryEntry, MemoryKind
@@ -101,14 +101,14 @@ async def handle_checkpoint_writes(**kwargs: object) -> None:
             )[:500]
 
             blackboard_result = await session.execute(
-                select(Blackboard).where(
-                    Blackboard.office_id == membership.office_id,
-                    Blackboard.deleted_at.is_(None),
+                select(CentralHub).where(
+                    CentralHub.office_id == membership.office_id,
+                    CentralHub.deleted_at.is_(None),
                 )
             )
             blackboard = blackboard_result.scalar_one_or_none()
             if blackboard is None:
-                blackboard = Blackboard(
+                blackboard = CentralHub(
                     office_id=membership.office_id, content=text
                 )
                 session.add(blackboard)

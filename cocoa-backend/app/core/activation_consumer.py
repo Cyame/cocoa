@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.events import register_handler
 from app.core.harness_supervisor import supervisor
-from app.models.blackboard import Blackboard
+from app.models.central_hub import CentralHub
 from app.models.instance import Instance, InstanceStatus
 from app.models.loop_state import InstanceLoopState, LoopStatus
 from app.models.memory import MemoryEntry
@@ -153,14 +153,14 @@ async def write_blackboard_summary(
     P9+ will replace with real LLM summary generation).
     """
     result = await session.execute(
-        select(Blackboard).where(
-            Blackboard.office_id == office_id,
-            Blackboard.deleted_at.is_(None),
+        select(CentralHub).where(
+            CentralHub.office_id == office_id,
+            CentralHub.deleted_at.is_(None),
         )
     )
     blackboard = result.scalars().first()
     if blackboard is None:
-        blackboard = Blackboard(office_id=office_id, content="")
+        blackboard = CentralHub(office_id=office_id, content="")
         session.add(blackboard)
         await session.flush()
     blackboard.content = summary  # skeleton: hardcoded stub

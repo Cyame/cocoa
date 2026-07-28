@@ -3,7 +3,7 @@
 import pytest
 
 from app.core.dirs import (
-    blackboard_dir,
+    fornix_dir,
     employee_dir,
     memory_export_path,
     vault_dir,
@@ -45,16 +45,16 @@ class TestWorkspaceDir:
 
 class TestBlackboardDir:
     def test_returns_relative_path(self) -> None:
-        assert blackboard_dir("office-1") == "blackboard/office-1/"
+        assert fornix_dir("office-1") == "fornix/office-1/"
 
     def test_trailing_slash(self) -> None:
-        assert blackboard_dir("office-1").endswith("/")
+        assert fornix_dir("office-1").endswith("/")
 
     def test_rejects_parent_traversal(self) -> None:
         with pytest.raises(ValueError, match="Path traversal"):
-            blackboard_dir("..")
+            fornix_dir("..")
         with pytest.raises(ValueError, match="Path traversal"):
-            blackboard_dir("x/..")
+            fornix_dir("x/..")
 
 
 class TestVaultDir:
@@ -99,8 +99,8 @@ class TestPathTraversalEdgeCases:
         (employee_dir, "a/../b"),
         (workspace_dir, ".."),
         (workspace_dir, "x/../y"),
-        (blackboard_dir, ".."),
-        (blackboard_dir, "a/.."),
+        (fornix_dir, ".."),
+        (fornix_dir, "a/.."),
         (vault_dir, ".."),
         (vault_dir, "../vault"),
         (memory_export_path, ".."),

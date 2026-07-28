@@ -25,10 +25,10 @@ class TestContentRef:
         assert ref.scope == "workspace"
         assert ref.path == "/foo"
 
-    def test_scope_blackboard_no_path(self) -> None:
+    def test_scope_fornix_no_path(self) -> None:
         """Valid scope without path (path defaults to None)."""
-        ref = ContentRef(scope="blackboard")
-        assert ref.scope == "blackboard"
+        ref = ContentRef(scope="fornix")
+        assert ref.scope == "fornix"
         assert ref.path is None
 
     def test_invalid_scope_value_raises_validation_error(self) -> None:

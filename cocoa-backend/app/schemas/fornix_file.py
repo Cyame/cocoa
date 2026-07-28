@@ -1,4 +1,9 @@
-"""BlackboardFile schemas — virtual filesystem inside a Blackboard."""
+"""FornixFile schemas — 穹窿脑区 (virtual filesystem inside a CentralHub).
+
+> **15d-rename (2026-07-29)**: Renamed from `blackboard_file.py`. Class names
+> `FornixFileCreate` / `FornixFileUpdate` / `FornixFileOut` are 15d+
+> canonical. No back-compat aliases.
+"""
 
 from __future__ import annotations
 
@@ -7,8 +12,8 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, field_validator
 
 
-class BlackboardFileCreate(BaseModel):
-    """Create a file or directory inside a Blackboard."""
+class FornixFileCreate(BaseModel):
+    """Create a file or directory inside the 穹窿 (fornix) brain of a CentralHub."""
 
     office_id: str
     name: str
@@ -27,15 +32,15 @@ class BlackboardFileCreate(BaseModel):
         return v
 
 
-class BlackboardFileUpdate(BaseModel):
-    """Rename or move a BlackboardFile (parent_path is the new parent directory)."""
+class FornixFileUpdate(BaseModel):
+    """Rename or move a FornixFile (parent_path is the new parent directory)."""
 
     name: str | None = None
     parent_path: str | None = None
 
 
-class BlackboardFileOut(BaseModel):
-    """Read-only representation of a BlackboardFile."""
+class FornixFileOut(BaseModel):
+    """Read-only representation of a FornixFile."""
 
     model_config = ConfigDict(from_attributes=True)
 

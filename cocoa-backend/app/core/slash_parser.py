@@ -10,7 +10,7 @@ Grammar (informal)::
     <target>      := "@" <employee-name>
     <cmd>         := "/" <name>
     <content-ref> : "@" <scope> [":" <path>]
-    scope         := "workspace" | "blackboard" | "vault" | "memory"
+    scope         := "workspace" | "fornix" | "vault" | "memory"
 
 This is a **pure parser** — it only validates structural syntax, NOT
 whether targets or commands exist.  Command validation, target resolution,
@@ -24,14 +24,14 @@ from typing import Literal
 
 from app.schemas.slash import ContentRef, Directive, Turn
 
-Scope = Literal["workspace", "blackboard", "vault", "memory"]
+Scope = Literal["workspace", "fornix", "vault", "memory"]
 
 # Regex: @employee-name (alphanumeric + hyphens/underscores) at line start
 _RE_TARGET = re.compile(r"^@([a-zA-Z0-9_-]+)\s+")
 
 # Regex: @scope:path where scope is one of the 4 keywords
 _RE_CONTENT_REF = re.compile(
-    r"@(?P<scope>workspace|blackboard|vault|memory)"
+    r"@(?P<scope>workspace|fornix|vault|memory)"
     r"(?::(?P<path>\S+))?"
 )
 
