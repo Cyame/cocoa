@@ -2,6 +2,39 @@
 
 > 给人类贡献者与 AI Agent 共同遵守的开发规范。读者包括 Claude / OpenCode / Cursor / Codex 类工具，以及项目内的开发者。
 
+## 0. 项目定位
+
+Cocoa v2 是 `nodeskclaw` 的 v2 重建（**轻量化 + 视觉优先**）。继承 nodeskclaw 的核心抽象（Employee = preset + memory / Instance = materialization / 近邻消息 / K8s-native 部署），但**做深不做宽**：单租户 / 极简前端 / 不复制 nodeskclaw 全部 6-registry 平台。完整对比见 `.omo/plans/cocoa-v2-roadmap.md` §1。
+
+## 0.1 Reference projects（planner / agent 必须先知道的外部参考）
+
+| 项目 | 路径 | 作用 | 为什么重要 |
+|---|---|---|---|
+| **nodeskclaw** | `/Users/xuwenrui/Documents/Codes/Researches/nodeskclaw/` | Cocoa v2 的 v1 生产系统 | K8s deploy / Tunnel / Gene / Knowledge / Voice / Multi-tenant 的设计源头。capability map 在 `.omo/evidence/nodeskclaw-capability-map.md`（896 行）。 |
+| **oh-my-openagent** | `/Users/xuwenrui/Documents/Codes/github/oh-my-openagent/` | Loop-engineering harness 来源 (Boulder / continuation / notepad) | P8 的 Boulder loop 设计来源。**Caveat**: dev 分支在主动重构中（its own AGENTS.md 说 "DO NOT TRUST THE STRUCTURE BELOW AS STABLE"），引用时 pin 到 tag（如 v4.19.2）。在 `phase-8-harness.md` 中引用。 |
+
+**Planners 必须在回答"Cocoa 是否支持 X"类问题前**：
+1. 读 `.omo/evidence/nodeskclaw-capability-map.md`（外部参考）
+2. 读 `.omo/evidence/cocoa-capability-map.md`（当前实现）
+3. 读 `.omo/plans/cocoa-v2-roadmap.md`（项目级 roadmap + 阶段状态 + 远期方向）
+
+## 0.2 Planning artifacts（`.omo/` 目录结构）
+
+`***REMOVED***.omo/` 是项目的 planning system：
+
+| 子目录 | 用途 | 谁写 | 谁读 |
+|---|---|---|---|
+| `plans/` | 每个 phase 的可执行 plan（结构化 todos + commit 策略 + 验证） | planner | worker session（启动 `/start-work` 后读） |
+| `drafts/` | 长期设计讨论（**没有 approved plan** 的状态） | planner | planner（下个相关 session 开始时先读） |
+| `evidence/` | (a) phase 审计（f1-audit / f4-scope）；(b) 独立审查（independent review）；(c) capability map | worker + planner | 任何人 |
+| `notepads/` | 每个 phase 的决策 / 问题 / 教训（已废弃，新版用 plan + evidence 替代） | — | — |
+
+**Planners 在新会话开始时**：
+- 读 `plans/cocoa-v2-roadmap.md` 看项目整体状态
+- 读 `drafts/*.md` 看是否有进行中的设计讨论
+- 读 `evidence/*-capability-map.md` 了解现状
+- 然后进入 INTENT ROUTING
+
 ## 项目概述
 
 Cocoa 是多 Agent 控制台（multi-agent control studio）。本仓库已完成 **P7 实例运行时与 K8s 部署脚手架**，包含：
@@ -9,7 +42,7 @@ Cocoa 是多 Agent 控制台（multi-agent control studio）。本仓库已完�
 | 组件 | 技术栈 | 状态 |
 |------|--------|------|
 | `cocoa-backend/` | Python 3.12 + FastAPI + SQLAlchemy (async) + asyncpg + Alembic | P2 引入 12 核心域模型；P3.5 加入 Event 模型；P8 加入 InstanceLoopState 模型 + 4 熔断器配置 + Boulder snapshot 字段；P9 加入 CorridorNode 模型 + glow helper + events 查询端点 + live-status 聚合端点 + Membership 坐标迁移（`hex_q/hex_r` → `posx/posy`）；P11b 加入 DeployRecord 模型 + 9 步 K8s pipeline + SSE 进度推送；P14a 加入 InstanceProviderConfig 模型 + LLMClient (4 provider 类型) + ProviderRouter + ModelCatalog (models.dev + 600s 缓存) + LLMDistiller + 6 preset 升级 manifest；P10 加入 Learning 子系统（DistillationEngine Protocol + AggregatingDistiller 启发式引擎 + 3 个 learning API 端点 + LEARNING_COMMANDS 第 4 命令族 + portal Learning 页面 + 零 schema 变更），合计 **17 models** + **425 backend 测试通过**（P14a merge 状态；6 stale-by-design 失败 + 3 skip 见 `.omo/evidence/cocoa-vs-nodeskclaw-drift.md` §4.4–§4.5） |
-| `cocoa-portal/`  | React 19 + Vite 8 + TypeScript + Tailwind CSS v4 + Bun + lucide-react + Zustand | P9 first UI（14 todos：7 页面 + topology viz + CorridorNode + interaction modes + 零新增 npm 依赖） |
+| `cocoa-portal/`  | React 19 + Vite 8 + TypeScript + Tailwind CSS v4 + Bun + lucide-react + Zustand | P10 first UI（8 页面：Login / Office list / Office detail / Instance detail / Composer / Debug / Topology viz / Employee Learning）+ 零新增 npm 依赖；P14a 不改前端（仅后端改造 agent_runtime 调真 LLM） |
 | `cocoa-artifacts/` | Dockerfile + K8s 清单（Deployment/Service/ConfigMap/PVC/NetworkPolicy） | P7 已完成 |
 | `.github/workflows/` | CI 基础（lint + build） | 骨架 |
 
@@ -284,6 +317,18 @@ chore(repo): 初始化根目录约定与启动脚本
 - 数据库 DROP / DELETE / TRUNCATE
 - DNS / 域名变更
 - `git push --force`、`git reset --hard`
+
+## 远期方向（用户明确表达，未进入 wave queue）
+
+参见 `.omo/drafts/session-engine-v2.md` —— 用户希望重建会话引擎：
+- **更轻 / 更易用**：替代当前 `session.ts` Zustand 单 store
+- **多模态协议 day 1**：image / audio / video 作为 first-class content（用 LLM 原生 multimodal API，不是 base64-in-string）
+- **功能覆盖**：等价 nodeskclaw Tunnel + Voice + Channel 表面
+- **搭建时锁定架构决策**：不能后补
+
+详细设计待 P15+ 启动时规划；当前仅 draft 状态。
+
+其他远期：参见 `.omo/plans/cocoa-v2-roadmap.md` §4 (P14+ 候选 wave 队列 13 个) + §5 (long-term directions)。
 
 ## 仓库结构快查
 
