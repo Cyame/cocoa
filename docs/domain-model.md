@@ -197,7 +197,7 @@ classDiagram
 | `offices` | Workspace | 菌落 | 菌落 | Collaboration workspace boundary |
 | `memberships` | Membership | - | - | User or Instance presence in a Workspace with role + hex coords |
 | `corridors` | Passage | 突触 | 突触 | Directed adjacency edge between memberships |
-| `blackboards` | Blackboard | 共生面 | 黑板 | 1:1 shared collaboration context per Workspace |
+| `blackboards` | Blackboard | 穹窿 | 穹窿 | 1:1 shared collaboration context per Workspace |
 | `blackboard_files` | BlackboardFile | - | - | File/directory within a Blackboard |
 | `vaults` | Vault | 冰封库 | 冰封库 | 1:1 cold archival storage per Workspace |
 | `vault_entries` | VaultEntry | - | - | Archived artifact entry |

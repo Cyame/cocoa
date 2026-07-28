@@ -121,9 +121,9 @@ class Event(BaseModel, Base):
 | `INSTANCE_STOPPED` | `instance.stopped` | 实例 | P7（`POST .../stop`） |
 | `INSTANCE_FAILED` | `instance.failed` | 实例 | P7（`POST .../fail`） |
 | `INSTANCE_DELETED` | `instance.deleted` | 实例 | P7（`DELETE ...`） |
-| `BLACKBOARD_FILE_CREATED` | `blackboard.file_created` | 黑板 | P6（`POST .../files`） |
-| `BLACKBOARD_FILE_UPDATED` | `blackboard.file_updated` | 黑板 | P6（`PATCH .../files/{id}`） |
-| `BLACKBOARD_FILE_ARCHIVED` | `blackboard.file_archived` | 黑板 | P6（`POST .../files/{id}/archive`） |
+| `BLACKBOARD_FILE_CREATED` | `blackboard.file_created` | 穹窿 | P6（`POST .../files`） |
+| `BLACKBOARD_FILE_UPDATED` | `blackboard.file_updated` | 穹窿 | P6（`PATCH .../files/{id}`） |
+| `BLACKBOARD_FILE_ARCHIVED` | `blackboard.file_archived` | 穹窿 | P6（`POST .../files/{id}/archive`） |
 | `MEMORY_ENTRY_APPENDED` | `memory.entry_appended` | 记忆 | P6（`POST /memory/entries`） |
 | `HARNESS_LOOP_STARTED` | `harness.loop_started` | 控制循环 | P8 落地 |
 | `HARNESS_CHECKPOINT` | `harness.checkpoint` | 控制循环 | P8 落地 |
