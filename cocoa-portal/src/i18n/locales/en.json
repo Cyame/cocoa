@@ -23,7 +23,8 @@
     "debug": "Debug",
     "topology": "Topology",
     "composer": "Composer",
-    "learning": "Learning"
+    "learning": "Learning",
+    "members": "Members"
   },
   "login": {
     "signInHeading": "Sign in",
@@ -185,6 +186,24 @@
       "researcher": "researcher",
       "director": "director"
     }
+  },
+  "members": {
+    "eyebrow": "Office roster",
+    "title": "Members",
+    "subtitle": "{{count}} active members in this office, including owners, editors, and viewers.",
+    "loading": "Loading members",
+    "emptyTitle": "No members yet",
+    "emptyDetail": "This office has no active memberships.",
+    "loadFailed": "Failed to load members",
+    "officeIdMissing": "Office identifier is missing.",
+    "role": {
+      "owner": "Owner",
+      "editor": "Editor",
+      "viewer": "Viewer"
+    },
+    "userKind": "User",
+    "instanceKind": "Instance",
+    "positionLabel": "Position"
   },
   "errors": {
     "401": "Sign-in required. Please sign in again.",

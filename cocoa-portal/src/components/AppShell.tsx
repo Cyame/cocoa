@@ -1,4 +1,4 @@
-import { BookOpen, Bug, Building2, LogOut, Network, Pencil, User } from 'lucide-react';
+import { BookOpen, Bug, Building2, LogOut, Network, Pencil, User, Users } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Navigate, NavLink, Outlet, useParams } from 'react-router';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
@@ -60,7 +60,30 @@ export default function AppShell() {
       end: true,
       isDisabled: officeId === null,
     },
+    {
+      label: t('nav.members'),
+      href: officeId === null ? '/offices' : `/offices/${officeId}/members`,
+      Icon: Users,
+      end: true,
+      isDisabled: officeId === null,
+    },
   ] as const;
+
+  const MOBILE_GRID_COLS_CLASS: string = (() => {
+    const count: number = navigationItems.length;
+    switch (count) {
+      case 4:
+        return 'grid-cols-4';
+      case 5:
+        return 'grid-cols-5';
+      case 6:
+        return 'grid-cols-6';
+      case 7:
+        return 'grid-cols-7';
+      default:
+        return 'grid-cols-5';
+    }
+  })();
 
   return (
     <div className="flex min-h-dvh bg-slate-100 text-slate-950 md:h-dvh md:overflow-hidden">
@@ -140,7 +163,10 @@ export default function AppShell() {
         </header>
 
         <nav
-          className="grid shrink-0 grid-cols-5 border-b border-slate-200 bg-white md:hidden"
+          className={cn(
+            'grid shrink-0 border-b border-slate-200 bg-white md:hidden',
+            MOBILE_GRID_COLS_CLASS,
+          )}
           aria-label="Primary navigation"
         >
           {navigationItems.map(({ label, href, Icon, end, isDisabled }) => (

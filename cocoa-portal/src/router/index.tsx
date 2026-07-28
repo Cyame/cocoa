@@ -6,6 +6,7 @@ import EmployeeLearningPage from '@/pages/EmployeeLearningPage';
 import EmployeesListPage from '@/pages/EmployeesListPage';
 import InstanceDetailPage from '@/pages/InstanceDetailPage';
 import LoginPage from '@/pages/LoginPage';
+import MembersListPage from '@/pages/MembersListPage';
 import OfficeDetailPage from '@/pages/OfficeDetailPage';
 import OfficeListPage from '@/pages/OfficeListPage';
 import TopologyPage from '@/pages/TopologyPage';
@@ -39,6 +40,10 @@ const router = createBrowserRouter([
       {
         path: '/offices/:id/employees',
         Component: EmployeesListPage,
+      },
+      {
+        path: '/offices/:id/members',
+        Component: MembersListPage,
       },
       {
         path: '/offices/:id/instances/:iid',

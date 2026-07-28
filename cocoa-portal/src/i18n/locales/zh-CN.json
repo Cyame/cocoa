@@ -23,7 +23,8 @@
     "debug": "调试",
     "topology": "拓扑视图",
     "composer": "编辑器",
-    "learning": "学习"
+    "learning": "学习",
+    "members": "成员"
   },
   "login": {
     "signInHeading": "登录",
@@ -185,6 +186,24 @@
       "researcher": "研究员",
       "director": "主管"
     }
+  },
+  "members": {
+    "eyebrow": "办公室名册",
+    "title": "成员",
+    "subtitle": "本办公室共有 {{count}} 名活跃成员，包括所有者、编辑与查看者。",
+    "loading": "正在加载成员",
+    "emptyTitle": "暂无成员",
+    "emptyDetail": "此办公室尚无活跃成员关系。",
+    "loadFailed": "加载成员失败",
+    "officeIdMissing": "缺少办公室标识。",
+    "role": {
+      "owner": "所有者",
+      "editor": "编辑",
+      "viewer": "查看者"
+    },
+    "userKind": "用户",
+    "instanceKind": "实例",
+    "positionLabel": "坐标"
   },
   "errors": {
     "401": "需要登录，请重新登录。",
