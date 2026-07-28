@@ -473,933 +473,667 @@ interface Capability {
 
 ---
 
-## §7 导航结构 + AppShell
+## §7 AppShell + Sidebar 框架（VSCode 风）
 
-### 7.1 整体结构（双栏布局）
+> **15d 重构（2026-07-28）**：从"3-tab 详情页"转向"VSCode 风 IDE 布局"——Workspace dashboard 默认画布 = 拓扑图，常驻右侧 Composer panel，可折叠左侧 Sidebar 活动栏，节点点击弹大窗。
 
-AppShell 是已登录用户的统一外壳，包裹所有需要鉴权的页面。**所有 9 个内部入口都挂在 AppShell 下**（Login / Register 不挂）。
+### 7.1 整体结构（3 浮层 + 1 主画布）
 
 ```
-┌──────────────────────────────────────────────────────┐
-│ AppShell                                               │
-│ ┌──────────┬─────────────────────────────────────────┐│
-│ │          │ Topbar（语言切换 / 用户信息 / 登出）   ││
-│ │  Sidebar │ Header（页面标题 / 子标题）             ││
-│ │  桌面侧  │ ─────────────────────────────────────── ││
-│ │  边栏    │ Content（页面主体）                     ││
-│ │          │                                          ││
-│ └──────────┴─────────────────────────────────────────┘│
-│ Mobile Bottom Tab Bar（替代 sidebar）                  │
-└──────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────┐
+│ AppShell - 全屏 IDE 布局                                         │
+│ ┌────────┬──────────────────────────────────────────┬──────────┐│
+│ │        │ Activity Bar（顶部）                    │          ││
+│ │ Sidebar│ ┌────────────────────────────────────────┐ │ Composer ││
+│ │ (左,    │ │ Tab 栏（多 tab 可切换）            │ │ Side     ││
+│ │ 可折叠)│ │  [拓扑] [契印] [化身] [记忆]  ← 默认│ │ Panel    ││
+│ │        │ ├────────────────────────────────────────┤ │ (右,     ││
+│ │        │ │ 主画布（默认 = 拓扑 SVG 画布）        │ │ 常驻,    ││
+│ │        │ │  click 节点 → 浮窗（背景 blur）       │ │ 可拖缩,  ││
+│ │        │ │  dblclick 节点 → 持久化 tab          │ │ 可全屏,  ││
+│ │        │ │                                      │ │ 可关闭)  ││
+│ │        │ └────────────────────────────────────────┘ │          ││
+│ │        │ Status Bar（底部 — 心智状态 / 超管)    │          ││
+│ └────────┴──────────────────────────────────────────┴──────────┘│
+└───────────────────────────────────────────────────────────────┘
 ```
 
-### 7.2 Sidebar 桌面侧边栏（≥768px）
+4 个浮层 / 区：
 
-**位置**：固定左侧，宽度 240px，高度 100vh，深色背景（slate-950）
+| 区 | 默认状态 | 行为 |
+|---|---|---|
+| **Sidebar（左侧活动栏）** | 折叠（仅图标） | 默认 64px 宽，点按钮展开到 240px。包含 6 个图标：空间 / 神职市场 / 契印 / 眷族 / 调试 / 用户菜单 |
+| **主画布（中间）** | 始终显示 | 多 tab 模式。默认 tab = 拓扑图（dashboard）。其他 tab = 契印 / 化身 / 记忆 |
+| **Composer Side Panel（右侧）** | 常驻显示（默认宽度 360px） | 可拖拽边缘缩放（100-800px 范围），可全屏覆盖主画布，可折叠隐藏 |
+| **Status Bar（底部）** | 始终显示 | 当前 Workspace 健康度 + 当前用户觉醒基因 chip + Super Admin badge |
 
-**结构**（自顶向下）：
+### 7.2 Sidebar 活动栏（左侧）
 
-| 区域 | 内容 |
-|---|---|
-| Logo 区 | Cocoa 图标 + "Cocoa" + 副标题"控制台" |
-| 主导航区 | 9 个入口（见 7.4） |
-| 用户区（底部） | 用户名 + 觉醒基因 chip + Super Admin badge + 登出按钮 |
+**位置**：固定左侧，宽度 64px 折叠态 / 240px 展开态
 
-**当前页高亮规则**：
-- 匹配当前路由（包括子路由）：背景变蓝（blue-600），文字变白
-- 路由匹配通过 React Router v7 的 NavLink `isActive` 自动判定
-- 关联 Workspace 时（需要 office_id 的入口），必须选中一个 Workspace 才能高亮
+**折叠态（默认）**：
+- 6 个垂直堆叠图标（lucide 24px）：
+  - `Building2` 空间（点击跳 `/namespaces` namespace 主页）
+  - `Library` 神职市场（跳 `/base-classes`）
+  - `Stamp` 契印管理（跳 `/contracts` global）
+  - `Users` 眷族管理（跳 `/entities` global）
+  - `Bug` 调试（跳 `/namespaces?tab=debug`）
+  - `User` 用户菜单（点击展开用户菜单弹出层）
+- 顶部：图标按钮 hover 显示 tooltip + 当前活动页背景高亮（蓝色 600）
+- 底部：用户头像（点击展开用户菜单）
 
-### 7.3 Mobile Bottom Tab Bar（<768px）
+**展开态（240px）**：
+- 与 VSCode 类似，2 个浮动 panel：
+  - 左：图标列（同折叠态）
+  - 右：图标对应的"二级"列表（如点击 `Building2` 显示 workspace 列表、`Users` 显示眷族列表、`Stamp` 显示契印列表）
+- 视觉风格：白底 / 灰底 + 1px 边框
 
-**位置**：固定底部，高度 64px，白色背景
+**Sidebar 切换 workspace**：
+- 在展开态下点 workspace 卡片 → 切到该 workspace dashboard
+- 双击 workspace 卡片 → 全屏打开 dashboard（隐藏 sidebar / status bar）
+- 再次双击 → 还原 sidebar + status bar
 
-**结构**：5-7 个 Tab 横向均分（按需展开成可滚动）
+### 7.3 主画布的多 tab 系统
 
-**优先级排序**（从左到右）：
-1. 空间（必须有 workspace_id 才能进入）
-2. 拓扑（同上）
-3. Composer（同上）
-4. 调试（无 workspace 限制）
-5. 学习（同上）
-6. 成员（同上）
+**Tab 列表（默认）**：
+```
+[拓扑] [契印] [化身] [记忆]   (主画布 tab 栏)
+```
 
-**超过 5 个时**：底部 Tab 仅显示 5 个，其余收到"更多"菜单（右上角 ⋯）
+**Tab 行为**：
+- **切换 tab**：仅切换主画布内容，sidebar / composer panel 不动
+- **持久化**：用户拖入新 tab 后，切其他 tab 回来仍在那里
+- **关闭 tab**：右上角 `×` 按钮（节点双击开窗时的 tab）
 
-### 7.4 9 个导航入口
+**主画布默认 tab = 拓扑图**（§11 dashboard 视图）
 
-按 Workspace 依赖关系分组：
+#### 各 tab 内容速览
 
-#### A. Workspace 内入口（必须选中 workspace 才能访问）
+| Tab | 渲染对象 | 关键交互 |
+|---|---|---|
+| **拓扑**（默认） | SVG 画布 + 节点 + 通道 | hover tooltip / click 浮窗 / dblclick 持久化 tab |
+| **契印** | 当前 Workspace 真人契印列表（表格） | 表格行 hover 高亮 + 右键菜单 |
+| **化身** | 当前 Workspace 化身列表（card grid） | card hover 详情，click → 该化身 info tab 浮窗 |
+| **记忆** | 眷族记忆聚合视图（按眷族分组） | 列表点击 → 单眷族记忆详情（窗内浮窗） |
 
-| # | 入口 | 路由 | 图标 | 启用条件 |
-|---|---|---|---|---|
-| 1 | 空间详情 | `/workspaces/:id` | `Building2` | 总是启用 |
-| 2 | 神职列表 | `/workspaces/:id/entities` | `Users` | 总是启用 |
-| 3 | 成员列表 | `/workspaces/:id/members` | `Users` | 总是启用 |
-| 4 | 拓扑 | `/workspaces/:id/topology` | `Network` | 总是启用 |
-| 5 | Composer | `/workspaces/:id/composer` | `Pencil` | 总是启用 |
-| 6 | 学习 | `/workspaces/:id/entities` | `BookOpen` | 总是启用 |
+### 7.4 Composer Side Panel（右侧）
 
-#### B. 全局入口（无 workspace 依赖）
+**位置**：右侧固定栏，默认宽度 360px
 
-| # | 入口 | 路由 | 图标 | 启用条件 |
-|---|---|---|---|---|
-| 7 | 空间列表 | `/workspaces` | `Building2` | 总是启用 |
-| 8 | 调试 | `/debug` | `Bug` | 总是启用 |
-| 9 | 登录 | `/login` | (无) | 仅未登录时显示 |
+**常驻行为**：
+- 进入 workspace dashboard 时**自动展开**到 360px（不折叠可关闭但默认显示）
+- 用户输入或对话历史可见，用户可关掉但下次进入 workspace 仍默认展开
 
-> **Login 不挂 AppShell**：登录页是独立路由，不进 AppShell 包裹。
+**可调节交互**：
+- **拖拽左边框**：横向 resize，宽度范围 100-800px
+- **折叠按钮**：右上角折叠图标（→ side panel 收起为 0，主画布占满右侧）
+- **全屏按钮**：右上角全屏图标（→ side panel 覆盖整个 viewport，含 sidebar / status bar / 主画布）
+- **退出全屏**：Esc 键 或 全屏状态下点击右上角还原按钮
 
-### 7.5 Topbar（顶部条）
+**视觉层次**（3 层）：
+```
+点击 Composer 浮窗 →
+  Layer 1（背景）：主画布 blur(8px) + 暗化 30%
+  Layer 2：Composer full-screen 浮窗
+  Layer 3：SVG 节点浮窗（如果点击节点）
+```
 
-**位置**：AppShell 主体顶部，高度 40px，白底
+### 7.5 Status Bar（底部）
+
+**位置**：底部固定，高度 24px
 
 **结构**（从左到右）：
-- 左侧空（占位）
-- 右侧：语言切换按钮 → 用户名 + 觉醒基因 chip + Super Admin badge → 登出按钮
+- Workspace 名（hover 显示完整 slug + 创建时间）
+- Workspace 健康度指示（绿/黄/红，基于化身 loop_status 聚合）
+- 分隔符
+- 当前选中节点（如果在拓扑 tab 上有点击选中）
+- 分隔符
+- 右侧：觉醒基因 chip + Super Admin badge（如适用）+ 用户菜单
 
-**组件**：
-- **语言切换**：`LanguageSwitcher` 组件（zh-CN ⇄ en）
-- **用户信息**：头像（占位圆）+ 用户名 + 觉醒基因 chip + Super Admin badge（如适用）
-  - 觉醒基因 chip：显示当前基因名（如 `operator-gene`），hover 显示能力位列表
-  - Super Admin badge：金色徽章，「超管」字样（仅 `is_super_admin=true` 时显示）
-- **登出**：按钮点击 → 清 token → 跳 `/login`
+### 7.6 全局快捷键
 
-### 7.6 Header（页面标题区）
+| 快捷键 | 行为 |
+|---|---|
+| `⌘K` / `Ctrl+K` | 打开全局命令面板（搜功能 / 跳页 / 调起操作） |
+| `Cmd+\` | 折叠 / 展开 Composer Side Panel |
+| `Cmd+B` | 折叠 / 展开 Sidebar |
+| `Cmd+Shift+F` | Composer 全屏 |
+| `V` / `C` / `M` | 拓扑 tab 操作模式切换（仅在拓扑 tab 激活时） |
+| `R` | 刷新当前 tab 数据 |
+| `Esc` | 关闭浮窗 / 退出 Composer 全屏 |
 
-**位置**：Topbar 下方，高度自适应
+### 7.7 路由总览
 
-**结构**：
-- **大标题**：H1，32px，semibold（页面名）
-- **副标题**：14px，灰色（页面一句话描述）
-- **右侧**：页面级操作按钮（可选，例如空间详情的"召唤眷族"按钮）
+| 路由 | 页面 | 默认行为 |
+|---|---|---|
+| `/login` | 登录页（不在 AppShell 内） | 登录成功 → 跳 `/namespaces` |
+| `/namespaces` | **namespace 主页（VSCode-style dashboard）** | 登录默认落点 |
+| `/namespaces?tab=...` | namespace 主页的特定 tab（Workspace / 神职 / 契印 / 眷族 / 调试） | |
+| `/workspaces/:id` | **Workspace dashboard**（VSCode-IDE 布局） | 进入此路由时 sidebar/Composer panel 自动展开 |
+| `/workspaces/:id?fullscreen=:iid` | workspace dashboard 全屏打开指定化身 | |
+| `/workspaces/:id?focus=memory&entity=:eid` | workspace dashboard "记忆" tab + focus 到指定眷族记忆 | |
+| `/contracts` | 全局契印管理（VSCode 风，tab 化列表） | sidebar 契印图标 |
+| `/entities` | 全局眷族管理（VSCode 风，列表 + 详情） | sidebar 眷族图标 |
+| `/base-classes` | 神职市场（VSCode 风，grid + 详情） | sidebar 神职图标 |
+| `/debug` | 调试页 | sidebar 调试图标 |
 
-**页面 Header 样例**（空间详情）：
-```
-┌────────────────────────────────────────┐
-│ 奈亚探子巢穴                  [+ 召唤眷族] │
-│ Workspace 详情 · 5 个眷族 · 3 个化身   │
-└────────────────────────────────────────┘
-```
+### 7.8 Namespace 主页（`/namespaces`）详
 
-> **统计语义**：Workspace 内**只**显示眷族数 + 化身数。**不**显示神职数——神职（BaseClass）是系统级模板，全局共享，不属于任何特定 workspace（未来多 namespace 扩展时才会变 per-namespace）。Workspace 内一切皆眷族 / 化身 / 主脑 状态。
+> 后续 §8 详写。当前简述：从 workspace 列表视角升级为 namespace dashboard。
 
-### 7.7 未授权与未选 Workspace 处理
+**默认 tab = Workspace**（登录后第一次看到）：
+- 上半部：Workspace 列表卡片 grid（每个 workspace 显示当前统计 + Stat 卡片 = 眷族数 / 化身数 / 主脑活跃状态）
+- 下半部：召唤 CTA（如空）+ 召唤历史
+
+**其他 tab**：
+- **神职**：全球神职市场（11 + 可能的可装）
+- **契印**：契约管理 + 觉醒基因分布表
+- **眷族**：全局眷族设置（v1 简化版 — 主要在 workspace 层使用）
+- **调试**：印痕流 + 过滤
+
+### 7.9 未授权与未选 Workspace 处理
 
 | 场景 | 行为 |
 |---|---|
 | 未登录访问受保护路由 | 跳 `/login` |
-| 已登录但未选 Workspace，访问 workspace 内路由 | 跳 `/workspaces`（列表），Toast「请先选择 Workspace」 |
-| 已登录，Workspace ID 无效（404） | 跳 `/workspaces`，Toast「Workspace 不存在或已删除」 |
+| 已登录但未选 Workspace | 跳 `/namespaces`（namespace 主页是登录默认落点） |
+| 已登录，Workspace ID 无效（404） | 跳 `/namespaces`，Toast「Workspace 不存在或已删除」 |
 | Token 过期（API 返回 401） | 清 token + 跳 `/login`，Toast「会话已过期，请重新登录」 |
+| Composer 全屏状态下 token 过期 | 同上 + Composer 折叠回 side panel 形态 |
 
-### 7.8 错误边界
+### 7.10 错误边界
 
 - AppShell 整体包一个 `ErrorBoundary`
 - 任意子组件崩溃 → 显示降级 UI："页面遇到错误，请刷新或返回首页"
-- 提供"刷新" + "返回首页"按钮
+- 提供「刷新」+「返回 /namespaces」按钮
+- Composer 全屏状态下崩溃 → 默认 fallback 到 side panel 模式
 
-### 7.9 响应式断点
+### 7.11 响应式断点
 
 | 断点 | 范围 | 布局 |
 |---|---|---|
-| mobile | <768px | 隐藏 sidebar，显示 bottom tab bar |
-| tablet | 768-1023px | sidebar 显示（240px 宽），简化 header |
-| desktop | ≥1024px | 完整 sidebar（240px），完整 header，content 全宽 |
+| mobile | <768px | Sidebar 折叠态强制 + Composer 折叠为底部 drawer；主画布仍 tab |
+| tablet | 768-1023px | Sidebar 可折叠，Composer 默认 320px |
+| desktop | ≥1024px | 完整 VSCode 风布局 |
+
+> **v1 优先桌面**：mobile 体验是 fallback，不优化。
 
 ---
 
-## §8 空间列表 + 空间详情页
+## §8 Namespace 主页（`/namespaces`）
 
-### 8.1 空间列表页 `/workspaces`
+> **核心定位**：登录后**默认落点**。这是系统最上层的"管理控制台"——VSCode 风布局，所有静态资产管理在这里。
 
-#### 页面定位
-- **入口**：Sidebar "空间列表"、Logo 点击、移动端底部 Tab "空间"
-- **场景**：登录后的默认页（无 workspace 选中时）、用户想切换 workspace 时
-- **典型 Persona**：全部 3 个（架构师/执行者/审计者都会用）
-
-#### 页面结构
+### 8.1 总体结构
 
 ```
-┌─────────────────────────────────────────────┐
-│ Header                                      │
-│   标题："空间"                              │
-│   副标题："选择 Workspace 进入神职与化身"   │
-├─────────────────────────────────────────────┤
-│ Content                                     │
-│   - 加载中：居中 spinner                     │
-│   - 空态：召唤首位眷族 CTA                  │
-│   - 列表：workspace 卡片 grid               │
-└─────────────────────────────────────────────┘
+/namespaces 默认 tab = Workspace
+/namespaces?tab=base-classes  → 神职市场
+/namespaces?tab=contracts     → 契印管理
+/namespaces?tab=entities     → 眷族管理（全局配置层）
+/namespaces?tab=debug         → 调试
 ```
 
-#### 加载态
-- 居中 `LoaderCircle` + 文字"加载空间中"（zh）/ "Loading workspaces"（en）
+每个 tab 内容都在主画布显示，sidebar / composer panel 行为跟 workspace 一致（跨 tab 共享 IDE 布局）。
 
-#### 空态（Workspace 列表为空）
+### 8.2 Workspace tab（默认）
 
-这是单租户模式下用户首次进入的常态。**不显示"创建一个 Workspace"按钮**——因为 15d 单租户默认只有 1 个 Workspace 且已自动存在。
-
-**空态文案**：
-- 标题："还没有眷族"
-- 副标题："召唤你的第一位眷族，开始与 AI 化身协作"
-- 主 CTA 按钮："召唤首位眷族" → 触发首次运行引导（§6）
-- 次 CTA 链接："了解神职" → 滚动到底部"神职预览"展示 11 张缩略卡
-
-#### 列表态（卡片 grid）
-
-- **布局**：桌面 3 列、平板 2 列、移动 1 列
-- **卡片内容**：
-  - 顶部：Workspace 图标（`Building2`）+ slug（mono）
-  - 中部：Workspace 显示名（H2）+ 创建时间
-  - 底部：3 个统计——眷族数 / 化身数 / 主脑状态
-- **点击行为**：进入 `/workspaces/:id` 详情页
-- **Hover**：边框颜色变深 + 抬升 shadow + "进入 →"箭头显形
-
-#### 错误态
-- 401 → 自动跳 `/login`
-- 其他错误：顶部红框错误条 + "重试"按钮
-
-### 8.2 空间详情页 `/workspaces/:id`
-
-#### 页面定位
-- **入口**：空间列表卡片点击、首次运行引导完成跳转、Sidebar "空间"图标
-- **场景**：Workspace 的"主页"，展示眷族 / 化身 / 主脑三个维度
-- **典型 Persona**：全部 3 个
-
-#### 页面结构
-
-```
-┌─────────────────────────────────────────────┐
-│ Header（页面标题区）                         │
-│   标题：Workspace 名称                       │
-│   副标题：slug · 创建时间                   │
-│   右侧操作：[+ 召唤眷族]（§6 引导）          │
-├─────────────────────────────────────────────┤
-│ Tab Bar（3 个 tab）                          │
-│   [神职] [化身] [主脑]                       │
-├─────────────────────────────────────────────┤
-│ Tab Content                                  │
-│   （根据当前 tab 显示不同内容）              │
-└─────────────────────────────────────────────┘
-```
-
-#### Header 详情
-- 大标题：Workspace 显示名（slug 在上方小字 mono 灰色）
-- 副标题："5 个眷族 · 3 个化身 · 主脑活跃"
-- 右侧操作按钮（需 `can_summon_entity`）：
-  - "+ 召唤眷族"（触发 §6 引导，Workspace 已空时高亮 + 动画）
-  - "⋯"菜单（需 `can_edit_workspace`）：编辑 Workspace 名 / 软删除（30 天可恢复）
-
-#### Tab 1：神职（原"成员"）
-
-**含义变更**：15d 后，"成员" = Membership（契印），是 Workspace 内的契约关系；"神职" = Entity（眷族），是 agent 身份。本 tab 显示眷族而非人。
-
-**空态**：
-- 图标：`UserRound`
-- 标题："还没有眷族"
-- 副标题："从 11 神职中召唤你的第一位眷族"
-- CTA："召唤眷族" → 触发 §6 引导
-
-**列表态**：
-- **布局**：3 列 grid，desktop
-- **卡片内容**：
-  - 顶部：头像圆（眷族 display name 首字）+ 神职 chip（神职 display name）
-  - 中部：眷族显示名（H3）+ slug（mono 小字）
-  - 底部：AI rank badge（浅识者 / 深潜者）+ 创建时间
-- **点击**：进入 `/entities/:id` 详情页（P10 学习页 §13）
-- **右键菜单**（需 `can_summon_entity`）：
-  - 软删除（30 天可恢复）
-  - 跳到该眷族的 Memory 页
-
-#### Tab 2：化身
-
-**空态**：
-- 图标：`Cpu`
-- 标题："还没有化身"
-- 副标题："眷族存在不代表化身在运行。召唤一位眷族后 spawn 化身"
-- CTA："前往眷族列表挑选" → 跳 Tab 1
-
-**列表态**：
-- **布局**：垂直列表，每行一个化身
-- **每行内容**：
-  - 左：化身图标（圆颜色对应 loop_status glow）+ 化身 ID 前 8 位
-  - 中：眷族名（链向眷族）+ K8s pod name
-  - 右：loop_status badge（running/idle/paused/failed 颜色）
-- **点击**：进入 `/workspaces/:id/instances/:iid`（§9 化身详情页）
-- **批量操作**（需 `can_interrupt_instance`）：勾选多个 → 批量 interrupt / resume
-
-#### Tab 3：主脑（CentralHub）— 4 脑区协作中枢
-
-> **核心概念**：**主脑 = 4 脑区合成的协作中枢容器**。每个 Workspace 有且只有 1 个 CentralHub（1:1），里面包含 4 个独立功能的子区（脑区），每个脑区对应 1 个独立子表：
->
-> | 脑区 | Backend 表名 | Display (zh) | 功能 |
-> |---|---|---|---|
-> | 穹窿（fornix） | `fornix` | 穹窿 | Workspace 共通工作目录（files / shared assets / attachments）— 现有 BlackboardFile |
-> | 额叶（frontal lobe） | `frontal_lobe_kanbans` | 额叶 | Kanban + Todo（继承 oh-my-openagent 的 todo 系统） |
-> | 脑干（brainstem） | `brainstem_schedules` | 脑干 | 定时任务 / 延时任务（cron-like 调度，Workspace 作用域） |
-> | 小脑（cerebellum） | `cerebellum_agents` | 小脑 | 1 个系统级中央 agent，仅服务主脑，不参与 Workspace 整体编排，承担中央智能功能（状态监控/感知聚合等）|
->
-> 数据模型采用**分子表**方案（核心已确定），4 个脑区各自独立表，1 个 CentralHub 表承担容器角色（1:1 per workspace）。
-
-**Tab 3 子结构**：进入 Tab 3 后默认打开"概览"视图 + 4 个脑区子 tab（穹窿 / 额叶 / 脑干 / 小脑）。
-
-##### §8.2.3a CentralHub 概览（默认视图）
-
-**空态**：
-- 图标：`Notebook`
-- 标题："主脑是空的"
-- 副标题："共享状态尚未初始化。让你的化身写第一条主脑内容吧"
-- CTA："召唤眷族" → 触发 §6 引导
-
-**填充态（概览视图）**：
-- **布局**：顶部统计 + 4 脑区状态卡片 grid（2×2）
-- **顶部统计**（4 脑区计数汇总）：
-  - 穹窿文件数 · 额叶活跃 todo 数 · 脑干定时任务数 · 小脑 agent 心智状态
-- **4 张脑区状态卡片**（每卡 1 脑区）：
-  - 卡头：脑区名称 + 中文 display + 当前健康状态 badge（绿/黄/红）
-  - 卡体：2-3 个核心 metric（如穹窿显示文件大小 / 修改时间，额叶显示活跃 todo / 已完成 todo，脑干显示下次执行 / 已失败任务，小脑显示 agent loop_status / 续命次数）
-  - 卡底：「进入此脑区」按钮（→ Tab 3.x 视图）
-
-##### §8.2.3b 穹窿（fornix）— 工作目录视图
-
-**Tab 切换路径**：`/workspaces/:id?tab=centralHub&area=fornix`
+**页面定位**：所有 workspace 的列表视图 + 召唤 CTA
 
 **结构**：
-- 顶部面包屑：`Workspace · 主脑 · 穹窿`
-- 左侧：BlackboardFile 树状目录（保留现有 P6 BlackboardFile 模型，字段名 `fornix_files` 后续 15d-rename wave 更新）
-- 右侧：文件详情预览 + 操作（下载 / 替换 / 删除）
-- **继承 P6 操作**：GET/PATCH/POST/DELETE 文件 + 归档到 Vault
+- 顶部 stats 总览：当前 namespace 下 workspace 数 / 总眷族数 / 总化身数 / 总主脑活跃数
+- 主区：workspace 卡片 grid（3 列 desktop / 2 列 tablet / 1 列 mobile）
+- 每个卡片内容：
+  - 大标题：Workspace 显示名
+  - 副标题：slug + 创建时间
+  - 4 项统计：当前眷族数 / 化身数 / 契印数 / 主脑健康度
+  - 健康度 badge：绿（healthy）/ 黄（部分 idle）/ 红（有 failed 化身）
+  - CTA：「进入 Workspace」按钮（点击 → /workspaces/:id，VSCode dashboard 展开）
 
-##### §8.2.3c 额叶（frontal lobe）— Kanban + Todo
+**空态**（workspace 数为 0）：
+- "还没有 Workspace" CTA：「召唤第一个眷族」（→ §6 引导）
 
-**Tab 切换路径**：`/workspaces/:id?tab=centralHub&area=frontal-lobe`
+### 8.3 神职 tab
 
-**结构**：
-- 左侧列：Kanban 看板（todo 状态切换列：backlog / in-progress / done / blocked）
-- 右侧：当前选中 todo 详情（创建者 / 关联 entity / 关联 instance / 时间线）
-- 「+ 新建 todo」按钮（手动 / 由 instance 通过基因自动创建）
-
-**Todo 来源**：
-- 真人手动创建
-- 化身通过基因（深海基因 install 包含 todo-creation gene）自动写入
-- 跨 Workspace 不可见，但 Workspace 内全员可读（权限 后续可细化）
-
-##### §8.2.3d 脑干（brainstem）— 调度任务
-
-**Tab 切换路径**：`/workspaces/:id?tab=centralHub&area=brainstem`
+**页面定位**：神职市场（base-classes）
 
 **结构**：
-- 任务列表：name + cron/interval + 下次执行时间 + 上次结果 + 状态
-- 「+ 新建调度」按钮（弹模态：name / cron expr 或 interval / 目标 / 首次执行时间）
-- 操作：暂停 / 启用 / 删除 / 查看执行历史
+- 顶部：分类过滤（4 类 / 全部）+ 标签过滤 + 排序
+- 主区：神职卡片 grid
+- 每卡内容：
+  - 神职 display name + slug + 1 句话职能
+  - 3 个核心命令 chip
+  - Provider 默认（gpt-4o-mini / claude-3-5-sonnet 等）
+  - 当前使用此神职的眷族数
+  - CTA：「查看详情」
 
-**继承 oh-my-openagent 的调度概念**（待验证细节再细化）。
+**点击卡片**：
+- 单击 → 详情浮窗（不离开 tab 列表）
+- 双击 → 全屏打开神职详情页
 
-##### §8.2.3e 小脑（cerebellum）— 中央 agent
+#### 神职详情浮窗
 
-**Tab 切换路径**：`/workspaces/:id?tab=centralHub&area=cerebellum`
+- 神职显示名 + slug + 1 段职能描述
+- 命令全集（不带 3 个限制，全部列出 + hover tooltip）
+- Provider 默认 + override 字段
+- prompt 片段预览（前 200 字）
+- 依赖的深海基因列表（v1 可能空）
+- 来源 / 版本
+- 底部 CTA：「基于此神职召唤眷族」→ §6 引导 Step 1 预选此神职
+
+### 8.4 契印 tab
+
+**页面定位**：全局用户契印管理
 
 **结构**：
-- 中央 agent 详情（不是普通 Entity 详情，因为小脑 agent 是系统级而非用户创建）
-- 显示内容：神职名 + 心智状态 + 当前任务（脑干调度触发的任务 / 穹窿 / 额叶 触发的感知聚合）
-- 操作（仅超管）：
-  - 查看小脑 agent 完整 Memory（系统级 schema）
-  - 重启小脑 agent（force restart）
-  - 修改小脑 agent 的 prompt 配置（受 `can_manage_cerebellum_agent` 限制）
+- 表格：用户名 / 觉醒基因 / 加入时间 / 状态
+- 工具栏：「+ 添加契印」按钮（v1 可能 disabled / 仅超管）
 
-**小脑 agent 特殊性**：
-- 由系统初始化时自动创建（per workspace），**不可软删**
-- 有自己专用的 BaseClass（`cerebellum-baseclass`，系统内置神职）—— 见 §2 深海基因
-- 不出现在 Workspace 节点的 Topology viz 拓扑图（仅在主脑视图显示）
-- 心智状态通过 glow halos 显示（使用独立颜色 / 灰度调以区别普通 Entity）
+**点击行**：
+- 详情浮窗：契约详情 + 能力位覆盖
 
-### 8.3 三个 Tab 的统一规范
+> **v1 简化**：契印由系统注册流程创建，不在 UI 上"手动添加"。
 
-#### Tab 切换
-- URL query：`?tab=entities|instances|blackboard`（默认 entities）
-- 直接进入：`/workspaces/:id?tab=instances` 可深链
-- Tab 切换时记录前一个 tab，用于"返回"行为
+### 8.5 眷族 tab（全局配置层）
 
-#### 加载态
-- Tab 切换时：tab 内容区显示 spinner（不切换整个页面）
-- 初次加载：整个 tab 内容区显示加载态
+> **重要**：眷族管理 ≠ 眷族使用。**使用**在 workspace dashboard（§13 记忆 + 节点跳详情），**配置**在这里。
 
-#### 错误态
-- 整个 tab 内容区显示错误条 + "重试"按钮
-- 切换到其他 tab 不影响
+**页面定位**：眷族元数据 + 跨 workspace 全局视图
 
-### 8.4 与其他页面关系
-- **从空间列表**：点击卡片 → 进入详情页（默认 entities tab）
-- **首次运行完成**：§6 引导第 3 步完成后跳转此处
-- **眷族详情**：从 tab 1 卡片点击进入 `/entities/:id`（§13 学习页）
-- **化身详情**：从 tab 2 行点击进入 `/workspaces/:id/instances/:iid`（§9）
-- **拓扑**：从任何化身/眷族卡片的"在拓扑中查看"链接跳转到 `/workspaces/:id/topology`（§11）
+**结构**：
+- 表格：眷族显示名 / slug / 神职（chip）/ rank / 关联 workspace / 化身数 / 记忆条数 / 创建时间
+- 每行右侧操作：
+  - 「详情」→ 浮窗显示完整属性
+  - 「绑定深海基因」→ §14b
+  - 「炼化」→ 跳到该眷族所在 workspace 记忆 tab
+  - 「软删」（需 `can_summon_entity`）
+
+**眷族详情浮窗**（嵌入 namespace tab，不离开主画布）：
+- **基本属性**（可编辑）：
+  - name / slug / display name
+  - description（多行文本）
+  - rank（创建后冻结）
+  - BaseClass 关联（fixed after creation；不可修改）
+- **深海基因**：当前 list + "添加额外基因"按钮（→ §14b）
+- **当前化身列表**：每个化身的 loop_status badge + spawn 时间 + 「跳到化身」（跳到所在 workspace 仪表 + focus 节点）
+
+### 8.6 调试 tab
+
+详见 §12。Namespace tab 提供与 workspace 调试同等的印痕流，但粒度为 namespace 全局。
 
 ---
 
-## §9 化身详情页
+## §9 Workspace Dashboard（`/workspaces/:id`）
 
-### 9.1 路由
-`/workspaces/:id/instances/:iid`
+### 9.1 页面定位
 
-### 9.2 页面定位
-- **入口**：空间详情"化身"tab 行点击、心灵图景节点点击、Composer 跳化身链接
-- **场景**：操作员实时监控 1 个 AI 化身的运行状态、心智状态、事件流，并执行控制操作
-- **典型职阶**：操作员（日常 Operator，重点）+ 审计者（拥有审计相关能力位的真人）
+workspace 进入后的主页面 = VSCode 风 dashboard，**默认主画布是拓扑图**。
 
-### 9.3 页面结构
+### 9.2 默认状态 = 拓扑 dashboard（详见 §11）
+
+- 渲染 SVG 节点画布（契印节点 + 眷族节点 + 主脑节点）
+- 节点 hover → tooltip（loop_status 心智状态）
+- 节点 click → 浮窗
+- 节点 dblclick → 持久化 tab
+
+### 9.3 主画布的 4 个 tab
+
+| Tab | 默认 | 内容 |
+|---|---|---|
+| 拓扑 | ✓（默认） | §11 SVG dashboard |
+| 契印 |  | 当前 workspace 真人契印列表（表格，简化版） |
+| 化身 |  | 当前 workspace 化身列表（card grid，含 loop_status glow） |
+| 记忆 |  | 眷族记忆聚合视图（按眷族分组，记忆数 / 最近晋升 / 最近炼化） |
+
+#### 契印 tab
+
+表格：用户名 / 觉醒基因 / 加入时间
+
+#### 化身 tab
+
+- card grid：每张卡显示节点类型 + 眷族信息
+- 每行操作：「跳到记忆详情」/「软删除」（需权限）
+
+#### 记忆 tab
+
+- 眷族维度分组（按眷族 list）
+- 每个眷族卡片：当前 Memory 统计 + 上次晋升 / 炼化时间
+- 卡片点击 → 单眷族记忆详情浮窗（§13）
+
+---
+
+## §10 Composer Side Panel
+
+### 10.1 路由 / 触发
+
+- 进入 workspace dashboard 时**自动展开**右侧 Composer panel（常驻 360px）
+- 用户随时可通过快捷键 `Cmd+\` 折叠 / 展开
+- 「全屏」按钮可让 Composer 覆盖全 viewport（含 sidebar + 主画布 + status bar）
+
+### 10.2 常驻面板布局
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│ Header                                                        │
-│   ← 返回空间                                                  │
-│   化身标题：眷族名 + K8s pod 前缀                            │
-│   副标题：神职 + rank + 当前 loop_status 实时显示            │
-├──────────────────────────────────────────────────────────────┤
-│ Status Bar（4 个 metric + 1 个 breaker config）               │
-├──────────────────────────────────────────────────────────────┤
-│ Control Toolbar（5 个控制按钮）                              │
-├──────────────────────────────────────────────────────────────┤
-│ Event Panel（最近 50 条印痕，按时间倒序）                    │
-├──────────────────────────────────────────────────────────────┤
-│ Snapshot Modal（按"快照"按钮时弹出）                         │
-└──────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────┐
+│ Composer Panel（360px 宽，可拖）       │
+├─────────────────────────────────────┤
+│ Header                               │
+│  当前对话名 + 切换按钮               │
+├─────────────────────────────────────┤
+│ 消息流（可滚动）                     │
+│  - 真人消息（incoming）               │
+│  - 化身消息（outgoing）                │
+│  - 系统消息 / 错误                    │
+├─────────────────────────────────────┤
+│ 输入区                               │
+│  textarea + 命令自动补全             │
+│  [发送] [清空] [新对话]              │
+└─────────────────────────────────────┘
 ```
 
-### 9.4 Header 详情
+### 10.3 消息流设计
 
-- **返回按钮**：左上方 `← 返回空间`，跳回 `/workspaces/:id?tab=instances`
-- **大标题**：眷族 display name（链向眷族详情）+ K8s pod 前 8 位（mono 灰色）
-- **副标题**：神职 chip + rank chip + 当前 loop_status badge（实时跟随 status poll）
+- 单列 vertical scroller
+- 消息气泡：左 = 真人（incoming），右 = 化身（outgoing）
+- @slug mention 高亮
+- 系统消息用灰色 thin 文本行（"Component scheduled at ..."）
 
-### 9.5 Status Bar
+### 10.4 输入区
 
-4 个 metric 横排 + 1 个 breaker config：
+- textarea（单行变高模式，⌘Enter 提交）
+- 实时解析 `@slug /cmd` 段落化
+- 目标选择器 chip（一键插入 `@current_slug`）
+- 命令自动补全：`/` 弹下拉
+- 发送按钮 + loading 状态
+- 「新对话」按钮清空当前对话（保留前 N 条到历史）
 
-| Metric | 显示 | 数据来源 | 实时刷新 |
+### 10.5 Composer 全屏
+
+- 触发：右上角全屏图标 或 Cmd+Shift+F
+- 视觉：整个 viewport 都显示 Composer，sidebar / 主画布 / status bar 全部隐藏（z-index 高于所有）
+- 退出：Esc 或右上角还原按钮
+- 全屏时 Composer 显示聊天列表（左栏）+ 当前对话（中栏）+ 输入区（右栏），3 栏布局
+
+### 10.6 跨化身对话
+
+- 一次 Composer 可同时派给多个 `@slug`
+- 每个 `@slug` 一个 chat channel（input 段落化）
+- 列表显示每个 `@slug` 的未读红点 + 最新一条预览
+
+### 10.7 与节点跳转联动
+
+点击主画布上的某个化身节点 → 节点浮窗里有「在 Composer 里聊」按钮 → 在 Composer 输入区预填 `@<that slug>`，自动 focus。
+
+---
+
+## §11 Topology Dashboard（主画布默认 tab）
+
+### 11.1 路由 / 进入
+
+- 进入 `/workspaces/:id` → 默认渲染主画布为 tab"拓扑"
+- 全屏打开：`Cmd+Shift+T` 或 sidebar 拓扑按钮长按 → 进入全屏 dashboard 模式
+
+### 11.2 主画布布局
+
+```
+┌─────────────────────────────────────────────────────┐
+│ Toolbar：模式切换 [选择 V] [连接 C] [移动 M]   Zoom ▾ │
+├─────────────────────────────────────────────────────┤
+│                                                     │
+│      ╭─◯─╮         ╭─◯─╮                          │
+│      │ AI │ ───────  │ 你 │                          │
+│      ╰───╯         ╰───╯                          │
+│                                                     │
+│      [全屏] [刷新] [清空过滤]                      │
+└─────────────────────────────────────────────────────┘
+```
+
+### 11.3 节点类型 + 视觉
+
+| 节点类型 | 形状 | 颜色 | 含义 |
 |---|---|---|---|
-| 心智状态 | badge（running/idle/paused/interrupted/completed/failed）颜色对应 glow | `loop_status` | 2s 轮询 |
-| 续命次数 | 大字数字 | `continuation_count` | 2s 轮询 |
-| 最近 checkpoint | ISO 时间戳或"从未" | `last_checkpoint_at` | 2s 轮询 |
-| 熔断器配置 | 4 行 mini-table：max_cont / max_wall / max_token / idle_t | `breaker_config` | 加载时一次性 |
+| **AI 眷族节点** | 圆 40px | 头像圆 + 神职 chip | 当前 workspace 的 AI 智能体身份 |
+| **AI 化身节点** | 嵌套小圆 | 继承 loop_status glow | 眷族派生的运行态（心智能状态） |
+| **真人契印节点** | 圆 40px | 纯灰底（slate-200） | 当前 workspace 的真人操作员 |
+| **主脑节点** | 大六边形 | 紫红渐变 | Workspace 中央主脑（4 脑区聚合） |
 
-**未加载态**：每个 metric 显示 `—` + 灰色 spinner
+**glow 颜色对应**：
+- running = #10b981 / 强
+- idle = #eab308 / 中
+- paused = #94a3b8 / 弱
+- interrupted = #ef4444 / 中
+- completed = #3b82f6 / 低
+- failed = #dc2626 / 强
 
-### 9.6 Control Toolbar
+### 11.4 节点 hover tooltip
 
-5 个按钮水平排列（移动端可换行）：
-
-| 按钮 | HTTP 方法 | 路径 | 触发动作 | 启用条件 |
-|---|---|---|---|---|
-| 中断 (Interrupt) | POST | `/instances/{iid}/interrupt` | 立即停止 loop，跳到 `interrupted` | 总是启用（除已 failed/completed）|
-| 暂停 (Pause) | POST | `/instances/{iid}/pause` | 化身后台暂停，新 turn 入队 | 总是启用（除已 paused/failed）|
-| 继续 (Resume) | POST | `/instances/{iid}/resume` | 从暂停处继续 loop | 仅 paused 时启用 |
-| 状态 (Status) | GET | `/instances/{iid}/status` | 主动刷新 status（绕过轮询）| 总是启用 |
-| 快照 (Snapshot) | POST | `/instances/{iid}/snapshot` | 生成 boulder snapshot，弹 modal | 总是启用 |
-
-**按钮状态**：
-- 默认：白底深灰边
-- Hover：浅蓝底
-- Busy（请求中）：显示 spinner + 文字「处理中...」，禁用其他按钮（避免并发）
-- Disabled（条件不满足）：灰显 + tooltip 解释为什么禁用
-
-**确认对话框**：
-- 中断 / 暂停 / 炼化派生操作：弹确认 modal（参考 §13 蒸馏 UI 的 modal 风格）
-  - 「确认中断？」 + 副标题「当前未保存的状态将丢失」
-  - 「取消」/「确认中断」按钮
-- 状态 / 快照：直接执行，无确认
-
-**Toast 反馈**：
-- 成功：绿色 toast「中断已发送」（自动消失 3s）
-- 失败：红色 toast「中断失败：[error_message]」（带「重试」按钮）
-
-### 9.7 Event Panel
-
-**标题**：「事件流」+ 副标题「最近 50 条印痕」
-
-**列表布局**：垂直列表，每条事件一行：
-- 左：相对时间（"2 分钟前"）+ ISO 时间戳（mono 小字）
-- 中：事件 type（mono 蓝色 chip）+ actor（`type/id` 格式）
-- 右：payload 摘要（折叠展开）
-
-**展开行为**：点击行 → 展开显示完整 JSON payload（等宽字体，深底浅字，预格式化）
-
-**空态**：
-- 标题："还没有印痕"
-- 副标题："化身启动后事件会出现在这里"
-
-**加载态**：列表上方显示 spinner + "加载事件中..."
-
-**实时刷新**：每 2 秒追加新事件到顶部（不滚动整列表，只 prepend）
-
-### 9.8 Snapshot Modal
-
-按「快照」按钮弹出（也是 §6 引导里提到的 boulder snapshot）：
-
-**Modal 结构**：
-- 标题："化身快照"
-- 副标题：`续命次数 N · 捕获时间 ISO`
-- 主体：完整 JSON（深底等宽字体，可滚动）
-- 右上角按钮：
-  - 「复制到剪贴板」→ 绿色 toast「已复制」
-  - 「关闭」X
-
-**复制失败**：红色 toast「剪贴板不可用」+ 提供手动选中提示
-
-### 9.9 错误态
-
-| 场景 | 行为 |
+| 节点类型 | tooltip 内容 |
 |---|---|
-| 化身不存在（404） | 跳回空间详情 tab=instances，红色 toast「化身不存在或已删除」 |
-| 化身非本 workspace（403） | 跳回空间列表，红色 toast「无权访问此化身」 |
-| 控制操作失败（500） | 按钮回到默认状态，红色 toast 显示具体错误 |
-| 心智状态查询失败 | Status Bar 显示「连接中断」徽章，retry 按钮 |
+| AI 眷族 | 眷族名 + slug + rank + 神职 chip + 已绑深海基因数 + "进入记忆" 链接 |
+| AI 化身 | 眷族 → 化身 ID + loop_status + 续命次数 + 心智状态 + "查看详情" 链接 |
+| 真人契印 | 用户名 + 邮箱 + 觉醒基因 + 加入时间 |
+| 主脑 | 4 脑区状态聚合（穹窿 / 额叶 / 脑干 / 小脑）+ 主脑健康度 + "进入主脑" 链接 |
 
-### 9.10 与其他页面关系
-- **从空间详情 tab=instances** 点击行进入
-- **从心灵图景节点** 点击节点进入（带 transition 平滑滚动到 header）
-- **从 Composer** 跳化身链接进入（URL hash 标记具体消息）
-- **返回**：统一跳回 `/workspaces/:id?tab=instances`
+### 11.5 节点 click 浮窗
 
----
+**触发**：单击节点 → 主画布整体 blur + 暗化 30% → 节点浮窗出现
 
-## §10 Composer 页
+**浮窗结构**：
 
-### 10.1 路由
-`/workspaces/:id/composer`
+| 节点 | 浮窗内容 |
+|---|---|
+| AI 眷族 | 眷族详情（同 §8.5 浮窗）+ 「进入记忆详情」/「绑定深海基因」/「软删除」/「跳到 Topology 上的位置」按钮 |
+| AI 化身 | 化身详情（loop_status 5 control buttons + 当前记忆数 + 所属眷族）+ 「跳到记忆详情」/「回 Topology」 |
+| 真人契印 | 用户详情 + 觉醒基因 + 「查看用户」/「移除契印」 |
+| 主脑 | 4 脑区当前状态卡片 + 「进入穹窿 / 额叶 / 脑干 / 小脑」按钮 |
 
-### 10.2 页面定位
-- **入口**：Sidebar "Composer" 图标、心灵图景工具栏
-- **场景**：操作员向 1 个或多个 AI 化身发送 turn（指令 + 命令 + 参数），跨眷族派活
-- **典型职阶**：操作员（日常 Operator，重点）
+**关闭**：浮窗外点击 / Esc / 浮窗右上 × / "回到 Topology" 按钮。
 
-### 10.3 页面结构
+### 11.6 节点 dblclick → 持久化 tab
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│ Header                                                        │
-│   "Composer" + "向一个或多个 AI 化身发送 turn"               │
-├──────────────────────────────┬───────────────────────────────┤
-│ 左侧：输入区                  │ 右侧：Compartments 预览       │
-│  - textarea (大)              │  - 每条 @slug 一个卡片         │
-│  - command autocomplete       │  - general 一个卡片           │
-│  - send button                │  - 每张卡片展开命令和预设    │
-└──────────────────────────────┴───────────────────────────────┘
-```
+**触发**：双击节点 → 在主画布 tab 栏新增一个 tab（如"化身 #abc123"），主画布切换到该 tab
 
-### 10.4 左侧输入区
+**新 tab 内容**（取决于节点类型）：
+- AI 化身的详情页（旧 §9 化身详情页内容）
+- AI 眷族的记忆聚合页（旧 §13 学习页内容）
+- 真人契印详情页
+- 主脑 4 脑区的某个子视图
 
-**Textarea**：
-- 占满左侧高度（≈400px）
-- 等宽字体（mono），方便看 `/cmd` 命令
-- Placeholder："输入指令... 用 `@<slug> /<command>` 寻址 AI 化身"
-- 实时 parse：输入时右侧 preview 同步更新
+**关闭**：tab × 按钮
 
-**Command Autocomplete**：
-- 输入 `/` 时弹出下拉列表：
-  - 全局命令：/read /list /write /archive
-  - 控制命令（per-instance）：/interrupt /pause /resume /status /snapshot
-  - 学习命令（per-entity）：/distill /consolidate /reflect
-  - 神职专属命令（依当前眷族选中的神职过滤）
-- 上下方向键选中，Enter 插入
-- 当前选中的神职命令显示 description tooltip
+**与浮窗的差别**：
+- 浮窗 = 临时查看（关掉就没了）
+- dblclick tab = 持续化（用户切换其他 tab 后再回来仍在）
 
-**Send 按钮**：
-- 位置：textarea 右下
-- 状态：
-  - 默认：蓝底白字"发送"
-  - 可发送条件：parse 成功 + 至少 1 个 directive 或 general text
-  - 不可发送：灰显 + tooltip "无内容或解析失败"
-  - 发送中：spinner + "发送中..."
-- 快捷键：`⌘ + Enter`（macOS）/ `Ctrl + Enter`（其他）
+### 11.7 三模式交互（v / c / m）
 
-### 10.5 右侧 Compartments 预览
-
-每条 `@<slug> /<command>` 解析后成为一个 compartment。预览规则：
-
-#### 卡片类型
-
-| 类型 | 标识 | 颜色边框 |
+| 模式 | 快捷键 | 行为 |
 |---|---|---|
-| `@<slug>` 定向 compartment | `@密士` / `@暗行` 等 | 蓝色（slate-300 → blue-500 左 border） |
-| `general` 无定向 compartment | `General` | 灰色 |
+| 选择 (Select) | `V` | hover tooltip / click 浮窗 / dblclick tab |
+| 连接 (Connect) | `C` | 点源节点 → 高亮连接态 → 点目标节点 → 创建通道 |
+| 移动 (Move) | `M` | 拖拽节点改 posx/posy，松手 PATCH |
 
-#### 卡片内容
+### 11.8 实时刷新
 
-- **顶部**：左侧类型标签 + 右侧命令数 chip（"3 cmd(s)"）
-- **中部**：该 compartment 的通用文本（若有）
-- **命令列表**：每条命令一行
-  - 命令名（mono 蓝色）：`/build`
-  - 参数（若有）：灰色
-  - content_ref（若有）：`ref: @workspace:path/to/file`
-- **底部**（如有匹配神职）：展开显示该神职可用命令的 chip 列表（蓝色 chip 灰色 chip 紫色 chip 按族分组）
+- 每 2 秒拉 `/workspaces/:wid/live-status` 更新节点 glow
+- 每 5 秒拉 `/events?type_prefix=messaging.&since=5s_ago` 触发通道粒子动画
 
-#### 空态
+### 11.9 Navigator 跳转（点击节点关联对象 → 信息页）
 
-- textarea 为空时：右侧显示引导文案
-  - 标题："开始输入以查看分割预览"
-  - 副标题："每条 `@slug /cmd` 会成为一个独立的 compartment"
-  - 示例：`@密士 /plan 帮我设计一个 RAG 系统`
+按用户的明确要求：
 
-### 10.6 发送后的行为
-
-**成功**：
-- 绿色 toast "已发送 N 个指令"（N = directive 数）
-- textarea 清空
-- 右侧 compartments 清空
-- 跳转：可选——停留在 Composer / 跳到心灵图景（看化身开始 loop）/ 跳到第一目标化身详情
-
-**失败**：
-- 红色 toast "发送失败：[error_message]"
-- textarea 内容保留
-- 重试按钮（在 toast 上）
-
-**Parse 失败**（如 `@密士` 但 slug 不存在）：
-- 红色 toast "目标 `@xxx` 不存在"
-- textarea 内容保留
-- 跳转链接："前往眷族列表创建"（跳空间详情 tab=entities）
-
-### 10.7 响应式
-
-- 桌面（≥1024px）：左右 2 列
-- 平板（768-1023px）：上下 2 列，textarea 占上方 60%
-- 移动端（<768px）：只有 textarea + send 按钮；compartments 预览折叠到「预览 ▾」按钮点击展开
-
-### 10.8 与其他页面关系
-- **从心灵图景** 进入（带预填 `@<slug>` if 从节点发起）
-- **从首次运行引导** 完成（清空 + 默认空 workspace 的引导已结束）
-- **发送后**：跳转到对应化身详情或停留在 Composer（用户配置）
-- **跨 Workspace**：Composer 是当前 Workspace 内派活，跨 Workspace 派活 P16d 后扩展
-
----
-
-## §11 心灵图景页
-
-### 11.1 路由
-`/workspaces/:id/topology`
-
-### 11.2 页面定位
-- **入口**：Sidebar "拓扑" 图标、空间详情 "在拓扑中查看" 链接
-- **场景**：可视化 AI 化身 / 真人契印之间的拓扑关系（节点 + 通道），通过 3 种交互模式操作
-- **典型职阶**：全部真人观看（操作员 + 审计者 + Read-only 旁观者，§2.1）
-
-### 11.3 页面结构
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│ Header                                                        │
-│   "心灵图景" + 副标题 "拖动平移 · 滚轮缩放 · 事件每 2 秒刷新"│
-├──────────────────────────────────────────────────────────────┤
-│ Toolbar（3 个模式按钮）                                       │
-│   [选择 V] [连接 C] [移动 M]                                  │
-├──────────────────────────────────────────────────────────────┤
-│ Canvas（SVG 全屏）                                            │
-│   - 节点：圆形 + glow 颜色（对应 loop_status）                │
-│   - 边：直线（passage 通道）                                  │
-│   - 节点悬停显示 tooltip                                      │
-│   - 选中节点高亮                                              │
-├──────────────────────────────────────────────────────────────┤
-│ NodeDrawer（选中节点时右侧抽屉）                              │
-└──────────────────────────────────────────────────────────────┘
-```
-
-### 11.4 Header 详情
-
-- 大标题：「心灵图景」+ Workspace slug（mono 小字）
-- 副标题：「拖动平移 · 滚轮缩放 · 事件每 2 秒刷新」
-- 右侧（可选）：节点总数 + 通道总数 + 实时 loop 化身数
-
-### 11.5 Toolbar
-
-3 个模式按钮横排（移动端折叠到右上角菜单）：
-
-| 模式 | 快捷键 | 图标 | 行为 |
-|---|---|---|---|
-| 选择 (Select) | `V` | `MousePointer2` | 点击节点选中，弹出 NodeDrawer |
-| 连接 (Connect) | `C` | `Link` | 点击源节点 → 点击目标节点 → 创建通道 |
-| 移动 (Move) | `M` | `Move` | 拖拽节点改变位置（PATCH membership posx/posy）|
-
-**当前模式高亮**：蓝底白字 + 顶部状态栏显示"当前：[模式]"
-
-**Read-only 模式（P16d 扩展，目前未实现）**：所有模式按钮禁用，节点拖拽禁用；触发条件 = 用户缺少 `can_move_node` 等节点编辑能力位
-
-### 11.6 Canvas
-
-**节点类型**：
-- **AI 化身节点**：圆形 40px 半径，外环 glow 颜色对应 `loop_status`：
-  - running = 绿色（#10b981/strong）
-  - idle = 黄色（#eab308/medium）
-  - paused = 灰色（#94a3b8/weak）
-  - interrupted = 橙色（#ef4444/medium）
-  - completed = 蓝色（#3b82f6/low）
-  - failed = 红色（#dc2626/strong）
-- **真人契印节点**：圆形 40px 半径，纯灰底（slate-200），无 glow（真人无 loop 状态）
-- **节点内图标**：化身 = `Bot`，真人 = `User`
-
-**通道（Passage）边**：
-- 直线连接两个节点
-- 默认灰色（#94a3b8）1.5px
-- 激活时（最近有消息传递）：绿色（#10b981）2px + 粒子动画（圆点沿直线移动 1s）
-
-**交互**：
-- **悬停**：节点边框高亮 + 浮出 tooltip（label | role | status）
-- **拖拽**：在 Move 模式下拖动节点（实时跟随鼠标，松手时 PATCH 后端）
-- **点击**：根据当前模式行为不同
-
-**坐标系统**：
-- posx/posy：用户自定义坐标（free-form Cartesian，无 grid 约束）
-- 范围：理论无界；显示边界 = -1000 到 +1000
-- 冲突检测：PATCH 时若 (posx, posy) 已被同 workspace 占用 → 409，节点回到原位 + 红色 toast
-
-**Viewport 控制**：
-- 拖拽空白处 = 平移整个画布
-- 滚轮 = 缩放（0.25x - 4x）
-- 移动端双指 = 平移 + 缩放
-
-### 11.7 Connect 模式流程
-
-1. 用户点击源节点 → 节点边框变橙（pending 状态），顶部出现提示条："点击目标节点"
-2. 用户点击目标节点 → POST `/messaging/corridors` 创建 passage
-3. 成功：新通道出现 + 节点边框恢复正常 + Toast "通道已建立"
-4. 失败：节点边框回退 + Toast "通道创建失败：[error]"
-
-**取消**：再次点击同一源节点，或按 `Esc`
-
-### 11.8 NodeDrawer（右侧抽屉）
-
-选中节点时出现，宽度 288px，从右滑入：
-
-| 字段 | AI 化身节点 | 真人契印节点 |
+| 节点 / 元素 | 点击行为 | 跳转目标 |
 |---|---|---|
-| 类型 | "AI 化身" | "真人契印" |
-| Label | 眷族显示名 | 真人用户名 |
-| 角色 | 神职 + rank | 觉醒基因预设名（如 `operator-gene`） |
-| 状态 | loop_status badge + glow 颜色块 | "在线/离线" 标记 |
-| 坐标 | (posx, posy) | (posx, posy) |
-| 操作 | "进入化身详情"（跳 §9）/ "软删除"（需 `can_delete_node`） | "查看成员信息" / "解除契印"（需 `can_remove_membership`） |
+| **眷族节点 / 卡片** | 单击浮窗的"神职 chip" / 详情 | 跳 `/namespaces?tab=base-classes&focus=<slug>` （神职市场该 BaseClass 详情页） |
+| **化身节点** | 浮窗或 tab 中点 "查看记忆" / "进入眷族" | workspace dashboard 切到「记忆」tab + focus 到该眷族记忆 |
+| **化身节点** | 浮窗 "跳到所在 workspace" | 跳 `/workspaces/<wid>?fullscreen=<iid>` （workspace dashboard + 全屏打开该化身） |
+| **真人契印节点** | 浮窗 "查看用户" | 跳 `/contracts?focus=<uid>` 全局契印详情 |
+| **Workspace 节点 / Link** | (rare) | 跳该 workspace dashboard 全屏模式 |
 
-### 11.9 实时刷新
-
-- 每 2 秒拉取 `/offices/{id}/live-status`，更新节点 glow 颜色
-- 每 5 秒拉取 `/events?type_prefix=messaging.&since=5s_ago`，检查是否有 `messaging.message_sent` 触发对应通道的粒子动画
-- 节点位置 / 通道存在性：每次操作后 refetch（无后台轮询）
-
-### 11.10 与其他页面关系
-- **从空间详情** tab 跳入
-- **从化身详情** 通过 URL 参数进入（带 focus 节点）
-- **从 Composer** 跨入（带 pre-selected 目标节点）
-- **退出**：返回空间详情
+**实现**：所有跳转用 `react-router-dom` `<Link>` 或 `useNavigate()`，保留 dashboard 上下文（焦点状态）。
 
 ---
 
-## §12 调试页
+## §12 调试页（namespace tab 内 + workspace 内可访问）
 
 ### 12.1 路由
-`/debug`
 
-### 12.2 页面定位
-- **入口**：Sidebar "Debug" 图标（无 workspace 依赖，全局入口）
-- **场景**：操作员 / 审计者按类型/资源/时间过滤并查看 AI 化身产生的全部印痕（EventLog），支持导出
-- **典型职阶**：审计者（拥有审计相关能力位的真人，重点）+ 操作员（偶发使用）
+- `/namespaces?tab=debug` — namespace 调试
+- workspace 内 status bar 的 `Bug` 图标 → 跳 namespace 调试
+- 双击：sidebar 调试图标直接打开
 
-### 12.3 页面结构
+### 12.2 详细布局
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│ Header                                                        │
-│   "调试" + "按类型与时间过滤，查看 AI 化身原始印痕"          │
-│   右侧：[刷新] [导出 JSON]                                    │
-├──────────────────────────────────────────────────────────────┤
-│ Filter Bar（6 字段 + 3 个 quick pick + 时间范围 + 重置）      │
-├──────────────────────────────────────────────────────────────┤
-│ Events Table（5 列：时间/类型/操作者/资源/Payload 摘要）       │
-└──────────────────────────────────────────────────────────────┘
-```
-
-### 12.4 Filter Bar
-
-**6 个字段**（桌面 6 列，平板 3 列 × 2 行，移动端 1 列 × 6 行）：
-
-| # | 字段 | 类型 | 默认 | 说明 |
-|---|---|---|---|---|
-| 1 | type_prefix | text | `harness.` | 事件类型前缀 |
-| 2 | resource_type | select | (all) | instance / office / membership / corridor / message / memory_entry / learning / blackboard |
-| 3 | resource_id | text | (空) | UUID |
-| 4 | request_id | text | (空) | UUID |
-| 5 | since | datetime-local | (空) | 起始时间 |
-| 6 | until | datetime-local | (空) | 结束时间 |
-
-**3 个 type_prefix quick pick**（chip 按钮）：
-- `harness.`（默认 + 高亮）
-- `instance.`
-- `messaging.`
-
-**3 个时间范围 quick pick**（chip 按钮）：
-- 最近 1 小时
-- 最近 24 小时
-- 最近 7 天
-
-**重置按钮**：清空所有字段到默认
-
-**应用按钮**：commit 当前过滤条件触发查询
-
-### 12.5 Events Table
-
-**5 列**：
-
-| 列 | 内容 |
-|---|---|
-| 时间 | ISO 时间戳（mono） |
-| 类型 | 事件 type（mono 蓝色） |
-| 操作者 | `actor_type/actor_id`（蓝色 + 灰色） |
-| 资源 | `resource_type:resource_id` 或 `-` |
-| Payload | JSON 摘要（80 字符截断） |
-
-**行交互**：
-- 点击行 → 展开显示完整 JSON（深底等宽字体，预格式化）
-- 再次点击 → 折叠
-
-**空态**：
-- 标题："没有匹配的印痕"
-- 副标题："尝试调整过滤条件或扩大时间范围"
-
-**加载态**：
-- 表格头行下方 spinner + "加载印痕中..."
-
-**轮询**：
-- 每 5 秒自动刷新（应用过滤后启动轮询）
-- 顶栏右侧 "Last updated 14:23:01" 提示
-
-### 12.6 Header 操作按钮
-
-**刷新**：手动触发当前过滤的查询（绕过轮询）
-
-**导出 JSON**：
-- 弹下载文件 `cocoa-events-<ISO时间戳>.json`
-- 内容：当前显示的全部事件数组（不是全库）
-- 含完整 payload（不仅是摘要）
-- 导出后 Toast "已导出 N 条事件"
-
-### 12.7 与其他页面关系
-- 从化身详情跳过来（带预填 resource_type=instance + resource_id=iid）
-- 从空间详情跳过来（带预填 resource_type=office + resource_id=wid）
+详细规格同 P15c 已实现版本（filter bar + 事件表格 + 6 type-prefix quick picks + 3 时间范围 quick picks + 重置 + 导出 JSON）。v1 不重构这部分。
 
 ---
 
-## §13 学习页 + 蒸馏 UI
+## §13 记忆 + 眷族管理 + 神职市场（重构后的命名）
 
-> **蒸馏 2 动作（命名严格确定）**：
-> - **晋升 (promote)** — Instance → Entity，捕获当前运行中化身的 Memory 回写到所属眷族，原地增强眷族
-> - **炼化 (transmute)** — Entity → BaseClass，将眷族累积的 Memory 蒸馏为新的可复用神职（跨 Workspace 可用）
->
-> **没有第 3 个动作**（"飞升" / "ascend" 等不存在）。
->
-> **与基因的关系**：蒸馏动作产生的是 **新 BaseClass（神职）**，不是深海基因。神职和深海基因是两个正交维度——神职定义 AI 的 prompt + commands + provider config；深海基因定义 AI 的 capabilities（skills / tools / mcps / lsps）。新 BaseClass 可以**引用**已存在的深海基因作为其默认安装包，但蒸馏产物本身 ≠ 基因。
+> **重命名**：原 §13 "学习页 + 蒸馏 UI" 改名《记忆 + 眷族管理 + 神职市场》。**记忆**作为章节主名（用户原话："学习这边改成叫记忆吧"）。
 
-### 13.1 路由
-`/workspaces/:id/entities/:eid/learning`
+### 13.1 章节分段
 
-### 13.2 页面定位
-- **入口**：空间详情 tab=神职 卡片"学习"按钮、眷族详情
-- **场景**：查看 AI 眷族的 Memory 汇总，并触发 2 个蒸馏动作（晋升 / 炼化）
-- **典型职阶**：操作员（日常 Operator，重点）
+| 子节 | 覆盖范围 |
+|---|---|
+| **§13.1 记忆管理（workspace dashboard tab "记忆"）** | Workspace dashboard 主画布 tab 之 "记忆" — 眷族记忆聚合 + 单眷族记忆详情 |
+| **§13.2 眷族配置（namespace tab "眷族"）** | 全局眷族属性管理 + 深海基因绑定 + 炼化触发 |
+| **§13.3 神职市场（namespace tab "神职"）** | §8.3 详 |
 
-### 13.3 页面结构
+### 13.1 记忆管理
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│ Header                                                        │
-│   眷族显示名 + 神职 + rank                                   │
-│   副标题："Memory 汇总 + 晋升 / 炼化"                       │
-├──────────────────────────────┬───────────────────────────────┤
-│ 左：Memory 汇总               │ 右：蒸馏表单                   │
-│  - 4 个 kind 计数卡          │  - action 选择（晋升/炼化）   │
-│  - 最近 5 条 lessons          │  - 目标 slug 输入              │
-│                              │  - kind 过滤多选              │
-│                              │  - 源神职 slug（可空）         │
-│                              │  - 触发按钮                   │
-├──────────────────────────────┴───────────────────────────────┤
-│ Result Modal（蒸馏完成后弹出，晋升/炼化产物预览）             │
-└──────────────────────────────────────────────────────────────┘
-```
+#### 13.1.1 记忆 tab（workspace dashboard 主画布）
 
-### 13.4 Header 详情
+**进入**：`/workspaces/:id` 主画布切到"记忆"tab
 
-- 大标题：眷族 display name（mono slug 在上方小字）
-- 神职 chip + rank chip
-- 副标题："Memory 汇总 + 晋升 / 炼化"
+**结构**：
+- 顶部 stats：当前 workspace 眷族数 / 累计 Memory 条目数 / 待晋升候选数（≥N 条经验的眷族）
+- 主区：眷族聚合列表（按眷族 card grid）
+- 每张眷族卡内容：
+  - 眷族显示名 + slug + 神职 chip + rank badge
+  - 4 个 kind 记忆计数小卡片（经验 / 教训 / 决策 / 问题）
+  - 操作：「查看记忆详情」/「晋升」/「炼化」（移动到 namespace 级"眷族"操作）
 
-### 13.5 左：Memory 汇总
+#### 13.1.2 单眷族记忆详情（浮窗 / dblclick tab）
 
-**4 个 kind 计数卡**（grid 2x2）：
-- 经验 (experience) - 数字 + 图标
-- 教训 (lesson) - 数字 + 图标
-- 决策 (decision) - 数字 + 图标
-- 问题 (problem) - 数字 + 图标
+**进入**：
+- 从记忆 tab 卡片点击 → 主画布浮窗
+- 从拓扑节点浮窗 → dblclick → 持久化 tab
+- URL：`/workspaces/:id?focus=memory&entity=:eid`
 
-每个卡片：图标 + 大数字 + kind display name
+**结构**：
+- 顶部：眷族显示名 + 神职 + rank
+- 左：Memory 汇总（4 kind count + 5 条最近 lessons）
+- 右：蒸馏表单（晋升 / 炼化 按钮组）
+- 顶部 stats：累计 memory 数量 + 上次晋升 / 上次炼化时间 + 心跳
 
-**最近 5 条 lessons**（列表）：
-- 每条 80 字符截断
-- 灰底浅边
-- 点击展开查看完整内容（modal）
+**蒸馏表单**：
+- 晋升按钮（绿色）：触发 Instance → Entity 原地 Memory 回写
+- 炼化按钮（紫红）：触发 Entity → BaseClass 蒸馏（需填目标 slug）
+- 完成后弹 Result Modal（新 BaseClass 预览 + chain → §13.3 神职详情页）
 
-**空态**：
-- 标题："Memory 还是空的"
-- 副标题："化身运行一段时间后会有经验 / 教训 / 决策记录"
+#### 13.1.3 Memory 入口与生命周期
 
-**加载态**：spinner + "加载 Memory 中..."
+- v1 Memory 来源：
+  - 化身运行时自动写（loop 关键事件 → kind=lesson / decision / problem）
+  - 真人手动通过 Composer 注入（"@[slug] /remember ..."）
+  - 深海基因携带（v1 部分 gene 预置）
 
-**错误态**：错误条 + "重试"按钮
+- 晋升触发：用户手动触发（v1）；未来可自动 trigger（基于记忆数阈值）
+- 炼化触发：用户手动触发（v1）
 
-### 13.6 右：蒸馏表单
+### 13.2 眷族配置（namespace tab "眷族"）
 
-**Action 选择**（2 个 tab 或 radio）：
-- **晋升**（promote）：Instance → Entity，捕获当前化身运行时 Memory 回写到眷族
-- **炼化**（transmute）：Entity → BaseClass，将眷族累积 Memory 蒸馏成新神职
+> 见 §8.5「眷族 tab」。本节补充眷族配置的具体操作。
 
-**根据 Action 切换表单字段**：
+#### 13.2.1 眷族基本属性
 
-#### 晋升模式（promote）
-- **目标 slug**：自动 = 当前眷族 slug，灰显不可编辑
-- **Kind 过滤**（多选 checkbox）：可勾选 "仅晋升教训/决策/..."
-- **触发按钮**：「晋升」 → POST `/learning/entities/{eid}/distill?action=promote`
-- **说明 tooltip**：晋升会捕获当前眷族所有 running 化身的 Memory + 主脑写入，原地增强眷族自身 prompt
+- name / slug / display_name / description
+- rank（创建后冻结）
+- BaseClass（创建后冻结，不可修改）
+- 创建时间 / 创建者
 
-#### 炼化模式（transmute）
-- **目标 slug**：必填，输入新 BaseClass 的 slug
-  - 校验：`/^[a-z][a-z0-9-]*$/`
-  - 实时去重检查
-  - 显示 BaseClass slug 全名预览（自动加 `-skill-<timestamp>` 后缀避免冲突）
-- **源神职 slug**（可选）：基于哪个已有神职 fork
-- **Kind 过滤**（多选）：可勾选参与蒸馏的 Memory 类型
-- **触发按钮**：「炼化」 → POST `/learning/entities/{eid}/distill?action=transmute`
-- **说明 tooltip**：炼化会基于眷族累积 Memory 生成新的可复用神职，跨 Workspace 也能用
+#### 13.2.2 深海基因绑定
 
-### 13.7 Result Modal（蒸馏完成）
+- 显示已绑定的深海基因列表（按 source 分组：from BaseClass / 额外添加）
+- 「+ 添加额外基因」按钮 → 弹模态选择深海基因（来自 `/base-classes` 列表过滤出基因类型）
+- 单条基因「移除」按钮（仅额外添加的能删，from BaseClass 的不可删）
 
-按触发按钮后弹出，包含：
-- 标题：「晋升完成」/「炼化完成」
-- 副标题：摘要文案
-- Manifest 预览（key-value 表格）：
-  - 新 slug
-  - 新 display name
-  - 模型
-  - prompt（前 2 行截断）
-  - skills 列表
-  - tools 列表
-  - commands 列表
-- 底部按钮：
-  - 「关闭」
-  - 「查看神职」→ 跳 `/workspaces/:id/entities`（炼化产物可作为眷族再次召唤）
+> 详细：§14b 深海基因管理。
 
-**失败处理**：modal 切换为红色错误态，显示具体错误 + "重试"按钮
+#### 13.2.3 炼化触发入口（在眷族配置页）
 
-### 13.8 与其他页面关系
-- **从空间详情 tab=神职** "学习" 链接进入
-- **完成后**：跳转到新眷族（晋升）或返回空间详情（炼化）
+- 「炼化成新神职」按钮（需 `can_transmute_entity`）
+- 弹模态：填目标 slug → POST 蒸馏 → 跳到新 BaseClass 详情页
+
+#### 13.2.4 Navigator 跳转（点击关联对象）
+
+| 关联对象 | 点击行为 | 跳转目标 |
+|---|---|---|
+| 眷族卡上的 **神职 chip** | 单击 | 跳 `/namespaces?tab=base-classes&focus=<slug>` （神职详情） |
+| 眷族卡上的 **化身节点** | 单击 | 跳 `/workspaces/<wid>?fullscreen=<iid>` （workspace dashboard 全屏该化身） |
+| 眷族详情浮窗的 **workspace 标签** | 单击 | 跳 `/workspaces/<wid>?focus=memory&entity=<eid>` （同一 workspace dashboard 记忆 tab 定位到此眷族） |
+
+### 13.3 神职市场（namespace tab "神职"）
+
+> 见 §8.3 神职 tab。本节只补充神职**详细属性页**的 UI 规格。
+
+#### 13.3.1 神职详情浮窗（点击神职卡片触发）
+
+- 大 display name + slug
+- 完整职能说明（prose 段落，2-4 段）
+- 命令全集（不限 3 个，hover tooltip）
+- Provider 默认 + override 字段
+- prompt 前 200 字预览
+- 依赖深海基因列表
+- 来源 / 版本
+- CTA：「基于此神职召唤眷族」→ §6 引导 Step 1 预选此 BaseClass
+
+#### 13.3.2 双击神职卡片 → 神职详情全屏页
+
+URL：`/base-classes/:slug`
+
+- 详情浮窗全部内容
+- 多段描述长文展开
+- 实时统计：从该神职派生的眷族列表（跨 workspace 全局）
+- /memory：该神职派生眷族的记忆聚合（按 workspace 分组）
+
+### 13.4 蒸馏 2 动作（保留）
+
+#### 晋升 (promote) — Instance → Entity
+
+**含义**：把当前化身的 Memory + 主脑写入回写到所属眷族
+
+**触发位置**：
+- workspace dashboard 记忆 tab 眷族卡（在该眷族所有 Instance 都停止 / 已无 running 时）
+- namespace tab 眷族详情浮窗
+
+**行为**：
+- 输入：可选指定 Memory kind 过滤（默认全部）
+- API：`POST /api/v1/learning/entities/:eid/distill?action=promote`
+- 输出：原眷族 Memory 计数增加 + EventLog 印痕
+- 副作用：原眷族的 BaseClass manifest 不变（rank / display 也不变），仅 Memory 内容增加
+
+#### 炼化 (transmute) — Entity → BaseClass
+
+**含义**：把眷族累积的 Memory 蒸馏成新神职
+
+**触发位置**：
+- namespace tab 眷族详情浮窗
+- workspace dashboard 记忆 tab 卡片上（带跨 workspace 提醒）
+
+**行为**：
+- 输入：目标 slug（必填）+ 目标神职 name（必填）+ kind 过滤
+- API：`POST /api/v1/learning/entities/:eid/distill?action=transmute`
+- 输出：新 BaseClass record 创建 + 跳转 BaseClass 详情页
+- 副作用：原 Entity 不变（不删，不影响）；新 BaseClass 与原 Entity 解耦
+
+### 13.5 与基因（深海基因）的关系
+
+- 蒸馏动作产生的是 **BaseClass**，**不是**深海基因
+- BaseClass 定义 AI 的 prompt + commands + provider config
+- 深海基因定义 AI 的 capabilities（skills / tools / mcps / lsps）
+- 新 BaseClass 可以**引用**已存在的深海基因作为默认安装包（在 §13.3 详情页可以勾选）
+- 蒸馏产物 ≠ 深海基因
 
 ---
 
@@ -1693,32 +1427,116 @@ switch (error.status) {
 
 ## §5 文档结构（后续 Todo 索引）
 
+> **2026-07-28 大重构**：从"多 tab 详情页"转向"VSCode 风 IDE 布局"。§7-§13 章节全部重写。
+
 - §1 产品概述（本节）✓
 - §2 三层正交概念：职阶 / 能力 / 知识（本节）✓
 - §3 命名对照表（本节）✓
 - §4 全局 UX 原则（本节）✓
 - §6 首次运行引导 + 神职卡片组（本节）✓
-- §7 导航结构 + AppShell（本节）✓
-- §8 空间列表 + 空间详情页（本节）✓
-- §9 化身详情页（本节）✓
-- §10 Composer 页（本节）✓
-- §11 心灵图景页（本节）✓
-- §12 调试页（本节）✓
-- §13 学习页 + 蒸馏 UI（晋升 + 炼化 2 动作）（本节）✓
-- §14 觉醒基因 UI（人类侧 — 权限组管理）（本节）✓
-- §14b 深海基因 UI（AI 侧 — Capability 打包管理）（本节）✓
-- §14c 知识 UI（仅 Instance 侧）（本节）✓
+- §7 AppShell + Sidebar 框架（VSCode 风）（本节）✓
+- §8 Namespace 主页（`/namespaces`，多 tab）（本节）✓
+- §9 Workspace Dashboard（`/workspaces/:id`，VSCode-IDE 布局）（本节）✓
+- §10 Composer Side Panel（右侧常驻 + 可全屏）（本节）✓
+- §11 Topology Dashboard（主画布默认 tab，节点浮窗 + 双击持久化）（本节）✓
+- §12 调试页（namespace tab 内）（本节）✓
+- §13 记忆 + 眷族管理 + 神职市场（改名）（本节）✓
+- §14 觉醒基因 UI（本节）✓
+- §14b 深海基因 UI（本节）✓
+- §14c 知识 UI（本节）✓
 - §15 i18n 覆盖矩阵 + 错误显示规范（本节）✓
+- §16 架构变更说明（15d+ 大重构）（本节）✓
 
 ---
 
-## 附录：F1-F4 最终验证
+## §16 架构变更说明（2026-07-28 大重构）
 
-- **F1. 页面覆盖度** — 10 个页面 + 导航 + 引导 + 蒸馏 UI + 觉醒基因 / 深海基因 / 知识 UI 全部 text wireframe ✓
-- **F2. 命名一致性** — 所有术语 grep 对照 `phase-15d-naming-system.md` 无偏离 ✓
-- **F3. 决策追溯** — 每个 UX 决策尾部标注 U1-U8 引用（部分标记）⚠️
-- **F4. Golden path 可走通** — 从首次注册到首次蒸馏完整复现 ✓
+> 本节解释 15e PRD 从"多 tab 详情页"到"VSCode 风 IDE 布局"的架构变更。读者不必把 §7-§13 当成先后两个版本理解——这是 15e 交付的真实目标状态。
+
+### 16.1 重构触发
+
+在用户原话反馈中提到："**workspace 主页应该是 dashboard（拓扑）作为主页面，然后点击节点弹窗口；VSCode 那种 IDE 布局就挺好**"。这个反馈推动 PRD 大重构。
+
+### 16.2 重构前 vs 重构后
+
+| 维度 | 重构前（早期版本） | 重构后（当前 PRD 状态） |
+|---|---|---|
+| **Workspace 主页** | `/workspaces/:id` 是 3-tab 详情页（契印 / 眷族 / 主脑）| `/workspaces/:id` 是 VSCode 风 dashboard（默认 tab = 拓扑，可切换 4 个 tab） |
+| **主画布** | 单页滚动，3 个 tab 切换 | 多 tab + 可切换 + 可持久化（dblclick 节点开新 tab） |
+| **Composer** | 全屏独立路由 `/workspaces/:id/composer` | 右侧常驻 side panel，可拖缩 / 全屏 / 关闭 |
+| **节点交互** | 拓扑是单独路由，只有点击跳详情 | 拓扑默认在 dashboard，hover tooltip / click 浮窗 / dblclick 持久化 |
+| **眷族管理位置** | workspace tab 「眷族」内 | namespace tab 「眷族」内 |
+| **神职管理位置** | 全局 `/base-classes` | namespace tab 「神职」内，整合入 `/namespaces` |
+| **登录默认落点** | `/workspaces` | **`/namespaces`**（明确区分 namespace / workspace 两层） |
+| **Sidebar 入口** | 9 个展开入口 | 6 个折叠态图标 + 展开态二级列表（VSCode 风） |
+
+### 16.3 不动的部分
+
+- **§1-§6** 产品概述 + 三层正交概念 + 命名对照 + UX 原则 + 首次运行引导 — **完全不动**
+- **§14 / §14b / §14c** 觉醒基因 / 深海基因 / 知识 UI — 完全不动（这些是后台管理 / 配置 UI，不在 IDE 画布内）
+- **§15** i18n 覆盖矩阵 — 几乎不动（少量 i18n key 需要更新名字以匹配新结构）
+
+### 16.4 重构带来的新结构
+
+**新路由结构**（RESTful）：
+
+```
+/login
+/namespaces                          ← 登录默认落点，namespace dashboard
+/namespaces?tab=workspace           (默认 tab)
+/namespaces?tab=base-classes
+/namespaces?tab=contracts
+/namespaces?tab=entities
+/namespaces?tab=debug
+/workspaces/:id                     ← workspace dashboard (VSCode-IDE)
+/workspaces/:id?fullscreen=:iid     全屏打开指定化身
+/workspaces/:id?focus=memory&entity=:eid  记忆 tab + focus 眷族
+/contracts?focus=:uid
+/entities?focus=:eid
+/base-classes
+/base-classes/:slug
+```
+
+**IDE 布局区域**（workspace dashboard 内）：
+- 主画布多 tab：拓扑 / 契印 / 化身 / 记忆
+- Composer Side Panel（右侧，常驻）
+- Sidebar 活动栏（左侧，可折叠）
+- Status Bar（底部）
+
+### 16.5 Navigator 跳转模型
+
+按用户原话："**关联对象都得是 navigator，点完了能直接点到那个对象的设置/信息页**"。所有跨对象跳转：
+
+| 起点 | 点击 | 终点 |
+|---|---|---|
+| workspace dashboard 节点 | 浮窗"神职 chip" | `/namespaces?tab=base-classes&focus=<slug>` |
+| workspace dashboard 节点 | 浮窗"跳到所在 workspace" | 当前 workspace dashboard + 全屏打开 |
+| namespace tab 眷族卡 | 神职 chip | 神职市场该 BaseClass 详情 |
+| namespace tab 眷族详情 | "跳到 workspace" | workspace dashboard + focus 到该眷族记忆 |
+| 主脑 / 各脑区 | 任意关联对象 | 对应对象的详情页 |
+
+### 16.6 节点交互的 3 档
+
+| 交互 | 触发 | 内容 |
+|---|---|---|
+| **hover tooltip** | 鼠标悬停节点 | 心智状态 / loop_status / 续命次数 / 链接 |
+| **click 浮窗** | 单击节点 | 主画布 blur + 暗化 30% + 浮窗显示详细信息 + 操作按钮 |
+| **dblclick 持久化** | 双击节点 | 在主画布 tab 栏新增 tab，可切换其他 tab 后切回仍在此 |
+
+### 16.7 反向影响
+
+重构导致 §7-§13 章节整体重写，但 **§1-§6 / §14-§15 内容** 完全不变。这意味着 15e-rename wave（代码层面）的工作不变，UI 重写的工作量更大。
+
+### 16.8 待办（重构后还需要补的事）
+
+| 项 | 负责范围 |
+|---|---|
+| §6 引导 → 完成后导航 `/workspaces/:id` 改为 `/namespaces`（如果 workspace 不存在） | 修正 §6.5 "完成后导航" |
+| §12 调试页 tab 化后 URL 跳转 | 跟 §12 链接 |
+| §15 i18n 矩阵更新 key 命名（如 `nav.topology` → `nav.topologyDashboard` 之类） | 等 §7 定版后做 |
+
+这些是 follow-up，不影响当前 PRD 整体一致性。
 
 ---
 
-*§1-§15 完成 (Todo #1-#11)。15e PRD v1 初稿完毕，等待用户审阅+反馈。*
+*§1-§16 完成 (Todo #1-#11 + 重构记录)。15e PRD v2 完成，等待用户整体审阅。*
