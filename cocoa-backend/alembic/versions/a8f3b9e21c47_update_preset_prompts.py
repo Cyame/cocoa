@@ -62,7 +62,9 @@ def downgrade() -> None:
     """Restore the TODO P14a placeholder for downgrade / rollback.
 
     Mirrors upgrade() exactly in shape so a round-trip brings the DB back
-    to the pre-P15a state.
+    to the pre-P15a state. The literal string is cast to ``text``
+    explicitly so asyncpg / PostgreSQL can infer the polymorphic
+    ``jsonb`` target type at plan time.
     """
     for preset in BUILTIN_PRESETS:
         slug = preset["slug"]
@@ -74,7 +76,7 @@ def downgrade() -> None:
                 SET manifest = jsonb_set(
                     manifest,
                     '{prompt}',
-                    to_jsonb('TODO P14a'),
+                    to_jsonb('TODO P14a'::text),
                     false
                 )
                 WHERE slug = :slug
