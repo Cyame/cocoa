@@ -11,12 +11,15 @@ The portal is a client-side React application with zero additional npm dependenc
 |                   Cocoa Portal                     |
 |  React 19 + Vite 8 + TypeScript + Tailwind v4     |
 +---------------------------------------------------+
-|  Pages (7)       |  Components (4)  |  Stores (2) |
+|  Pages (10)      |  Components (4)  |  Stores (2) |
 |  ComposerPage    |  AppShell        |  session.ts |
 |  DebugPage       |  TopologyToolbar |  selected.ts|
-|  InstanceDetail  |  TopologyGlow    |             |
-|  LoginPage       |  CommandAuto-    |             |
-|  OfficeDetail    |  complete        |             |
+|  EmployeeLearning|  TopologyGlow    |             |
+|  EmployeesList   |  CommandAuto-    |             |
+|  InstanceDetail  |  complete        |             |
+|  LoginPage       |                  |             |
+|  MembersList     |                  |             |
+|  OfficeDetail    |                  |             |
 |  OfficeList      |                  |             |
 |  TopologyPage    |                  |             |
 +------------------+------------------+-------------+
@@ -37,32 +40,35 @@ The portal is a client-side React application with zero additional npm dependenc
 
 - **API client**: `src/lib/api.ts` — a typed `fetch` wrapper that injects `Authorization: Bearer <token>`, auto-redirects to `/login` on 401, and throws typed `ApiError`.
 - **State management**: Zustand with `persist` middleware. `useSessionStore` holds JWT in localStorage. `useSelectedStore` holds `officeId`, `instanceId`, and `interactionMode` (persisted as `cocoa.topology.mode`).
-- **Routing**: `react-router` v7 with `createBrowserRouter`. The root path `/` redirects to `/login` (unauthenticated) or `/offices` (authenticated). Six nested routes live under the `App` layout shell.
+- **Routing**: `react-router` v7 with `createBrowserRouter`. The root path `/` redirects to `/login` (unauthenticated) or `/offices` (authenticated). Nine nested routes live under the `App` layout shell (`/login` is outside).
 - **Topology rendering**: Pure SVG with `<svg viewBox>`, `<g transform="translate(pan_x, pan_y) scale(zoom)">`, and `<defs><filter>` for glow effects. Mouse wheel zoom + drag-to-pan via React state.
 - **Live status polling**: `setInterval` at 2-second intervals on `GET /offices/{id}/live-status`. No WebSocket or SSE — debug-first simplicity.
 - **Connection animation**: Polls `GET /events?type_prefix=messaging.&since=<5 seconds ago>` to detect message flow; renders SVG `<animateMotion>` particles on matching corridor `<line>` elements for 1 second.
 
 ## 2. Page Inventory
 
-The portal has 7 route-level pages and 4 shared components. Each page maps to one or more backend endpoints.
+The portal has 10 route-level pages and 4 shared components. Each page maps to one or more backend endpoints. (P9 当期 7 页面；P10 加 Employee Learning → 8；P15b 加 Employees list + Members list → 10 当前状态。)
 
 ### Route Table
 
 | Path | Page Component | Purpose | Backend Endpoints Used |
 |------|---------------|---------|------------------------|
-| `/login` | `LoginPage` | Username/password authentication | `POST /auth/login` |
+| `/login` | `LoginPage` | Username/password authentication (P15b 加 register 模式) | `POST /auth/login`, `POST /auth/register` |
 | `/offices` | `OfficeListPage` | Card grid of accessible offices | `GET /offices` |
 | `/offices/:id` | `OfficeDetailPage` | Office tabs: Employees, Instances, Blackboard | `GET /messaging/memberships?office_id=`, `GET /instances`, `GET /blackboards` |
+| `/offices/:id/employees` | `EmployeesListPage` (P15b) | Per-office employee roster with role / preset / instance count | `GET /employees?office_id=`, `GET /instances?office_id=` |
+| `/offices/:id/members` | `MembersListPage` (P15b) | Per-office membership roster with role display | `GET /messaging/memberships?office_id=` |
 | `/offices/:id/instances/:iid` | `InstanceDetailPage` | Instance status bar + harness control buttons + event panel | `GET /instances/{id}/status`, `POST /instances/{id}/{interrupt,pause,resume,snapshot}`, `GET /events` |
 | `/offices/:id/topology` | `TopologyPage` | Interactive SVG canvas: circle nodes with glow, corridor lines, pan/zoom, 3-mode toolbar | `GET /messaging/memberships`, `GET /messaging/corridors`, `GET /learning/corridor-nodes`, `GET /offices/{id}/live-status`, `GET /events`, `PATCH /messaging/memberships/{id}`, `PATCH /learning/corridor-nodes/{id}`, `POST /messaging/corridors` |
 | `/offices/:id/composer` | `ComposerPage` | Multi-`@` compartmentalized message editor + slash command autocomplete | `POST /messaging/messages`, `GET /employee-presets/{slug}` |
+| `/employees/:employeeId/learning` | `EmployeeLearningPage` (P10) | Per-employee memory summary + distill form + manifest preview modal | `GET /learning/memories/{id}/summary`, `POST /learning/employees/{id}/distill`, `GET /learning/presets/{id}` |
 | `/debug` | `DebugPage` | Full-width event table with filter bar, polling, and JSON export | `GET /events` |
 
 ### Component Inventory
 
 | Component | File | Purpose |
 |-----------|------|---------|
-| `AppShell` | `src/components/AppShell.tsx` | Layout wrapper: left navigation (Office list / Debug / Composer / Topology links) + top bar (user info + logout) |
+| `AppShell` | `src/components/AppShell.tsx` | Layout wrapper: left navigation (Office list / Employees / Members / Learning / Topology / Composer / Debug links) + top bar (user info + i18n switcher + logout) |
 | `TopologyToolbar` | `src/components/TopologyToolbar.tsx` | Three-mode switch: Select (`<MousePointer />`) / Connect (`<Link />`) / Move (`<Move />`) with keyboard shortcuts `V`/`C`/`M` |
 | `TopologyGlow` | `src/components/TopologyGlow.tsx` | SVG `<defs>` filter generator: produces `feGaussianBlur` + `feFlood` + `feComposite` filters per glow color at the correct intensity |
 | `CommandAutocomplete` | `src/components/CommandAutocomplete.tsx` | Dropdown popup triggered by `/` in the composer: shows GLOBAL_COMMANDS + CONTROL_COMMANDS + per-preset manifest.commands, with keyboard navigation |
