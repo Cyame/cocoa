@@ -73,24 +73,18 @@ async def _bootstrap_instance(
     employee_slug: str,
     employee_name: str,
 ) -> tuple[Instance, dict]:
-    """Create office + employee + instance via HTTP; return (Instance, headers)."""
+    """Create office + employee + instance via HTTP; return (Instance, headers).
+
+    Note (P14b-onboard2): the office creator is auto-added as an owner
+    Membership by ``POST /offices``, so we no longer manually issue a join
+    after office creation (which would now return 409 Conflict).
+    """
     h = {"Authorization": f"Bearer {auth_token}"}
     office = client.post(
         "/api/v1/offices",
         headers=h,
         json={"name": office_name, "slug": office_slug},
     ).json()
-    client.post(
-        "/api/v1/messaging/memberships",
-        headers=h,
-        json={
-            "office_id": office["id"],
-            "user_id": auth_user_id,
-            "posx": 0,
-            "posy": 0,
-            "role": "owner",
-        },
-    )
     employee_id = client.post(
         "/api/v1/employees",
         headers=h,

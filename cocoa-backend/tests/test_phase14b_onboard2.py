@@ -22,9 +22,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.testclient import TestClient
 
-from app.models.office import Membership, MembershipRole, Office
 from app.models.user import User
-
 
 # ---------------------------------------------------------------------------
 # Shared fixtures

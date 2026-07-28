@@ -77,35 +77,22 @@ def viewer_token(client: TestClient) -> str:
 async def office_id(
     owner_token: str,
     client: TestClient,
-    session: AsyncSession,
 ) -> str:
-    """Create an office, join the owner as owner, return office id."""
+    """Create an office; the owner is auto-added as a Membership (P14b-onboard2).
+
+    Before P14b-onboard2 the fixture manually issued a POST to
+    ``/api/v1/messaging/memberships`` to attach the creator as an owner.  Since
+    P14b-onboard2 the office creation endpoint does that automatically, so
+    re-issuing the join would now return 409 Conflict.  The fixture keeps the
+    same shape and return type so downstream tests are unaffected.
+    """
     resp = client.post(
         "/api/v1/offices",
         headers={"Authorization": f"Bearer {owner_token}"},
         json={"name": "CorridorNode Office", "slug": "cn-office"},
     )
     assert resp.status_code == 201
-    office_id = resp.json()["id"]
-
-    result = await session.execute(
-        select(User).where(User.username == "cn_owner")
-    )
-    owner_user_id = result.scalar_one().id
-
-    join_resp = client.post(
-        "/api/v1/messaging/memberships",
-        headers={"Authorization": f"Bearer {owner_token}"},
-        json={
-            "office_id": office_id,
-            "user_id": owner_user_id,
-            "role": "owner",
-            "posx": 0,
-            "posy": 0,
-        },
-    )
-    assert join_resp.status_code == 201
-    return office_id
+    return resp.json()["id"]
 
 
 @pytest_asyncio.fixture

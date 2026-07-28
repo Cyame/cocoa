@@ -322,7 +322,6 @@ async def test_api_create_membership_at_taken_pos_returns_409(
     """
     token_a = _register_login_token(client, "p9-pos-user-a")
     token_b = _register_login_token(client, "p9-pos-user-b")
-    user_a_id = await _user_id_by_username(session, "p9-pos-user-a")
     user_b_id = await _user_id_by_username(session, "p9-pos-user-b")
     h_a = _auth(token_a)
     h_b = _auth(token_b)
@@ -332,15 +331,21 @@ async def test_api_create_membership_at_taken_pos_returns_409(
         "slug": "api-dup-pos",
     }).json()
 
-    # Owner joins at (10, 10)
-    owner = client.post("/api/v1/messaging/memberships", headers=h_a, json={
-        "office_id": office["id"],
-        "user_id": user_a_id,
-        "role": "owner",
-        "posx": 10,
-        "posy": 10,
-    })
-    assert owner.status_code == 201, owner.json()
+    # P14b-onboard2: office creation auto-adds user_a as owner at (0, 0).
+    # Patch user_a's auto-membership to occupy (10, 10) instead.
+    list_resp = client.get(
+        f"/api/v1/messaging/memberships?office_id={office['id']}",
+        headers=h_a,
+    )
+    items = list_resp.json()["items"]
+    assert len(items) == 1
+    owner_membership_id = items[0]["id"]
+    move_resp = client.patch(
+        f"/api/v1/messaging/memberships/{owner_membership_id}",
+        headers=h_a,
+        json={"posx": 10, "posy": 10},
+    )
+    assert move_resp.status_code == 200, move_resp.json()
 
     # Second user joins at the SAME pos -> IntegrityError -> 409
     collision = client.post("/api/v1/messaging/memberships", headers=h_b, json={
@@ -364,7 +369,6 @@ async def test_api_patch_membership_to_taken_pos_returns_409(
     """
     token_a = _register_login_token(client, "p9-move-a")
     token_b = _register_login_token(client, "p9-move-b")
-    user_a_id = await _user_id_by_username(session, "p9-move-a")
     user_b_id = await _user_id_by_username(session, "p9-move-b")
     h_a = _auth(token_a)
     h_b = _auth(token_b)
@@ -374,15 +378,14 @@ async def test_api_patch_membership_to_taken_pos_returns_409(
         "slug": "patch-move",
     }).json()
 
-    membership_a = client.post(
-        "/api/v1/messaging/memberships", headers=h_a, json={
-            "office_id": office["id"],
-            "user_id": user_a_id,
-            "role": "owner",
-            "posx": 0,
-            "posy": 0,
-        },
-    ).json()
+    # P14b-onboard2: user_a auto-joined as owner at (0, 0); look it up.
+    list_resp = client.get(
+        f"/api/v1/messaging/memberships?office_id={office['id']}",
+        headers=h_a,
+    )
+    items = list_resp.json()["items"]
+    assert len(items) == 1
+    membership_a_id = items[0]["id"]
 
     client.post("/api/v1/messaging/memberships", headers=h_b, json={
         "office_id": office["id"],
@@ -394,7 +397,7 @@ async def test_api_patch_membership_to_taken_pos_returns_409(
 
     # Move A onto B's position -> 409
     resp = client.patch(
-        f"/api/v1/messaging/memberships/{membership_a['id']}",
+        f"/api/v1/messaging/memberships/{membership_a_id}",
         headers=h_a,
         json={"posx": 100, "posy": 100},
     )

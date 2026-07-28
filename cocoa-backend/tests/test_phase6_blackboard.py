@@ -56,21 +56,21 @@ def _setup_office_and_membership(
     office_slug: str = "test-office",
     role: str = "owner",
 ) -> str:
+    """Create an office; the creator is auto-added as owner (P14b-onboard2).
+
+    The ``user_id`` and ``role`` parameters are kept for backward compatibility
+    with existing call sites but no longer influence the outcome — the office
+    creator is always added as the owner.  Tests that need a non-owner
+    membership should add it explicitly via ``POST /api/v1/messaging/memberships``
+    for a *different* user.
+    """
     h = _auth(token)
     resp = client.post("/api/v1/offices", headers=h, json={
         "name": office_name,
         "slug": office_slug,
     })
     assert resp.status_code == 201
-    office_id = resp.json()["id"]
-
-    resp = client.post("/api/v1/messaging/memberships", headers=h, json={
-        "office_id": office_id,
-        "user_id": user_id,
-        "role": role,
-    })
-    assert resp.status_code == 201
-    return office_id
+    return resp.json()["id"]
 
 
 def _register_and_login(client: TestClient, username: str) -> str:

@@ -70,7 +70,7 @@ class TestMembershipCrud:
     def test_join_office(
         self, client: TestClient, auth_token: str, auth_user_id: str,
     ) -> None:
-        """POST /offices then POST /memberships returns 201."""
+        """POST /offices auto-creates the creator's owner membership (P14b-onboard2)."""
         h = _auth(auth_token)
 
         resp = client.post(
@@ -81,17 +81,15 @@ class TestMembershipCrud:
         assert resp.status_code == 201
         office_id = resp.json()["id"]
 
-        resp = client.post(
-            "/api/v1/messaging/memberships",
+        # Auto-membership: creator is added as owner without an explicit join.
+        list_resp = client.get(
+            f"/api/v1/messaging/memberships?office_id={office_id}",
             headers=h,
-            json={
-                "office_id": office_id,
-                "user_id": auth_user_id,
-                "role": "owner",
-            },
         )
-        assert resp.status_code == 201
-        body = resp.json()
+        assert list_resp.status_code == 200
+        items = list_resp.json()["items"]
+        assert len(items) == 1, f"expected 1 owner membership, got {len(items)}"
+        body = items[0]
         assert body["office_id"] == office_id
         assert body["user_id"] == auth_user_id
         assert body["role"] == "owner"
@@ -111,26 +109,21 @@ class TestMembershipCrud:
         assert resp.status_code == 201
         office_id = resp.json()["id"]
 
+        # P14b-onboard2: creator is auto-added as owner, so re-issuing the
+        # owner join now returns 409.
         payload = {
             "office_id": office_id,
             "user_id": auth_user_id,
-            "role": "viewer",
+            "role": "owner",
         }
 
-        resp1 = client.post(
+        resp_duplicate = client.post(
             "/api/v1/messaging/memberships",
             headers=h,
             json=payload,
         )
-        assert resp1.status_code == 201
-
-        resp2 = client.post(
-            "/api/v1/messaging/memberships",
-            headers=h,
-            json=payload,
-        )
-        assert resp2.status_code == 409
-        assert resp2.json()["error_code"] == "membership.duplicate"
+        assert resp_duplicate.status_code == 409
+        assert resp_duplicate.json()["error_code"] == "membership.duplicate"
 
     def test_change_role(
         self, client: TestClient, auth_token: str, auth_user_id: str,
@@ -146,17 +139,15 @@ class TestMembershipCrud:
         assert resp.status_code == 201
         office_id = resp.json()["id"]
 
-        resp = client.post(
-            "/api/v1/messaging/memberships",
+        # The creator is auto-added as owner.  Verify role change on that row.
+        list_resp = client.get(
+            f"/api/v1/messaging/memberships?office_id={office_id}",
             headers=h,
-            json={
-                "office_id": office_id,
-                "user_id": auth_user_id,
-                "role": "viewer",
-            },
         )
-        assert resp.status_code == 201
-        membership_id = resp.json()["id"]
+        items = list_resp.json()["items"]
+        assert len(items) == 1
+        membership_id = items[0]["id"]
+        assert items[0]["role"] == "owner"
 
         resp = client.patch(
             f"/api/v1/messaging/memberships/{membership_id}",
@@ -180,17 +171,14 @@ class TestMembershipCrud:
         assert resp.status_code == 201
         office_id = resp.json()["id"]
 
-        resp = client.post(
-            "/api/v1/messaging/memberships",
+        # The creator is auto-added as the sole owner (P14b-onboard2).
+        list_resp = client.get(
+            f"/api/v1/messaging/memberships?office_id={office_id}",
             headers=h,
-            json={
-                "office_id": office_id,
-                "user_id": auth_user_id,
-                "role": "owner",
-            },
         )
-        assert resp.status_code == 201
-        membership_id = resp.json()["id"]
+        items = list_resp.json()["items"]
+        assert len(items) == 1
+        membership_id = items[0]["id"]
 
         resp = client.delete(
             f"/api/v1/messaging/memberships/{membership_id}",
@@ -219,7 +207,7 @@ class TestCorridorCrud:
         """Register 2 users, both join an office, create corridor → 201."""
         h = _auth(auth_token)
 
-        # 1. Create office
+        # 1. Create office (P14b-onboard2: user1 auto-joins as owner)
         resp = client.post(
             "/api/v1/offices",
             headers=h,
@@ -240,20 +228,14 @@ class TestCorridorCrud:
         user2 = result.scalars().first()
         assert user2 is not None
 
-        # 3. User1 joins (owner) at (0, 0)
-        resp = client.post(
-            "/api/v1/messaging/memberships",
+        # 3. Look up user1's auto-created owner membership
+        list_resp = client.get(
+            f"/api/v1/messaging/memberships?office_id={office_id}",
             headers=h,
-            json={
-                "office_id": office_id,
-                "user_id": auth_user_id,
-                "role": "owner",
-                "posx": 0,
-                "posy": 0,
-            },
         )
-        assert resp.status_code == 201
-        m1_id = resp.json()["id"]
+        items = list_resp.json()["items"]
+        assert len(items) == 1
+        m1_id = items[0]["id"]
 
         # 4. User2 joins (viewer) at distinct coords (P9 partial unique index)
         resp = client.post(
@@ -301,17 +283,14 @@ class TestCorridorCrud:
         assert resp.status_code == 201
         office_id = resp.json()["id"]
 
-        resp = client.post(
-            "/api/v1/messaging/memberships",
+        # Look up the auto-created owner membership (P14b-onboard2)
+        list_resp = client.get(
+            f"/api/v1/messaging/memberships?office_id={office_id}",
             headers=h,
-            json={
-                "office_id": office_id,
-                "user_id": auth_user_id,
-                "role": "owner",
-            },
         )
-        assert resp.status_code == 201
-        m_id = resp.json()["id"]
+        items = list_resp.json()["items"]
+        assert len(items) == 1
+        m_id = items[0]["id"]
 
         resp = client.post(
             "/api/v1/messaging/corridors",
@@ -339,17 +318,7 @@ class TestCorridorCrud:
         assert resp.status_code == 201
         office_id = resp.json()["id"]
 
-        resp = client.post(
-            "/api/v1/messaging/memberships",
-            headers=h,
-            json={
-                "office_id": office_id,
-                "user_id": auth_user_id,
-                "role": "owner",
-            },
-        )
-        assert resp.status_code == 201
-
+        # Creator is auto-added as owner (P14b-onboard2); corridor list still works.
         resp = client.get(
             "/api/v1/messaging/corridors",
             headers=h,
@@ -371,7 +340,7 @@ class TestCorridorCrud:
         """DELETE corridor → 204; subsequent GET → 404."""
         h = _auth(auth_token)
 
-        # 1. Create office
+        # 1. Create office (P14b-onboard2: user1 auto-joins as owner)
         resp = client.post(
             "/api/v1/offices",
             headers=h,
@@ -391,20 +360,15 @@ class TestCorridorCrud:
         )
         user2 = result.scalars().first()
         assert user2 is not None
-        # 3. Both join at distinct coords (P9 partial unique index on (office_id, posx, posy))
-        resp = client.post(
-            "/api/v1/messaging/memberships",
+
+        # 3. Look up user1's auto-created owner membership
+        list_resp = client.get(
+            f"/api/v1/messaging/memberships?office_id={office_id}",
             headers=h,
-            json={
-                "office_id": office_id,
-                "user_id": auth_user_id,
-                "role": "owner",
-                "posx": 0,
-                "posy": 0,
-            },
         )
-        assert resp.status_code == 201
-        m1_id = resp.json()["id"]
+        items = list_resp.json()["items"]
+        assert len(items) == 1
+        m1_id = items[0]["id"]
 
         resp = client.post(
             "/api/v1/messaging/memberships",

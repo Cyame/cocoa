@@ -63,22 +63,20 @@ def _setup_office_and_membership(
     office_slug: str = "learning-office",
     role: str = "owner",
 ) -> str:
-    """Create an office and add *user_id* as member with *role*. Returns office_id."""
+    """Create an office. The creator is auto-added as owner (P14b-onboard2).
+
+    ``user_id`` and ``role`` parameters are kept for backward compatibility
+    with existing call sites; the auto-membership is always ``role='owner'``
+    attached to the office creator (the token holder).  Tests that need a
+    non-owner membership should add it explicitly for a *different* user.
+    """
     h = _auth(token)
     resp = client.post("/api/v1/offices", headers=h, json={
         "name": office_name,
         "slug": office_slug,
     })
     assert resp.status_code == 201, resp.text
-    office_id = resp.json()["id"]
-
-    resp = client.post("/api/v1/messaging/memberships", headers=h, json={
-        "office_id": office_id,
-        "user_id": user_id,
-        "role": role,
-    })
-    assert resp.status_code == 201, resp.text
-    return office_id
+    return resp.json()["id"]
 
 
 def _create_employee(client: TestClient, token: str, slug: str, name: str) -> str:

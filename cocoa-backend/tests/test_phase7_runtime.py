@@ -57,21 +57,21 @@ def _setup_office_and_membership(
     office_name: str = "Runtime Office",
     office_slug: str = "runtime-office",
 ) -> str:
+    """Create an office; the creator is auto-added as owner (P14b-onboard2).
+
+    Before P14b-onboard2 the helper also called
+    ``POST /api/v1/messaging/memberships`` to attach the creator as an owner.
+    That step now returns 409 Conflict because office creation already adds the
+    owner, so the manual call has been removed.  ``user_id`` is kept in the
+    signature for backward compatibility with existing call sites.
+    """
     h = _auth(token)
     resp = client.post("/api/v1/offices", headers=h, json={
         "name": office_name,
         "slug": office_slug,
     })
     assert resp.status_code == 201
-    office_id = resp.json()["id"]
-
-    resp = client.post("/api/v1/messaging/memberships", headers=h, json={
-        "office_id": office_id,
-        "user_id": user_id,
-        "role": "owner",
-    })
-    assert resp.status_code == 201
-    return office_id
+    return resp.json()["id"]
 
 
 def _create_employee(client: TestClient, token: str, slug: str, name: str) -> str:
