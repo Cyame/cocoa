@@ -1127,7 +1127,509 @@ URL：`/base-classes/:slug`
 - 输出：新 BaseClass record 创建 + 跳转 BaseClass 详情页
 - 副作用：原 Entity 不变（不删，不影响）；新 BaseClass 与原 Entity 解耦
 
-### 13.5 与基因（深海基因）的关系
+---
+
+## §13.UX UI 详写（start-work 落地用）
+
+> 本节是"展开写"——上面 §13.1-§13.5 是**概念**，本节是**实现规格**。任何 §13.X 引用可以回链此处查具体怎么落地。
+
+### 13.2.U 眷族详情浮窗 / 详情页完整 UI 规格
+
+#### 13.2.U.1 入口与打开方式
+
+| 入口 | 触发 | 行为 |
+|---|---|---|
+| namespace tab 眷族卡片单击 | 主画布 blur + 暗化 | 弹出浮窗，不离 tab |
+| namespace tab 眷族卡片双击 | 主画布 blur + 暗化 + 全屏 | 进入 `/entities/:eid` 详情页（无 sidebar / status bar） |
+| workspace dashboard 记忆 tab 眷族卡片单击 | 同上模糊 | 打开眷族记忆版（见 §13.1.2.U） |
+| workspace 拓扑 / 记忆 tab dblclick 眷族节点 | 持久化 tab | 打开 tab 内容 = 眷族详情 |
+
+#### 13.2.U.2 浮窗整体布局
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ ◆ 某某眷族（slug: mi-xi-you-zi）                              ✕ │
+├─────────────────────────────────────────────────────────────────┤
+│ ┌──────────────────────────────┐ ┌──────────────────────────┐   │
+│ │ HEADER 头                      │ │ Meta 侧栏               │   │
+│ │ - display name (H2, 可编辑)    │ │ - slug (mono, 可编辑)    │   │
+│ │ - rank badge (浅识/深潜, 冻结) │ │ - description (textarea)│   │
+│ │ - BaseClass chip (chip, 冻结) │ │ - BaseClass (display only) │   │
+│ │ - "v 1.0 / @作者 / 创建时间"  │ │ - creator (真人 用户)     │   │
+│ │ [保存]  [× 取消]  [⋯ 更多]    │ │ - workspace (chip, 关联)│   │
+│ └──────────────────────────────┘ │ - rank (display only)    │   │
+│                                  │ - AI rank since (日期) │   │
+│                                  └──────────────────────────┘   │
+│                                                                 │
+│ Tabs:  [基本属性] [能力系统] [深海基因] [当前化身] [炼化]      │
+│                                                                 │
+│ TAB CONTENT (depends on selected tab)                            │
+│                                                                 │
+├─────────────────────────────────────────────────────────────────┤
+│ Footer: [查看所绑 Workspace 记忆] [在拓扑中找到此 Node]         │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+浮窗尺寸：默认 920×640px，可拖右下角缩放（min 640×480，max 全屏）。移动端全屏 sheet。
+
+#### 13.2.U.3 基本属性 tab（默认 tab）
+
+这是浮窗打开时默认展示的 tab。
+
+**字段**（详见下表）+ 保存按钮 + 操作反馈 + 关联对象可点击跳走。
+
+| 字段 | UI 类型 | 可编辑 | 验证 | 反馈 |
+|---|---|---|---|---|
+| display_name | text input | ✓ | 必填，1-32 字符，去重（同 workspace） | 实时：重复 → 红框 + 文案"该 workspace 已有同名眷族"|
+| slug | text input (mono) | ✓ | 必填，匹配 `/^[a-z][a-z0-9-]*$/`，去重 | 实时：违反 → 红框 + 文案"slug 必须以小写字母开头，仅含小写字母/数字/连字符" |
+| description | textarea (4 行) | ✓ | 可空，最多 500 字符 | 字数计数器 bottom-right |
+| BaseClass | chip (display-only) | ✗ | n/a | 鼠标悬停 tooltip 显示 BaseClass 完整描述；单击 chip → 跳转 `/namespaces?tab=base-classes&focus=<slug>` |
+| rank | chip (display-only, frozen) | ✗ | 冻结不可改 | 鼠标悬停解释 tooltip "创建时定，冻结不可改" |
+| creator | chip (display-only) | ✗ | n/a | 悬停显示创建者邮箱 + 注册时间 |
+| workspace | chip (display-only) | ✗ | n/a | 单击 → workspace dashboard `/workspaces/:id?focus=memory&entity=:eid`（同 workspace 记忆 tab） |
+| created_at | text (display-only) | ✗ | n/a | n/a |
+
+**表单 dirty 状态**：用户改动任意字段后右上角显示橙色「未保存」徽章。点击"保存" → POST `/api/v1/entities/:eid` with If-Match ETag → 成功后绿色 toast "已保存"+ 徽章消失；如果 ETag 不匹配（其他人已改过）→ 红色 toast "该眷族已被其他人修改，请刷新"+ 提供「重新加载」按钮。
+
+**"更多"菜单**（`⋯`）：
+- 「查看历史修改」→ 时间线 view（EventLog 按 entity.* 过滤，列出所有变更）
+- 「软删除」（仅 `can_summon_entity`）→ 弹确认 modal："软删除 [name]？30 天内可恢复" → 成功后 toast "已软删除"+ 关闭浮窗
+
+#### 13.2.U.4 能力系统 tab
+
+展示该 Entity 当前已装/绑定的 capability 集（与深海基因 tab 略有重复，但视角不同）：
+
+**视图模式**（顶部 switcher）：「Group by type（默认）/ Group by source / All flat」
+
+**Group by type 视图**：4 个分组（`skill` / `tool` / `mcp` / `lsp`），每个分组折叠 / 展开：
+
+```
+能力系统 (Group by type)                             [刷新]  [管理深海基因 →]
+▼ skill (3)
+  - workflow-design-patterns    v0.1.2     from BaseClass
+  - code-review-checklist       v0.0.1     from BaseClass
+  - planted-skill-1             v1.0       额外添加 →  ([移除])
+▶ tool (3)
+▶ mcp (2)
+▶ lsp (2)
+```
+
+每行显示：
+- capability name
+- 版本（vX.Y.Z，hover 显示 changelog tooltip，v1 占位）
+- 来源 chip：`from BaseClass`（橙色，可点 chip 跳 BaseClass 详情）/ `额外添加`（蓝色，可移除）
+- 操作按钮：`[移除]`（仅额外添加的来源有，蓝色 hover 边框）
+- "管理深海基因 →" 按钮（在右上角）→ 切到深海基因 tab
+
+**空态**："该眷族还没装任何 capability — 检查 BaseClass 是否正确加载，或在「深海基因」tab 添加额外"
+
+**Group by source 视图**：分 2 组（`from BaseClass` / `额外添加`），每组按 type 二次展开。
+
+**All flat 视图**：表格 — name / type / version / source / operation。
+
+**来源 chip 跳转**：点击 chip → 跳 BaseClass 详情（`from BaseClass`）或深海基因详情（`额外添加`，v1 不实现深海基因详情页时降级到深海基因列表）。
+
+**移除 capability 流程**（`can_manage_ai_genes`）：
+1. 单条「移除」按钮 → 弹确认 modal "从 [Entity name] 移除 [capability name]？新 spawn 的 Instance 不会再装，新装需要重新添加。"
+2. 确认 → POST `/api/v1/entities/:eid/capabilities/:cap_id` DELETE → 成功后立即从 list 移除（乐观更新）+ 绿色 toast "已移除"。**已运行 Instance 不受影响**（这与 §2.2.4 "深海基因变更只对新建 Instance 生效" 保持一致）
+
+**「刷新」**按钮：手动拉最新；显示 `last_sync_at` 时间戳（hover 显示完整 sync metadata）
+
+#### 13.2.U.5 深海基因 tab
+
+**入口**：namespace tab 眷族详情的"深海基因" tab，承接 §14b 深海基因管理
+
+**结构**：
+- 上半：当前绑定列表（按 source 分组：`from BaseClass` / `额外添加`）
+  - 每行：基因名（slug） + kind chip（tool/meta/genome/workflow）+ tags + "移至 BaseClass"或"移除"操作
+  - `from BaseClass` 的基因 + 锁定图标（不可移除，只能去 BaseClass 那边改）
+- 下半：「+ 添加额外基因」按钮 → 弹模态
+  - 模态：上为基因 grid（与 §14b 同样的列表）+ 类型过滤 + tag 过滤 + 选中预览
+  - 选中后底部显示"会添加到 Entity 的额外基因列表，下次 spawn Instance 生效"
+
+**「移除」风险确认 modal**：
+"从 [Entity name] 移除 [gene name]？注意：已运行的 Instance 不受影响（要重启才生效）。下次 spawn 不会再装。"
+
+确认 → DELETE → 移除列表 → toast
+
+#### 13.2.U.6 当前化身 tab
+
+**结构**：表格 + 顶部 stats（化身总数 + running / idle / failed 计数 + 整体 health badge）
+
+**每行字段**：
+
+| 列 | 内容 |
+|---|---|
+| 化身 ID（前 8 位）+ 完整 ID（hover 复制） | 单击 → `/workspaces/:wid?fullscreen=:iid`（workspace dashboard 全屏该化身） |
+| loop_status badge | glow halo 圆色 8px + 文字（小）：running/idle/paused/interrupted/completed/failed |
+| 续命次数 | `n`（text，hover 显示 wave 数） |
+| K8s pod | pod 名称前 32 字符（hover 显示全 + 节点名 + 启动时间） |
+| spawn 时间 | `x 分钟前` 格式 |
+| 上次活跃 | `x 秒前`（实时更新） |
+| 操作 | `跳到 workspace` / `查看记忆` / `回收`（需 `can_interrupt_instance`） |
+
+**排序**：默认按 loop_status 优先级（failed > interrupted > paused > running > idle > completed），同状态内按 spawn 时间倒序。
+
+**搜索 + 过滤栏**：
+- 顶部 search box（输入 loop_status / pod / id 模糊搜索）
+- 左侧或顶部可展开过滤：`[loop_status 选择]`、`[only-failed]` toggle、`[only-running]` toggle
+
+**空态**："该眷族还没有 spawn 任何 Instance" + CTA「立即 Spawn 一个」→ 弹模态选择 InstanceProviderConfig 后 POST `/api/v1/instances`。
+
+**「回收」操作**：
+- 单条按钮 → 弹确认 modal "回收 Instance [id]？将停止 loop 并删除 pod。Memory 已写入眷族不会被回收。"
+- 确认 → POST `DELETE /api/v1/instances/:iid` → 成功后立即从表移除 + 绿色 toast + 化身列表 stats 重新计算
+
+#### 13.2.U.7 炼化 tab（蒸馏触发）
+
+- 顶部：「蒸馏是单向动作。原眷族 Memory 不受影响，但新神职会取代 BaseClass 的派生源之一。」
+- 2 个 section：
+  - **晋升**（绿色 section）
+    - 「晋升」按钮 → 弹模态
+    - 模态字段：可选 kind 过滤（4 选 checkbox：experience / lesson / decision / problem，默认全选）
+    - 提交按钮显示当前眷族的 Memory 计数 + 上次晋升时间（如有）
+    - 提交 → POST → 成功后绿色 toast + 模态显示"新增 N 条 Memos"
+  - **炼化**（紫红 section，需 `can_transmute_entity`）
+    - "目标 slug" input + "目标神职 name" input + 4 kind 过滤
+    - slug 实时查重（同 namespace 全局 unique）
+    - 提交 → POST → 成功后跳转 `/base-classes/<新 slug>` 显示新 BaseClass
+    - 错误处理：如 slug 冲突 → 红框 + 提示"该 slug 已被占用，建议用 [建议 slug 自动拼接 display_name 字段]"
+
+#### 13.2.U.8 浮窗底部 Footer
+
+固定 2 个按钮：
+
+- 「查看所绑 Workspace 记忆」→ 跳 `/workspaces/:wid?focus=memory&entity=:eid`
+- 「在拓扑中找到此 Node」→ 在 namespace 主页拓扑 tab 上 focus 此节点（v1 占位：toast "该 Workspace 主脑中尚无此节点 — 主脑节点功能 P15d+ 后续"）
+
+### 13.1.U 记忆管理 UI 详写
+
+#### 13.1.U.1 workspace dashboard 记忆 tab（主画布 tab 之一）
+
+**顶部 stats bar**：
+- 总眷族数（链路到 namespace tab 眷族）
+- 累计 Memory 条目数（跨 4 kind）
+- 待晋升候选数：Memory ≥ 20 的眷族数（蓝色徽章，hover 显示列表）
+
+**眷族记忆卡片 grid**（3 列 desktop / 2 列 tablet / 1 列 mobile）：
+
+每卡片内容：
+- 大标题：眷族 display name + slug（mono 小字）+ rank badge
+- 神职 chip
+- 4 个 kind 小卡片（grid 2×2）：experience / lesson / decision / problem，每个显示数字
+- 最近 lesson snippet（最多 80 字符截断）
+- 操作 row：「查看完整记忆」/ 「晋升」/「炼化」（炼化需跳到 namespace 级）
+- 健康度 badge：如果有失败化身的眷族 card 角标加红色描边
+
+点击卡片行为：
+- 单击 → workspace dashboard 主画布 blur + 暗化 + 打开 §13.1.2.U 单眷族记忆详情浮窗
+- 双击 → 主画布新增持久化 tab：「记忆 · [眷族名]」（即 §13.1.2.U 详情页）
+
+#### 13.1.U.2 单眷族记忆详情（持久化 tab 或浮窗）
+
+**URL**：`/workspaces/:id?focus=memory&entity=:eid`
+
+**Layout**（持久化 tab 占满主画布 / 浮窗 920×640）：
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│ HEADER: [← 返回 记忆 tab] 某某眷族 · 神职 chip · rank badge    │
+├──────────────────────────────────────────────────────────────┤
+│ Stats Bar (4 个)：4 个 kind 计数 + 上次晋升 / 上次炼化时间     │
+├──────────────────────────────────────────────────────────────┤
+│ 2 栏 grid:                                                    │
+│ ┌──────────────────────────┐ ┌────────────────────────────┐  │
+│ │ 左：Memory 汇总（主区域） │ │ 右：蒸馏操作区             │  │
+│ │                          │ │                            │  │
+│ │ [Tab: 全部][经验][教训]  │ │ ─ 晋升 (绿色 card) ─        │  │
+│ │       [决策][问题]        │ │ 选 kind (4 checkbox)       │  │
+│ │                          │ │ 当前 Memory N 条 / 上次 T  │  │
+│ │ Memory 列表（按时间倒序）│ │ [立即晋升]                 │  │
+│ │ 每条：kind badge + 时间 + │ │                            │  │
+│ │       完整文本 + 来源     │ │ ─ 炼化 (紫红 card) ─        │  │
+│ │       (Instance ID 前 8)  │ │ 目标 slug (实时查重)        │  │
+│ │                          │ │ 目标 name                    │  │
+│ │ virtualized list (window) │ │ kind 过滤 (4 checkbox)      │  │
+│ │                          │ │ [立即炼化]                  │  │
+│ │                          │ │                            │  │
+│ │ [加载更多]               │ │ ─ 历史记录 ─                │  │
+│ │                          │ │ 上次晋升：x 天前            │  │
+│ │                          │ │ 上次炼化：x 天前            │  │
+│ └──────────────────────────┘ └────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**Memory 列表项**：
+
+```
+[经验] 2 小时前  from Instance #abc12345
+测试发现 P9 拓扑节点拖拽时 z-index 偶尔丢失
+[展开 ▼]  [复制]  [删除 super_admin only]
+```
+
+- 顶部行：kind badge + 相对时间 + 来源链接（Instance 名可点击跳该化身全屏）
+- 主体：完整文本（默认折叠，长文 100 字截断 + [展开 ▼] 完整显示）
+- 操作：[复制]（剪贴板）/ [删除]（仅 super_admin 可见，弹确认 modal）
+- 长按 / 滑动（移动端）→ 出现快捷操作
+
+**蒸馏表单**：
+
+晋升 section：
+- 4 个 kind checkbox（默认全选）
+- 灰色文字显示当前 Memory 总数 + 上次晋升时间戳
+- 「立即晋升」按钮（绿色）：点击 → 弹 spinner + toast "晋升中..."
+- 完成后：toast "晋升成功 — 新增 N 条记忆在 Entity 上" + button 变成「已晋升 ✓」disabled 状态 + 显示时间戳
+
+炼化 section：
+- 输入：目标 slug input + 目标神职 name input
+- slug 实时校验：去重 + 格式（kebab-case regex）/ 自动建议（从 display_name slugified）
+- 4 个 kind checkbox
+- 「立即炼化」按钮（紫红，点击 → spinner + toast "炼化中..."）
+- 完成后：跳到新 BaseClass 详情页 + 历史记录 section 新增一行
+
+#### 13.1.U.3 蒸馏完成 Result Modal
+
+晋升完成时 **不弹 modal**，只用 toast + 状态切换。
+
+炼化完成时弹全屏 modal（如 §13.4.2 定义）：
+
+```
+┌──────────────────────────────────────────────────┐
+│ 炼化完成                                          ✕ │
+├──────────────────────────────────────────────────┤
+│ 新 BaseClass 已创建：[slug]                    │
+│                                                  │
+│ ┌─ Manifest Preview (key-value) ─┐               │
+│ │ Name: 「某某眷族的技艺」          │            │
+│ │ Slug: jin-xi-you-zi              │            │
+│ │ Provider: anthropic / claude-3.5 │            │
+│ │ Skills: [workflow-patterns, code-review...] ││
+│ │ Tools: [shell, fetch_url, ...]  │            │
+│ │ Commands: /execute /build /test  │            │
+│ │ 基于 Memory: 23 entries          │            │
+│ └──────────────────────────────────┘               │
+│                                                  │
+│ [查看神职详情] [立即基于此神职召唤新眷族] [关闭]  │
+└──────────────────────────────────────────────────┘
+```
+
+[查看神职详情]：跳 `/base-classes/<slug>`
+[立即基于此神职召唤新眷族]：跳 `/namespaces?tab=base-classes&focus=<slug>` + 自动展开「召唤」CTA
+
+### 13.3.U 神职市场 UI 详写
+
+#### 13.3.U.1 神职卡片 UI（namespace tab 神职 list item）
+
+每卡片：
+
+```
+┌──────────────────────────────────────────┐
+│ 神职名 [display name]              [悬停]│
+│ slug: mi-shi · v1.0                    │
+│                                          │
+│ 1 句话职能描述（最多 100 字）            │
+│                                          │
+│ ┌─ 命令 ─┐ ┌─ Provider ─┐               │
+│ │ /plan  │ │ claude-3.5 │              │
+│ │ /deco  │ │ gpt-4o-mini│              │
+│ └────────┘ └────────────┘               │
+│                                          │
+│ 已用: 5 眷族 · 12 化身 (跨 3 workspaces) │
+│ ────────                                │
+│ [查看详情]    [基于此召唤眷族 →]          │
+└──────────────────────────────────────────┘
+```
+
+视觉层次：
+- 头部（display name + version tag）：H3 16px semibold + small grey version
+- 1 句话职能：14px regular slate-600
+- 命令 chips：blue-50 背景 + blue-700 text，等宽字体，hover 出 description tooltip
+- Provider chip：neutral + 实际模型名（hover 显示完整 prompt preview 首 50 字）
+- 底部统计行：跨 workspace 全局聚合（count of entities / count of instances derived）
+- 操作：
+  - 「查看详情」按钮（中性）→ 神职详情浮窗
+  - 「基于此召唤眷族 →」按钮（primary 蓝）→ §6 引导 Step 1 预选此神职
+
+#### 13.3.U.2 神职详情浮窗（点击神职卡片触发）
+
+**浮窗尺寸**：920×720（比眷族浮窗更大，因为内容多）
+
+**Tabs**：
+1. **概览**（默认）：display + 完整职能 + 命令集 + provider + 派生统计
+2. **详细描述**：多段长 prose（来自 BaseClass manifest 的 description 字段，markdown 渲染）
+3. **依赖基因**：列出该神职引用的深海基因
+4. **派生眷族**：跨 workspace 列表（按 workspace 分组，每组列该 workspace 的眷族）
+
+**概览 tab 内容**：
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Header:                                                    ✕ │
+│ - 大 display name (H2)                                     │
+│ - slug (mono small) + version tag                          │
+│ - "召唤类" + "策划类" tags                                │
+├─────────────────────────────────────────────────────────────┤
+│ [Tabs: 概览 | 详细描述 | 依赖基因 | 派生眷族]              │
+├─────────────────────────────────────────────────────────────┤
+│ 概览 tab:                                                  │
+│                                                             │
+│ ┌─ Section: 职能描述（短） ──────────────────┐             │
+│ │ 1 段短描述                              │              │
+│ └────────────────────────────────────────┘              │
+│                                                             │
+│ ┌─ Section: 命令全集（不限 3 个） ──────────────┐          │
+│ │ /plan 标记       "战略规划，列出可执行步骤"│             │
+│ │ /decompose      "分解任务到子任务"        │             │
+│ │ /prioritize     "按优先级重排"          │              │
+│ │ /verify         "运行验证步骤"           │             │
+│ │ (全部命令 + hover 显示 description)         │             │
+│ └────────────────────────────────────────┘               │
+│                                                             │
+│ ┌─ Section: Provider 配置 ────────────────────┐             │
+│ │ Provider: claude-3.5-sonnet                │             │
+│ │ Fallback: gpt-4o-mini                     │             │
+│ │ Max tokens: 4096                          │             │
+│ │ 显示关键 override 字段                    │             │
+│ └────────────────────────────────────────┘               │
+│                                                             │
+│ ┌─ Section: prompt 预览 ────────────────────┐             │
+│ │ first 200 chars of system_prompt         │             │
+│ │ "...[read more]"                          │             │
+│ └────────────────────────────────────────┘               │
+│                                                             │
+│ ┌─ Section: 派生统计 ────────────────────────┐             │
+│ │ 5 眷族 across 3 workspaces                │             │
+│ │ 12 化身 running                            │             │
+│ │ 累计该 BaseClass 召唤：x 次             │             │
+│ └────────────────────────────────────────┘               │
+│                                                             │
+├─────────────────────────────────────────────────────────────┤
+│ Footer:                                                     │
+│  ← 关闭     [基于此神职召唤眷族 →]                       │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### 13.3.U.3 详细描述 tab
+
+- 渲染 markdown（来自 `BaseClass.description` 字段，markdown 源码）
+- 顶部 sticky 锚点导航（自动生成 h2/h3 锚点列表）
+- 渲染：标题 / 段落 / 列表 / 代码块 / 表格
+- 代码块带语法高亮 + 复制按钮
+- 长文支持 markdown `---` 分隔
+
+#### 13.3.U.4 依赖基因 tab
+
+- 上半：此 BaseClass 引用的深海基因列表（from manifest 的 `installed_genes` 字段）
+- 每行：基因名（slug）+ kind chip + tags + 「查看基因」按钮（跳 §14b 详情）
+- 下半：v1 暂不支持"从此页添加新基因"——baseClass 一旦创建基因锁定，要改去 §14b 改 BaseClass manifest
+
+#### 13.3.U.5 派生眷族 tab
+
+- 跨 workspace 列表（按 workspace 分组）
+
+```
+▼ Workspace: 我的开发组 (3)
+  - 某某眷族 (mi-xi-you-zi)  深潜者   跳到实体详情 →
+  - 另一个眷族 (ling-yi-ge)  浅识者   跳到实体详情 →
+  - ...
+▶ Workspace: 运维组 (2)
+  - ...
+```
+
+- 每行右侧「跳到实体详情 →」按钮 → 跳 `/namespaces?tab=entities&focus=:eid`
+- 总数 footer：「N 个 Workspace / M 个眷族 / K 个化身」
+
+#### 13.3.U.6 双击神职卡片 → 神职详情全屏页
+
+URL：`/base-classes/:slug`
+
+- 同 §13.3.U.2 浮窗内容但全屏 + 左侧加 sidebar（"X 神职详情" + tab 切换）
+- 顶部 breadcrumb：「神职 / my-slug」
+- 操作栏：「基于此召唤眷族」primary 按钮 + 「编辑神职 manifest」（仅 super_admin，超链到 §14b）
+
+#### 13.3.U.7 「基于此神职召唤眷族」CTA 全链路
+
+1. 用户在神职卡片 / 详情页点击「基于此召唤眷族 →」
+2. 跳到 `/namespaces?tab=base-classes&focus=:slug&action=summon`
+3. namespace 主页主画布 blur + 暗化 + 全屏打开 §6 引导 modal
+4. 引导 Step 1（神职选择）预选 `:slug`（高亮勾选状态）
+5. 用户完成 Step 2 + Step 3 → 跳到 `/workspaces/:id?focus=memory&entity=:eid`（workspace dashboard 记忆 tab 定位此新眷族）
+
+### 13.4.U 蒸馏 UI 跨场景一致性
+
+蒸馏 2 动作在多个入口出现：
+
+| 入口 | 看到的蒸馏 UI |
+|---|---|
+| workspace dashboard 记忆 tab 眷族卡 | 「晋升」 / 「炼化」按钮（炼化跳转 namespace）|
+| 眷族详情浮窗 炼化 tab | 完整 2 动作表单（§13.2.U.7）|
+| 眷族详情浮窗 当前化身 tab | 每行一个"回收"按钮（不是蒸馏，是资源回收，单独）|
+| namespace tab 眷族 tab 详情 | 完整 2 动作表单 |
+
+**所有入口的表单字段一致**：
+- 晋升 = kind 过滤选 + 「立即晋升」按钮（4 checkbox 默认全选）
+- 炼化 = slug + name + 4 kind filter + 「立即炼化」按钮
+
+**API 端点统一**：`POST /api/v1/learning/entities/:eid/distill?action={promote|transmute}`
+
+### 13.5.U 错误态 + 边界（展开）
+
+#### 网络错误
+
+- 蒸馏失败：toast "炼化失败：网络错误，请重试" + 「重试」按钮（恢复提交按钮可点）
+- 详情加载失败：顶部 error banner + 「重试」按钮 + 「回到列表」链接
+
+#### 权限错误
+
+- 普通用户点击「基于此召唤眷族」→ 弹 toast "需要 can_summon_entity 能力位"
+- 普通用户点击「软删除」→ 不显示该按钮（capacity-based hide）
+
+#### 并发错误
+
+- 详情浮窗 ETag mismatch（同时间其他人改了）
+  - 红色 toast "该眷族已被其他人修改"
+  - 「重新加载」按钮（拉最新并刷新表单）
+  - 表单恢复为只读模式直到重新加载
+
+#### 数据验证
+
+- slug 格式不对：实时红框 + tooltip 提示
+- slug 重复（虽然前端查重，后端也会复查）：红色 toast + 「恢复原 slug」按钮
+- description 超长：实时计数器显示 500/500 红色
+
+### 13.6.U a11y / i18n / 响应式
+
+#### a11y
+
+- 所有可点击 chip 都有 `aria-label`
+- 浮窗打开时 trap 焦点（Esc 关闭）
+- 表单字段用 `aria-describedby` 关联错误文案
+- Tab 切换支持 `← →` 箭头键
+- 「晋升」「炼化」按钮 hover 显示预计耗时（"约 5-10 秒"）
+
+#### i18n
+
+- 所有用户可见文案走 i18n key
+- 关键字符串列表：
+  - `entity.edit.displayName.label`、`entity.edit.slug.label`、`entity.edit.description.label`
+  - `entity.tab.basic`、`entity.tab.capabilities`、`entity.tab.deepGenes`、`entity.tab.instances`、`entity.tab.distill`
+  - `entity.button.save`、`entity.button.cancel`、`entity.button.delete`
+  - `memory.tab.all` / `memory.tab.experience` / `memory.tab.lesson` / `memory.tab.decision` / `memory.tab.problem`
+  - `distill.promote.submit`、`distill.transmute.submit`
+  - `baseClass.tab.overview`、`baseClass.tab.description`、`baseClass.tab.genes`、`baseClass.tab.derived`
+  - `nav.distill.promote`、`nav.distill.transmute`
+
+#### 响应式
+
+| 断点 | 眷族详情浮窗 | 神职详情浮窗 | 记忆详情 |
+|---|---|---|---|
+| mobile (<768px) | 全屏 sheet | 全屏 sheet | 上下堆叠（无 2 栏） |
+| tablet (768-1023px) | 900×600 居中 | 900×680 居中 | 2 栏变窄 |
+| desktop (≥1024px) | 920×640 默认 | 920×720 默认 | 完整 2 栏 |
+
+---
+
+*§13.1-§13.6 概念 + UI 详写完成。start-work 时 §13.U 章节可直接作为实现规格。*
 
 - 蒸馏动作产生的是 **BaseClass**，**不是**深海基因
 - BaseClass 定义 AI 的 prompt + commands + provider config
@@ -1441,6 +1943,7 @@ switch (error.status) {
 - §11 Topology Dashboard（主画布默认 tab，节点浮窗 + 双击持久化）（本节）✓
 - §12 调试页（namespace tab 内）（本节）✓
 - §13 记忆 + 眷族管理 + 神职市场（改名）（本节）✓
+- §13.UX UI 详写（start-work 直接落地用，含眷族详情 / 记忆管理 / 神职市场 UI 规格）
 - §14 觉醒基因 UI（本节）✓
 - §14b 深海基因 UI（本节）✓
 - §14c 知识 UI（本节）✓
