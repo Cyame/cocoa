@@ -6,7 +6,9 @@
 #
 # Build context must be the repository root so `cocoa-backend/...` paths resolve.
 # Build: docker build -t cocoa-backend:latest -f cocoa-artifacts/docker/Dockerfile.backend .
-FROM python:3.12-slim AS builder
+# Pinned base image (Python 3.12 — Debian bookworm).
+# Pull: docker pull python:3.12.7-slim-bookworm
+FROM python:3.12.7-slim-bookworm AS builder
 WORKDIR /build
 
 # Switch Debian apt sources to Aliyun mirror.
@@ -23,7 +25,7 @@ RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple && 
     uv export --frozen --no-dev --no-hashes -o requirements.txt && \
     pip install --no-cache-dir -r requirements.txt
 
-FROM python:3.12-slim
+FROM python:3.12.7-slim-bookworm
 WORKDIR /app
 
 # Keep the runtime apt sources on Aliyun for consistency (e.g. debugging tools).

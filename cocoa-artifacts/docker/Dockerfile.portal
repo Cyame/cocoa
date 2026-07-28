@@ -1,13 +1,15 @@
 # syntax=docker/dockerfile:1.7
 # Cocoa Portal Static Image — built with npmmirror (China) + served by nginx:alpine.
 #
-# Multi-stage build: a node:20-alpine builder runs `bun install --frozen-lockfile`
+# Multi-stage build: a node:22-alpine builder runs `bun install --frozen-lockfile`
 # and `bun run build` to produce the React SPA, then nginx:alpine serves the
 # resulting `dist/` directory on port 5173 with SPA fallback to /index.html.
 #
 # Build context must be the repository root so `cocoa-portal/...` paths resolve.
 # Build: docker build -t cocoa-portal:latest -f cocoa-artifacts/docker/Dockerfile.portal .
-FROM node:20-alpine AS builder
+# Pinned base image (Node 22 LTS — per user direction 2026-07-28).
+# Pull: docker pull node:22.11.0-alpine
+FROM node:22.11.0-alpine AS builder
 WORKDIR /build
 
 # npmmirror (China) for both npm and bun — bun reads npm-style registry config.
@@ -22,7 +24,9 @@ RUN bun install --frozen-lockfile
 COPY cocoa-portal ./
 RUN bun run build
 
-FROM nginx:alpine
+# Pinned runtime base image (nginx 1.27 LTS).
+# Pull: docker pull nginx:1.27.4-alpine
+FROM nginx:1.27.4-alpine
 WORKDIR /usr/share/nginx/html
 
 # Replace the default nginx site with a minimal SPA + healthz config on port 5173.
