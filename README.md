@@ -20,7 +20,7 @@ cocoa/
 ├── cocoa-backend/      # API server -- Python 3.12 + FastAPI + SQLAlchemy
 ├── cocoa-portal/       # Web portal -- React 19 + Vite 8 + TypeScript + Bun + Tailwind CSS v4
 ├── cocoa-artifacts/    # Docker images & deploy manifests (P7)
-├── .omo/               # Plans, drafts, run-continuation state
+├── .omo/               # Plans + drafts + evidence; historical artifacts archived (see .omo/plans/archive/, .omo/evidence/archive/)
 ├── .github/            # CI workflows
 ├── .codegraph/         # Code-graph index (machine-local, git-ignored)
 ├── dev.sh              # One-command local dev launcher

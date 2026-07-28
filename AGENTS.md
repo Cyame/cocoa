@@ -20,20 +20,28 @@ Cocoa v2 是 `nodeskclaw` 的 v2 重建（**轻量化 + 视觉优先**）。继�
 
 ## 0.2 Planning artifacts（`.omo/` 目录结构）
 
-`***REMOVED***.omo/` 是项目的 planning system：
+`***REMOVED***.omo/` 是项目的 planning system。**2026-07-28 起按 15d 时间分线**：活跃 vs 归档分离，归档只读不再修改。
 
 | 子目录 | 用途 | 谁写 | 谁读 |
 |---|---|---|---|
-| `plans/` | 每个 phase 的可执行 plan（结构化 todos + commit 策略 + 验证） | planner | worker session（启动 `/start-work` 后读） |
-| `drafts/` | 长期设计讨论（**没有 approved plan** 的状态） | planner | planner（下个相关 session 开始时先读） |
-| `evidence/` | (a) phase 审计（f1-audit / f4-scope）；(b) 独立审查（independent review）；(c) capability map | worker + planner | 任何人 |
-| `notepads/` | 每个 phase 的决策 / 问题 / 教训（已废弃，新版用 plan + evidence 替代） | — | — |
+| `plans/` | 当前和未来 phase 的可执行 plan + INDEX.md | planner | worker session（启动 `/start-work` 后读） |
+| `plans/archive/` | 已完成 phase 的 plan（只读；含 `README.md`） | — | 历史参考 |
+| `drafts/` | 当前规划 + 未来方向（15d naming、session-engine-v2 等） + INDEX.md | planner | planner |
+| `drafts/archive/` | 历史草稿 + phase 详情草稿（只读） | — | 历史参考 |
+| `evidence/` | 当前 capability map / gap / drift / deployment / orbstack ops + INDEX.md | worker + planner | 任何人 |
+| `evidence/archive/` | 历史 phase 审计 + 历史 capability 快照（只读） | — | 历史参考 |
+| `notepads/` | **已废弃**（gitignored；本地 session-only） | — | — |
+
+**Canonical docs**（取代旧 plan 文件作为产品参考）：
+- `docs/*.md` — 13 个文件，15d 命名 canonical（terminology / metaphor-name-table / domain-model / api-architecture / preset-system / portal-system / messaging-system / blackboard-system / runtime-system / harness-system / learning-system / observability / product-positioning）
+- `docs/prd-v1.md` — 15e PRD（1253 行，覆盖 10 个 portal 页面 + 首次运行引导 + 蒸馏 UI）
 
 **Planners 在新会话开始时**：
-- 读 `plans/cocoa-v2-roadmap.md` 看项目整体状态
-- 读 `drafts/*.md` 看是否有进行中的设计讨论
-- 读 `evidence/*-capability-map.md` 了解现状
-- 然后进入 INTENT ROUTING
+1. 读 `plans/cocoa-v2-roadmap.md` 看项目整体状态
+2. 读 `drafts/*.md` 看是否有进行中的设计讨论
+3. 读 `evidence/*-capability-map.md` 了解现状
+4. 读 `docs/terminology.md` + `docs/metaphor-name-table.md` 确认 15d 命名
+5. 然后进入 INTENT ROUTING
 
 ## 项目概述
 
