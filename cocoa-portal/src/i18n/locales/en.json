@@ -171,6 +171,21 @@
     "distillFailed": "Failed to distill skill",
     "loadFailed": "Failed to load memory summary"
   },
+  "employees": {
+    "eyebrow": "Workforce",
+    "title": "Employees",
+    "subtitle": "{{count}} active employees available for office {{office}}. Pick one to learn from.",
+    "loading": "Loading employees",
+    "emptyTitle": "No employees yet",
+    "emptyDetail": "No employees have been provisioned.",
+    "viewLearning": "Learn",
+    "rankLabel": "Rank: {{rank}}",
+    "rank": {
+      "intern": "intern",
+      "researcher": "researcher",
+      "director": "director"
+    }
+  },
   "errors": {
     "401": "Sign-in required. Please sign in again.",
     "403": "You do not have permission to perform this action.",

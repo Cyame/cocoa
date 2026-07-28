@@ -171,6 +171,21 @@
     "distillFailed": "提炼技能失败",
     "loadFailed": "加载记忆摘要失败"
   },
+  "employees": {
+    "eyebrow": "员工",
+    "title": "员工列表",
+    "subtitle": "办公室 {{office}} 共有 {{count}} 名活跃员工。选择一位以查看其学习记录。",
+    "loading": "正在加载员工",
+    "emptyTitle": "暂无员工",
+    "emptyDetail": "暂未配置任何员工。",
+    "viewLearning": "学习",
+    "rankLabel": "职级：{{rank}}",
+    "rank": {
+      "intern": "实习生",
+      "researcher": "研究员",
+      "director": "主管"
+    }
+  },
   "errors": {
     "401": "需要登录，请重新登录。",
     "403": "你无权执行此操作。",

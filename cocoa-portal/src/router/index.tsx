@@ -3,6 +3,7 @@ import App from '@/App';
 import ComposerPage from '@/pages/ComposerPage';
 import DebugPage from '@/pages/DebugPage';
 import EmployeeLearningPage from '@/pages/EmployeeLearningPage';
+import EmployeesListPage from '@/pages/EmployeesListPage';
 import InstanceDetailPage from '@/pages/InstanceDetailPage';
 import LoginPage from '@/pages/LoginPage';
 import OfficeDetailPage from '@/pages/OfficeDetailPage';
@@ -34,6 +35,10 @@ const router = createBrowserRouter([
       {
         path: '/offices/:id',
         Component: OfficeDetailPage,
+      },
+      {
+        path: '/offices/:id/employees',
+        Component: EmployeesListPage,
       },
       {
         path: '/offices/:id/instances/:iid',

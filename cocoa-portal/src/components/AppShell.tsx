@@ -55,10 +55,10 @@ export default function AppShell() {
     },
     {
       label: t('nav.learning'),
-      href: '/employees',
+      href: officeId === null ? '/offices' : `/offices/${officeId}/employees`,
       Icon: BookOpen,
       end: true,
-      isDisabled: false,
+      isDisabled: officeId === null,
     },
   ] as const;
 
