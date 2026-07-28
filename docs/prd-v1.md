@@ -1097,35 +1097,224 @@ URL：`/base-classes/:slug`
 - 实时统计：从该神职派生的眷族列表（跨 workspace 全局）
 - /memory：该神职派生眷族的记忆聚合（按 workspace 分组）
 
-### 13.4 蒸馏 2 动作（保留）
+### 13.4 蒸馏 2 动作（操作层）
 
-#### 晋升 (promote) — Instance → Entity
+> **完整数据流语义**（4 级跳 + API 体 / 副作用 / 边界）见 **§13.6**。本节只讲**用户操作层**——按钮放哪、什么时候点。
 
-**含义**：把当前化身的 Memory + 主脑写入回写到所属眷族
+#### 晋升 (promote) — 见 §13.6.3 完整定义
 
-**触发位置**：
+**触发位置（用户操作）**：
 - workspace dashboard 记忆 tab 眷族卡（在该眷族所有 Instance 都停止 / 已无 running 时）
-- namespace tab 眷族详情浮窗
+- namespace tab 眷族详情浮窗 → 「炼化」tab → 晋升 card
 
-**行为**：
-- 输入：可选指定 Memory kind 过滤（默认全部）
-- API：`POST /api/v1/learning/entities/:eid/distill?action=promote`
-- 输出：原眷族 Memory 计数增加 + EventLog 印痕
-- 副作用：原眷族的 BaseClass manifest 不变（rank / display 也不变），仅 Memory 内容增加
+**API**：`POST /api/v1/learning/entities/:eid/distill?action=promote`
 
-#### 炼化 (transmute) — Entity → BaseClass
+#### 炼化 (transmute) — 见 §13.6.4 完整定义
 
-**含义**：把眷族累积的 Memory 蒸馏成新神职
+**触发位置（用户操作）**：
+- namespace tab 眷族详情浮窗 → 「炼化」tab → 炼化 card
+- workspace dashboard 记忆 tab 卡片上（带跨 workspace 提醒）— 跳到 namespace 级执行
 
-**触发位置**：
-- namespace tab 眷族详情浮窗
-- workspace dashboard 记忆 tab 卡片上（带跨 workspace 提醒）
+**API**：`POST /api/v1/learning/entities/:eid/distill?action=transmute`
 
-**行为**：
-- 输入：目标 slug（必填）+ 目标神职 name（必填）+ kind 过滤
-- API：`POST /api/v1/learning/entities/:eid/distill?action=transmute`
-- 输出：新 BaseClass record 创建 + 跳转 BaseClass 详情页
-- 副作用：原 Entity 不变（不删，不影响）；新 BaseClass 与原 Entity 解耦
+> **关键区分**：晋升 = Entity 内部升级（同 workspace 内变强）。炼化 = 跨 workspace 资产生产（产生新神职模板）。**用户看按钮时**：晋升带绿色 = "升级这个眷族"，炼化带紫红 = "蒸馏成新神职"。
+
+### 13.5 与基因（深海基因）的关系
+
+- 蒸馏动作产生的是 **BaseClass**，**不是**深海基因
+- BaseClass 定义 AI 的 prompt + commands + provider config
+- 深海基因定义 AI 的 capabilities（skills / tools / mcps / lsps）
+- 新 BaseClass 可以**引用**已存在的深海基因作为默认安装包（在 §13.3 详情页可以勾选）
+- 蒸馏产物 ≠ 深海基因
+
+---
+
+## §13.6 能力生命周期模型：Memory → Capability → Gene → BaseClass（4 级跳）
+
+> **核心澄清**：用户原话反馈"晋升和炼化做了什么？一个是不是能力系统保存？另一个是记忆？记忆回收后应该变成能力？能力组合成基因？这是一套三级跳"。
+>
+> 这是 Cocoa 的**核心数据流**。所有蒸馏动作的本质都从这条链来。本节给完整定义，避免 §13.1-§13.5 与 §13.UX 之间的歧义。
+
+### 13.6.1 4 个层级（从低到高）
+
+| 层级 | 名称 | 存储位置 | 类型 | 描述 |
+|---|---|---|---|---|
+| **L1** | **Memory**（记忆沉淀） | `Memory` 表 / `Entity.memory_entries` | `experience / lesson / decision / problem` | 化身跑过的事、踩过的坑、做过的决策。是**事实记录**，无能力性 |
+| **L2** | **Capability**（能力） | `Entity.capabilities[]` 字段（运行时复制到 `Instance.capabilities`） | `skill / tool / mcp / lsp` | 由 Memory 蒸馏出的"能做某事"的单元。是**可执行的能力** |
+| **L3** | **Gene**（基因 = 能力包） | `ai_genes` 表 / `BaseClass.installed_gene_slugs[]` | 4 类（`tool-gene / meta-gene / genome / workflow-gene`）| 命名打包的能力集合。一个基因 = 多个 Capability |
+| **L4** | **BaseClass**（神职 = AI 角色模板） | `base_classes` 表 | 系统级 / 自定义 | Entity 身份 + Memory + 完整能力集 + prompt 的整合体。**跨 workspace 复用** |
+
+### 13.6.2 5 个动作的精确边界
+
+| # | 动作 | 名称 | 起点 | 终点 | 模型 | 边界（用户操作时会得到什么） |
+|---|---|---|---|---|---|---|
+| 1 | **采集** | 自动写入 | 化身 runtime 事件 | `Memory` 条目 | 自动（loop hook 监听 `EventLog`）| 用户**不可操作**，系统自动 |
+| 2 | **回收** | Memory → Capability | 1 条 / 多条 Memory 条目 | 1 条 `Capability`（"从此 Memory 学到了 X 能力"）| **回收 = 把"经验"蒸馏成"可执行能力"** | 用户得到 1 条新 Capability，可用于 Entity + 所有 Instance |
+| 3 | **装载** | Gene + Capability → Instance runtime | Capability / Gene manifest | 写入容器（skill dir / tool registry / mcp process / lsp client）| GeneInstallAdapter | 用户得到"runtime 可用" |
+| 4 | **组合** | 多 Capability → 1 Gene | 多条 capability + 自命名 | 1 个新 Gene (`ai_genes` insert) | 用户操作 / 系统 auto-suggest | 用户得到"命名打包的能力集，可被多个 BaseClass 引用" |
+| 5 | **晋升** | Instance runtime → Entity 整体 | 当前 Instance + 它累积的 Memory + 已装 capabilities | Entity 整体升级（capability 固化 + Memory 沉淀 + prompt 重生成）| **晋升 ≠ 只升 Memory**。是 Entity 整体升级。详见 §13.6.3 |
+| 6 | **炼化** | Entity 完整身份 → 新 BaseClass | Entity 的 Capability + Memory + prompt snapshot | 1 个新 BaseClass record | **炼化 ≠ 只升 capability**。是完整 Entity 转神职模板，跨 workspace 复用。详见 §13.6.4 |
+
+> **重点澄清**：晋升（动作 5）和炼化（动作 6）是两个不同层级跳。**晋升是 Entity 内部升级**（同一个 Entity 变强），**炼化是跨 Workspace 资产生产**（一个 Entity 蒸馏出可给任何 AI 用的神职模板）。
+
+### 13.6.3 晋升 (promote) — Instance runtime → Entity 完整升级
+
+**核心定义**：晋升 = **把当前 Instance 的 runtime 经验完整迁移到所属 Entity**。结果：Entity 变强（同 Entity 后续 spawn 出来的 Instance 都受益），但 Entity 本身身份（slug/display_name/BaseClass/rank）不变。
+
+**完整效果**：
+
+| 维度 | 晋升前 | 晋升后 |
+|---|---|---|
+| **Memory** | 散落在 Instance runtime buffer（可能丢失） | 固化为 Entity.Memory 条目（persist） |
+| **Capability 集** | Instance 当前装的能力（runtime 时复制） | Entity.capabilities 新增：本次晋升蒸馏出的新 capability |
+| **prompt** | Instance 当前 system_prompt（BaseClass 默认 + capability 触发增量）| Entity 触发 prompt **regenerate**：基于新沉淀的 Memory + 新 capability，重新计算最优 prompt（v1: 简单拼接；未来：LLM 优化） |
+| **BaseClass 关联** | Entity 仍关联同一 BaseClass | **不变**（Entity 已经绑死 BaseClass，不能改） |
+| **rank / 身份** | 不变 | **不变** |
+
+**API 形态**：`POST /api/v1/learning/entities/:eid/distill?action=promote`
+
+**Body**（v1 简化）：
+```json
+{
+  "memory_kind_filter": ["lesson", "decision"],  // 可选，默认全选
+  "include_capability_distillation": true,       // 默认 true: 是否同时蒸馏 capability
+  "include_prompt_regen": true,                   // 默认 true: 是否重新生成 prompt
+  "snapshot_only": false                          // 默认 false; true = 预览，不提交
+}
+```
+
+**响应**：
+```json
+{
+  "status": "ok",
+  "promoted_at": "2026-07-28T...",
+  "memory_persisted": 12,                         // 新增到 Entity.Memory 的条数
+  "capability_distilled": 3,                      // 蒸馏出的新 capability
+  "prompt_regenerated": true,
+  "new_prompt_preview": "..."                     // 显示给用户预览
+}
+```
+
+**前端 UI 行为**（§13.1.U.2 / §13.2.U.7）：
+- 顶部 stats：当前累计 memory N / 上次晋升时间
+- 模态分 3 段（kind 过滤 / 蒸馏选项 / 提交按钮）
+- 提交后：toast + 4 个 step 进度条（memory / capability / prompt / commit）+ 完成后右侧显示"新增条数 + 新 prompt 预览"
+
+### 13.6.4 炼化 (transmute) — Entity 完整身份 → 新 BaseClass（神职模板）
+
+**核心定义**：炼化 = **把 Entity 整体身份蒸馏成 1 个新 BaseClass**。结果是 1 个跨 workspace 可复用的神职模板，可被任何新眷族召唤。
+
+**完整效果**：
+
+| 维度 | 炼化前（Entity 内） | 炼化后 |
+|---|---|---|
+| **原 Entity** | 完整状态 | **不变**（Entity 不删，不影响当前/未来 spawn） |
+| **新 BaseClass** | n/a | 1 个 BaseClass record 创建 |
+| **新 BaseClass manifest 内容** | n/a | 提取自原 Entity：核心 prompt（regen 后）+ 累积 Memory 摘要 + capability 集 + 推荐的 god_gene 列表 |
+| **新 BaseClass manifest.provenance** | n/a | 记录来源（"炼化自 Entity `xxx` at `2026-07-28`"） |
+| **跨 workspace 可用** | n/a | ✓ |
+
+**API 形态**：`POST /api/v1/learning/entities/:eid/distill?action=transmute`
+
+**Body**（v1）：
+```json
+{
+  "target_slug": "jin-xi-you-zi",              // 必填，新 BaseClass 的 slug
+  "target_name": "某某眷族的技艺",                  // 必填
+  "memory_kind_filter": ["lesson", "decision"],
+  "include_prompt_template": true,                  // 提取 prompt 为 BaseClass 默认 system_prompt
+  "include_capability_extraction": true,           // 提取 capability 列表
+  "auto_install_default_genes": true,              // 自动用 Entity 的深海基因作为新 BaseClass 默认依赖
+  "snapshot_only": false
+}
+```
+
+**响应**：
+```json
+{
+  "status": "ok",
+  "new_base_class_id": "uuid-xxx",
+  "new_base_class_slug": "jin-xi-you-zi",
+  "manifest_summary": {
+    "prompt_chars": 1245,
+    "extracted_capabilities": ["workflow-patterns", "tool:fetch_url"],
+    "auto_installed_genes": ["nodeskclaw-tool-routing"]
+  }
+}
+```
+
+**前端 UI 行为**（§13.1.U.2 / §13.2.U.7）：
+- 模态字段：目标 slug + 目标 name + 4 kind filter + 3 个 include checkbox + snapshot_only
+- 提交：进度条 4 步（prompt 摘要 / capability 提取 / gene 依赖推导 / BaseClass 创建）+ 完成后跳到 `/base-classes/<new slug>`
+
+### 13.6.5 边界澄清：能力 vs 记忆 vs 基配置
+
+用户原话："**一个是不是能力系统和各项设置的保存**？另一个就是记忆？"
+
+明确分：
+
+| 维度 | 是什么 | 在哪存 | 怎么改 |
+|---|---|---|---|
+| **能力系统（Capability + Gene 集合）** | 当前 Entity 装的 capability 列表 + 引用的深海基因 | `Entity.capabilities[]` + `BaseClass.installed_gene_slugs[]` | 眷族详情浮窗「能力系统」/「深海基因」tab 直接编辑 |
+| **各项设置（眷族配置）** | 基本属性：name/slug/display_name/description | `Entity` 表字段 | 眷族详情浮窗「基本属性」tab |
+| **记忆** | 化身跑过的事 | `Memory` 表 | 通过晋升/炼化"蒸馏"出去，**不能直接编辑**（可删除：仅 super_admin） |
+
+**核心**：能力系统 + 设置 → **眷族详情浮窗直接编辑**；记忆 → **通过蒸馏动作消费**。这两者是不同的"边界"。
+
+### 13.6.6 能力"组合成基因"的流程（用户原话"能力组合成为基因"）
+
+> 这是用户提的"第 4 级跳"——多个 capability 命名打包成 1 个 gene。但**这是深海基因管理**的概念，不是普通用户操作。
+
+**Gene 创建路径**：
+
+| 路径 | 触发者 | 描述 |
+|---|---|---|
+| **A. 手动创建** | 系统超管 | 在 §14b 深海基因管理 UI 里「+ 新建基因」，手动选择 1 组 capability + manifest |
+| **B. 蒸馏产物自动建议** | 系统 | 炼化某 Entity 时检测到"这组 capability 在 2+ workspace 都使用" → 自动建议"是否打包为新 Gene 沉淀？" → 超管 accept 后自动生成 ai_genes row |
+| **C. 用户手动提议** | any user with can_suggest_gene | 在能力系统 tab 「提议打包为基因」按钮 → 创建提案（写到 §14b 收件箱）超管 accept 后入库 |
+
+**Gene 的引用关系**：
+- `ai_genes` 表（全局，每个 Gene 一行）
+- `BaseClass.installed_gene_slugs[]`（N:N，一个 BaseClass 可引用多个 Gene）
+- `Entity.additional_gene_slugs[]`（v1 暂不在 Entity 层单独存，能力全部从 BaseClass 来 + 额外添加 capability）
+
+### 13.6.7 完整数据流图
+
+```
+[化身跑过的事件]
+        ↓ (系统自动 hook)
+   L1: Memory 条目
+        ↓ (用户触发：回收 / 晋升)
+   L2: Capability (单个能力)
+        ↓ (用户操作：组合 / 系统建议 / 手动创建)
+   L3: Gene (能力包)
+        ↓ (BaseClass 引用 / 炼化产生新 BaseClass)
+   L4: BaseClass (神职模板)
+        ↓ (新眷族召唤)
+   Entity → Instance (runtime 可用)
+```
+
+### 13.6.8 与 §13.4 (蒸馏 2 动作) 的关系
+
+| 旧概念 (PRD v1 早期) | 现在澄清（v2） |
+|---|---|
+| 晋升 = Memory 回写 | 晋升 = Entity **整体**升级（Memory + Capability + prompt 三件事一起） |
+| 炼化 = 创建新 BaseClass | 炼化 = 从 Entity **完整身份**蒸馏出 BaseClass，包含 prompt + 能力 + 自动基因依赖 |
+| 蒸馏 vs 回收 | 明确：**回收（动作 2）才是 Memory → Capability 的一阶**；**晋升是 Entity 整体级**；**炼化是 BaseClass 级** |
+
+### 13.6.9 v1 实施边界（start-work 时明确范围）
+
+| 阶段 | 实现 | 说明 |
+|---|---|---|
+| **v1 必做** | 动作 1 采集 / 动作 5 晋升 / 动作 6 炼化 | 三个核心循环 |
+| **v1 必做** | 动作 2 回收（合并进晋升，作为内部 step）| 回收不作为独立 UI 动作，晋升时自动做 |
+| **v1 可选** | 动作 3 装载（GeneInstallAdapter）| v1 简化：仅支持 skill 类型的 Gene（部署到 skill dir） |
+| **v2 后续** | 动作 4 组合（Gene 自动建议）| 待 Phase 16d 后 |
+
+**v1 PRD 落地建议**：
+- 晋升按钮按下 → 后端实际执行「Memory → Entity 固化 + Capability 蒸馏 + prompt regen」
+- 炼化按钮按下 → 后端实际执行「完整 Entity 身份 → 新 BaseClass」
+- 用户不需要看到「回收」按钮 — 它是晋升的子步骤
 
 ---
 
@@ -1943,6 +2132,7 @@ switch (error.status) {
 - §11 Topology Dashboard（主画布默认 tab，节点浮窗 + 双击持久化）（本节）✓
 - §12 调试页（namespace tab 内）（本节）✓
 - §13 记忆 + 眷族管理 + 神职市场（改名）（本节）✓
+- §13.6 能力生命周期模型：Memory → Capability → Gene → BaseClass（4 级跳，用户原话澄清后定义）
 - §13.UX UI 详写（start-work 直接落地用，含眷族详情 / 记忆管理 / 神职市场 UI 规格）
 - §14 觉醒基因 UI（本节）✓
 - §14b 深海基因 UI（本节）✓
