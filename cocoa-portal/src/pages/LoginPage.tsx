@@ -2,6 +2,7 @@ import { AlertCircle, Building2, LoaderCircle, LogIn, UserPlus } from 'lucide-re
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router';
+import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { ApiError, api } from '@/lib/api';
 import { useSessionStore } from '@/stores/session';
 
@@ -78,14 +79,17 @@ export default function LoginPage() {
   return (
     <main className="grid min-h-dvh place-items-center bg-slate-950 px-4 py-10 text-slate-100">
       <section className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl shadow-black/30 sm:p-8">
-        <div className="mb-8 flex items-center gap-3">
-          <span className="grid size-11 place-items-center rounded-xl bg-blue-600 text-white">
-            <Building2 className="size-6" aria-hidden="true" />
-          </span>
-          <div>
-            <p className="text-sm font-semibold tracking-tight">{t('common.appName')}</p>
-            <p className="text-xs text-slate-400">{t('common.appTagline')}</p>
+        <div className="mb-8 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="grid size-11 place-items-center rounded-xl bg-blue-600 text-white">
+              <Building2 className="size-6" aria-hidden="true" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold tracking-tight">{t('common.appName')}</p>
+              <p className="text-xs text-slate-400">{t('common.appTagline')}</p>
+            </div>
           </div>
+          <LanguageSwitcher />
         </div>
 
         <div className="mb-6" role="tablist" aria-label="Authentication mode">

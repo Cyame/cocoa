@@ -127,6 +127,10 @@ export default function AppShell() {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col md:min-h-0">
+        <div className="flex h-10 shrink-0 items-center justify-end gap-3 border-b border-slate-200 bg-slate-50 px-4 sm:px-6">
+          <LanguageSwitcher />
+        </div>
+
         <header className="flex h-16 shrink-0 items-center justify-between gap-4 border-b border-slate-200 bg-white px-4 sm:px-6">
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-slate-900">
@@ -136,7 +140,6 @@ export default function AppShell() {
           </div>
 
           <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-            <LanguageSwitcher />
             <div className="flex min-w-0 items-center gap-2">
               <span className="grid size-8 shrink-0 place-items-center rounded-full bg-slate-100 text-slate-600">
                 <User className="size-4" aria-hidden="true" />
