@@ -18,6 +18,7 @@ function renderLogin(initialPath = '/login') {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/offices" element={<p>Office destination</p>} />
+        <Route path="/offices/:officeId" element={<p>Office detail destination</p>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -37,8 +38,18 @@ describe('LoginPage', () => {
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
   });
 
-  it('stores the token and redirects after successful login', async () => {
-    mockedApi.mockResolvedValue({ access_token: 'jwt-token', token_type: 'bearer' });
+  it('stores the token and lands on the first existing office after login', async () => {
+    mockedApi.mockImplementation((path) => {
+      if (path === '/auth/login') {
+        return Promise.resolve({ access_token: 'jwt-token', token_type: 'bearer' });
+      }
+      if (path === '/offices') {
+        return Promise.resolve({
+          items: [{ id: 'office-existing', name: 'Existing', slug: 'existing' }],
+        });
+      }
+      throw new Error(`unexpected api call: ${path}`);
+    });
     renderLogin();
 
     fireEvent.change(screen.getByRole('textbox', { name: 'Username' }), {
@@ -56,6 +67,29 @@ describe('LoginPage', () => {
       });
     });
     expect(useSessionStore.getState().token).toBe('jwt-token');
+    expect(await screen.findByText('Office detail destination')).toBeInTheDocument();
+  });
+
+  it('falls back to the office list when the login user has no offices', async () => {
+    mockedApi.mockImplementation((path) => {
+      if (path === '/auth/login') {
+        return Promise.resolve({ access_token: 'jwt-token', token_type: 'bearer' });
+      }
+      if (path === '/offices') {
+        return Promise.resolve({ items: [] });
+      }
+      throw new Error(`unexpected api call: ${path}`);
+    });
+    renderLogin();
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Username' }), {
+      target: { value: 'fresh' },
+    });
+    fireEvent.change(screen.getByLabelText('Password'), {
+      target: { value: 'secret-pass' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+
     expect(await screen.findByText('Office destination')).toBeInTheDocument();
   });
 
@@ -84,8 +118,12 @@ describe('LoginPage', () => {
     expect(screen.getByRole('link', { name: /Sign in/i })).toHaveAttribute('href', '/login');
   });
 
-  it('submits register payload to /auth/register', async () => {
-    mockedApi.mockResolvedValue({ access_token: 'new-jwt', token_type: 'bearer' });
+  it('lands directly on the personal workspace after register', async () => {
+    mockedApi.mockResolvedValue({
+      access_token: 'new-jwt',
+      token_type: 'bearer',
+      office_id: 'office-personal',
+    });
     renderLogin('/login?mode=register');
 
     fireEvent.change(screen.getByRole('textbox', { name: 'Username' }), {
@@ -110,7 +148,7 @@ describe('LoginPage', () => {
       });
     });
     expect(useSessionStore.getState().token).toBe('new-jwt');
-    expect(await screen.findByText('Office destination')).toBeInTheDocument();
+    expect(await screen.findByText('Office detail destination')).toBeInTheDocument();
   });
 
   it('renders sign-in mode by default', () => {
