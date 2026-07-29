@@ -46,10 +46,16 @@ require_command kubectl
 
 CURRENT_CONTEXT="$(kubectl config current-context 2>/dev/null || printf 'none')"
 log "K8s context: $CURRENT_CONTEXT"
-case "$CURRENT_CONTEXT" in
-  *orbstack*|*kubernetes-admin@tmaas*|*k3d*|*minikube*|*kind*) ;;
-  *) err "Unexpected K8s context; refusing to deploy to the wrong cluster"; exit 1 ;;
-esac
+if [[ "$CURRENT_CONTEXT" != "orbstack" ]]; then
+  case "$CURRENT_CONTEXT" in
+    *k3d*|*minikube*|*kind*) ;;
+    *)
+      err "Unexpected K8s context '$CURRENT_CONTEXT'; switch to orbstack first:"
+      err "  kubectl config use-context orbstack"
+      exit 1
+      ;;
+  esac
+fi
 
 if ! kubectl cluster-info >/dev/null 2>&1; then
   err "Kubernetes cluster is unreachable; start OrbStack Kubernetes first"
