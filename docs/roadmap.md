@@ -88,11 +88,17 @@ Tenant hierarchy (PRD-v2):
 ```
 System (logical control plane — NOT a DB table)
   └── Organization (世界)     tenant boundary
-        └── Namespace (次元)  env / scenario partition; Entity lives here
-              └── Workspace (空间)  collaboration surface; Instance + Membership + Passage live here
+        └── Namespace (次元)  **scenario** partition (NOT env); Entity lives here
+              └── Workspace (空间)  concrete workstream in that scenario; Instance + Membership + Passage + CentralHub(+CerebellumAgent) + Vault live here
 ```
 
+Example: Namespace `coding` vs `social-media`; within social-media, Workspaces `wechat-official` / `xiaohongshu`. Entity binds Namespace so scenario identity/memory spans those Workspaces.
+
 Single-tenant default forever valid: `1 Org → 1 Namespace → 1 Workspace`, empty start.
+
+**Vault (v2)**: DB KV (`vault_entries`, optional inline value) is enough; object store (MinIO/S3) is deferred — see PRD-v2 §8.3.
+
+**CentralHub**: every Workspace hub includes exactly one built-in **CerebellumAgent** (central intelligence; not a topology Membership).
 
 ### 1.5 Portal surface (target)
 
@@ -348,6 +354,7 @@ Recorded so future planners do not lose intent:
 | 2026-07-29 | PRD-v1 implemented (P15f); PRD-v2 written (multi-tenant + agent stack) |
 | 2026-07-29 | **Roadmap canonicalized to `docs/roadmap.md`**; archive `.omo/plans/cocoa-v2-roadmap.md` + `phase-15-foundation-roadmap.md`; next engineering wave = PRD-v2 implementation after Plan-mode plan |
 | 2026-07-29 | Reaffirm: every completed development wave deploys to orbstack for human test |
+| 2026-07-29 | PRD-v2 修订：Namespace = **场景分区**（非 env）；Vault = DB KV（MinIO/S3 远期）；ER 补全 **CerebellumAgent 中央智能体 1:1** |
 
 ---
 

@@ -18,15 +18,16 @@ Database columns use the backend names. UI labels use the frontend names. Backen
 | Backend (code/DB) | Frontend Display | Old Name (P0-P15) | Description |
 |---|---|---|---|
 | **Organization** | 世界 | (none / emerging) | Top-level isolation unit. PRD-v2 first-class; singleton default. |
-| **Namespace** | 次元 | (none / emerging) | Within Organization. PRD-v2 first-class; Entity scope. Singleton "default". |
-| **Workspace** | 空间 | Office | Within Namespace, where agents collaborate. Current "Office" model until rename. |
+| **Namespace** | 次元 | (none / emerging) | **场景分区**（非 env）：e.g. coding / social-media。Entity 归属层。 |
+| **Workspace** | 空间 | Office | 场景内具体工作流（平台 / 系统）。Current "Office" model until rename. |
 | **BaseClass** | 神职 | EmployeePreset | Preset template: prompt, commands, tools, provider config. 11 built-in. |
-| **Entity** | 眷族 | Employee | Per-Workspace identity with BaseClass ref + accumulated Memory. |
+| **Entity** | 眷族 | Employee | **per-Namespace** identity + Memory；跨该场景多个 Workspace 复用。 |
 | **Instance** | 化身 | Instance (unchanged) | Running pod materialization of an Entity. Ephemeral. |
-| **Membership** | 契印 | Membership (unchanged) | Entity/User membership seal in a Workspace, with posx/posy + role. |
+| **Membership** | 契印 | Membership (unchanged) | User/Instance membership seal in a Workspace, with posx/posy + role. |
 | **Passage** | 通道 | Corridor | Edge between two endpoints in Workspace topology. CorridorNode dropped. |
-| **CentralHub** | 主脑 | CentralHub (was Blackboard; semantics: 4 脑区合成容器) | Per-Workspace shared state panel. |
-| **Vault** | 冰封库 | Vault (unchanged) | Cold storage archive. |
+| **CentralHub** | 主脑 | CentralHub (was Blackboard; semantics: 4 脑区合成容器) | Per-Workspace shared state；含 **CerebellumAgent 1:1**。 |
+| **CerebellumAgent** | 小脑 / 中央智能体 | (new / emerging) | 主脑内置系统 agent；不可软删；不进拓扑。 |
+| **Vault** | 冰封库 | Vault (unchanged) | Cold archive；v2 = DB KV，远期 MinIO/S3。 |
 | **Memory** | 记忆沉淀 | MemoryEntry | Append-only per-Entity memory log (experience/lesson/decision/problem). |
 | **Event** | 印痕 | Event (unchanged) | Audit log row. |
 | **LoopState** | 心智状态 | InstanceLoopState | Harness runtime state: status, continuations, breakers. |

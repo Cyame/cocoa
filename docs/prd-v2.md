@@ -26,7 +26,7 @@
 
 ### 定位
 
-**多 Agent 控制台** — 多租户控制面：真人在 Organization 内召唤、观察、调度 AI 智能体。每个 Organization 是一套独立的租户隔离边界，内部按 Namespace（环境分区）→ Workspace（协作空间）级联展开。
+**多 Agent 控制台** — 多租户控制面：真人在 Organization 内召唤、观察、调度 AI 智能体。每个 Organization 是一套独立的租户隔离边界，内部按 Namespace（场景分区）→ Workspace（具体协作空间）级联展开。
 
 > **核心身份区分**：Cocoa 中只有**真人用户**（User，觉醒者）能注册登录。所有"神职"（BaseClass）、"眷族"（Entity）、"化身"（Instance）都是 **AI 智能体**，由真人召唤、配置、调度，不与真人平级。真人永远是觉醒者；AI 永远是浅识者或深潜者——两类身份不互通。
 
@@ -37,7 +37,7 @@
 | 顶层 | Organization（1 行） | **System**（逻辑控制面）+ Organization（N 行） |
 | Entity 归属 | per-Workspace | **per-Namespace** |
 | BaseClass 归属 | Organization 内共享 | **System 控制**，跨所有 Org 的全局神职池 |
-| 环境隔离 | 无（单 Workspace） | Namespace 提供 dev/staging/prod 分区 |
+| 场景隔离 | 无（单 Workspace） | Namespace 提供**场景分区**（如 coding / social-media）；Workspace 承载场景内具体工作流 |
 | ai_genes 设计 | 4 类基因形态（kind enum） | **统一 schema**（无 kind enum，无 workflow-gene） |
 | 用户基因 | `human_genes` 表 | **`user_genes`** 表（对齐 users 表） |
 
@@ -55,18 +55,32 @@
 ```
 System（逻辑控制面，非 DB 表）
   └── Organization（世界）— 1:N，第一个 DB tenant 表
-        └── Namespace（次元）— 1:N，环境分区
-              └── Workspace（空间）— 1:N，协作容器
+        └── Namespace（次元）— 1:N，场景分区（非 env）
+              └── Workspace（空间）— 1:N，场景内的具体协作容器
 ```
 
 | 层级 | 后端名 | 前端显示 | 说明 |
 |---|---|---|---|
 | System | `system` | —（逻辑层，不显示） | 管控 BaseClass 池 + User 注册。无 DB row |
 | Organization | `Organization` | 世界 | 租户隔离边界。slug="default" 为单租户兼容 |
-| Namespace | `Namespace` | 次元 | 环境分区。Entity 属于 Namespace |
-| Workspace | `Workspace` | 空间 | 协作空间。Instance 绑定 Workspace |
+| Namespace | `Namespace` | 次元 | **场景分区**（不是 dev/staging/prod）。Entity 属于 Namespace |
+| Workspace | `Workspace` | 空间 | 场景内的具体工作流容器。Instance / Membership / CentralHub / Vault 绑定 Workspace |
 
-**单租户默认**：1 Organization → 1 Namespace → 1 Workspace，空启动，所有真人共享。
+**Namespace ≠ 环境分区。** Namespace 按**业务场景**切分——例如 `coding` 与 `social-media` 是两个次元。同一场景下可以有多个 Workspace（例如 social-media 下「公众号发布」「小红书运营」；coding 下「Cocoa API」「Portal 前端」）。这正是 **Entity 绑定 Namespace** 的原因：眷族身份与场景经验跨该场景内多个 Workspace 复用，而不是跟着某一个具体工作流走。
+
+```
+Organization "default"
+  ├── Namespace "coding"              ← 场景：写代码 / 工程
+  │     ├── Entity: 暗行-backend、衡判-qa …   (per-Namespace)
+  │     ├── Workspace "cocoa-api"            (具体系统)
+  │     └── Workspace "portal-ui"            (具体系统)
+  └── Namespace "social-media"        ← 场景：社媒内容
+        ├── Entity: 密士-content、百瞳-media …
+        ├── Workspace "wechat-official"      (具体平台)
+        └── Workspace "xiaohongshu"          (具体平台)
+```
+
+**单租户默认**：1 Organization → 1 Namespace → 1 Workspace，空启动，所有真人共享。可按需再开 Namespace / Workspace。
 
 ### 三层业务递进
 
@@ -204,7 +218,7 @@ Cocoa 刻意丢弃 nodeskclaw 的 4 类基因形态。原则：**基因回答"�
 |---|---|---|
 | `System` | —（逻辑控制面） | 非 DB 表。管控 BaseClass 池 + User 注册 |
 | `Organization` | 世界 | 租户隔离边界 |
-| `Namespace` | 次元 | 环境分区 |
+| `Namespace` | 次元 | 场景分区（非 env；Entity 归属层） |
 | `Workspace` | 空间 | 协作空间 |
 
 ### 3.2 Backend → Frontend 核心映射
@@ -412,22 +426,49 @@ Workspace 是协作面。6 个设施提供交互底质：
 
 ### 8.2 CentralHub — 主脑
 
-CentralHub 是 Workspace 的 **被动共享状态容器**（非消息队列或事件总线）。消息走 Passage，事件流走 Event 审计日志。CentralHub 持有团队"共识"——文件、任务、调度、agent 配置。
+CentralHub 是 Workspace 的 **被动共享状态容器**（非消息队列或事件总线）。消息走 Passage，事件流走 Event 审计日志。CentralHub 持有团队"共识"——文件、任务、调度，并**内置一个中央智能体（小脑 / CerebellumAgent）**。
 
 **四脑区**（每个 Workspace 1 个 CentralHub，4 个脑区子表）：
 
-| 脑区 | 中文 | 神经隐喻 | 子表 | 管理内容 |
-|---|---|---|---|---|
-| Fornix | 穹窿 | 脑的弓形记忆结构——拱形通道存放记忆 | `fornix_files` | 虚拟文件系统：文件/目录，按 (workspace_id, parent_path, name) 键控 |
-| Frontal Lobe | 额叶 | 脑的执行功能中心——计划、决策、任务组织 | `frontal_lobe_kanbans` | Kanban 任务板：todo / in_progress / done 状态，assignee_entity_id |
-| Brainstem | 脑干 | 脑的自主调节器——无意识按计划运行 | `brainstem_schedules` | Cron 定时任务：cron_expr + action_payload + enabled |
-| Cerebellum | 小脑 | 脑的技能与协调中心——"怎么做"的程序记忆 | `cerebellum_agents` | 中枢 agent 配置：orchestrator / planner / executor / observer |
+| 脑区 | 中文 | 神经隐喻 | 子表 | 基数 | 管理内容 |
+|---|---|---|---|---|---|
+| Fornix | 穹窿 | 脑的弓形记忆结构——拱形通道存放记忆 | `fornix_files` | 1:N | 虚拟文件系统：文件/目录 |
+| Frontal Lobe | 额叶 | 脑的执行功能中心——计划、决策、任务组织 | `frontal_lobe_kanbans` | 1:N | Kanban：todo / in_progress / done |
+| Brainstem | 脑干 | 脑的自主调节器——无意识按计划运行 | `brainstem_schedules` | 1:N | Cron / interval / delay 定时任务 |
+| Cerebellum | 小脑 | 脑的技能与协调中心 | `cerebellum_agents` | **1:1** | **内置中央智能体**（见下） |
 
-v1 仅实现 FornixFile，其余三个脑表在 phase-15f 引入。
+#### 8.2.1 CerebellumAgent — 内置中央智能体（强制存在）
+
+每个 CentralHub **恰好 1 个** CerebellumAgent。它不是普通眷族 / 化身：
+
+| 维度 | 普通 Entity / Instance | CerebellumAgent（小脑） |
+|---|---|---|
+| 创建 | 真人召唤 | Workspace/CentralHub 初始化时**系统自动创建** |
+| 软删 | 可以 | **不可**（系统级，强制存在） |
+| BaseClass | 11 神职之一 | 内置 `cerebellum-baseclass`（系统专属） |
+| 拓扑 | 出现在心灵图景 | **不出现在拓扑**；仅主脑视图可见 |
+| 派活 | Composer / Passage | 系统自动：感知聚合、脑区巡检、脑干调度默认执行人 |
+| 与 Instance 关系 | 有独立 pod / LoopState | 可有自己的运行态字段（loop_status / heartbeat）；**不是** Membership 节点 |
+
+核心职责：感知聚合（穹窿+额叶+脑干）→ Workspace 级视图；健康巡检与预警；脑干调度的默认执行者；跨脑区一致性检查。默认 idle，按需唤醒（调度到达 / 文件变更 / todo 创建），超时回 idle。
+
+> ER 必须显式画出 `CentralHub 1 —— 1 CerebellumAgent`。附录 A 已包含四脑区子表。
 
 ### 8.3 Vault — 冰封库
 
-Workspace 的冷存储档案。与 CentralHub（活跃协作状态）互补——Vault 持有**已归档**内容。`/archive` 命令写入。每条目通过 `VaultEntry` 追踪来源：`source_type`（fornix_file / workspace_file）+ `source_ref` + `archived_key`。不可变（约定非强制）。父表 `vaults` 仅提供 FK 完整性，无内容字段。
+Workspace 的冷存储档案。与 CentralHub（活跃协作状态）互补——Vault 持有**已归档**内容。`/archive` 命令写入。
+
+**存储策略（PRD-v2 范围）**：
+
+| 层 | v2 做法 | 远期 |
+|---|---|---|
+| **DB 表** | `vaults`（1:1 Workspace）+ `vault_entries`（KV 元数据 + 可选 inline value） | 表结构保留 |
+| **对象载荷** | v2 **允许整段 content 落在 DB KV**（`value` TEXT/JSONB 或小 blob），不强制外置 | 外置 **MinIO / S3**；DB 只留 `storage_key` / `content_hash` / MIME / size |
+| **不可变** | 约定不可变（非 DB 强制） | 同左 |
+
+每条目通过 `VaultEntry` 追踪来源：`source_type`（fornix_file / workspace_file）+ `source_ref` + `archived_key`（未来对接对象存储的 opaque key；v2 可与 inline KV 并存）。父表 `vaults` 提供 FK 完整性。
+
+> **PRD-v2 不展开** MinIO/S3 适配器、bucket 策略、预签名 URL——记入 roadmap 远期（原 P16l 一类）。实现 wave 以 DB KV 可跑通归档闭环即可。
 
 ### 8.4 Membership — 契印
 
@@ -899,6 +940,12 @@ classDiagram
     User "N" -- "N" user_genes : via user_user_genes
     BaseClass "N" -- "N" ai_genes : via base_class_ai_genes
 
+    %% CentralHub 四脑区（含内置中央智能体）
+    CentralHub "1" -- "N" FornixFile : central_hub_id
+    CentralHub "1" -- "N" FrontalLobeKanban : central_hub_id
+    CentralHub "1" -- "N" BrainstemSchedule : central_hub_id
+    CentralHub "1" -- "1" CerebellumAgent : central_hub_id unique
+
     class Organization {
         +id: UUID PK
         +slug: str unique
@@ -913,6 +960,7 @@ classDiagram
         +description: TEXT?
         +tags: JSONB?
         deleted_at: datetime?
+        note: 场景分区 e.g. coding / social-media
     }
     class Workspace {
         +id: UUID PK
@@ -920,6 +968,7 @@ classDiagram
         +slug: str unique per namespace
         +name: str
         deleted_at: datetime?
+        note: 场景内具体工作流 e.g. wechat / cocoa-api
     }
     class User {
         +id: UUID PK
@@ -995,9 +1044,42 @@ classDiagram
     class CentralHub {
         +id: UUID PK
         +workspace_id: FK unique
-        +content: TEXT?
-        +manual_notes: TEXT?
         deleted_at: datetime?
+        note: 容器表；内容在四脑区子表
+    }
+    class FornixFile {
+        +id: UUID PK
+        +central_hub_id: FK
+        +parent_path: str?
+        +name: str
+        +is_directory: bool
+        +storage_key: str?
+        deleted_at: datetime?
+    }
+    class FrontalLobeKanban {
+        +id: UUID PK
+        +central_hub_id: FK
+        +title: str
+        +status: enum backlog|in_progress|done|blocked
+        deleted_at: datetime?
+    }
+    class BrainstemSchedule {
+        +id: UUID PK
+        +central_hub_id: FK
+        +name: str
+        +schedule_type: enum cron|interval|delay
+        +enabled: bool
+        deleted_at: datetime?
+    }
+    class CerebellumAgent {
+        +id: UUID PK
+        +central_hub_id: FK unique
+        +base_slug: str = cerebellum-baseclass
+        +system_prompt: TEXT?
+        +loop_status: enum
+        +heartbeat_at: datetime?
+        +installed_genes: JSONB?
+        note: 内置中央智能体；不可软删；不进拓扑
     }
     class Vault {
         +id: UUID PK
@@ -1010,6 +1092,7 @@ classDiagram
         +source_type: enum fornix_file|workspace_file
         +source_ref: TEXT?
         +archived_key: str?
+        +value: JSONB? (v2 inline KV; 远期迁 MinIO/S3)
         deleted_at: datetime?
     }
     class Memory {
@@ -1051,13 +1134,13 @@ classDiagram
 
 ## 附录 B：数据模型参考
 
-### B.1 核心表 18 张
+### B.1 核心表 18 张 + 主脑子表 4 张
 
 | 表 | 后端名 | 关键特征 |
 |---|---|---|
 | `organizations` | Organization | slug UNIQUE，tenant 隔离边界 |
-| `namespaces` | Namespace | org_id FK，description + tags（PRD-v2 NEW） |
-| `workspaces` | Workspace | namespace_id FK（PRD-v2 NEW） |
+| `namespaces` | Namespace | org_id FK，**场景分区**（description + tags）；非 env |
+| `workspaces` | Workspace | namespace_id FK；场景内具体工作流 |
 | `users` | User | 无 org_id FK（System 层） |
 | `user_genes` | user_genes | kind enum + permission_keys JSONB |
 | `base_classes` | BaseClass | 无 org_id FK（System 控制），manifest JSONB |
@@ -1066,13 +1149,22 @@ classDiagram
 | `instances` | Instance | runtime_config JSONB（含 knowledge） |
 | `memberships` | Membership | exclusive-FK（user XOR instance） |
 | `passages` | Passage | 有向边，CorridorNode 已 drop |
-| `central_hubs` | CentralHub | 1:1 Workspace，4 脑区子表 |
+| `central_hubs` | CentralHub | 1:1 Workspace，四脑区容器 |
 | `vaults` | Vault | 1:1 Workspace |
-| `vault_entries` | VaultEntry | 来源追溯 |
+| `vault_entries` | VaultEntry | KV 元数据 + v2 允许 inline `value`；远期 MinIO/S3 |
 | `memories` | Memory | Append-only，**无 updated_at** |
 | `loop_states` | LoopState | 4 熔断器 |
 | `deploy_records` | DeployRecord | 9 步流水线 |
 | `instance_provider_configs` | InstanceProviderConfig | api_key_ref（非原始密钥） |
+
+**CentralHub 四脑区子表**（不计入上方 18，但是一等公民 schema）：
+
+| 表 | 后端名 | 基数 | 关键特征 |
+|---|---|---|---|
+| `fornix_files` | FornixFile | 1:N | 穹窿虚拟文件 |
+| `frontal_lobe_kanbans` | FrontalLobeKanban | 1:N | 额叶 Kanban |
+| `brainstem_schedules` | BrainstemSchedule | 1:N | 脑干调度 |
+| `cerebellum_agents` | CerebellumAgent | **1:1** | **内置中央智能体**；不可软删；不进拓扑 |
 
 ### B.2 概念实体（非 DB 表）
 
@@ -1119,8 +1211,16 @@ classDiagram
 ### 多租户架构
 
 - [ ] System → Organization → Namespace → Workspace 四级层次记录完整
+- [ ] Namespace 明确为**场景分区**（非 dev/staging/prod）；举例 coding vs social-media
+- [ ] Workspace 明确为场景内具体工作流（平台 / 系统）；Entity 绑定 Namespace 的理据写清
 - [ ] 单租户默认（1 Org → 1 Namespace → 1 Workspace）明确记录
 - [ ] 多租户未来（N Org）保留但不在 v1 实现
+
+### 主脑 / Vault
+
+- [ ] ER 含 CentralHub → FornixFile / FrontalLobeKanban / BrainstemSchedule / **CerebellumAgent(1:1)**
+- [ ] CerebellumAgent 描述为内置中央智能体（不可软删、不进拓扑、系统自动创建）
+- [ ] VaultEntry v2 = DB KV（可 inline value）；外置 MinIO/S3 记为远期，本 PRD 不展开
 
 ### 前端页面
 
@@ -1132,6 +1232,7 @@ classDiagram
 ### 数据模型
 
 - [ ] 18 核心表 + 2 N:N 关联 + 4 概念实体全部记录
+- [ ] 四脑区子表（含 CerebellumAgent 1:1）在 ER 中显式画出
 - [ ] 所有 unique constraint 使用 Partial Unique Index（`WHERE deleted_at IS NULL`）
 - [ ] Exclusive-FK（Membership）用 CHECK 约束记录
 - [ ] ER 图覆盖所有核心表关系
@@ -1139,3 +1240,4 @@ classDiagram
 ---
 
 *Generated 2026-07-29 from 9 evidence files + 2026-07-29 diary + decisions ledger.*
+*Revised 2026-07-29: Namespace = 场景分区；Vault = DB KV（MinIO/S3 远期）；ER + §8.2.1 补全 CerebellumAgent 中央智能体。*

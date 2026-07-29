@@ -12,21 +12,22 @@ One-line definitions for every Cocoa code-term (backend), display-name (frontend
 ### Tenant Hierarchy
 
 - **Organization** (世界) — Top-level isolation unit. **PRD-v2 first-class**; single-tenant default slug=`default`.
-- **Namespace** (次元) — Within an Organization (env / scenario partition). **PRD-v2 first-class**; Entity belongs here. Single-tenant default slug=`default`.
-- **Workspace** (空间) — Within a Namespace, where agents collaborate. Current code may still say `Office` until rename wave. Single-tenant default: one Workspace shared by all users. Starts empty (no auto-preloaded Entities).
+- **Namespace** (次元) — Within an Organization: **scenario partition** (e.g. coding vs social-media), **not** env (dev/staging/prod). **PRD-v2 first-class**; Entity belongs here so scenario identity spans multiple Workspaces.
+- **Workspace** (空间) — Within a Namespace: a concrete workstream (e.g. a product system or a publish platform). Current code may still say `Office` until rename wave. Single-tenant default: one Workspace shared by all users. Starts empty (no auto-preloaded Entities).
 
 ### Entity Hierarchy (the "agent stack")
 
-- **BaseClass** (神职) — Preset template defining rules, prompt, commands, tools, and provider config. Created by humans or distilled from Entity experience. Persists across Workspaces. 11 built-in BaseClasses defined in §4 of the naming system.
-- **Entity** (眷族) — Instantiation of a BaseClass in a Workspace, with identity + accumulated Memory + Blackboard writes. Per-Workspace scope. Can be promoted to BaseClass via 炼化 (transmutation).
-- **Instance** (化身) — Running materialization of an Entity. One Instance per pod. Ephemeral runtime state (LoopState). Restarts lose memory, re-reads from Entity.
+- **BaseClass** (神职) — Preset template defining rules, prompt, commands, tools, and provider config. Created by humans or distilled from Entity experience. System-scoped. 11 built-in BaseClasses defined in §4 of the naming system.
+- **Entity** (眷族) — Instantiation of a BaseClass **per-Namespace**, with identity + accumulated Memory. Scenario-scoped so one Entity can spawn Instances across Workspaces in that Namespace. Can be promoted/transmuted via distillation actions.
+- **Instance** (化身) — Running materialization of an Entity in one Workspace. One Instance per pod. Ephemeral runtime state (LoopState). Restarts re-read from Entity.
 
 ### Structural Concepts
 
-- **Membership** — Entity or User membership in a Workspace, with position coordinates (posx/posy), role, and permissions. Exclusive-FK: exactly one of user_id or instance_id.
-- **Passage** (通道) — Adjacency edge between two Memberships or between any two points in the Workspace, defining the selectable neighbor set for messaging. Simplified in 15d: any two points can connect directly; CorridorNode concept dropped.
-- **CentralHub** (主脑) — Per-Workspace 协作中枢容器，含 4 脑区（穹窿 / 额叶 / 脑干 / 小脑）。Display 中文"主脑"，backend 代码名 `CentralHub`。
-- **Vault** (冰封库) — Cold storage archive for long-term preservation, written by `/archive` command.
+- **Membership** — User or Instance membership in a Workspace, with position coordinates (posx/posy), role, and permissions. Exclusive-FK: exactly one of user_id or instance_id.
+- **Passage** (通道) — Adjacency edge between two Memberships, defining the selectable neighbor set for messaging. CorridorNode dropped.
+- **CentralHub** (主脑) — Per-Workspace 协作中枢容器，含 4 脑区（穹窿 / 额叶 / 脑干 / **小脑=内置中央智能体 CerebellumAgent 1:1**）。Display 中文"主脑"，backend 代码名 `CentralHub`。
+- **CerebellumAgent** (小脑 / 中央智能体) — Built-in system agent on every CentralHub. Auto-created; not soft-deletable; not shown on topology. See `docs/blackboard-system.md` §4 and PRD-v2 §8.2.1.
+- **Vault** (冰封库) — Cold archive per Workspace. PRD-v2: DB KV (`vault_entries`, optional inline value); eventual MinIO/S3 via `archived_key` — not expanded in v2.
 - **Memory** (记忆沉淀) — Append-only per-Entity memory log, indexed by kind (experience/lesson/decision/problem) and time. No `updated_at` column. Accumulates across Instances.
 
 ### Runtime Concepts
@@ -74,10 +75,11 @@ Code-term-only entities from the core domain model. No product UI display-names.
 
 - **User** — Human authentication identity: username, email, password hash; the login entity.
 - **BaseClass** (was EmployeePreset) — Persisted preset record storing slug, manifest JSONB, and version.
-- **Entity** (was Employee) — Per-Workspace identity referencing a BaseClass, with accumulated memory.
-- **Membership** (契印) — Entity or User membership seal in a Workspace, with posx/posy coordinates, role, and permissions.
-- **BlackboardFile** — File record on a Blackboard, with storage key, content type, and directory tree metadata.
-- **VaultEntry** — Archived entry in a Vault, recording source type, source reference, and archival timestamp.
+- **Entity** (was Employee) — Per-Namespace identity referencing a BaseClass, with accumulated memory across Workspaces in that scenario.
+- **Membership** (契印) — User or Instance membership seal in a Workspace, with posx/posy coordinates, role, and permissions.
+- **BlackboardFile** / **FornixFile** — File record on CentralHub fornix, with storage key, content type, and directory tree metadata.
+- **CerebellumAgent** — Built-in central agent (1:1 CentralHub); system-owned, not a Membership.
+- **VaultEntry** — Archived KV entry in a Vault (`value` inline in v2; `archived_key` for future object store).
 - **Memory** (was MemoryEntry) — Append-only memory log entry per Entity, indexed by kind and time.
 
 ---
