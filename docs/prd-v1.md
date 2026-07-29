@@ -2924,14 +2924,18 @@ switch (error.status) {
 - §3 命名对照表（本节）✓
 - §4 全局 UX 原则（本节）✓
 - §6 首次运行引导 + 神职卡片组（本节）✓
+- §6.U 首次运行引导 UI 详写（start-work 落地用）
 - §7 AppShell + Sidebar 框架（VSCode 风）（本节）✓
 - §8 Namespace 主页（`/namespaces`，多 tab）（本节）✓
+- §8.7 Organization 页（`/organization`，provider 配置）
+- §8.U Workspace 召唤 + 管理 UI 详写（start-work 落地用）
 - §9 Workspace Dashboard（`/workspaces/:id`，VSCode-IDE 布局）（本节）✓
 - §10 Composer Side Panel（右侧常驻 + 可全屏）（本节）✓
 - §11 Topology Dashboard（主画布默认 tab，节点浮窗 + 双击持久化）（本节）✓
+- §11.U 拓扑 Dashboard UI 详写（start-work 落地用，节点渲染 + hover/click/dblclick 3 档交互）
 - §12 调试页（namespace tab 内）（本节）✓
-- §13 记忆 + 眷族管理 + 神职市场（改名）（本节）✓
-- §13.6 能力生命周期模型：Memory → Capability → Gene → BaseClass（4 级跳，用户原话澄清后定义）
+- §13 记忆 + 眷族管理 + 神职市场（本节）✓
+- §13.6 能力生命周期模型：Memory → Capability → Gene → BaseClass（4 级跳，6 动作精确边界）
 - §13.UX UI 详写（start-work 直接落地用，含眷族详情 / 记忆管理 / 神职市场 UI 规格）
 - §14 觉醒基因 UI（本节）✓
 - §14b 深海基因 UI（本节）✓
