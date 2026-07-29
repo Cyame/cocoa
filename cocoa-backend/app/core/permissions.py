@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.errors import ForbiddenError
 from app.models.office import Membership
 
-ROLE_ORDER: dict[str, int] = {"viewer": 0, "editor": 1, "owner": 2}
+ROLE_ORDER: dict[str, int] = {"viewer": 0, "editor": 1, "operator": 2, "owner": 3}
 
 
 async def require_office_role(

@@ -73,3 +73,18 @@ INSTANCE_DELETED = "instance.deleted"
 # ---------------------------------------------------------------------------
 
 LEARNING_DISTILLATION_COMPLETED = "learning.distillation_completed"
+
+# Phase-15f capability lifecycle (PRD §13.6.3–§13.6.5)
+# reap:        Memory → Capability (instance-private, market entry)
+# promote:     Instance cap → Employee shared (+ market entry)
+# transmute:   Employee → BaseClass (new 神职)
+# combine:     N Capabilities → 1 Gene (L2 packaging)
+LEARNING_REAP_COMPLETED = "learning.reap_completed"
+LEARNING_PROMOTE_COMPLETED = "learning.promote_completed"
+LEARNING_DISTILL_TRANSMUTED = "learning.distill_transmuted"
+LEARNING_CAPABILITY_COMBINED = "learning.capability_combined"
+
+# Phase-15f T4: instance re-sync after promote (PRD §13.6.7).
+# Plural form distinct from the lifecycle INSTANCE_RESTARTED above; this
+# is the operator-initiated batch re-sync event payload.
+INSTANCE_BATCH_RESTARTED = "instance.batch_restarted"

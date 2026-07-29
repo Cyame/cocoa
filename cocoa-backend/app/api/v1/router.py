@@ -6,6 +6,7 @@ Sub-routers are registered by P4-P10. P3 provides only the aggregation point.
 from fastapi import APIRouter
 
 from app.api.v1.auth import router as auth_router
+from app.api.v1.base_classes import router as base_classes_router
 from app.api.v1.central_hubs import router as central_hubs_router
 from app.api.v1.corridor_node import router as corridor_node_router
 from app.api.v1.deploy import router as deploy_router
@@ -23,6 +24,7 @@ from app.api.v1.offices import router as offices_router
 
 api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(auth_router)
+api_router.include_router(base_classes_router)
 api_router.include_router(central_hubs_router)
 api_router.include_router(corridor_node_router)
 api_router.include_router(deploy_router)

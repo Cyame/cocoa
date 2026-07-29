@@ -12,6 +12,8 @@ from app.core.glow import (
 )
 from app.core.openapi import add_error_responses
 from app.core.permissions import require_office_role
+from app.models.employee import Employee
+from app.models.instance import Instance
 from app.models.loop_state import InstanceLoopState
 from app.models.office import Membership
 from app.schemas.glow import GlowColorOut, LiveStatusItemOut
@@ -33,7 +35,14 @@ async def get_office_live_status(
     db: DB,
     current_user: CurrentUserDep,
 ) -> list[LiveStatusItemOut]:
-    """Aggregate per-node glow state for the topology canvas."""
+    """Aggregate per-node glow state for the topology canvas.
+
+    Phase-15f T4: each instance node also carries ``outdated`` and
+    ``active_hash`` fields. ``outdated`` is true when the running
+    instance's ``active_hash`` does not match the current
+    ``Employee.migration_hash`` (or the instance has no
+    ``active_hash`` yet — first-time spawn caveat).
+    """
     await require_office_role(db, current_user.user_id, office_id, "viewer")
 
     memberships = (
@@ -60,19 +69,60 @@ async def get_office_live_status(
         ).scalars().all()
         loop_states_by_instance = {row.instance_id: row for row in loop_state_rows}
 
+    # Phase-15f: join instances with their employees to expose
+    # active_hash + deprecated-by-promote flag.
+    instance_by_id: dict[str, Instance] = {}
+    employee_migration_hash: dict[str, str | None] = {}
+    if instance_ids:
+        inst_rows = (
+            await db.execute(
+                select(Instance).where(
+                    Instance.id.in_(instance_ids),
+                    Instance.deleted_at.is_(None),
+                )
+            )
+        ).scalars().all()
+        instance_by_id = {row.id: row for row in inst_rows}
+
+        emp_rows = (
+            await db.execute(
+                select(Employee.id, Employee.migration_hash).where(
+                    Employee.id.in_(
+                        inst.employee_id for inst in instance_by_id.values()
+                    ),
+                    Employee.deleted_at.is_(None),
+                )
+            )
+        ).all()
+        employee_migration_hash = {row[0]: row[1] for row in emp_rows}
+
     items: list[LiveStatusItemOut] = []
     for membership in memberships:
         if membership.user_id is not None:
             glow = _glow_to_out(user_membership_glow())
             node_type: str = "user"
+            outdated = False
+            active_hash: str | None = None
         else:
-            state = loop_states_by_instance.get(membership.instance_id or "")
+            instance_id = membership.instance_id or ""
+            state = loop_states_by_instance.get(instance_id)
             glow = (
                 _glow_to_out(loop_status_to_glow(state.loop_status))
                 if state is not None
                 else _glow_to_out(_STATIC_FALLBACK)
             )
             node_type = "instance"
+            instance = instance_by_id.get(instance_id)
+            active_hash = instance.active_hash if instance is not None else None
+            expected_hash = (
+                employee_migration_hash.get(instance.employee_id)
+                if instance is not None
+                else None
+            )
+            outdated = (
+                active_hash is None
+                or active_hash != expected_hash
+            )
 
         items.append(
             LiveStatusItemOut(
@@ -81,6 +131,8 @@ async def get_office_live_status(
                 posy=membership.posy,
                 node_type=node_type,
                 glow=glow,
+                outdated=outdated,
+                active_hash=active_hash,
             )
         )
 

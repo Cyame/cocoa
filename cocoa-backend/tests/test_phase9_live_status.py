@@ -1,10 +1,15 @@
-"""Integration tests for the P9 live-status aggregation endpoint."""
+"""Integration tests for the P9 live-status aggregation endpoint.
+
+Phase-15f T4: also verifies that the phase-15f fields (``outdated`` and
+``active_hash``) are correctly joined from the Instance/Employee tables.
+"""
 
 import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.testclient import TestClient
 
+from app.models.instance import Instance
 from app.models.office import Membership
 from app.models.user import User
 
@@ -205,3 +210,172 @@ async def test_live_status_uses_static_glow_without_loop_state(
     assert response.status_code == 200
     instance_item = next(item for item in response.json() if item["membership_id"] == membership.id)
     assert instance_item["glow"] == {"color": "#94a3b8", "intensity": "static"}
+
+
+# ---------------------------------------------------------------------------
+# Phase-15f T4: outdated-detection + active_hash fields
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_live_status_outdated_when_active_hash_is_null(
+    client: TestClient,
+    phase9_auth_token: str,
+    phase9_auth_user_id: str,
+    session: AsyncSession,
+    office_factory,
+    employee_factory,
+) -> None:
+    """An instance with no active_hash is reported as outdated (first-time spawn)."""
+    user_id = phase9_auth_user_id
+    office = await office_factory()
+    emp = await employee_factory()
+    emp.migration_hash = "a" * 64
+    await session.flush()
+
+    instance = Instance(
+        employee_id=emp.id,
+        office_id=office.id,
+        proxy_token="unused",
+        active_hash=None,
+    )
+    session.add(instance)
+    await session.flush()
+
+    await _create_membership(
+        session, office_id=office.id, user_id=user_id, posx=1, posy=2,
+    )
+    instance_membership = await _create_membership(
+        session, office_id=office.id, instance_id=instance.id, posx=3, posy=4,
+    )
+    await session.commit()
+
+    response = client.get(
+        f"/api/v1/offices/{office.id}/live-status",
+        headers=_auth(phase9_auth_token),
+    )
+    assert response.status_code == 200
+    instance_item = next(
+        item for item in response.json()
+        if item["membership_id"] == instance_membership.id
+    )
+    assert instance_item["outdated"] is True
+    assert instance_item["active_hash"] is None
+
+
+@pytest.mark.asyncio
+async def test_live_status_outdated_when_hash_mismatch(
+    client: TestClient,
+    phase9_auth_token: str,
+    phase9_auth_user_id: str,
+    session: AsyncSession,
+    office_factory,
+    employee_factory,
+) -> None:
+    """An instance whose active_hash differs from Employee.migration_hash is outdated."""
+    user_id = phase9_auth_user_id
+    office = await office_factory()
+    emp = await employee_factory()
+    emp.migration_hash = "b" * 64
+    await session.flush()
+
+    instance = Instance(
+        employee_id=emp.id,
+        office_id=office.id,
+        proxy_token="unused",
+        active_hash="c" * 64,
+    )
+    session.add(instance)
+    await session.flush()
+
+    await _create_membership(
+        session, office_id=office.id, user_id=user_id, posx=1, posy=2,
+    )
+    await _create_membership(
+        session, office_id=office.id, instance_id=instance.id, posx=3, posy=4,
+    )
+    await session.commit()
+
+    response = client.get(
+        f"/api/v1/offices/{office.id}/live-status",
+        headers=_auth(phase9_auth_token),
+    )
+    assert response.status_code == 200
+    instance_item = next(
+        item for item in response.json()
+        if item["active_hash"] == "c" * 64
+    )
+    assert instance_item["outdated"] is True
+
+
+@pytest.mark.asyncio
+async def test_live_status_in_sync_when_hashes_match(
+    client: TestClient,
+    phase9_auth_token: str,
+    phase9_auth_user_id: str,
+    session: AsyncSession,
+    office_factory,
+    employee_factory,
+) -> None:
+    """An instance whose active_hash matches Employee.migration_hash is in-sync."""
+    user_id = phase9_auth_user_id
+    office = await office_factory()
+    emp = await employee_factory()
+    emp.migration_hash = "d" * 64
+    await session.flush()
+
+    instance = Instance(
+        employee_id=emp.id,
+        office_id=office.id,
+        proxy_token="unused",
+        active_hash="d" * 64,
+    )
+    session.add(instance)
+    await session.flush()
+
+    await _create_membership(
+        session, office_id=office.id, user_id=user_id, posx=1, posy=2,
+    )
+    await _create_membership(
+        session, office_id=office.id, instance_id=instance.id, posx=3, posy=4,
+    )
+    await session.commit()
+
+    response = client.get(
+        f"/api/v1/offices/{office.id}/live-status",
+        headers=_auth(phase9_auth_token),
+    )
+    assert response.status_code == 200
+    instance_item = next(
+        item for item in response.json()
+        if item["active_hash"] == "d" * 64
+    )
+    assert instance_item["outdated"] is False
+
+
+@pytest.mark.asyncio
+async def test_live_status_user_node_never_outdated(
+    client: TestClient,
+    phase9_auth_token: str,
+    phase9_auth_user_id: str,
+    session: AsyncSession,
+    office_factory,
+) -> None:
+    """A user-membership node always reports outdated=False and active_hash=None."""
+    user_id = phase9_auth_user_id
+    office = await office_factory()
+    await _create_membership(
+        session, office_id=office.id, user_id=user_id, posx=1, posy=2,
+    )
+    await session.commit()
+
+    response = client.get(
+        f"/api/v1/offices/{office.id}/live-status",
+        headers=_auth(phase9_auth_token),
+    )
+    assert response.status_code == 200
+    user_items = [i for i in response.json() if i["node_type"] == "user"]
+    assert user_items
+    for item in user_items:
+        assert item["outdated"] is False
+        assert item["active_hash"] is None

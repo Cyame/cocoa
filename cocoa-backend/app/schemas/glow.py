@@ -30,7 +30,14 @@ NodeType = Literal["user", "instance"]
 
 
 class LiveStatusItemOut(BaseModel):
-    """A single topology node's live status for the canvas."""
+    """A single topology node's live status for the canvas.
+
+    Per PRD §13.6.7 + phase-15f: instance nodes carry an additional
+    ``outdated`` flag (true when ``instance.active_hash !=
+    employee.migration_hash``) and the raw ``active_hash`` so the
+    portal can render the "needs restart" badge and a hash-comparison
+    tooltip.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -39,3 +46,7 @@ class LiveStatusItemOut(BaseModel):
     posy: int
     node_type: NodeType
     glow: GlowColorOut
+    # Phase-15f T4: instance-membership only. ``user``-type nodes
+    # always have ``outdated=False`` and ``active_hash=None``.
+    outdated: bool = False
+    active_hash: str | None = None

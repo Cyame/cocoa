@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from fastapi import APIRouter, status
@@ -24,6 +25,7 @@ from sqlalchemy.exc import IntegrityError
 from app.api.deps import DB, CurrentUserDep
 from app.core.errors import ConflictError, NotFoundError
 from app.core.event_types import (
+    INSTANCE_BATCH_RESTARTED,
     INSTANCE_CREATED,
     INSTANCE_DELETED,
     INSTANCE_DEPLOYED,
@@ -45,6 +47,12 @@ from app.schemas.instance import (
     InstanceOut,
     InstanceOutWithToken,
     InstanceUpdate,
+)
+from app.schemas.instance_actions import (
+    BatchRestartRequest,
+    BatchRestartResultOut,
+    RestartRequest,
+    RestartResultOut,
 )
 from app.services.deploy_service import (
     deploy_instance as svc_deploy_instance,
@@ -498,23 +506,171 @@ async def start_instance(
     )
 
 
-@router.post("/{instance_id}/restart", response_model=InstanceOut)
+@router.post("/{instance_id}/restart", response_model=RestartResultOut)
 async def restart_instance(
     instance_id: str,
+    body: RestartRequest,
     db: DB,
     current_user: CurrentUserDep,
-) -> Instance:
-    """Transition instance to ``restarting``.
+) -> RestartResultOut:
+    """Re-sync an outdated instance to the current Employee.migration_hash.
 
-    Allowed from: ``running``, ``failed``.
+    Per PRD §13.6.7: this is the operator flow that runs after a
+    promote (when the live-status shows the instance is outdated). The
+    instance is moved ``restarting`` → ``pending`` and its
+    ``active_hash`` is reset to the current Employee.migration_hash.
+
+    Refuses with 409 if ``status == "running"`` and ``force=false``.
+    The K8s pickup hook is out of scope for this wave (P11c).
     """
-    return await _transition(
-        instance_id,
-        allowed=[InstanceStatus.running.value, InstanceStatus.failed.value],
-        new_status=InstanceStatus.restarting.value,
-        event_type=INSTANCE_RESTARTED,
-        db=db,
-        current_user=current_user,
+    instance = await db.get(Instance, instance_id)
+    if instance is None or instance.deleted_at is not None:
+        raise NotFoundError(
+            "instance.not_found",
+            "errors.instance.not_found",
+            f"Instance '{instance_id}' not found",
+        )
+
+    employee = await db.get(Employee, instance.employee_id)
+    if employee is None or employee.deleted_at is not None:
+        raise NotFoundError(
+            "employee.not_found",
+            "errors.employee.not_found",
+            f"Employee '{instance.employee_id}' not found",
+        )
+
+    await require_office_role(db, current_user.user_id, instance.office_id, "operator")
+
+    if instance.status == InstanceStatus.running.value and not body.force:
+        raise ConflictError(
+            "instance.running",
+            "errors.instance.running",
+            f"Instance '{instance_id}' is running; pass force=true to override",
+            details={
+                "running_instance_id": instance_id,
+                "current_status": instance.status,
+            },
+        )
+
+    old_hash = instance.active_hash
+    instance.status = InstanceStatus.restarting.value
+    await db.flush()
+
+    instance.active_hash = employee.migration_hash
+    instance.status = InstanceStatus.pending.value
+
+    await emit(
+        INSTANCE_RESTARTED,
+        actor_type="user",
+        actor_id=current_user.user_id,
+        resource_type="instance",
+        resource_id=instance.id,
+        payload={
+            "old_hash": old_hash,
+            "new_hash": instance.active_hash,
+            "reason": body.reason,
+            "force": body.force,
+        },
+        session=db,
+    )
+    await db.commit()
+
+    return RestartResultOut(
+        restarted_at=datetime.now(timezone.utc).isoformat(),
+        instance_id=instance_id,
+        old_hash=old_hash,
+        new_hash=instance.active_hash,
+        status_after=instance.status,
+    )
+
+
+@router.post("/batch-restart", response_model=BatchRestartResultOut)
+async def batch_restart_instances(
+    body: BatchRestartRequest,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> BatchRestartResultOut:
+    """Bulk re-sync for T4 — picks up every outdated instance in one call.
+
+    Per PRD §13.6.7: refuse the entire batch if any instance is running
+    (returns 409 with the offending IDs in ``details``). Otherwise set
+    ``active_hash = Employee.migration_hash`` and ``status = restarting``
+    for each instance.
+    """
+    # 1. Load all instances.
+    instances_q = await db.execute(
+        select(Instance).where(
+            Instance.id.in_(body.instance_ids),
+            Instance.deleted_at.is_(None),
+        )
+    )
+    instances = list(instances_q.scalars().all())
+    found_ids = {i.id for i in instances}
+    missing = [iid for iid in body.instance_ids if iid not in found_ids]
+    if missing:
+        raise NotFoundError(
+            "instance.not_found",
+            "errors.instance.not_found",
+            f"Instance(s) not found: {missing}",
+            details={"missing_instance_ids": missing},
+        )
+
+    # 2. Auth: operator role in the first instance's office (the batch
+    # is implicitly same-office — if not, the permission check fails).
+    first_office = instances[0].office_id
+    await require_office_role(db, current_user.user_id, first_office, "operator")
+
+    # 3. Reject batch if any instance is running.
+    running = [i.id for i in instances if i.status == InstanceStatus.running.value]
+    if running:
+        raise ConflictError(
+            "instance.batch_has_running",
+            "errors.instance.batch_has_running",
+            "Batch contains running instances; stop them first",
+            details={"running_instance_ids": running},
+        )
+
+    # 4. Re-sync each instance.
+    restarted_ids: list[str] = []
+    skipped: list[str] = []
+    employee_cache: dict[str, Employee] = {}
+    for inst in instances:
+        emp = employee_cache.get(inst.employee_id)
+        if emp is None:
+            emp = await db.get(Employee, inst.employee_id)
+            if emp is None:
+                skipped.append(inst.id)
+                continue
+            employee_cache[inst.employee_id] = emp
+            # Check office-equivalence while we have the office.
+            if emp.deleted_at is not None:
+                skipped.append(inst.id)
+                continue
+        inst.active_hash = emp.migration_hash
+        inst.status = InstanceStatus.restarting.value
+        restarted_ids.append(inst.id)
+
+    await emit(
+        INSTANCE_BATCH_RESTARTED,
+        actor_type="user",
+        actor_id=current_user.user_id,
+        resource_type="instance",
+        resource_id=None,
+        payload={
+            "instance_ids": body.instance_ids,
+            "reason": body.reason,
+            "restarted_count": len(restarted_ids),
+        },
+        session=db,
+    )
+
+    await db.commit()
+
+    return BatchRestartResultOut(
+        restarted_count=len(restarted_ids),
+        restarted_at=datetime.now(timezone.utc).isoformat(),
+        instance_ids=restarted_ids,
+        skipped=skipped,
     )
 
 
