@@ -6,12 +6,12 @@ only — no filesystem directories are created here.
 """
 
 
-def generate_workspace_path(employee_slug: str, instance_id: str) -> str:
-    """Return a workspace path scoped to *employee_slug* and *instance_id*.
+def generate_workspace_path(entity_slug: str, instance_id: str) -> str:
+    """Return a workspace path scoped to *entity_slug* and *instance_id*.
 
-    Pattern: ``.pi/workspace/{employee_slug}-{instance_id[:8]}/``
+    Pattern: ``.pi/workspace/{entity_slug}-{instance_id[:8]}/``
 
     The trailing slash is intentional — it marks the path as a directory
     for harness consumers that need to ``mkdir -p`` later.
     """
-    return f".pi/workspace/{employee_slug}-{instance_id[:8]}/"
+    return f".pi/workspace/{entity_slug}-{instance_id[:8]}/"

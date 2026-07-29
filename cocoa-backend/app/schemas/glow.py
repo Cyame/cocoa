@@ -34,7 +34,7 @@ class LiveStatusItemOut(BaseModel):
 
     Per PRD §13.6.7 + phase-15f: instance nodes carry an additional
     ``outdated`` flag (true when ``instance.active_hash !=
-    employee.migration_hash``) and the raw ``active_hash`` so the
+    entity.migration_hash``) and the raw ``active_hash`` so the
     portal can render the "needs restart" badge and a hash-comparison
     tooltip.
     """

@@ -223,8 +223,8 @@ async def deploy_instance(
     name: str,
     image_version: str,
     *,
-    office_id: str,
-    employee_id: str,
+    workspace_id: str,
+    entity_id: str,
     cpu_request: str = "100m",
     cpu_limit: str = "500m",
     mem_request: str = "256Mi",
@@ -250,7 +250,7 @@ async def deploy_instance(
         async with get_session_factory()() as session:
             return await deploy_instance(
                 name, image_version,
-                office_id=office_id, employee_id=employee_id,
+                workspace_id=workspace_id, entity_id=entity_id,
                 cpu_request=cpu_request, cpu_limit=cpu_limit,
                 mem_request=mem_request, mem_limit=mem_limit,
                 storage_size=storage_size, replicas=replicas,
@@ -260,8 +260,8 @@ async def deploy_instance(
 
     instance = Instance(
         workspace_path=name,
-        office_id=office_id,
-        employee_id=employee_id,
+        workspace_id=workspace_id,
+        entity_id=entity_id,
         proxy_token=proxy_token,
     )
     db.add(instance)

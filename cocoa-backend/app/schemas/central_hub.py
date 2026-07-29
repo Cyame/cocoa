@@ -1,6 +1,6 @@
-"""CentralHub schemas — Office-scoped shared collaboration surface.
+"""CentralHub schemas — Workspace-scoped shared collaboration surface.
 
-> **15d-rename (2026-07-29)**: Renamed from `blackboard.py`. Class names
+> **15d-rename (2026-07-29)**: Renamed from `central_hub.py`. Class names
 > `CentralHubOut` / `CentralHubUpdate` are 15d+ canonical. No back-compat
 > aliases — no prod data yet.
 """
@@ -27,7 +27,7 @@ class CentralHubOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
-    office_id: str
+    workspace_id: str
     content: str | None
     manual_notes: str | None
     created_at: datetime

@@ -63,7 +63,7 @@ function mockApiSuccess() {
     if (path.startsWith('/base-classes') && (init?.method ?? 'GET') === 'GET') {
       return Promise.resolve(BASE_CLASSES_PAGE);
     }
-    if (path === '/employees' && init?.method === 'POST') {
+    if (path === '/entities' && init?.method === 'POST') {
       return Promise.resolve(CREATED_EMPLOYEE);
     }
     return Promise.reject(new Error(`Unmocked call: ${init?.method ?? 'GET'} ${path}`));
@@ -211,7 +211,7 @@ describe('FirstRunOnboardingModal', () => {
     expect((slugInput as HTMLInputElement).value).toBe('custom-slug');
   });
 
-  it('submits POST /employees at Step 3 with the full payload and closes via "completed"', async () => {
+  it('submits POST /entities at Step 3 with the full payload and closes via "completed"', async () => {
     const onClose = vi.fn();
     renderModal(onClose);
 
@@ -240,7 +240,7 @@ describe('FirstRunOnboardingModal', () => {
 
     await waitFor(() => {
       const submitCall = mockedApi.mock.calls.find(
-        ([path, init]) => path === '/employees' && init?.method === 'POST',
+        ([path, init]) => path === '/entities' && init?.method === 'POST',
       );
       expect(submitCall).toBeDefined();
       if (submitCall === undefined) return;
@@ -268,12 +268,12 @@ describe('FirstRunOnboardingModal', () => {
     expect(onClose).toHaveBeenCalledWith('completed');
   });
 
-  it('surfaces an error banner and stays on Step 3 when POST /employees fails', async () => {
+  it('surfaces an error banner and stays on Step 3 when POST /entities fails', async () => {
     mockedApi.mockImplementation((path, init) => {
       if (path.startsWith('/base-classes') && (init?.method ?? 'GET') === 'GET') {
         return Promise.resolve(BASE_CLASSES_PAGE);
       }
-      if (path === '/employees' && init?.method === 'POST') {
+      if (path === '/entities' && init?.method === 'POST') {
         return Promise.reject(new ApiError(409, { message: 'slug already taken' }));
       }
       return Promise.reject(new Error(`Unmocked: ${init?.method ?? 'GET'} ${path}`));

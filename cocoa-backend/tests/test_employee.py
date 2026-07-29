@@ -1,35 +1,36 @@
-"""Tests for Employee and EmployeePreset models."""
+"""Tests for Entity and BaseClass models."""
 
 import pytest
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.employee import Employee, EmployeePreset, EmployeeRank
+from app.models.entity import Entity, EntityRank
+from app.models.base_class import BaseClass
 
 
-class TestEmployeeRank:
-    """Tests for the EmployeeRank enum."""
+class TestEntityRank:
+    """Tests for the EntityRank enum."""
 
-    def test_rank_has_three_values(self):
-        members = list(EmployeeRank)
-        assert len(members) == 3
+    def test_rank_has_two_values(self):
+        members = list(EntityRank)
+        assert len(members) == 2
         values = {m.value for m in members}
-        assert values == {"intern", "researcher", "director"}
+        assert values == {"intern", "researcher"}
 
     def test_rank_is_string_enum(self):
-        assert isinstance(EmployeeRank.intern.value, str)
-        assert EmployeeRank.intern.value == "intern"
+        assert isinstance(EntityRank.intern.value, str)
+        assert EntityRank.intern.value == "intern"
 
 
-class TestEmployeePresetTable:
-    """Tests for the EmployeePreset model table."""
+class TestBaseClassTable:
+    """Tests for the BaseClass model table."""
 
     def test_table_name(self):
-        assert EmployeePreset.__tablename__ == "employee_presets"
+        assert BaseClass.__tablename__ == "base_classes"
 
     @pytest.mark.asyncio
     async def test_create_preset(self, session: AsyncSession):
-        preset = EmployeePreset(slug="helper", name="Helper", version="1.0")
+        preset = BaseClass(slug="helper", name="Helper", version="1.0")
         session.add(preset)
         await session.commit()
         await session.refresh(preset)
@@ -44,7 +45,7 @@ class TestEmployeePresetTable:
     @pytest.mark.asyncio
     async def test_create_preset_with_manifest(self, session: AsyncSession):
         manifest_data = {"system_prompt": "You are helpful.", "tools": ["search"]}
-        preset = EmployeePreset(
+        preset = BaseClass(
             slug="worker", name="Worker", manifest=manifest_data
         )
         session.add(preset)
@@ -55,22 +56,22 @@ class TestEmployeePresetTable:
 
     @pytest.mark.asyncio
     async def test_partial_unique_active_conflict(self, session: AsyncSession):
-        a = EmployeePreset(slug="dup", name="First")
-        b = EmployeePreset(slug="dup", name="Second")
+        a = BaseClass(slug="dup", name="First")
+        b = BaseClass(slug="dup", name="Second")
         session.add_all([a, b])
         with pytest.raises(IntegrityError):
             await session.commit()
 
     @pytest.mark.asyncio
     async def test_partial_unique_soft_deleted_allows_reuse(self, session: AsyncSession):
-        a = EmployeePreset(slug="reuse", name="First")
+        a = BaseClass(slug="reuse", name="First")
         session.add(a)
         await session.commit()
 
         a.soft_delete()
         await session.commit()
 
-        b = EmployeePreset(slug="reuse", name="Second")
+        b = BaseClass(slug="reuse", name="Second")
         session.add(b)
         await session.commit()
         await session.refresh(b)
@@ -79,15 +80,21 @@ class TestEmployeePresetTable:
         assert b.deleted_at is None
 
 
-class TestEmployeeTable:
-    """Tests for the Employee model table."""
+class TestEntityTable:
+    """Tests for the Entity model table."""
 
     def test_table_name(self):
-        assert Employee.__tablename__ == "employees"
+        assert Entity.__tablename__ == "entities"
 
     @pytest.mark.asyncio
-    async def test_create_employee(self, session: AsyncSession):
-        emp = Employee(slug="alice", name="Alice", rank=EmployeeRank.researcher)
+    async def test_create_entity(self, session: AsyncSession, namespace_factory):
+        ns = await namespace_factory()
+        emp = Entity(
+            namespace_id=ns.id,
+            slug="alice",
+            name="Alice",
+            rank=EntityRank.researcher,
+        )
         session.add(emp)
         await session.commit()
         await session.refresh(emp)
@@ -102,48 +109,59 @@ class TestEmployeeTable:
         assert emp.deleted_at is None
 
     @pytest.mark.asyncio
-    async def test_default_rank_is_intern(self, session: AsyncSession):
-        emp = Employee(slug="bob", name="Bob")
+    async def test_default_rank_is_intern(self, session: AsyncSession, namespace_factory):
+        ns = await namespace_factory()
+        emp = Entity(namespace_id=ns.id, slug="bob", name="Bob")
         session.add(emp)
         await session.commit()
         await session.refresh(emp)
 
-        assert emp.rank == EmployeeRank.intern
+        assert emp.rank == EntityRank.intern.value
 
     @pytest.mark.asyncio
-    async def test_create_employee_with_display_fields(self, session: AsyncSession):
-        emp = Employee(
+    async def test_create_entity_with_display_fields(
+        self, session: AsyncSession, namespace_factory
+    ):
+        ns = await namespace_factory()
+        emp = Entity(
+            namespace_id=ns.id,
             slug="charlie",
             name="Charlie",
-            rank=EmployeeRank.director,
-            display_name="Charlie the Director",
+            rank=EntityRank.researcher,
+            display_name="Charlie the Researcher",
             display_color="#FF5733",
         )
         session.add(emp)
         await session.commit()
         await session.refresh(emp)
 
-        assert emp.display_name == "Charlie the Director"
+        assert emp.display_name == "Charlie the Researcher"
         assert emp.display_color == "#FF5733"
 
     @pytest.mark.asyncio
-    async def test_partial_unique_active_conflict(self, session: AsyncSession):
-        a = Employee(slug="dupe", name="First")
-        b = Employee(slug="dupe", name="Second")
+    async def test_partial_unique_active_conflict(
+        self, session: AsyncSession, namespace_factory
+    ):
+        ns = await namespace_factory()
+        a = Entity(namespace_id=ns.id, slug="dupe", name="First")
+        b = Entity(namespace_id=ns.id, slug="dupe", name="Second")
         session.add_all([a, b])
         with pytest.raises(IntegrityError):
             await session.commit()
 
     @pytest.mark.asyncio
-    async def test_partial_unique_soft_deleted_allows_reuse(self, session: AsyncSession):
-        a = Employee(slug="reuse", name="First")
+    async def test_partial_unique_soft_deleted_allows_reuse(
+        self, session: AsyncSession, namespace_factory
+    ):
+        ns = await namespace_factory()
+        a = Entity(namespace_id=ns.id, slug="reuse", name="First")
         session.add(a)
         await session.commit()
 
         a.soft_delete()
         await session.commit()
 
-        b = Employee(slug="reuse", name="Second")
+        b = Entity(namespace_id=ns.id, slug="reuse", name="Second")
         session.add(b)
         await session.commit()
         await session.refresh(b)
@@ -152,22 +170,24 @@ class TestEmployeeTable:
         assert b.deleted_at is None
 
 
-class TestEmployeePresetReference:
-    """Tests for the logical reference from Employee.preset_slug to EmployeePreset.slug.
-
-    No DB-level FK constraint exists because EmployeePreset.slug uses a
-    partial unique index (soft-delete), which PostgreSQL does not accept as
-    a foreign-key target.
-    """
+class TestBaseClassReference:
+    """Logical reference from Entity.preset_slug to BaseClass.slug."""
 
     @pytest.mark.asyncio
-    async def test_preset_slug_references_valid_preset(self, session: AsyncSession):
-        preset = EmployeePreset(slug="engineer", name="Engineer")
+    async def test_preset_slug_references_valid_preset(
+        self, session: AsyncSession, namespace_factory
+    ):
+        ns = await namespace_factory()
+        preset = BaseClass(slug="engineer", name="Engineer")
         session.add(preset)
         await session.commit()
 
-        emp = Employee(
-            slug="eve", name="Eve", preset_slug="engineer", rank=EmployeeRank.researcher
+        emp = Entity(
+            namespace_id=ns.id,
+            slug="eve",
+            name="Eve",
+            preset_slug="engineer",
+            rank=EntityRank.researcher,
         )
         session.add(emp)
         await session.commit()
@@ -176,8 +196,13 @@ class TestEmployeePresetReference:
         assert emp.preset_slug == "engineer"
 
     @pytest.mark.asyncio
-    async def test_preset_slug_null_allowed(self, session: AsyncSession):
-        emp = Employee(slug="grace", name="Grace", rank=EmployeeRank.intern)
+    async def test_preset_slug_null_allowed(
+        self, session: AsyncSession, namespace_factory
+    ):
+        ns = await namespace_factory()
+        emp = Entity(
+            namespace_id=ns.id, slug="grace", name="Grace", rank=EntityRank.intern
+        )
         session.add(emp)
         await session.commit()
         await session.refresh(emp)
@@ -185,13 +210,20 @@ class TestEmployeePresetReference:
         assert emp.preset_slug is None
 
     @pytest.mark.asyncio
-    async def test_preset_slug_survives_preset_update(self, session: AsyncSession):
-        preset = EmployeePreset(slug="temp", name="Temporary")
+    async def test_preset_slug_survives_preset_update(
+        self, session: AsyncSession, namespace_factory
+    ):
+        ns = await namespace_factory()
+        preset = BaseClass(slug="temp", name="Temporary")
         session.add(preset)
         await session.commit()
 
-        emp = Employee(
-            slug="hank", name="Hank", preset_slug="temp", rank=EmployeeRank.intern
+        emp = Entity(
+            namespace_id=ns.id,
+            slug="hank",
+            name="Hank",
+            preset_slug="temp",
+            rank=EntityRank.intern,
         )
         session.add(emp)
         await session.commit()
@@ -203,10 +235,17 @@ class TestEmployeePresetReference:
         assert emp.preset_slug == "temp"
 
     @pytest.mark.asyncio
-    async def test_employee_preset_slug_stored_as_plain_string(self, session: AsyncSession):
+    async def test_base_class_slug_stored_as_plain_string(
+        self, session: AsyncSession, namespace_factory
+    ):
         """preset_slug has no DB FK constraint, so any string value is accepted."""
-        emp = Employee(
-            slug="iris", name="Iris", preset_slug="no-such-preset", rank=EmployeeRank.intern
+        ns = await namespace_factory()
+        emp = Entity(
+            namespace_id=ns.id,
+            slug="iris",
+            name="Iris",
+            preset_slug="no-such-preset",
+            rank=EntityRank.intern,
         )
         session.add(emp)
         await session.commit()

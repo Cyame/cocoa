@@ -1,6 +1,6 @@
-"""Distillation engine — converts employee memory entries into preset manifests.
+"""Distillation engine — converts entity memory entries into preset manifests.
 
-A DistillationEngine reads an employee's MemoryEntry records and produces a
+A DistillationEngine reads an entity's Memory records and produces a
 DistillResult containing a PresetManifest blueprint. The AggregatingDistiller is
 the default heuristic implementation; callers can swap in other engines
 (e.g. an LLM-based distiller) by conforming to the DistillationEngine Protocol.
@@ -25,8 +25,9 @@ from typing import Any, Protocol
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.employee import Employee, EmployeePreset
-from app.models.memory import MemoryEntry, MemoryKind
+from app.models.entity import Entity
+from app.models.base_class import BaseClass
+from app.models.memory import Memory, MemoryKind
 from app.schemas.learning import AggregatedMemoryCount, DistillRequest, SkillManifestPreview
 
 logger = logging.getLogger(__name__)
@@ -54,13 +55,13 @@ class DistillResult:
     """Output from DistillationEngine.distill() — pure data, no DB side effects.
 
     The engine computes the manifest and aggregated memory counts; callers
-    handle persistence (creating an EmployeePreset row, emitting events, etc.).
+    handle persistence (creating an BaseClass row, emitting events, etc.).
     """
 
     new_preset_slug: str
     manifest_preview: SkillManifestPreview
     aggregated_memory: AggregatedMemoryCount
-    source_employee_id: str
+    source_entity_id: str
     source_preset_slug: str | None
 
 
@@ -73,8 +74,8 @@ class DistillationError(Exception):
     """Recoverable error during distillation (maps to HTTP error responses).
 
     Attributes:
-        code: Machine-readable error code (e.g. ``"employee.not_found"``).
-        message_key: i18n message key (e.g. ``"errors.employee.not_found"``).
+        code: Machine-readable error code (e.g. ``"entity.not_found"``).
+        message_key: i18n message key (e.g. ``"errors.entity.not_found"``).
         message: Human-readable error description.
     """
 
@@ -93,7 +94,7 @@ class DistillationError(Exception):
 class DistillationEngine(Protocol):
     """Interface for distillation engines.
 
-    Implementations read an employee's memory entries and produce a
+    Implementations read an entity's memory entries and produce a
     DistillResult containing a PresetManifest. The engine does NOT persist
     anything — that responsibility belongs to the caller.
 
@@ -101,13 +102,13 @@ class DistillationEngine(Protocol):
 
         engine: DistillationEngine = AggregatingDistiller()
         result = await engine.distill(
-            employee_id, request=DistillRequest(...), session=session
+            entity_id, request=DistillRequest(...), session=session
         )
     """
 
     async def distill(
         self,
-        employee_id: str,
+        entity_id: str,
         *,
         request: DistillRequest,
         session: AsyncSession,
@@ -144,8 +145,8 @@ class AggregatingDistiller:
 
     Algorithm
     ---------
-    1. Look up Employee by ID (raise ``DistillationError`` if not found).
-    2. Query ``MemoryEntry`` for the employee, filtered by kind (optional),
+    1. Look up Entity by ID (raise ``DistillationError`` if not found).
+    2. Query ``Memory`` for the entity, filtered by kind (optional),
        excluding soft-deleted rows.
     3. Aggregate counts by ``MemoryKind`` → ``AggregatedMemoryCount``.
     4. Extract kebab-case keys from ``lesson`` / ``decision`` entries →
@@ -161,30 +162,30 @@ class AggregatingDistiller:
 
     async def distill(
         self,
-        employee_id: str,
+        entity_id: str,
         *,
         request: DistillRequest,
         session: AsyncSession,
     ) -> DistillResult:
-        # 1. Look up employee.
-        emp = await session.get(Employee, employee_id)
+        # 1. Look up entity.
+        emp = await session.get(Entity, entity_id)
         if emp is None:
             raise DistillationError(
-                code="employee.not_found",
-                message_key="errors.employee.not_found",
-                message=f"Employee {employee_id!r} not found",
+                code="entity.not_found",
+                message_key="errors.entity.not_found",
+                message=f"Entity {entity_id!r} not found",
             )
 
         # 2. Query memory entries.
-        q = select(MemoryEntry).where(
-            MemoryEntry.employee_id == employee_id,
-            MemoryEntry.deleted_at.is_(None),
+        q = select(Memory).where(
+            Memory.entity_id == entity_id,
+            Memory.deleted_at.is_(None),
         )
         if request.memory_kind_filter:
-            q = q.where(MemoryEntry.kind.in_(request.memory_kind_filter))
+            q = q.where(Memory.kind.in_(request.memory_kind_filter))
 
         result = await session.execute(q)
-        entries: list[MemoryEntry] = list(result.scalars().all())
+        entries: list[Memory] = list(result.scalars().all())
 
         if not entries:
             raise DistillationError(
@@ -249,9 +250,9 @@ class AggregatingDistiller:
         model = "tbd"
         source_preset_slug = request.source_preset_slug
         if source_preset_slug:
-            preset_q = select(EmployeePreset).where(
-                EmployeePreset.slug == source_preset_slug,
-                EmployeePreset.deleted_at.is_(None),
+            preset_q = select(BaseClass).where(
+                BaseClass.slug == source_preset_slug,
+                BaseClass.deleted_at.is_(None),
             )
             preset_result = await session.execute(preset_q)
             source_preset = preset_result.scalar_one_or_none()
@@ -274,7 +275,7 @@ class AggregatingDistiller:
             new_preset_slug=new_preset_slug,
             manifest_preview=manifest,
             aggregated_memory=aggregated,
-            source_employee_id=employee_id,
+            source_entity_id=entity_id,
             source_preset_slug=source_preset_slug,
         )
 
@@ -291,7 +292,7 @@ class LLMDistiller:
     """LLM-powered skill distillation (P14a).
 
     Asks an :class:`LLMClient` to generate a JSON skill manifest from an
-    employee's accumulated memories. On ``LLMError`` or malformed JSON
+    entity's accumulated memories. On ``LLMError`` or malformed JSON
     response, falls back to a simple heuristic dict so the caller never
     raises — distillation always returns *something* useful.
     """
@@ -301,7 +302,7 @@ class LLMDistiller:
 
     async def distill(
         self,
-        employee_id: str,
+        entity_id: str,
         *,
         memories: list[dict[str, Any]] | None = None,
         session: AsyncSession | None = None,
@@ -316,7 +317,7 @@ class LLMDistiller:
         if memories is not None:
             mem_list = memories
         elif session is not None:
-            mem_list = await self._fetch_memories(employee_id, session)
+            mem_list = await self._fetch_memories(entity_id, session)
         else:
             mem_list = []
 
@@ -344,14 +345,14 @@ class LLMDistiller:
 
     async def _fetch_memories(
         self,
-        employee_id: str,
+        entity_id: str,
         session: AsyncSession,
     ) -> list[dict[str, Any]]:
-        """Query ``MemoryEntry`` rows when no in-memory list was passed."""
+        """Query ``Memory`` rows when no in-memory list was passed."""
         result = await session.execute(
-            select(MemoryEntry).where(
-                MemoryEntry.employee_id == employee_id,
-                MemoryEntry.deleted_at.is_(None),
+            select(Memory).where(
+                Memory.entity_id == entity_id,
+                Memory.deleted_at.is_(None),
             )
         )
         entries = list(result.scalars().all())
@@ -366,7 +367,7 @@ class LLMDistiller:
             for m in memories[:_LLM_DISTILL_MAX_MEMORIES]
         )
         return (
-            "Based on these memories from an employee:\n\n"
+            "Based on these memories from an entity:\n\n"
             f"{mem_text}\n\n"
             "Generate a JSON skill manifest with these fields:\n"
             "- commands: list of kebab-case verbs\n"

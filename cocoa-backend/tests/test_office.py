@@ -1,10 +1,10 @@
-"""Tests for Office, Membership, and Corridor models."""
+"""Tests for Workspace, Membership, and Passage models."""
 
 from sqlalchemy import CheckConstraint, Index
 
-from app.models.employee import Employee  # noqa: F401
+from app.models.entity import Entity  # noqa: F401
 from app.models.instance import Instance  # noqa: F401
-from app.models.office import Corridor, Membership, MembershipRole, Office
+from app.models.workspace import Passage, Membership, MembershipRole, Workspace
 from app.models.user import User  # noqa: F401
 
 
@@ -28,33 +28,33 @@ class TestMembershipRole:
         assert issubclass(MembershipRole, str)
 
 
-class TestOfficeModel:
-    """Office model has correct table name and columns."""
+class TestWorkspaceModel:
+    """Workspace model has correct table name and columns."""
 
     def test_table_name(self) -> None:
-        assert Office.__tablename__ == "offices"
+        assert Workspace.__tablename__ == "workspaces"
 
     def test_inherits_base_model(self) -> None:
-        assert hasattr(Office, "id")
-        assert hasattr(Office, "created_at")
-        assert hasattr(Office, "updated_at")
-        assert hasattr(Office, "deleted_at")
-        assert hasattr(Office, "soft_delete")
+        assert hasattr(Workspace, "id")
+        assert hasattr(Workspace, "created_at")
+        assert hasattr(Workspace, "updated_at")
+        assert hasattr(Workspace, "deleted_at")
+        assert hasattr(Workspace, "soft_delete")
 
     def test_columns_exist(self) -> None:
-        assert hasattr(Office, "name")
-        assert hasattr(Office, "slug")
-        assert hasattr(Office, "blackboard_ref")
+        assert hasattr(Workspace, "name")
+        assert hasattr(Workspace, "slug")
+        assert hasattr(Workspace, "namespace_id")
 
     def test_slug_partial_unique_index(self) -> None:
-        """Office slug has a partial unique index WHERE deleted_at IS NULL."""
-        table_args = Office.__table_args__
+        """Workspace slug has a partial unique index WHERE deleted_at IS NULL."""
+        table_args = Workspace.__table_args__
         slug_index = None
         for arg in table_args:
-            if isinstance(arg, Index) and arg.name == "uq_offices_slug":
+            if isinstance(arg, Index) and arg.name == "uq_workspaces_namespace_slug":
                 slug_index = arg
                 break
-        assert slug_index is not None, "uq_offices_slug index not found"
+        assert slug_index is not None, "uq_workspaces_namespace_slug index not found"
         assert slug_index.unique is True
 
 
@@ -70,7 +70,7 @@ class TestMembershipModel:
         assert hasattr(Membership, "soft_delete")
 
     def test_fk_columns_exist(self) -> None:
-        assert hasattr(Membership, "office_id")
+        assert hasattr(Membership, "workspace_id")
         assert hasattr(Membership, "user_id")
         assert hasattr(Membership, "instance_id")
 
@@ -94,52 +94,52 @@ class TestMembershipModel:
             "CheckConstraint 'ck_memberships_exclusive_fk' not found"
         )
 
-    def test_office_user_partial_unique_index(self) -> None:
-        """Membership has uq_memberships_office_user index."""
+    def test_workspace_user_partial_unique_index(self) -> None:
+        """Membership has uq_memberships_workspace_user index."""
         table_args = Membership.__table_args__
         idx = None
         for arg in table_args:
-            if isinstance(arg, Index) and arg.name == "uq_memberships_office_user":
+            if isinstance(arg, Index) and arg.name == "uq_memberships_workspace_user":
                 idx = arg
                 break
         assert idx is not None, (
-            "Index 'uq_memberships_office_user' not found"
+            "Index 'uq_memberships_workspace_user' not found"
         )
         assert idx.unique is True
 
-    def test_office_instance_partial_unique_index(self) -> None:
-        """Membership has uq_memberships_office_instance index."""
+    def test_workspace_instance_partial_unique_index(self) -> None:
+        """Membership has uq_memberships_workspace_instance index."""
         table_args = Membership.__table_args__
         idx = None
         for arg in table_args:
-            if isinstance(arg, Index) and arg.name == "uq_memberships_office_instance":
+            if isinstance(arg, Index) and arg.name == "uq_memberships_workspace_instance":
                 idx = arg
                 break
         assert idx is not None, (
-            "Index 'uq_memberships_office_instance' not found"
+            "Index 'uq_memberships_workspace_instance' not found"
         )
         assert idx.unique is True
 
-    def test_office_pos_partial_unique_index(self) -> None:
-        """Membership has uq_memberships_office_pos index (P9: posx/posy coords)."""
+    def test_workspace_pos_partial_unique_index(self) -> None:
+        """Membership has uq_memberships_workspace_pos index (P9: posx/posy coords)."""
         table_args = Membership.__table_args__
         idx = None
         for arg in table_args:
-            if isinstance(arg, Index) and arg.name == "uq_memberships_office_pos":
+            if isinstance(arg, Index) and arg.name == "uq_memberships_workspace_pos":
                 idx = arg
                 break
         assert idx is not None, (
-            "Index 'uq_memberships_office_pos' not found"
+            "Index 'uq_memberships_workspace_pos' not found"
         )
         assert idx.unique is True
 
-    def test_fk_office(self) -> None:
-        """Membership.office_id is FK to offices.id."""
-        col = Membership.__table__.c["office_id"]
+    def test_fk_workspace(self) -> None:
+        """Membership.workspace_id is FK to workspaces.id."""
+        col = Membership.__table__.c["workspace_id"]
         fks = list(col.foreign_keys)
         assert len(fks) == 1
         fk = fks[0]
-        assert str(fk.target_fullname) == "offices.id"
+        assert str(fk.target_fullname) == "workspaces.id"
 
     def test_fk_user(self) -> None:
         """Membership.user_id is FK to users.id, nullable."""
@@ -160,60 +160,60 @@ class TestMembershipModel:
         assert col.nullable is True
 
 
-class TestCorridorModel:
-    """Corridor model has correct table name, columns, and constraints."""
+class TestPassageModel:
+    """Passage model has correct table name, columns, and constraints."""
 
     def test_table_name(self) -> None:
-        assert Corridor.__tablename__ == "corridors"
+        assert Passage.__tablename__ == "passages"
 
     def test_inherits_base_model(self) -> None:
-        assert hasattr(Corridor, "id")
-        assert hasattr(Corridor, "deleted_at")
-        assert hasattr(Corridor, "soft_delete")
+        assert hasattr(Passage, "id")
+        assert hasattr(Passage, "deleted_at")
+        assert hasattr(Passage, "soft_delete")
 
     def test_columns_exist(self) -> None:
-        assert hasattr(Corridor, "office_id")
-        assert hasattr(Corridor, "from_membership_id")
-        assert hasattr(Corridor, "to_membership_id")
-        assert hasattr(Corridor, "is_active")
-        assert hasattr(Corridor, "edge_meta")
+        assert hasattr(Passage, "workspace_id")
+        assert hasattr(Passage, "from_membership_id")
+        assert hasattr(Passage, "to_membership_id")
+        assert hasattr(Passage, "is_active")
+        assert hasattr(Passage, "edge_meta")
 
     def test_is_active_defaults_true(self) -> None:
-        col = Corridor.__table__.c["is_active"]
+        col = Passage.__table__.c["is_active"]
         assert col.default.arg is True
         assert col.nullable is False
 
     def test_active_edge_partial_unique_index(self) -> None:
-        """Corridor has uq_corridors_active_edge partial unique index."""
-        table_args = Corridor.__table_args__
+        """Passage has uq_passages_active_edge partial unique index."""
+        table_args = Passage.__table_args__
         idx = None
         for arg in table_args:
-            if isinstance(arg, Index) and arg.name == "uq_corridors_active_edge":
+            if isinstance(arg, Index) and arg.name == "uq_passages_active_edge":
                 idx = arg
                 break
         assert idx is not None, (
-            "Index 'uq_corridors_active_edge' not found"
+            "Index 'uq_passages_active_edge' not found"
         )
         assert idx.unique is True
 
     def test_no_acyclicity_constraint(self) -> None:
-        """Corridor does NOT enforce acyclicity at DB level (P5 concern)."""
-        table_args = Corridor.__table_args__
+        """Passage does NOT enforce acyclicity at DB level (P5 concern)."""
+        table_args = Passage.__table_args__
         for arg in table_args:
             if isinstance(arg, CheckConstraint):
                 assert "cycle" not in arg.sqltext.text.lower(), (
-                    "Corridor should not have acyclicity check constraint"
+                    "Passage should not have acyclicity check constraint"
                 )
 
     def test_fk_from_membership(self) -> None:
-        col = Corridor.__table__.c["from_membership_id"]
+        col = Passage.__table__.c["from_membership_id"]
         fks = list(col.foreign_keys)
         assert len(fks) == 1
         fk = fks[0]
         assert str(fk.target_fullname) == "memberships.id"
 
     def test_fk_to_membership(self) -> None:
-        col = Corridor.__table__.c["to_membership_id"]
+        col = Passage.__table__.c["to_membership_id"]
         fks = list(col.foreign_keys)
         assert len(fks) == 1
         fk = fks[0]

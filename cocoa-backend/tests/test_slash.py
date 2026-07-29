@@ -45,7 +45,7 @@ class TestDirective:
         d = Directive(cmd="/read")
         assert d.cmd == "/read"
         assert d.args == []
-        assert d.target_employee is None
+        assert d.target_entity is None
         assert d.content_ref is None
         assert d.raw_text == ""
 
@@ -58,13 +58,13 @@ class TestDirective:
         """Directive with all optional fields populated."""
         ref = ContentRef(scope="memory", path="notes/meeting")
         d = Directive(
-            target_employee="alice",
+            target_entity="alice",
             cmd="/write",
             args=["summary", "draft"],
             content_ref=ref,
             raw_text="@alice /write summary draft ->memory",
         )
-        assert d.target_employee == "alice"
+        assert d.target_entity == "alice"
         assert d.cmd == "/write"
         assert d.args == ["summary", "draft"]
         assert d.content_ref == ref

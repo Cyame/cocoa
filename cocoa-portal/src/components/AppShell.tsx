@@ -1,89 +1,49 @@
-import { BookOpen, Bug, Building2, LogOut, Network, Pencil, User, Users } from 'lucide-react';
+import { Bug, Building2, Layers, LogOut, Settings, Sparkles, User, Users } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Navigate, NavLink, Outlet, useParams } from 'react-router';
+import { Navigate, NavLink, Outlet, useSearchParams } from 'react-router';
+import GlobalModals from '@/components/GlobalModals';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { cn } from '@/lib/utils';
-import { useSelectedStore } from '@/stores/selected';
 import { useSessionStore } from '@/stores/session';
+
+const TAB_IDS = [
+  'workspace',
+  'base-classes',
+  'contracts',
+  'entities',
+  'capability-market',
+  'debug',
+] as const;
+
+export type NamespaceTabId = (typeof TAB_IDS)[number];
 
 const DESKTOP_LINK_CLASS =
   'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500';
-const MOBILE_LINK_CLASS =
-  'flex min-w-0 flex-col items-center gap-1 px-2 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500';
 
 export default function AppShell() {
   const { t } = useTranslation();
   const token = useSessionStore((state) => state.token);
   const user = useSessionStore((state) => state.user);
   const clearToken = useSessionStore((state) => state.clearToken);
-  const selectedOfficeId = useSelectedStore((state) => state.officeId);
-  const { id: routeOfficeId } = useParams<{ id: string }>();
-  const officeId = routeOfficeId ?? selectedOfficeId;
+  const [searchParams] = useSearchParams();
+  const activeTab = (searchParams.get('tab') ?? 'workspace') as NamespaceTabId;
 
   if (token === null) {
     return <Navigate to="/login" replace />;
   }
 
-  const navigationItems = [
+  const tabItems = [
+    { id: 'workspace' as const, label: t('namespaces.tabs.workspace'), Icon: Building2 },
+    { id: 'base-classes' as const, label: t('namespaces.tabs.baseClasses'), Icon: Sparkles },
+    { id: 'contracts' as const, label: t('namespaces.tabs.contracts'), Icon: Users },
+    { id: 'entities' as const, label: t('namespaces.tabs.entities'), Icon: Layers },
     {
-      label: t('nav.offices'),
-      href: '/offices',
-      Icon: Building2,
-      end: true,
-      isDisabled: false,
+      id: 'capability-market' as const,
+      label: t('namespaces.tabs.capabilityMarket'),
+      Icon: Settings,
     },
-    {
-      label: t('nav.debug'),
-      href: '/debug',
-      Icon: Bug,
-      end: true,
-      isDisabled: false,
-    },
-    {
-      label: t('nav.topology'),
-      href: officeId === null ? '/offices' : `/offices/${officeId}/topology`,
-      Icon: Network,
-      end: true,
-      isDisabled: officeId === null,
-    },
-    {
-      label: t('nav.composer'),
-      href: officeId === null ? '/offices' : `/offices/${officeId}/composer`,
-      Icon: Pencil,
-      end: true,
-      isDisabled: officeId === null,
-    },
-    {
-      label: t('nav.learning'),
-      href: officeId === null ? '/offices' : `/offices/${officeId}/employees`,
-      Icon: BookOpen,
-      end: true,
-      isDisabled: officeId === null,
-    },
-    {
-      label: t('nav.members'),
-      href: officeId === null ? '/offices' : `/offices/${officeId}/members`,
-      Icon: Users,
-      end: true,
-      isDisabled: officeId === null,
-    },
-  ] as const;
-
-  const MOBILE_GRID_COLS_CLASS: string = (() => {
-    const count: number = navigationItems.length;
-    switch (count) {
-      case 4:
-        return 'grid-cols-4';
-      case 5:
-        return 'grid-cols-5';
-      case 6:
-        return 'grid-cols-6';
-      case 7:
-        return 'grid-cols-7';
-      default:
-        return 'grid-cols-5';
-    }
-  })();
+    { id: 'debug' as const, label: t('namespaces.tabs.debug'), Icon: Bug },
+  ];
 
   return (
     <div className="flex min-h-dvh bg-slate-100 text-slate-950 md:h-dvh md:overflow-hidden">
@@ -98,24 +58,17 @@ export default function AppShell() {
           </div>
         </div>
 
-        <nav className="flex flex-1 flex-col gap-1 p-3" aria-label="Primary navigation">
-          {navigationItems.map(({ label, href, Icon, end, isDisabled }) => (
+        <nav className="flex flex-1 flex-col gap-1 p-3" aria-label="Namespace navigation">
+          {tabItems.map(({ id, label, Icon }) => (
             <NavLink
-              key={label}
-              to={href}
-              end={end}
-              aria-disabled={isDisabled}
-              tabIndex={isDisabled ? -1 : undefined}
-              onClick={(event) => {
-                if (isDisabled) event.preventDefault();
-              }}
-              className={({ isActive }) =>
+              key={id}
+              to={`/namespaces?tab=${id}`}
+              className={() =>
                 cn(
                   DESKTOP_LINK_CLASS,
-                  isActive && !isDisabled
+                  activeTab === id
                     ? 'bg-blue-600 text-white'
                     : 'text-slate-300 hover:bg-slate-800 hover:text-white',
-                  isDisabled && 'cursor-not-allowed opacity-40 hover:bg-transparent',
                 )
               }
             >
@@ -124,6 +77,23 @@ export default function AppShell() {
             </NavLink>
           ))}
         </nav>
+
+        <div className="border-t border-slate-800 p-3">
+          <NavLink
+            to="/organization"
+            className={({ isActive }) =>
+              cn(
+                DESKTOP_LINK_CLASS,
+                isActive
+                  ? 'bg-blue-600 text-white'
+                  : 'text-slate-300 hover:bg-slate-800 hover:text-white',
+              )
+            }
+          >
+            <Settings className="size-4 shrink-0" aria-hidden="true" />
+            <span className="truncate">{t('nav.organization')}</span>
+          </NavLink>
+        </div>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col md:min-h-0">
@@ -133,10 +103,8 @@ export default function AppShell() {
 
         <header className="flex h-16 shrink-0 items-center justify-between gap-4 border-b border-slate-200 bg-white px-4 sm:px-6">
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-slate-900">
-              {t('common.operatorConsole')}
-            </p>
-            <p className="truncate text-xs text-slate-500">{t('common.portalSubtitle')}</p>
+            <p className="truncate text-sm font-semibold text-slate-900">{t('namespaces.title')}</p>
+            <p className="truncate text-xs text-slate-500">{t('namespaces.subtitle')}</p>
           </div>
 
           <div className="flex min-w-0 items-center gap-2 sm:gap-3">
@@ -166,34 +134,23 @@ export default function AppShell() {
         </header>
 
         <nav
-          className={cn(
-            'grid shrink-0 border-b border-slate-200 bg-white md:hidden',
-            MOBILE_GRID_COLS_CLASS,
-          )}
-          aria-label="Primary navigation"
+          className="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-200 bg-white px-3 pt-2 md:hidden"
+          aria-label="Namespace tabs"
         >
-          {navigationItems.map(({ label, href, Icon, end, isDisabled }) => (
+          {tabItems.map(({ id, label }) => (
             <NavLink
-              key={label}
-              to={href}
-              end={end}
-              aria-disabled={isDisabled}
-              tabIndex={isDisabled ? -1 : undefined}
-              onClick={(event) => {
-                if (isDisabled) event.preventDefault();
-              }}
-              className={({ isActive }) =>
+              key={id}
+              to={`/namespaces?tab=${id}`}
+              className={() =>
                 cn(
-                  MOBILE_LINK_CLASS,
-                  isActive && !isDisabled
-                    ? 'bg-blue-50 text-blue-700'
-                    : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900',
-                  isDisabled && 'cursor-not-allowed opacity-40 hover:bg-transparent',
+                  'shrink-0 rounded-t-lg border-b-2 px-3 py-2 text-xs font-medium transition-colors',
+                  activeTab === id
+                    ? 'border-blue-600 bg-blue-50 text-blue-700'
+                    : 'border-transparent text-slate-500 hover:bg-slate-50',
                 )
               }
             >
-              <Icon className="size-4" aria-hidden="true" />
-              <span className="w-full truncate text-center">{label}</span>
+              {label}
             </NavLink>
           ))}
         </nav>
@@ -202,6 +159,8 @@ export default function AppShell() {
           <Outlet />
         </main>
       </div>
+
+      <GlobalModals />
     </div>
   );
 }

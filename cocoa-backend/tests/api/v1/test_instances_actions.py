@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.testclient import TestClient
 
-from app.models.employee import Employee
+from app.models.entity import Entity
 from app.models.event import Event
 from app.models.instance import Instance, InstanceStatus
 from app.models.user import User
@@ -56,9 +56,9 @@ def _auth(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
-def _setup_office(client: TestClient, token: str) -> str:
+def _setup_workspace(client: TestClient, token: str) -> str:
     slug = f"p15f-restart-{uuid.uuid4().hex[:6]}"
-    resp = client.post("/api/v1/offices", headers=_auth(token), json={
+    resp = client.post("/api/v1/workspaces", headers=_auth(token), json={
         "name": f"P15f Restart {slug}",
         "slug": slug,
     })
@@ -66,9 +66,9 @@ def _setup_office(client: TestClient, token: str) -> str:
     return resp.json()["id"]
 
 
-def _create_employee(client: TestClient, token: str) -> str:
+def _create_entity(client: TestClient, token: str) -> str:
     slug = f"p15f-emp-{uuid.uuid4().hex[:6]}"
-    resp = client.post("/api/v1/employees", headers=_auth(token), json={
+    resp = client.post("/api/v1/entities", headers=_auth(token), json={
         "name": "Worker", "slug": slug,
     })
     assert resp.status_code == 201, resp.text
@@ -77,11 +77,11 @@ def _create_employee(client: TestClient, token: str) -> str:
 
 async def _create_instance(
     client: TestClient, token: str,
-    employee_id: str, office_id: str,
+    entity_id: str, workspace_id: str,
     status: str | None = None,
     session: AsyncSession | None = None,
 ) -> str:
-    body: dict = {"employee_id": employee_id, "office_id": office_id}
+    body: dict = {"entity_id": entity_id, "workspace_id": workspace_id}
     resp = client.post("/api/v1/instances", headers=_auth(token), json=body)
     assert resp.status_code == 201, resp.text
     instance_id = resp.json()["id"]
@@ -95,19 +95,19 @@ async def _create_instance(
 
 
 def _grant_role(
-    client: TestClient, owner_token: str, office_id: str,
+    client: TestClient, owner_token: str, workspace_id: str,
     user_id: str, role: str,
 ) -> None:
     resp = client.post(
         "/api/v1/messaging/memberships",
         headers=_auth(owner_token),
-        json={"office_id": office_id, "user_id": user_id, "role": role},
+        json={"workspace_id": workspace_id, "user_id": user_id, "role": role},
     )
     assert resp.status_code in (200, 201), resp.text
 
 
 def _create_operator(
-    client: TestClient, owner_token: str, office_id: str,
+    client: TestClient, owner_token: str, workspace_id: str,
 ) -> str:
     """Create a throwaway user and grant them the operator role."""
     username = f"op-{uuid.uuid4().hex[:6]}"
@@ -130,7 +130,7 @@ def _create_operator(
         # The lookup endpoint may not exist; query directly.
         # Note: this is a sync test context; we rely on the session fixture.
         raise RuntimeError("User lookup endpoint unavailable")
-    _grant_role(client, owner_token, office_id, user_id, "operator")
+    _grant_role(client, owner_token, workspace_id, user_id, "operator")
     return login.json()["access_token"]
 
 
@@ -147,16 +147,22 @@ class TestInstanceRestart:
         session: AsyncSession,
     ) -> None:
         h = _auth(auth_token)
-        office_id = _setup_office(client, auth_token)
-        employee_id = _create_employee(client, auth_token)
+        workspace_id = _setup_workspace(client, auth_token)
+        entity_id = _create_entity(client, auth_token)
         instance_id = await _create_instance(
-            client, auth_token, employee_id, office_id,
+            client, auth_token, entity_id, workspace_id,
             status=InstanceStatus.pending.value,
         session=session,
         )
 
-        # Set Employee.migration_hash to a known value.
-        emp = await session.get(Employee, employee_id)
+        # Simulate outdated instance (no active_hash) before re-sync.
+        inst0 = await session.get(Instance, instance_id)
+        assert inst0 is not None
+        inst0.active_hash = None
+        await session.commit()
+
+        # Set Entity.migration_hash to a known value.
+        emp = await session.get(Entity, entity_id)
         assert emp is not None
         emp.migration_hash = "f" * 64
         await session.commit()
@@ -173,20 +179,19 @@ class TestInstanceRestart:
         assert body["new_hash"] == "f" * 64
         assert body["status_after"] == "pending"
 
-        inst = await session.get(Instance, instance_id)
-        assert inst is not None
-        assert inst.active_hash == "f" * 64
-        assert inst.status == InstanceStatus.pending.value
+        await session.refresh(inst0)
+        assert inst0.active_hash == "f" * 64
+        assert inst0.status == InstanceStatus.pending.value
 
     async def test_restart_409_when_running(
         self, client: TestClient, auth_token: str, auth_user_id: str,
         session: AsyncSession,
     ) -> None:
         h = _auth(auth_token)
-        office_id = _setup_office(client, auth_token)
-        employee_id = _create_employee(client, auth_token)
+        workspace_id = _setup_workspace(client, auth_token)
+        entity_id = _create_entity(client, auth_token)
         instance_id = await _create_instance(
-            client, auth_token, employee_id, office_id,
+            client, auth_token, entity_id, workspace_id,
             status=InstanceStatus.running.value,
         session=session,
         )
@@ -204,15 +209,15 @@ class TestInstanceRestart:
         session: AsyncSession,
     ) -> None:
         h = _auth(auth_token)
-        office_id = _setup_office(client, auth_token)
-        employee_id = _create_employee(client, auth_token)
+        workspace_id = _setup_workspace(client, auth_token)
+        entity_id = _create_entity(client, auth_token)
         instance_id = await _create_instance(
-            client, auth_token, employee_id, office_id,
+            client, auth_token, entity_id, workspace_id,
             status=InstanceStatus.running.value,
         session=session,
         )
 
-        emp = await session.get(Employee, employee_id)
+        emp = await session.get(Entity, entity_id)
         assert emp is not None
         emp.migration_hash = "a" * 64
         await session.commit()
@@ -239,15 +244,20 @@ class TestInstanceRestart:
         session: AsyncSession,
     ) -> None:
         h = _auth(auth_token)
-        office_id = _setup_office(client, auth_token)
-        employee_id = _create_employee(client, auth_token)
+        workspace_id = _setup_workspace(client, auth_token)
+        entity_id = _create_entity(client, auth_token)
         instance_id = await _create_instance(
-            client, auth_token, employee_id, office_id,
+            client, auth_token, entity_id, workspace_id,
             status=InstanceStatus.pending.value,
         session=session,
         )
 
-        emp = await session.get(Employee, employee_id)
+        inst0 = await session.get(Instance, instance_id)
+        assert inst0 is not None
+        inst0.active_hash = None
+        await session.commit()
+
+        emp = await session.get(Entity, entity_id)
         assert emp is not None
         emp.migration_hash = "b" * 64
         await session.commit()
@@ -283,17 +293,17 @@ class TestBatchRestart:
         session: AsyncSession,
     ) -> None:
         h = _auth(auth_token)
-        office_id = _setup_office(client, auth_token)
-        employee_id = _create_employee(client, auth_token)
+        workspace_id = _setup_workspace(client, auth_token)
+        entity_id = _create_entity(client, auth_token)
 
-        emp = await session.get(Employee, employee_id)
+        emp = await session.get(Entity, entity_id)
         assert emp is not None
         emp.migration_hash = "c" * 64
         await session.commit()
 
         ids = [
             await _create_instance(
-                client, auth_token, employee_id, office_id,
+                client, auth_token, entity_id, workspace_id,
                 status=InstanceStatus.pending.value,
             session=session,
             )
@@ -322,16 +332,16 @@ class TestBatchRestart:
         session: AsyncSession,
     ) -> None:
         h = _auth(auth_token)
-        office_id = _setup_office(client, auth_token)
-        employee_id = _create_employee(client, auth_token)
+        workspace_id = _setup_workspace(client, auth_token)
+        entity_id = _create_entity(client, auth_token)
 
         idle_id = await _create_instance(
-            client, auth_token, employee_id, office_id,
+            client, auth_token, entity_id, workspace_id,
             status=InstanceStatus.pending.value,
         session=session,
         )
         running_id = await _create_instance(
-            client, auth_token, employee_id, office_id,
+            client, auth_token, entity_id, workspace_id,
             status=InstanceStatus.running.value,
         session=session,
         )
@@ -351,10 +361,10 @@ class TestBatchRestart:
         session: AsyncSession,
     ) -> None:
         h = _auth(auth_token)
-        office_id = _setup_office(client, auth_token)
-        employee_id = _create_employee(client, auth_token)
+        workspace_id = _setup_workspace(client, auth_token)
+        entity_id = _create_entity(client, auth_token)
         await _create_instance(
-            client, auth_token, employee_id, office_id,
+            client, auth_token, entity_id, workspace_id,
             status=InstanceStatus.pending.value,
         session=session,
         )
@@ -371,11 +381,11 @@ class TestBatchRestart:
         session: AsyncSession,
     ) -> None:
         h = _auth(auth_token)
-        office_id = _setup_office(client, auth_token)
-        employee_id = _create_employee(client, auth_token)
+        workspace_id = _setup_workspace(client, auth_token)
+        entity_id = _create_entity(client, auth_token)
         ids = [
             await _create_instance(
-                client, auth_token, employee_id, office_id,
+                client, auth_token, entity_id, workspace_id,
                 status=InstanceStatus.pending.value,
             session=session,
             )

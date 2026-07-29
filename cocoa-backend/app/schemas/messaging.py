@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 class MessageSend(BaseModel):
     turn_text: str
-    office_id: str
+    workspace_id: str
 
 
 class MessageSendResult(BaseModel):

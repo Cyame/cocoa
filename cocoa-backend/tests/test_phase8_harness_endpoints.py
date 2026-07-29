@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.testclient import TestClient
 
 from app.models.instance import Instance
-from app.models.office import Membership, MembershipRole
+from app.models.workspace import Membership, MembershipRole
 from app.models.user import User
 
 
@@ -68,32 +68,32 @@ async def _bootstrap_instance(
     auth_user_id: str,
     session: AsyncSession,
     *,
-    office_name: str,
-    office_slug: str,
-    employee_slug: str,
-    employee_name: str,
+    workspace_name: str,
+    workspace_slug: str,
+    entity_slug: str,
+    entity_name: str,
 ) -> tuple[Instance, dict]:
-    """Create office + employee + instance via HTTP; return (Instance, headers).
+    """Create workspace + entity + instance via HTTP; return (Instance, headers).
 
-    Note (P14b-onboard2): the office creator is auto-added as an owner
-    Membership by ``POST /offices``, so we no longer manually issue a join
-    after office creation (which would now return 409 Conflict).
+    Note (P14b-onboard2): the workspace creator is auto-added as an owner
+    Membership by ``POST /workspaces``, so we no longer manually issue a join
+    after workspace creation (which would now return 409 Conflict).
     """
     h = {"Authorization": f"Bearer {auth_token}"}
-    office = client.post(
-        "/api/v1/offices",
+    workspace = client.post(
+        "/api/v1/workspaces",
         headers=h,
-        json={"name": office_name, "slug": office_slug},
+        json={"name": workspace_name, "slug": workspace_slug},
     ).json()
-    employee_id = client.post(
-        "/api/v1/employees",
+    entity_id = client.post(
+        "/api/v1/entities",
         headers=h,
-        json={"name": employee_name, "slug": employee_slug},
+        json={"name": entity_name, "slug": entity_slug},
     ).json()["id"]
     resp = client.post(
         "/api/v1/instances",
         headers=h,
-        json={"employee_id": employee_id, "office_id": office["id"]},
+        json={"entity_id": entity_id, "workspace_id": workspace["id"]},
     )
     assert resp.status_code == 201
     inst_id = resp.json()["id"]
@@ -110,8 +110,8 @@ async def test_interrupt_changes_status(
 ):
     inst_obj, h = await _bootstrap_instance(
         client, auth_token, auth_user_id, session,
-        office_name="Interrupt Office", office_slug="interrupt-office",
-        employee_slug="interrupt-emp", employee_name="Interrupt Employee",
+        workspace_name="Interrupt Workspace", workspace_slug="interrupt-workspace",
+        entity_slug="interrupt-emp", entity_name="Interrupt Entity",
     )
     await loop_state_factory(inst_obj, loop_status="running")
     await session.commit()
@@ -132,8 +132,8 @@ async def test_pause_and_resume(
 ):
     inst_obj, h = await _bootstrap_instance(
         client, auth_token, auth_user_id, session,
-        office_name="Pause Office", office_slug="pause-office",
-        employee_slug="pause-emp", employee_name="Pause Employee",
+        workspace_name="Pause Workspace", workspace_slug="pause-workspace",
+        entity_slug="pause-emp", entity_name="Pause Entity",
     )
     await loop_state_factory(inst_obj, loop_status="running")
     await session.commit()
@@ -155,8 +155,8 @@ async def test_status_endpoint(
 ):
     inst_obj, h = await _bootstrap_instance(
         client, auth_token, auth_user_id, session,
-        office_name="Status Office", office_slug="status-office",
-        employee_slug="status-emp", employee_name="Status Employee",
+        workspace_name="Status Workspace", workspace_slug="status-workspace",
+        entity_slug="status-emp", entity_name="Status Entity",
     )
     await loop_state_factory(inst_obj, loop_status="running")
     await session.commit()
@@ -178,8 +178,8 @@ async def test_capture_snapshot(
 ):
     inst_obj, h = await _bootstrap_instance(
         client, auth_token, auth_user_id, session,
-        office_name="Snapshot Office", office_slug="snapshot-office",
-        employee_slug="snapshot-emp", employee_name="Snapshot Employee",
+        workspace_name="Snapshot Workspace", workspace_slug="snapshot-workspace",
+        entity_slug="snapshot-emp", entity_name="Snapshot Entity",
     )
     valid_snapshot = {"todos": [{"status": "in_progress", "title": "x"}]}
     await loop_state_factory(inst_obj, boulder_snapshot=valid_snapshot)
@@ -193,7 +193,7 @@ async def test_capture_snapshot(
 
 async def test_p5_route_turn_unaffected_by_p8_changes(
     session: AsyncSession,
-    office_factory,
+    workspace_factory,
 ):
     """Verify P8 control-command branch does NOT break P5's bare-cmd drop.
 
@@ -210,10 +210,10 @@ async def test_p5_route_turn_unaffected_by_p8_changes(
     session.add(user)
     await session.flush()
 
-    office = await office_factory()
+    workspace = await workspace_factory()
     membership = Membership(
         user_id=user.id,
-        office_id=office.id,
+        workspace_id=workspace.id,
         posx=0,
         posy=0,
         role=MembershipRole.editor.value,
@@ -225,7 +225,7 @@ async def test_p5_route_turn_unaffected_by_p8_changes(
     results = await route_turn(
         session=session,
         raw_text="/interrupt",
-        office_id=office.id,
+        workspace_id=workspace.id,
         from_user_id=user.id,
     )
 
@@ -234,5 +234,5 @@ async def test_p5_route_turn_unaffected_by_p8_changes(
     assert len(results) >= 1
     for r in results:
         assert r.results == []
-        assert r.target_employee is None
+        assert r.target_entity is None
         assert r.cmd == "/interrupt"

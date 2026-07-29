@@ -16,7 +16,7 @@ class ContentRef(BaseModel):
     Attributes:
         scope: Mandatory content scope.
         path: Optional path within the scope (e.g. a file path for
-            ``workspace``, a key for ``blackboard``, etc.).
+            ``workspace``, a key for ``central_hub``, etc.).
     """
 
     scope: Literal["workspace", "fornix", "vault", "memory"]
@@ -35,7 +35,7 @@ class Directive(BaseModel):
     """A single directive within a turn — one command issued by the user.
 
     Attributes:
-        target_employee: Optional employee/agent this directive is
+        target_entity: Optional entity/agent this directive is
             addressed to.
         cmd: The command verb (e.g. ``/read``, ``/write``).
         args: Positional arguments for the command.
@@ -44,7 +44,7 @@ class Directive(BaseModel):
             (populated by P4's parser, empty when built programmatically).
     """
 
-    target_employee: str | None = None
+    target_entity: str | None = None
     cmd: str
     args: list[str] = Field(default_factory=list)
     content_ref: ContentRef | None = None

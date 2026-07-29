@@ -1,17 +1,13 @@
-"""Version 1 API aggregation router.
-
-Sub-routers are registered by P4-P10. P3 provides only the aggregation point.
-"""
+"""Version 1 API aggregation router (PRD-v2 paths)."""
 
 from fastapi import APIRouter
 
+from app.api.v1.ai_genes import router as ai_genes_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.base_classes import router as base_classes_router
 from app.api.v1.central_hubs import router as central_hubs_router
-from app.api.v1.corridor_node import router as corridor_node_router
 from app.api.v1.deploy import router as deploy_router
-from app.api.v1.employee_presets import router as employee_presets_router
-from app.api.v1.employees import router as employees_router
+from app.api.v1.entities import router as entities_router
 from app.api.v1.events import router as events_router
 from app.api.v1.harness import router as harness_router
 from app.api.v1.instances import router as instances_router
@@ -19,17 +15,19 @@ from app.api.v1.internal import router as internal_router
 from app.api.v1.learning import router as learning_router
 from app.api.v1.memory import router as memory_router
 from app.api.v1.messaging import router as messaging_router
-from app.api.v1.office_live_status import router as office_live_status_router
-from app.api.v1.offices import router as offices_router
+from app.api.v1.namespaces import router as namespaces_router
+from app.api.v1.organizations import router as organizations_router
+from app.api.v1.user_genes import router as user_genes_router
+from app.api.v1.workspace_live_status import router as workspace_live_status_router
+from app.api.v1.workspaces import router as workspaces_router
 
 api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(auth_router)
+api_router.include_router(ai_genes_router)
 api_router.include_router(base_classes_router)
 api_router.include_router(central_hubs_router)
-api_router.include_router(corridor_node_router)
 api_router.include_router(deploy_router)
-api_router.include_router(employee_presets_router)
-api_router.include_router(employees_router)
+api_router.include_router(entities_router)
 api_router.include_router(events_router)
 api_router.include_router(harness_router)
 api_router.include_router(instances_router)
@@ -37,5 +35,8 @@ api_router.include_router(internal_router)
 api_router.include_router(learning_router)
 api_router.include_router(memory_router)
 api_router.include_router(messaging_router)
-api_router.include_router(office_live_status_router)
-api_router.include_router(offices_router)
+api_router.include_router(namespaces_router)
+api_router.include_router(organizations_router)
+api_router.include_router(user_genes_router)
+api_router.include_router(workspace_live_status_router)
+api_router.include_router(workspaces_router)

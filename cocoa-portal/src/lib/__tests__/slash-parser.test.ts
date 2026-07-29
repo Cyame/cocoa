@@ -9,7 +9,7 @@ import {
 describe('slash-parser', () => {
   it('parses @slug /cmd @workspace:path into 1 directive + 1 content-ref', () => {
     // Note: 密士 (CJK) does not match the [a-zA-Z0-9_-]+ target regex,
-    // so target_employee is null - mirroring the Python parser exactly.
+    // so target_entity is null - mirroring the Python parser exactly.
     // The /plan command still makes this a directive, and @workspace:foo.md
     // is extracted as a content-ref.
     const turn = parse_turn('@密士 /plan @workspace:foo.md');
@@ -19,7 +19,7 @@ describe('slash-parser', () => {
 
     const d: Directive = turn.directives[0];
     expect(d.cmd).toBe('/plan');
-    expect(d.target_employee).toBeNull();
+    expect(d.target_entity).toBeNull();
     expect(d.args).toEqual(['@密士']);
     expect(d.content_ref).not.toBeNull();
     expect(d.content_ref?.scope).toBe('workspace');
@@ -44,7 +44,7 @@ describe('slash-parser', () => {
     expect(turn.general_text).toBeNull();
 
     const d = turn.directives[0];
-    expect(d.target_employee).toBe('unknown');
+    expect(d.target_entity).toBe('unknown');
     expect(d.cmd).toBe('/plan');
     expect(d.args).toEqual([]);
     expect(d.content_ref).toBeNull();

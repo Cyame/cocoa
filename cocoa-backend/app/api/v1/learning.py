@@ -2,12 +2,12 @@
 
 Endpoints for the skill-distillation and capability-lifecycle flows:
 
-- GET  /learning/memories/{employee_id}/summary       — aggregated memory counts
-- POST /learning/employees/{employee_id}/distill      — distill memories into a new preset (201)
+- GET  /learning/memories/{entity_id}/summary       — aggregated memory counts
+- POST /learning/entities/{entity_id}/distill      — distill memories into a new preset (201)
 - GET  /learning/presets/{preset_id}                  — fetch a distilled preset result
 - POST /learning/instances/{iid}/reap                 — memory → capability (instance-private)
-- POST /learning/entities/{eid}/promote               — instance cap → employee shared
-- POST /learning/entities/{eid}/distill?action=transmute — employee → base class
+- POST /learning/entities/{eid}/promote               — instance cap → entity shared
+- POST /learning/entities/{eid}/distill?action=transmute — entity → base class
 - POST /learning/capabilities/combine                 — N capabilities → 1 gene
 """
 
@@ -32,11 +32,12 @@ from app.core.event_types import (
 )
 from app.core.events import emit
 from app.core.migration_hash import (
-    compute_employee_migration_hash,
+    compute_entity_migration_hash,
     compute_migration_hash,
 )
 from app.core.openapi import add_error_responses
-from app.core.permissions import require_office_role
+from app.core.pagination import OffsetPage, paginate_offset
+from app.core.permissions import require_workspace_role
 from app.models.ai_gene import AiGene
 from app.models.base_class import BaseClass
 from app.models.capability_market import (
@@ -44,9 +45,10 @@ from app.models.capability_market import (
     CapabilityMarketEntry,
     CapabilityType,
 )
-from app.models.employee import Employee, EmployeePreset
+from app.models.entity import Entity
 from app.models.instance import Instance
-from app.models.memory import MemoryEntry
+from app.models.memory import Memory
+from app.schemas.capability_market import CapabilityMarketEntryOut
 from app.schemas.learning import (
     AggregatedMemoryCount,
     CombineRequest,
@@ -79,25 +81,55 @@ _REAP_DESC_CAP = 200
 # ---------------------------------------------------------------------------
 
 
-async def _get_office_id_for_employee(db: DB, employee_id: str) -> str:
-    """Return the office_id for the first Instance of *employee_id*.
+async def _get_workspace_id_for_entity(db: DB, entity_id: str) -> str:
+    """Return the workspace_id for the first Instance of *entity_id*.
 
-    Raises NotFoundError if the employee has no instance (and thus no office).
+    Raises NotFoundError if the entity has no instance (and thus no workspace).
     """
     result = await db.execute(
-        select(Instance.office_id).where(
-            Instance.employee_id == employee_id,
+        select(Instance.workspace_id).where(
+            Instance.entity_id == entity_id,
             Instance.deleted_at.is_(None),
         ).limit(1)
     )
-    office_id = result.scalar_one_or_none()
-    if office_id is None:
+    workspace_id = result.scalar_one_or_none()
+    if workspace_id is None:
         raise NotFoundError(
-            "employee.no_office",
-            "errors.employee.no_office",
-            f"Employee {employee_id!r} is not associated with any office",
+            "entity.no_workspace",
+            "errors.entity.no_workspace",
+            f"Entity {entity_id!r} is not associated with any workspace",
         )
-    return office_id
+    return workspace_id
+
+
+# ---------------------------------------------------------------------------
+# Capability market (L1) — list
+# ---------------------------------------------------------------------------
+
+
+@router.get("/capability-market", response_model=OffsetPage[CapabilityMarketEntryOut])
+async def list_capability_market(
+    db: DB,
+    current_user: CurrentUserDep,
+    type: str | None = Query(None, alias="type"),
+    tag: str | None = Query(None),
+    created_via: str | None = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+) -> OffsetPage:
+    """Return paginated L1 capability market entries with optional filters."""
+    stmt = (
+        select(CapabilityMarketEntry)
+        .where(CapabilityMarketEntry.deleted_at.is_(None))
+        .order_by(CapabilityMarketEntry.name)
+    )
+    if type is not None:
+        stmt = stmt.where(CapabilityMarketEntry.type == type)
+    if created_via is not None:
+        stmt = stmt.where(CapabilityMarketEntry.created_via == created_via)
+    if tag is not None:
+        stmt = stmt.where(CapabilityMarketEntry.tags.contains([tag]))
+    return await paginate_offset(db, stmt, offset, limit)
 
 
 # ---------------------------------------------------------------------------
@@ -105,43 +137,43 @@ async def _get_office_id_for_employee(db: DB, employee_id: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-@router.get("/memories/{employee_id}/summary", response_model=MemorySummaryOut)
+@router.get("/memories/{entity_id}/summary", response_model=MemorySummaryOut)
 async def get_memory_summary(
-    employee_id: str,
+    entity_id: str,
     db: DB,
     current_user: CurrentUserDep,
     kind: list[str] | None = Query(None),
     limit: int = Query(50, ge=1, le=200),
 ) -> MemorySummaryOut:
-    """Return aggregated memory counts and sample data for an employee.
+    """Return aggregated memory counts and sample data for an entity.
 
-    Requires ``viewer`` role in the employee's office.
+    Requires ``viewer`` role in the entity's workspace.
     Does **not** emit events (read-only).
     """
-    # 1. Find Employee.
-    emp = await db.get(Employee, employee_id)
+    # 1. Find Entity.
+    emp = await db.get(Entity, entity_id)
     if emp is None or emp.deleted_at is not None:
         raise NotFoundError(
-            "employee.not_found",
-            "errors.employee.not_found",
-            f"Employee {employee_id!r} not found",
+            "entity.not_found",
+            "errors.entity.not_found",
+            f"Entity {entity_id!r} not found",
         )
 
-    # 2. Get office_id from employee's instance → check permission.
-    office_id = await _get_office_id_for_employee(db, employee_id)
-    await require_office_role(db, current_user.user_id, office_id, "viewer")
+    # 2. Get workspace_id from entity's instance → check permission.
+    workspace_id = await _get_workspace_id_for_entity(db, entity_id)
+    await require_workspace_role(db, current_user.user_id, workspace_id, "viewer")
 
     # 3. Aggregate counts by kind (direct SQL).
     count_q = (
-        select(MemoryEntry.kind, func.count(MemoryEntry.id))
+        select(Memory.kind, func.count(Memory.id))
         .where(
-            MemoryEntry.employee_id == employee_id,
-            MemoryEntry.deleted_at.is_(None),
+            Memory.entity_id == entity_id,
+            Memory.deleted_at.is_(None),
         )
-        .group_by(MemoryEntry.kind)
+        .group_by(Memory.kind)
     )
     if kind is not None:
-        count_q = count_q.where(MemoryEntry.kind.in_(kind))
+        count_q = count_q.where(Memory.kind.in_(kind))
 
     count_result = await db.execute(count_q)
     kind_counter: dict[str, int] = {
@@ -165,14 +197,14 @@ async def get_memory_summary(
     # 4. Sample lessons (first <limit> lesson entries with non-empty content).
     #    Plan specifies first 5, but we use the query param for flexibility.
     sample_lessons_q = (
-        select(MemoryEntry.content)
+        select(Memory.content)
         .where(
-            MemoryEntry.employee_id == employee_id,
-            MemoryEntry.kind == "lesson",
-            MemoryEntry.content.isnot(None),
-            MemoryEntry.deleted_at.is_(None),
+            Memory.entity_id == entity_id,
+            Memory.kind == "lesson",
+            Memory.content.isnot(None),
+            Memory.deleted_at.is_(None),
         )
-        .order_by(MemoryEntry.created_at.asc())
+        .order_by(Memory.created_at.asc())
         .limit(min(limit, 5))
     )
     lesson_result = await db.execute(sample_lessons_q)
@@ -180,15 +212,15 @@ async def get_memory_summary(
 
     # 5. Sample keys by kind (up to 5 per kind).
     keys_q = (
-        select(MemoryEntry.kind, MemoryEntry.key)
+        select(Memory.kind, Memory.key)
         .where(
-            MemoryEntry.employee_id == employee_id,
-            MemoryEntry.key.isnot(None),
-            MemoryEntry.deleted_at.is_(None),
+            Memory.entity_id == entity_id,
+            Memory.key.isnot(None),
+            Memory.deleted_at.is_(None),
         )
     )
     if kind is not None:
-        keys_q = keys_q.where(MemoryEntry.kind.in_(kind))
+        keys_q = keys_q.where(Memory.kind.in_(kind))
 
     keys_result = await db.execute(keys_q)
     sample_keys_by_kind: dict[str, list[str]] = {}
@@ -200,7 +232,7 @@ async def get_memory_summary(
             sample_keys_by_kind[k_kind].append(k_key)
 
     return MemorySummaryOut(
-        employee_id=employee_id,
+        entity_id=entity_id,
         aggregated_counts=aggregated,
         sample_lessons=sample_lessons,
         sample_keys_by_kind=sample_keys_by_kind,
@@ -213,60 +245,60 @@ async def get_memory_summary(
 
 
 @router.post(
-    "/employees/{employee_id}/distill",
+    "/entities/{entity_id}/distill",
     response_model=DistillResultOut,
     status_code=status.HTTP_201_CREATED,
 )
-async def distill_employee(
-    employee_id: str,
+async def distill_entity(
+    entity_id: str,
     body: DistillRequest,
     db: DB,
     current_user: CurrentUserDep,
 ) -> DistillResultOut:
-    """Distill an employee's memory entries into a new EmployeePreset.
+    """Distill an entity's memory entries into a new BaseClass.
 
-    Requires ``editor`` role in the employee's office.
+    Requires ``editor`` role in the entity's workspace.
     Emits ``LEARNING_DISTILLATION_COMPLETED`` inside the transaction.
     Returns 201 with the new preset identity and manifest preview.
     """
-    # 1. Find Employee.
-    emp = await db.get(Employee, employee_id)
+    # 1. Find Entity.
+    emp = await db.get(Entity, entity_id)
     if emp is None or emp.deleted_at is not None:
         raise NotFoundError(
-            "employee.not_found",
-            "errors.employee.not_found",
-            f"Employee {employee_id!r} not found",
+            "entity.not_found",
+            "errors.entity.not_found",
+            f"Entity {entity_id!r} not found",
         )
 
-    # 2. Permission check — editor in the employee's office.
-    office_id = await _get_office_id_for_employee(db, employee_id)
-    await require_office_role(db, current_user.user_id, office_id, "editor")
+    # 2. Permission check — editor in the entity's workspace.
+    workspace_id = await _get_workspace_id_for_entity(db, entity_id)
+    await require_workspace_role(db, current_user.user_id, workspace_id, "editor")
 
     # 3. Run distillation.
     try:
         result = await AggregatingDistiller().distill(
-            employee_id,
+            entity_id,
             request=body,
             session=db,
         )
     except DistillationError as exc:
-        if exc.code == "employee.not_found":
+        if exc.code == "entity.not_found":
             raise NotFoundError(exc.code, exc.message_key, exc.message) from exc
         raise ValidationError(exc.code, exc.message_key, exc.message) from exc
 
     # 4. Slug uniqueness check.
     slug = result.new_preset_slug
     existing = await db.execute(
-        select(EmployeePreset).where(
-            EmployeePreset.slug == slug,
-            EmployeePreset.deleted_at.is_(None),
+        select(BaseClass).where(
+            BaseClass.slug == slug,
+            BaseClass.deleted_at.is_(None),
         )
     )
     if existing.scalar_one_or_none() is not None:
         raise ConflictError(
-            "employee_preset.slug_taken",
-            "errors.employee_preset.slug_taken",
-            f"EmployeePreset slug {slug!r} is already taken",
+            "base_class.slug_taken",
+            "errors.base_class.slug_taken",
+            f"BaseClass slug {slug!r} is already taken",
         )
 
     # 5. Create new preset inside transaction.
@@ -276,7 +308,7 @@ async def distill_employee(
     if result.source_preset_slug:
         manifest_dict["source_preset_slug"] = result.source_preset_slug
 
-    new_preset = EmployeePreset(
+    new_preset = BaseClass(
         slug=slug,
         name=preset_name,
         manifest=manifest_dict,
@@ -289,10 +321,10 @@ async def distill_employee(
         LEARNING_DISTILLATION_COMPLETED,
         actor_type="user",
         actor_id=current_user.user_id,
-        resource_type="employee_preset",
+        resource_type="base_class",
         resource_id=new_preset.id,
         payload={
-            "employee_id": employee_id,
+            "entity_id": entity_id,
             "new_preset_slug": slug,
             "source_preset_slug": result.source_preset_slug,
             "aggregated_counts": {
@@ -316,7 +348,7 @@ async def distill_employee(
         new_preset_name=new_preset.name,
         manifest_preview=result.manifest_preview,
         aggregated_memory=result.aggregated_memory,
-        source_employee_id=employee_id,
+        source_entity_id=entity_id,
         source_preset_slug=result.source_preset_slug,
     )
 
@@ -335,14 +367,14 @@ async def get_learning_preset(
     """Fetch a previously distilled preset by its UUID.
 
     Returns the distill result with manifest preview.
-    Does **not** require office membership — any authenticated user can view.
+    Does **not** require workspace membership — any authenticated user can view.
     """
-    preset = await db.get(EmployeePreset, preset_id)
+    preset = await db.get(BaseClass, preset_id)
     if preset is None or preset.deleted_at is not None:
         raise NotFoundError(
-            "employee_preset.not_found",
-            "errors.employee_preset.not_found",
-            f"EmployeePreset {preset_id!r} not found",
+            "base_class.not_found",
+            "errors.base_class.not_found",
+            f"BaseClass {preset_id!r} not found",
         )
 
     manifest_data = preset.manifest if isinstance(preset.manifest, dict) else {}
@@ -358,7 +390,7 @@ async def get_learning_preset(
         new_preset_name=preset.name,
         manifest_preview=manifest_preview,
         aggregated_memory=AggregatedMemoryCount(),
-        source_employee_id="",
+        source_entity_id="",
         source_preset_slug=source_preset_slug,
     )
 
@@ -401,11 +433,11 @@ async def reap_instance(
     db: DB,
     current_user: CurrentUserDep,
 ) -> ReapResultOut:
-    """Reap reusable capabilities from an instance's MemoryEntry log.
+    """Reap reusable capabilities from an instance's Memory log.
 
     Per PRD §13.6.3: distil memory entries into capability dicts, write
     them to the L1 capability_market (via ``created_via="reap"``) and to
-    the instance's local runtime_config. The Employee row is NOT
+    the instance's local runtime_config. The Entity row is NOT
     mutated (``entity_changed: false``).
     """
     instance = await db.get(Instance, instance_id)
@@ -416,29 +448,29 @@ async def reap_instance(
             f"Instance {instance_id!r} not found",
         )
 
-    employee = await db.get(Employee, instance.employee_id)
-    if employee is None or employee.deleted_at is not None:
+    entity = await db.get(Entity, instance.entity_id)
+    if entity is None or entity.deleted_at is not None:
         raise NotFoundError(
-            "employee.not_found",
-            "errors.employee.not_found",
-            f"Employee {instance.employee_id!r} not found",
+            "entity.not_found",
+            "errors.entity.not_found",
+            f"Entity {instance.entity_id!r} not found",
         )
 
-    await require_office_role(db, current_user.user_id, instance.office_id, "viewer")
+    await require_workspace_role(db, current_user.user_id, instance.workspace_id, "viewer")
 
     # 1. Pull memory entries visible to this instance.
     mem_q = (
-        select(MemoryEntry)
+        select(Memory)
         .where(
-            MemoryEntry.deleted_at.is_(None),
-            (MemoryEntry.source_instance_id == instance_id)
-            | (MemoryEntry.employee_id == instance.employee_id),
+            Memory.deleted_at.is_(None),
+            (Memory.source_instance_id == instance_id)
+            | (Memory.entity_id == instance.entity_id),
         )
-        .order_by(MemoryEntry.created_at.asc())
+        .order_by(Memory.created_at.asc())
         .limit(body.max_capabilities)
     )
     if body.memory_kind_filter:
-        mem_q = mem_q.where(MemoryEntry.kind.in_(body.memory_kind_filter))
+        mem_q = mem_q.where(Memory.kind.in_(body.memory_kind_filter))
 
     mem_rows = (await db.execute(mem_q)).scalars().all()
     memory_consumed = len(mem_rows)
@@ -491,7 +523,7 @@ async def reap_instance(
             description=cap["description"],
             tags=cap["tags"],
             created_via=CapabilityCreatedVia.reap.value,
-            source_entity_slug=employee.slug,
+            source_entity_slug=entity.slug,
         )
         db.add(market_entry)
         existing_names.add(cap["name"])
@@ -540,26 +572,26 @@ async def reap_instance(
 # ---------------------------------------------------------------------------
 
 
-@router.post("/entities/{employee_id}/promote", response_model=PromoteResultOut)
-async def promote_employee(
-    employee_id: str,
+@router.post("/entities/{entity_id}/promote", response_model=PromoteResultOut)
+async def promote_entity(
+    entity_id: str,
     body: PromoteRequest,
     db: DB,
     current_user: CurrentUserDep,
 ) -> PromoteResultOut:
-    """Promote an instance's capability set into the Employee.
+    """Promote an instance's capability set into the Entity.
 
     Per PRD §13.6.4: idempotent union of instance caps into
-    ``Employee.capabilities`` (matched by capability name), refresh of
+    ``Entity.capabilities`` (matched by capability name), refresh of
     ``migration_hash``, and an event payload that lists how many
     other instances are now outdated (``active_hash != migration_hash``).
     """
-    employee = await db.get(Employee, employee_id)
-    if employee is None or employee.deleted_at is not None:
+    entity = await db.get(Entity, entity_id)
+    if entity is None or entity.deleted_at is not None:
         raise NotFoundError(
-            "employee.not_found",
-            "errors.employee.not_found",
-            f"Employee {employee_id!r} not found",
+            "entity.not_found",
+            "errors.entity.not_found",
+            f"Entity {entity_id!r} not found",
         )
 
     # 1. Resolve source instance.
@@ -571,17 +603,17 @@ async def promote_employee(
                 "errors.instance.not_found",
                 f"Instance {body.from_instance_id!r} not found",
             )
-        if instance.employee_id != employee_id:
+        if instance.entity_id != entity_id:
             raise ValidationError(
-                "instance.employee_mismatch",
-                "errors.instance.employee_mismatch",
-                "Instance does not belong to the given Employee",
+                "instance.entity_mismatch",
+                "errors.instance.entity_mismatch",
+                "Instance does not belong to the given Entity",
             )
     else:
         result = await db.execute(
             select(Instance)
             .where(
-                Instance.employee_id == employee_id,
+                Instance.entity_id == entity_id,
                 Instance.deleted_at.is_(None),
             )
             .order_by(Instance.created_at.asc())
@@ -590,21 +622,21 @@ async def promote_employee(
         instance = result.scalar_one_or_none()
         if instance is None:
             raise NotFoundError(
-                "employee.no_instance",
-                "errors.employee.no_instance",
-                f"Employee {employee_id!r} has no active instance",
+                "entity.no_instance",
+                "errors.entity.no_instance",
+                f"Entity {entity_id!r} has no active instance",
             )
 
-    await require_office_role(db, current_user.user_id, instance.office_id, "editor")
+    await require_workspace_role(db, current_user.user_id, instance.workspace_id, "editor")
 
     # 2. Compute instance's effective capability set.
     instance_runtime = instance.runtime_config or {}
     reaped_caps = list(instance_runtime.get("reaped_capabilities", []))
     if not reaped_caps:
-        reaped_caps = list(employee.capabilities or [])
+        reaped_caps = list(entity.capabilities or [])
 
     # 3. Build idempotent union.
-    existing_caps = list(employee.capabilities or [])
+    existing_caps = list(entity.capabilities or [])
     existing_names = {c.get("name") for c in existing_caps if c.get("name")}
     promoted_now = 0
     merged = list(existing_caps)
@@ -616,15 +648,14 @@ async def promote_employee(
         existing_names.add(name)
         promoted_now += 1
 
-    # 4. Decide prompt snapshot.
-    prompt_regen = employee.prompt_regen_snapshot
+    # 4. Decide prompt snapshot (prefer Entity.system_prompt overlay).
+    prompt_regen = entity.system_prompt
     if body.include_prompt_regen:
-        # v1: deterministic stub — hash of cap names + employee slug.
         seed = hashlib.sha256(
-            (employee.slug + "|" + ",".join(sorted(existing_names))).encode("utf-8"),
+            (entity.slug + "|" + ",".join(sorted(existing_names))).encode("utf-8"),
         ).hexdigest()[:12]
         prompt_regen = (
-            f"You are {employee.name}, an upgraded template (seed={seed}). "
+            f"You are {entity.name}, an upgraded template (seed={seed}). "
             f"Capabilities: {', '.join(sorted(existing_names))}."
         )
 
@@ -632,7 +663,7 @@ async def promote_employee(
     if body.snapshot_only:
         return PromoteResultOut(
             promoted_at=datetime.now(timezone.utc).isoformat(),
-            entity_id=employee_id,
+            entity_id=entity_id,
             entity_promotion_migration_hash=compute_migration_hash(
                 merged, prompt_regen,
             ),
@@ -643,49 +674,20 @@ async def promote_employee(
             capability_market_uploaded=0,
         )
 
-    # 6. Persist to Employee.
-    employee.capabilities = merged
-    employee.prompt_regen_snapshot = prompt_regen
-    new_migration_hash = compute_employee_migration_hash(employee)
-    employee.migration_hash = new_migration_hash
+    # 6. Persist to Entity only (Chain B — never write capability_market).
+    entity.capabilities = merged
+    if body.include_prompt_regen and prompt_regen:
+        entity.system_prompt = prompt_regen
+    new_migration_hash = compute_entity_migration_hash(entity)
+    entity.migration_hash = new_migration_hash
 
-    # 7. Write promoted caps to capability_market (idempotent by name).
     market_uploaded = 0
-    if promoted_now:
-        new_names = [
-            c["name"] for c in merged[-promoted_now:]
-            if c.get("name")
-        ]
-        existing_market_names: set[str] = set()
-        if new_names:
-            market_q = await db.execute(
-                select(CapabilityMarketEntry.name).where(
-                    CapabilityMarketEntry.name.in_(new_names),
-                    CapabilityMarketEntry.deleted_at.is_(None),
-                )
-            )
-            existing_market_names = {row[0] for row in market_q}
-        for cap in merged[-promoted_now:]:
-            name = cap.get("name")
-            if not name or name in existing_market_names:
-                continue
-            market_entry = CapabilityMarketEntry(
-                name=name,
-                type=cap.get("type", CapabilityType.skill.value),
-                description=cap.get("description"),
-                tags=cap.get("tags") or ["promoted"],
-                created_via=CapabilityCreatedVia.promote.value,
-                source_entity_slug=employee.slug,
-            )
-            db.add(market_entry)
-            existing_market_names.add(name)
-            market_uploaded += 1
 
-    # 8. Count outdated instances (excluding the source instance).
+    # 7. Count outdated instances (excluding the source instance).
     sibling_q = (
         select(Instance)
         .where(
-            Instance.employee_id == employee_id,
+            Instance.entity_id == entity_id,
             Instance.id != instance.id,
             Instance.deleted_at.is_(None),
         )
@@ -695,15 +697,15 @@ async def promote_employee(
         1 for s in siblings if s.active_hash != new_migration_hash
     )
 
-    # 9. Emit event.
+    # 8. Emit event.
     await emit(
         LEARNING_PROMOTE_COMPLETED,
         actor_type="user",
         actor_id=current_user.user_id,
-        resource_type="employee",
-        resource_id=employee.id,
+        resource_type="entity",
+        resource_id=entity.id,
         payload={
-            "employee_id": employee_id,
+            "entity_id": entity_id,
             "new_migration_hash": new_migration_hash,
             "capability_promoted_count": promoted_now,
             "outdated_instances_count": outdated_count,
@@ -715,7 +717,7 @@ async def promote_employee(
 
     return PromoteResultOut(
         promoted_at=datetime.now(timezone.utc).isoformat(),
-        entity_id=employee_id,
+        entity_id=entity_id,
         entity_promotion_migration_hash=new_migration_hash,
         capability_promoted_count=promoted_now,
         prompt_regenerated=body.include_prompt_regen,
@@ -731,63 +733,55 @@ async def promote_employee(
 
 
 @router.post(
-    "/entities/{employee_id}/distill",
+    "/entities/{entity_id}/transmute",
     response_model=TransmuteResultOut,
     status_code=status.HTTP_201_CREATED,
 )
-async def transmute_employee(
-    employee_id: str,
+async def transmute_entity(
+    entity_id: str,
     body: TransmuteRequest,
-    action: str = Query("distill", description="Action type; 'transmute' for §13.6.5"),
     db: DB = None,
     current_user: CurrentUserDep = None,
 ) -> TransmuteResultOut:
-    """Distill an Employee into a new BaseClass (L3 神职).
+    """Distill an Entity into a new BaseClass (L3 神职).
 
-    Per PRD §13.6.5: pure derivative operation. The source Employee is
+    Per PRD §13.6.5: pure derivative operation. The source Entity is
     NOT mutated and capability_market is NOT touched. Only the new
     BaseClass row is created.
     """
-    if action != "transmute":
-        raise ValidationError(
-            "learning.action_unsupported",
-            "errors.learning.action_unsupported",
-            f"Action {action!r} is not supported on this endpoint; expected 'transmute'",
-        )
-
-    employee = await db.get(Employee, employee_id)
-    if employee is None or employee.deleted_at is not None:
+    entity = await db.get(Entity, entity_id)
+    if entity is None or entity.deleted_at is not None:
         raise NotFoundError(
-            "employee.not_found",
-            "errors.employee.not_found",
-            f"Employee {employee_id!r} not found",
+            "entity.not_found",
+            "errors.entity.not_found",
+            f"Entity {entity_id!r} not found",
         )
 
-    # Find an office for the employee to scope auth.
+    # Find an workspace for the entity to scope auth.
     inst_q = await db.execute(
-        select(Instance.office_id).where(
-            Instance.employee_id == employee_id,
+        select(Instance.workspace_id).where(
+            Instance.entity_id == entity_id,
             Instance.deleted_at.is_(None),
         ).limit(1)
     )
-    office_id = inst_q.scalar_one_or_none()
-    if office_id is None:
+    workspace_id = inst_q.scalar_one_or_none()
+    if workspace_id is None:
         raise NotFoundError(
-            "employee.no_office",
-            "errors.employee.no_office",
-            f"Employee {employee_id!r} is not associated with any office",
+            "entity.no_workspace",
+            "errors.entity.no_workspace",
+            f"Entity {entity_id!r} is not associated with any workspace",
         )
 
-    await require_office_role(db, current_user.user_id, office_id, "editor")
+    await require_workspace_role(db, current_user.user_id, workspace_id, "editor")
 
     # 1. Build the new manifest.
     manifest = {
         "provider_config": {},
         "default_model": "tbd",
         "commands": [],
-        "default_capabilities": list(employee.capabilities or []),
+        "default_capabilities": list(entity.capabilities or []),
         "default_gene_refs": [],
-        "system_prompt": employee.prompt_regen_snapshot or "",
+        "system_prompt": entity.system_prompt or "",
     }
 
     # 2. Slug uniqueness check.
@@ -811,7 +805,7 @@ async def transmute_employee(
             new_base_class_slug=body.target_base_class_slug,
             new_base_class_name=body.target_base_class_name,
             manifest_preview=manifest,
-            source_employee_id=employee_id,
+            source_entity_id=entity_id,
         )
 
     # 4. Create BaseClass.
@@ -832,7 +826,7 @@ async def transmute_employee(
         resource_type="base_class",
         resource_id=new_bc.id,
         payload={
-            "source_employee_id": employee_id,
+            "source_entity_id": entity_id,
             "new_base_class_slug": new_bc.slug,
             "capability_count": len(manifest["default_capabilities"]),
         },
@@ -847,7 +841,7 @@ async def transmute_employee(
         new_base_class_slug=new_bc.slug,
         new_base_class_name=new_bc.name,
         manifest_preview=manifest,
-        source_employee_id=employee_id,
+        source_entity_id=entity_id,
     )
 
 
@@ -931,10 +925,8 @@ async def combine_capabilities(
     new_gene = AiGene(
         slug=body.gene_slug,
         name=body.gene_name,
-        kind=body.kind,
         tags=body.tags or [],
         manifest=manifest,
-        gene_slugs=[],  # genome refs are an orthogonal concern
     )
     db.add(new_gene)
     await db.flush()
@@ -948,7 +940,6 @@ async def combine_capabilities(
         resource_id=new_gene.id,
         payload={
             "gene_slug": body.gene_slug,
-            "kind": body.kind,
             "referenced_capabilities": list(body.capability_names),
         },
         session=db,

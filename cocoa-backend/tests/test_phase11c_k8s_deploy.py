@@ -45,12 +45,12 @@ def deploy_app(session: AsyncSession) -> FastAPI:
 
 
 @pytest.fixture
-def deploy_factory(session: AsyncSession, office_factory, employee_factory):
+def deploy_factory(session: AsyncSession, workspace_factory, entity_factory):
     async def create(name: str, **kwargs):
-        office = await office_factory()
-        employee = await employee_factory()
+        workspace = await workspace_factory()
+        entity = await entity_factory()
         return await deploy_instance(
-            name, "v11", office_id=office.id, employee_id=employee.id, db=session, **kwargs
+            name, "v11", workspace_id=workspace.id, entity_id=entity.id, db=session, **kwargs
         )
 
     return create

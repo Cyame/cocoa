@@ -35,13 +35,15 @@ from app.core.event_types import (
     INSTANCE_STOPPED,
 )
 from app.core.events import emit
+from app.core.migration_hash import compute_entity_migration_hash
 from app.core.openapi import add_error_responses
+from app.core.overlay import resolve_instance_agent_config
 from app.core.pagination import OffsetPage, paginate_offset
-from app.core.permissions import require_office_role
+from app.core.permissions import require_workspace_role
 from app.core.workspace import generate_workspace_path
-from app.models.employee import Employee
+from app.models.entity import Entity
 from app.models.instance import Instance, InstanceStatus
-from app.models.office import Membership, Office
+from app.models.workspace import Membership, Workspace
 from app.schemas.instance import (
     InstanceCreate,
     InstanceOut,
@@ -67,6 +69,18 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/instances", tags=["Instances"])
 add_error_responses(router)
+
+
+async def _refresh_instance_agent_config(db: DB, instance: Instance) -> None:
+    """Resolve BaseClass ⊕ Entity overlay into ``runtime_config.agent_config``."""
+    entity = await db.get(Entity, instance.entity_id)
+    if entity is None or entity.deleted_at is not None:
+        return
+    agent_config = await resolve_instance_agent_config(db, entity)
+    runtime_config = dict(instance.runtime_config or {})
+    runtime_config["agent_config"] = agent_config
+    instance.runtime_config = runtime_config
+    instance.active_hash = compute_entity_migration_hash(entity)
 
 
 class FailBody(BaseModel):
@@ -119,25 +133,25 @@ async def list_instances(
     current_user: CurrentUserDep,
     limit: int = 50,
     offset: int = 0,
-    employee_id: str | None = None,
-    office_id: str | None = None,
+    entity_id: str | None = None,
+    workspace_id: str | None = None,
     status: str | None = None,
 ) -> OffsetPage:
     """Return a paginated list of active (non-deleted) instances.
 
-    Optional filters: ``employee_id``, ``office_id``, ``status``.
+    Optional filters: ``entity_id``, ``workspace_id``, ``status``.
     """
     stmt = select(Instance).where(Instance.deleted_at.is_(None))
 
-    if employee_id is not None:
-        stmt = stmt.where(Instance.employee_id == employee_id)
-    if office_id is not None:
-        await require_office_role(db, current_user.user_id, office_id, "viewer")
-        stmt = stmt.where(Instance.office_id == office_id)
+    if entity_id is not None:
+        stmt = stmt.where(Instance.entity_id == entity_id)
+    if workspace_id is not None:
+        await require_workspace_role(db, current_user.user_id, workspace_id, "viewer")
+        stmt = stmt.where(Instance.workspace_id == workspace_id)
     else:
         stmt = stmt.where(
-            Instance.office_id.in_(
-                select(Membership.office_id).where(
+            Instance.workspace_id.in_(
+                select(Membership.workspace_id).where(
                     Membership.user_id == current_user.user_id,
                     Membership.deleted_at.is_(None),
                 )
@@ -167,7 +181,7 @@ async def get_instance(
             "errors.instance.not_found",
             f"Instance '{instance_id}' not found",
         )
-    await require_office_role(db, current_user.user_id, instance.office_id, "editor")
+    await require_workspace_role(db, current_user.user_id, instance.workspace_id, "editor")
     return instance
 
 
@@ -186,41 +200,46 @@ async def create_instance(
 ) -> Instance:
     """Create a new instance.
 
-    Validates that the referenced employee and office exist (404 if not).
-    The caller must hold at least the ``editor`` role in the target office.
+    Validates that the referenced entity and workspace exist (404 if not).
+    The caller must hold at least the ``editor`` role in the target workspace.
     If ``workspace_path`` is omitted, one is generated automatically.
     A ``proxy_token`` is created automatically for P8 harness authentication.
     The initial status is ``creating``.
     """
-    employee = await db.get(Employee, body.employee_id)
-    if employee is None or employee.deleted_at is not None:
+    entity = await db.get(Entity, body.entity_id)
+    if entity is None or entity.deleted_at is not None:
         raise NotFoundError(
-            "employee.not_found",
-            "errors.employee.not_found",
-            f"Employee '{body.employee_id}' not found",
+            "entity.not_found",
+            "errors.entity.not_found",
+            f"Entity '{body.entity_id}' not found",
         )
 
-    office = await db.get(Office, body.office_id)
-    if office is None or office.deleted_at is not None:
+    workspace = await db.get(Workspace, body.workspace_id)
+    if workspace is None or workspace.deleted_at is not None:
         raise NotFoundError(
-            "office.not_found",
-            "errors.office.not_found",
-            f"Office '{body.office_id}' not found",
+            "workspace.not_found",
+            "errors.workspace.not_found",
+            f"Workspace '{body.workspace_id}' not found",
         )
 
-    await require_office_role(db, current_user.user_id, body.office_id, "editor")
+    await require_workspace_role(db, current_user.user_id, body.workspace_id, "editor")
 
     workspace_path = body.workspace_path or generate_workspace_path(
-        employee.slug, str(uuid4())
+        entity.slug, str(uuid4())
     )
 
+    agent_config = await resolve_instance_agent_config(db, entity)
+    runtime_config = dict(body.runtime_config or {})
+    runtime_config["agent_config"] = agent_config
+
     instance = Instance(
-        employee_id=body.employee_id,
-        office_id=body.office_id,
+        entity_id=body.entity_id,
+        workspace_id=body.workspace_id,
         workspace_path=workspace_path,
         status=InstanceStatus.creating.value,
-        runtime_config=body.runtime_config,
+        runtime_config=runtime_config,
         proxy_token=str(uuid4()),
+        active_hash=compute_entity_migration_hash(entity),
     )
     db.add(instance)
     await emit(
@@ -229,7 +248,7 @@ async def create_instance(
         actor_id=current_user.user_id,
         resource_type="instance",
         resource_id=instance.id,
-        payload={"workspace_path": workspace_path, "office_id": body.office_id},
+        payload={"workspace_path": workspace_path, "workspace_id": body.workspace_id},
         session=db,
     )
     try:
@@ -266,7 +285,7 @@ async def update_instance(
             f"Instance '{instance_id}' not found",
         )
 
-    await require_office_role(db, current_user.user_id, instance.office_id, "editor")
+    await require_workspace_role(db, current_user.user_id, instance.workspace_id, "editor")
 
     patch_data = body.model_dump(exclude_unset=True)
     for field, value in patch_data.items():
@@ -307,7 +326,7 @@ async def delete_instance(
             f"Instance '{instance_id}' not found",
         )
 
-    await require_office_role(db, current_user.user_id, instance.office_id, "editor")
+    await require_workspace_role(db, current_user.user_id, instance.workspace_id, "editor")
 
     if instance.status == InstanceStatus.deleting.value:
         return
@@ -390,7 +409,7 @@ async def _transition(
             f"Instance '{instance_id}' not found",
         )
 
-    await require_office_role(db, current_user.user_id, instance.office_id, "editor")
+    await require_workspace_role(db, current_user.user_id, instance.workspace_id, "editor")
 
     if instance.status not in allowed:
         raise ConflictError(
@@ -439,6 +458,18 @@ async def deploy_instance(
     working without a cluster.
     """
     if not _is_k8s_available():
+        instance = await db.get(Instance, instance_id)
+        if instance is None or instance.deleted_at is not None:
+            raise NotFoundError(
+                "instance.not_found",
+                "errors.instance.not_found",
+                f"Instance '{instance_id}' not found",
+            )
+        await require_workspace_role(
+            db, current_user.user_id, instance.workspace_id, "editor"
+        )
+        await _refresh_instance_agent_config(db, instance)
+        await db.flush()
         # P7 fallback: in-process DB transition (no K8s cluster reachable).
         return await _transition(
             instance_id,
@@ -460,13 +491,15 @@ async def deploy_instance(
             f"Instance '{instance_id}' not found",
         )
 
-    await require_office_role(db, current_user.user_id, instance.office_id, "editor")
+    await require_workspace_role(db, current_user.user_id, instance.workspace_id, "editor")
+
+    await _refresh_instance_agent_config(db, instance)
 
     record_id, ctx = await svc_deploy_instance(
         name=instance.workspace_path or str(instance.id),
         image_version="latest",
-        office_id=instance.office_id,
-        employee_id=instance.employee_id,
+        workspace_id=instance.workspace_id,
+        entity_id=instance.entity_id,
         proxy_token=instance.proxy_token or "",
         triggered_by=current_user.user_id,
         db=db,
@@ -513,12 +546,12 @@ async def restart_instance(
     db: DB,
     current_user: CurrentUserDep,
 ) -> RestartResultOut:
-    """Re-sync an outdated instance to the current Employee.migration_hash.
+    """Re-sync an outdated instance to the current Entity.migration_hash.
 
     Per PRD §13.6.7: this is the operator flow that runs after a
     promote (when the live-status shows the instance is outdated). The
     instance is moved ``restarting`` → ``pending`` and its
-    ``active_hash`` is reset to the current Employee.migration_hash.
+    ``active_hash`` is reset to the current Entity.migration_hash.
 
     Refuses with 409 if ``status == "running"`` and ``force=false``.
     The K8s pickup hook is out of scope for this wave (P11c).
@@ -531,15 +564,15 @@ async def restart_instance(
             f"Instance '{instance_id}' not found",
         )
 
-    employee = await db.get(Employee, instance.employee_id)
-    if employee is None or employee.deleted_at is not None:
+    entity = await db.get(Entity, instance.entity_id)
+    if entity is None or entity.deleted_at is not None:
         raise NotFoundError(
-            "employee.not_found",
-            "errors.employee.not_found",
-            f"Employee '{instance.employee_id}' not found",
+            "entity.not_found",
+            "errors.entity.not_found",
+            f"Entity '{instance.entity_id}' not found",
         )
 
-    await require_office_role(db, current_user.user_id, instance.office_id, "operator")
+    await require_workspace_role(db, current_user.user_id, instance.workspace_id, "operator")
 
     if instance.status == InstanceStatus.running.value and not body.force:
         raise ConflictError(
@@ -556,7 +589,7 @@ async def restart_instance(
     instance.status = InstanceStatus.restarting.value
     await db.flush()
 
-    instance.active_hash = employee.migration_hash
+    instance.active_hash = entity.migration_hash
     instance.status = InstanceStatus.pending.value
 
     await emit(
@@ -594,7 +627,7 @@ async def batch_restart_instances(
 
     Per PRD §13.6.7: refuse the entire batch if any instance is running
     (returns 409 with the offending IDs in ``details``). Otherwise set
-    ``active_hash = Employee.migration_hash`` and ``status = restarting``
+    ``active_hash = Entity.migration_hash`` and ``status = restarting``
     for each instance.
     """
     # 1. Load all instances.
@@ -615,10 +648,10 @@ async def batch_restart_instances(
             details={"missing_instance_ids": missing},
         )
 
-    # 2. Auth: operator role in the first instance's office (the batch
-    # is implicitly same-office — if not, the permission check fails).
-    first_office = instances[0].office_id
-    await require_office_role(db, current_user.user_id, first_office, "operator")
+    # 2. Auth: operator role in the first instance's workspace (the batch
+    # is implicitly same-workspace — if not, the permission check fails).
+    first_workspace = instances[0].workspace_id
+    await require_workspace_role(db, current_user.user_id, first_workspace, "operator")
 
     # 3. Reject batch if any instance is running.
     running = [i.id for i in instances if i.status == InstanceStatus.running.value]
@@ -633,16 +666,16 @@ async def batch_restart_instances(
     # 4. Re-sync each instance.
     restarted_ids: list[str] = []
     skipped: list[str] = []
-    employee_cache: dict[str, Employee] = {}
+    entity_cache: dict[str, Entity] = {}
     for inst in instances:
-        emp = employee_cache.get(inst.employee_id)
+        emp = entity_cache.get(inst.entity_id)
         if emp is None:
-            emp = await db.get(Employee, inst.employee_id)
+            emp = await db.get(Entity, inst.entity_id)
             if emp is None:
                 skipped.append(inst.id)
                 continue
-            employee_cache[inst.employee_id] = emp
-            # Check office-equivalence while we have the office.
+            entity_cache[inst.entity_id] = emp
+            # Check workspace-equivalence while we have the workspace.
             if emp.deleted_at is not None:
                 skipped.append(inst.id)
                 continue

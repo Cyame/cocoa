@@ -1,4 +1,4 @@
-"""Tests for P9 Todo 4 — ``GET /api/v1/employee-presets/{slug}`` detail endpoint.
+"""Tests for P9 Todo 4 — ``GET /api/v1/base-classes/{slug}`` detail endpoint.
 
 Verifies the slug-based detail endpoint expands the JSONB ``manifest`` into
 the 5-field :class:`PresetManifestOut` schema and returns 404 for missing
@@ -11,7 +11,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.testclient import TestClient
 
-from app.models.employee import EmployeePreset
+from app.models.base_class import BaseClass
 
 
 @pytest.fixture
@@ -40,14 +40,14 @@ _MANIFEST_FIELDS = ("model", "prompt", "skills", "tools", "commands")
 
 
 class TestGetPresetBySlug:
-    """``GET /api/v1/employee-presets/{slug}`` detail endpoint."""
+    """``GET /api/v1/base-classes/{slug}`` detail endpoint."""
 
     def test_get_builtin_preset_returns_expanded_manifest(
         self, client: TestClient, auth_token: str,
     ) -> None:
         """Built-in ``mi-shi`` preset returns 200 with a 5-field manifest."""
         resp = client.get(
-            "/api/v1/employee-presets/mi-shi",
+            "/api/v1/base-classes/mi-shi",
             headers=_auth_headers(auth_token),
         )
         assert resp.status_code == 200
@@ -73,7 +73,7 @@ class TestGetPresetBySlug:
     ) -> None:
         """``mi-shi`` (密士) commands list is non-empty per builtin_presets spec."""
         resp = client.get(
-            "/api/v1/employee-presets/mi-shi",
+            "/api/v1/base-classes/mi-shi",
             headers=_auth_headers(auth_token),
         )
         assert resp.status_code == 200
@@ -88,12 +88,12 @@ class TestGetPresetBySlug:
     ) -> None:
         """A slug that doesn't exist returns 404 with the expected error code."""
         resp = client.get(
-            "/api/v1/employee-presets/does-not-exist",
+            "/api/v1/base-classes/does-not-exist",
             headers=_auth_headers(auth_token),
         )
         assert resp.status_code == 404
         body = resp.json()
-        assert body["error_code"] == "employee_preset.not_found"
+        assert body["error_code"] == "base_class.not_found"
 
     @pytest.mark.asyncio
     async def test_get_soft_deleted_slug_returns_404(
@@ -102,7 +102,7 @@ class TestGetPresetBySlug:
         """Soft-deleting a preset makes its slug return 404."""
         # Create a custom preset, then soft-delete it.
         create_resp = client.post(
-            "/api/v1/employee-presets",
+            "/api/v1/base-classes",
             headers=_auth_headers(auth_token),
             json={
                 "slug": "to-soft-delete",
@@ -120,17 +120,17 @@ class TestGetPresetBySlug:
         preset_id = create_resp.json()["id"]
 
         # Soft-delete via the session directly (faster than DELETE endpoint).
-        preset = await session.get(EmployeePreset, preset_id)
+        preset = await session.get(BaseClass, preset_id)
         assert preset is not None
         preset.soft_delete()
         await session.commit()
 
         resp = client.get(
-            "/api/v1/employee-presets/to-soft-delete",
+            "/api/v1/base-classes/to-soft-delete",
             headers=_auth_headers(auth_token),
         )
         assert resp.status_code == 404
-        assert resp.json()["error_code"] == "employee_preset.not_found"
+        assert resp.json()["error_code"] == "base_class.not_found"
 
 
 class TestGetPresetManifestExpansion:
@@ -142,13 +142,13 @@ class TestGetPresetManifestExpansion:
         """A preset with ``manifest=None`` still serialises 5 manifest fields via defaults."""
         # Create a preset with no manifest.
         client.post(
-            "/api/v1/employee-presets",
+            "/api/v1/base-classes",
             headers=_auth_headers(auth_token),
             json={"slug": "no-manifest", "name": "No Manifest"},
         )
 
         resp = client.get(
-            "/api/v1/employee-presets/no-manifest",
+            "/api/v1/base-classes/no-manifest",
             headers=_auth_headers(auth_token),
         )
         assert resp.status_code == 200
@@ -167,7 +167,7 @@ class TestGetPresetManifestExpansion:
     ) -> None:
         """A manifest with only some keys fills the rest from defaults."""
         client.post(
-            "/api/v1/employee-presets",
+            "/api/v1/base-classes",
             headers=_auth_headers(auth_token),
             json={
                 "slug": "partial-manifest",
@@ -177,7 +177,7 @@ class TestGetPresetManifestExpansion:
         )
 
         resp = client.get(
-            "/api/v1/employee-presets/partial-manifest",
+            "/api/v1/base-classes/partial-manifest",
             headers=_auth_headers(auth_token),
         )
         assert resp.status_code == 200
@@ -193,5 +193,5 @@ class TestGetPresetManifestExpansion:
         self, client: TestClient,
     ) -> None:
         """GET without an auth token is rejected (CurrentUserDep enforced)."""
-        resp = client.get("/api/v1/employee-presets/mi-shi")
+        resp = client.get("/api/v1/base-classes/mi-shi")
         assert resp.status_code == 401

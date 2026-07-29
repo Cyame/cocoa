@@ -3,7 +3,7 @@
 import pytest
 
 from app.core.dirs import (
-    employee_dir,
+    entity_dir,
     fornix_dir,
     memory_export_path,
     vault_dir,
@@ -11,22 +11,22 @@ from app.core.dirs import (
 )
 
 
-class TestEmployeeDir:
+class TestEntityDir:
     def test_returns_relative_path(self) -> None:
-        assert employee_dir("analyst") == ".pi/analyst/"
+        assert entity_dir("analyst") == ".pi/analyst/"
 
     def test_trailing_slash(self) -> None:
-        assert employee_dir("researcher").endswith("/")
+        assert entity_dir("researcher").endswith("/")
 
     def test_rejects_parent_traversal(self) -> None:
         with pytest.raises(ValueError, match="Path traversal"):
-            employee_dir("..")
+            entity_dir("..")
         with pytest.raises(ValueError, match="Path traversal"):
-            employee_dir("foo/../bar")
+            entity_dir("foo/../bar")
 
     def test_rejects_leading_dotslash_traversal(self) -> None:
         with pytest.raises(ValueError, match="Path traversal"):
-            employee_dir("../etc")
+            entity_dir("../etc")
 
 
 class TestWorkspaceDir:
@@ -43,12 +43,12 @@ class TestWorkspaceDir:
             workspace_dir("instance/../../root")
 
 
-class TestBlackboardDir:
+class TestCentralHubDir:
     def test_returns_relative_path(self) -> None:
-        assert fornix_dir("office-1") == "fornix/office-1/"
+        assert fornix_dir("workspace-1") == "fornix/workspace-1/"
 
     def test_trailing_slash(self) -> None:
-        assert fornix_dir("office-1").endswith("/")
+        assert fornix_dir("workspace-1").endswith("/")
 
     def test_rejects_parent_traversal(self) -> None:
         with pytest.raises(ValueError, match="Path traversal"):
@@ -59,10 +59,10 @@ class TestBlackboardDir:
 
 class TestVaultDir:
     def test_returns_relative_path(self) -> None:
-        assert vault_dir("office-2") == "vault/office-2/"
+        assert vault_dir("workspace-2") == "vault/workspace-2/"
 
     def test_trailing_slash(self) -> None:
-        assert vault_dir("office-2").endswith("/")
+        assert vault_dir("workspace-2").endswith("/")
 
     def test_rejects_parent_traversal(self) -> None:
         with pytest.raises(ValueError, match="Path traversal"):
@@ -95,8 +95,8 @@ class TestPathTraversalEdgeCases:
     """Cross-function: every function rejects ``..`` consistently."""
 
     @pytest.mark.parametrize("func,slug", [
-        (employee_dir, ".."),
-        (employee_dir, "a/../b"),
+        (entity_dir, ".."),
+        (entity_dir, "a/../b"),
         (workspace_dir, ".."),
         (workspace_dir, "x/../y"),
         (fornix_dir, ".."),

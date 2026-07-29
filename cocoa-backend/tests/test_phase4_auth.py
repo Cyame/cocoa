@@ -94,8 +94,8 @@ class TestAuthProtected:
     """Endpoints that require authentication."""
 
     def test_protected_endpoint_requires_auth(self, client: TestClient) -> None:
-        """GET /api/v1/employees without token returns 401."""
-        response = client.get("/api/v1/employees")
+        """GET /api/v1/entities without token returns 401."""
+        response = client.get("/api/v1/entities")
         assert response.status_code == 401
         body = response.json()
         assert body["error_code"] == "auth.token_missing"

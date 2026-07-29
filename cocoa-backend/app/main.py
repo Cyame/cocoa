@@ -168,12 +168,12 @@ app = FastAPI(
     openapi_tags=[
         {"name": "Health", "description": "Liveness and readiness probes"},
         {"name": "Auth", "description": "Authentication and registration"},
-        {"name": "EmployeePresets", "description": "Agent preset template management"},
-        {"name": "Employees", "description": "Employee and agent cell management"},
-        {"name": "Offices", "description": "Office workspace management"},
+        {"name": "BaseClasss", "description": "Agent preset template management"},
+        {"name": "Entitys", "description": "Entity and agent cell management"},
+        {"name": "Workspaces", "description": "Workspace workspace management"},
         {"name": "Instances", "description": "Instance lifecycle"},
         {"name": "Messaging", "description": "Agent messaging"},
-        {"name": "Blackboard", "description": "Shared collaboration surface"},
+        {"name": "CentralHub", "description": "Shared collaboration surface"},
         {"name": "Learning", "description": "Persistent learning and /distill"},
     ],
 )

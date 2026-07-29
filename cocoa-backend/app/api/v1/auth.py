@@ -12,6 +12,7 @@ from app.core.errors import ConflictError, UnauthorizedError
 from app.core.openapi import add_error_responses
 from app.core.security import create_access_token, hash_password, verify_password
 from app.models.user import User
+from app.models.user_gene import UserGene, UserUserGene
 from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -53,6 +54,21 @@ async def register(body: RegisterRequest, db: DB) -> TokenResponse:
         is_super_admin=is_first_user,
     )
     db.add(user)
+    await db.flush()
+
+    # First registrant receives admin-gene (PRD-v2 §7).
+    if is_first_user:
+        gene = (
+            await db.execute(
+                select(UserGene).where(
+                    UserGene.slug == "admin-gene",
+                    UserGene.deleted_at.is_(None),
+                )
+            )
+        ).scalar_one_or_none()
+        if gene is not None:
+            db.add(UserUserGene(user_id=user.id, user_gene_id=gene.id))
+
     await db.commit()
     await db.refresh(user)
 

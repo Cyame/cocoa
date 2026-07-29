@@ -7,50 +7,52 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.employee import Employee, EmployeePreset, EmployeeRank
+from app.models.entity import Entity, EntityRank
+from app.models.base_class import BaseClass
 from app.models.instance import Instance
-from app.models.office import Membership, MembershipRole, Office
+from app.models.workspace import Membership, MembershipRole, Workspace
 from app.models.user import User
 
 
 class TestMultiInstance:
-    """Verify one employee can have multiple instances across different offices."""
+    """Verify one entity can have multiple instances across different workspaces."""
 
     @pytest.mark.asyncio
-    async def test_one_employee_two_instances_different_offices(
-        self, session: AsyncSession
+    async def test_one_entity_two_instances_different_workspaces(
+        self, session: AsyncSession, namespace_factory
     ) -> None:
-        """Insert 1 Employee + 2 Instances (different offices) succeeds."""
+        """Insert 1 Entity + 2 Instances (different workspaces) succeeds."""
         # 1. Create User (for FK chain)
         user = User(username="f3_user", email="f3@test.com", password_hash="hash")
         session.add(user)
         await session.commit()
 
-        # 2. Create EmployeePreset
-        preset = EmployeePreset(slug="f3-preset", name="F3 Preset")
+        # 2. Create BaseClass
+        preset = BaseClass(slug="f3-preset", name="F3 Preset")
         session.add(preset)
         await session.commit()
 
-        # 3. Create Employee
-        emp = Employee(slug="f3-emp", name="F3 Employee", rank=EmployeeRank.researcher)
+        ns = await namespace_factory()
+        # 3. Create Entity
+        emp = Entity(namespace_id=ns.id, slug="f3-emp", name="F3 Entity", rank=EntityRank.researcher)
         session.add(emp)
         await session.commit()
 
-        # 4. Create 2 Offices
-        office_a = Office(name="Office A", slug="office-a")
-        office_b = Office(name="Office B", slug="office-b")
-        session.add_all([office_a, office_b])
+        # 4. Create 2 Workspaces
+        workspace_a = Workspace(namespace_id=ns.id, name="Workspace A", slug="workspace-a")
+        workspace_b = Workspace(namespace_id=ns.id, name="Workspace B", slug="workspace-b")
+        session.add_all([workspace_a, workspace_b])
         await session.commit()
 
-        # 5. Create 2 Instances (same employee, different offices, different workspace_path)
+        # 5. Create 2 Instances (same entity, different workspaces, different workspace_path)
         inst_a = Instance(
-            employee_id=emp.id,
-            office_id=office_a.id,
+            entity_id=emp.id,
+            workspace_id=workspace_a.id,
             workspace_path="/workspace/a",
         )
         inst_b = Instance(
-            employee_id=emp.id,
-            office_id=office_b.id,
+            entity_id=emp.id,
+            workspace_id=workspace_b.id,
             workspace_path="/workspace/b",
         )
         session.add_all([inst_a, inst_b])
@@ -60,13 +62,13 @@ class TestMultiInstance:
 
         # 6. Assert both instances created
         assert inst_a.id is not None
-        assert inst_a.employee_id == emp.id
-        assert inst_a.office_id == office_a.id
+        assert inst_a.entity_id == emp.id
+        assert inst_a.workspace_id == workspace_a.id
         assert inst_a.workspace_path == "/workspace/a"
 
         assert inst_b.id is not None
-        assert inst_b.employee_id == emp.id
-        assert inst_b.office_id == office_b.id
+        assert inst_b.entity_id == emp.id
+        assert inst_b.workspace_id == workspace_b.id
         assert inst_b.workspace_path == "/workspace/b"
 
 
@@ -75,20 +77,21 @@ class TestWorkspacePathUniqueness:
 
     @pytest.mark.asyncio
     async def test_duplicate_workspace_path_raises_integrity_error(
-        self, session: AsyncSession
+        self, session: AsyncSession, namespace_factory
     ) -> None:
         """Inserting two active instances with the same workspace_path fails."""
+        ns = await namespace_factory()
         # Create dependent entities
-        emp = Employee(slug="f3-wp-emp", name="WP Employee", rank=EmployeeRank.intern)
-        office_a = Office(name="WP Office A", slug="wp-office-a")
-        office_b = Office(name="WP Office B", slug="wp-office-b")
-        session.add_all([emp, office_a, office_b])
+        emp = Entity(namespace_id=ns.id, slug="f3-wp-emp", name="WP Entity", rank=EntityRank.intern)
+        workspace_a = Workspace(namespace_id=ns.id, name="WP Workspace A", slug="wp-workspace-a")
+        workspace_b = Workspace(namespace_id=ns.id, name="WP Workspace B", slug="wp-workspace-b")
+        session.add_all([emp, workspace_a, workspace_b])
         await session.commit()
 
         # First instance succeeds
         inst_a = Instance(
-            employee_id=emp.id,
-            office_id=office_a.id,
+            entity_id=emp.id,
+            workspace_id=workspace_a.id,
             workspace_path="/same/path",
         )
         session.add(inst_a)
@@ -96,8 +99,8 @@ class TestWorkspacePathUniqueness:
 
         # Second instance with same workspace_path fails partial unique index
         inst_b = Instance(
-            employee_id=emp.id,
-            office_id=office_b.id,
+            entity_id=emp.id,
+            workspace_id=workspace_b.id,
             workspace_path="/same/path",
         )
         session.add(inst_b)
@@ -111,15 +114,16 @@ class TestMembershipExclusiveFK:
 
     @pytest.mark.asyncio
     async def test_both_null_raises_integrity_error(
-        self, session: AsyncSession
+        self, session: AsyncSession, namespace_factory
     ) -> None:
         """Membership with both user_id and instance_id NULL fails CHECK constraint."""
-        office = Office(name="Excl Office", slug="excl-office")
-        session.add(office)
+        ns = await namespace_factory()
+        workspace = Workspace(namespace_id=ns.id, name="Excl Workspace", slug="excl-workspace")
+        session.add(workspace)
         await session.commit()
 
         member = Membership(
-            office_id=office.id,
+            workspace_id=workspace.id,
             user_id=None,
             instance_id=None,
             posx=0,
@@ -133,16 +137,17 @@ class TestMembershipExclusiveFK:
 
     @pytest.mark.asyncio
     async def test_user_id_set_instance_id_null_succeeds(
-        self, session: AsyncSession
+        self, session: AsyncSession, namespace_factory
     ) -> None:
         """Membership with user_id set and instance_id NULL succeeds."""
         user = User(username="f3-mem-user", email="f3mem@test.com", password_hash="hash")
-        office = Office(name="User Office", slug="user-office")
-        session.add_all([user, office])
+        ns = await namespace_factory()
+        workspace = Workspace(namespace_id=ns.id, name="User Workspace", slug="user-workspace")
+        session.add_all([user, workspace])
         await session.commit()
 
         member = Membership(
-            office_id=office.id,
+            workspace_id=workspace.id,
             user_id=user.id,
             instance_id=None,
             posx=0,
@@ -159,24 +164,25 @@ class TestMembershipExclusiveFK:
 
     @pytest.mark.asyncio
     async def test_instance_id_set_user_id_null_succeeds(
-        self, session: AsyncSession
+        self, session: AsyncSession, namespace_factory
     ) -> None:
         """Membership with instance_id set and user_id NULL succeeds."""
-        emp = Employee(slug="f3-inst-emp", name="Inst Emp", rank=EmployeeRank.intern)
-        office = Office(name="Inst Office", slug="inst-office")
-        session.add_all([emp, office])
+        ns = await namespace_factory()
+        emp = Entity(namespace_id=ns.id, slug="f3-inst-emp", name="Inst Emp", rank=EntityRank.intern)
+        workspace = Workspace(namespace_id=ns.id, name="Inst Workspace", slug="inst-workspace")
+        session.add_all([emp, workspace])
         await session.commit()
 
         inst = Instance(
-            employee_id=emp.id,
-            office_id=office.id,
+            entity_id=emp.id,
+            workspace_id=workspace.id,
             workspace_path="/workspace/inst-mem",
         )
         session.add(inst)
         await session.commit()
 
         member = Membership(
-            office_id=office.id,
+            workspace_id=workspace.id,
             user_id=None,
             instance_id=inst.id,
             posx=0,

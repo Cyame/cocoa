@@ -25,7 +25,7 @@ class CursorPage(BaseModel, Generic[T]):
     """
 
     # ORM row objects (SQLAlchemy declarative models) are not Pydantic-native
-    # types; allow them so CursorPage[Employee]-style usage doesn't crash.
+    # types; allow them so CursorPage[Entity]-style usage doesn't crash.
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     items: list[T]

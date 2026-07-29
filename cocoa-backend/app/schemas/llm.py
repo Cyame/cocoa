@@ -53,7 +53,7 @@ class LLMProviderConfig(BaseModel):
 
     @classmethod
     def from_manifest_legacy(cls, manifest: dict[str, Any]) -> "LLMProviderConfig":
-        """Decode an EmployeePreset manifest into a provider config (D14).
+        """Decode an BaseClass manifest into a provider config (D14).
 
         * If ``manifest`` contains a ``provider`` dict → read its fields.
         * Otherwise — legacy P10/P13 manifest → fall back to OpenAI-

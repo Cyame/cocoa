@@ -7,7 +7,7 @@ Grammar (informal)::
 
     <turn>        := <directive>+
     <directive>   := [<target>] <cmd> [<args>] [<content-ref>]
-    <target>      := "@" <employee-name>
+    <target>      := "@" <entity-name>
     <cmd>         := "/" <name>
     <content-ref> : "@" <scope> [":" <path>]
     scope         := "workspace" | "fornix" | "vault" | "memory"
@@ -26,7 +26,7 @@ from app.schemas.slash import ContentRef, Directive, Turn
 
 Scope = Literal["workspace", "fornix", "vault", "memory"]
 
-# Regex: @employee-name (alphanumeric + hyphens/underscores) at line start
+# Regex: @entity-name (alphanumeric + hyphens/underscores) at line start
 _RE_TARGET = re.compile(r"^@([a-zA-Z0-9_-]+)\s+")
 
 # Regex: @scope:path where scope is one of the 4 keywords
@@ -86,7 +86,7 @@ def parse_directive(line: str) -> Directive | str:
     args = [a for a in remaining.split() if a]
 
     return Directive(
-        target_employee=target,
+        target_entity=target,
         cmd="/" + cmd,
         args=args,
         content_ref=content_ref,

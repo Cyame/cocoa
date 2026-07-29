@@ -54,14 +54,16 @@ def _auth(token: str) -> dict:
 class TestBaseClassesList:
     """Tests for the GET /base-classes endpoint."""
 
-    def test_list_returns_empty_when_no_data(
+    def test_list_returns_seeded_builtins(
         self, client: TestClient, auth_token: str,
     ) -> None:
         resp = client.get("/api/v1/base-classes", headers=_auth(auth_token))
         assert resp.status_code == 200, resp.text
         body = resp.json()
-        assert body["items"] == []
-        assert body["total"] == 0
+        assert body["total"] >= 6
+        slugs = {item["slug"] for item in body["items"]}
+        assert "mi-shi" in slugs
+        assert "cerebellum-baseclass" in slugs
 
     async def test_list_returns_active_base_classes(
         self, client: TestClient, auth_token: str, session: AsyncSession,
@@ -80,10 +82,9 @@ class TestBaseClassesList:
         resp = client.get("/api/v1/base-classes", headers=_auth(auth_token))
         assert resp.status_code == 200, resp.text
         body = resp.json()
-        assert body["total"] == 3
-        assert len(body["items"]) == 3
+        assert body["total"] >= 3
         slugs = {item["slug"] for item in body["items"]}
-        assert slugs == {"x", "y", "z"}
+        assert {"x", "y", "z"}.issubset(slugs)
 
     async def test_list_orders_by_created_at_descending(
         self, client: TestClient, auth_token: str, session: AsyncSession,
@@ -98,7 +99,8 @@ class TestBaseClassesList:
         resp = client.get("/api/v1/base-classes", headers=_auth(auth_token))
         assert resp.status_code == 200, resp.text
         slugs = [item["slug"] for item in resp.json()["items"]]
-        assert slugs == ["third", "second", "first"]
+        # Custom rows must appear before older seeded builtins.
+        assert slugs[:3] == ["third", "second", "first"]
 
     async def test_list_excludes_soft_deleted(
         self, client: TestClient, auth_token: str, session: AsyncSession,
@@ -113,7 +115,8 @@ class TestBaseClassesList:
         resp = client.get("/api/v1/base-classes", headers=_auth(auth_token))
         assert resp.status_code == 200, resp.text
         slugs = {item["slug"] for item in resp.json()["items"]}
-        assert slugs == {"alive"}
+        assert "alive" in slugs
+        assert "deleted" not in slugs
 
     async def test_list_paginates(
         self, client: TestClient, auth_token: str, session: AsyncSession,
@@ -128,7 +131,7 @@ class TestBaseClassesList:
         )
         assert resp.status_code == 200, resp.text
         body = resp.json()
-        assert body["total"] == 5
+        assert body["total"] >= 5
         assert body["limit"] == 2
         assert body["offset"] == 0
         assert len(body["items"]) == 2
@@ -138,7 +141,7 @@ class TestBaseClassesList:
             headers=_auth(auth_token),
         )
         assert resp2.status_code == 200, resp2.text
-        assert len(resp2.json()["items"]) == 1
+        assert len(resp2.json()["items"]) == 2
 
     def test_list_requires_auth(
         self, client: TestClient,

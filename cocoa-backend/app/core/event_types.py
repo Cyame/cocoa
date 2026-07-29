@@ -43,7 +43,7 @@ MESSAGING_DELIVERY_BLOCKED = "messaging.delivery_blocked"
 MESSAGING_ACTIVATION_TRIGGERED = "messaging.activation_triggered"
 
 # ---------------------------------------------------------------------------
-# Blackboard (emit points in P6)
+# CentralHub (emit points in P6)
 # ---------------------------------------------------------------------------
 
 FORNIX_FILE_CREATED = "fornix.file_created"
@@ -76,8 +76,8 @@ LEARNING_DISTILLATION_COMPLETED = "learning.distillation_completed"
 
 # Phase-15f capability lifecycle (PRD §13.6.3–§13.6.5)
 # reap:        Memory → Capability (instance-private, market entry)
-# promote:     Instance cap → Employee shared (+ market entry)
-# transmute:   Employee → BaseClass (new 神职)
+# promote:     Instance cap → Entity shared (+ market entry)
+# transmute:   Entity → BaseClass (new 神职)
 # combine:     N Capabilities → 1 Gene (L2 packaging)
 LEARNING_REAP_COMPLETED = "learning.reap_completed"
 LEARNING_PROMOTE_COMPLETED = "learning.promote_completed"

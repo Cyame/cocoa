@@ -1,4 +1,4 @@
-"""Vault schemas — archival storage per Office."""
+"""Vault schemas — archival storage per Workspace."""
 
 from __future__ import annotations
 
@@ -8,12 +8,12 @@ from pydantic import BaseModel, ConfigDict
 
 
 class VaultOut(BaseModel):
-    """Read-only representation of a Vault (1:1 with an Office)."""
+    """Read-only representation of a Vault (1:1 with an Workspace)."""
 
     model_config = ConfigDict(from_attributes=True)
 
     id: str
-    office_id: str
+    workspace_id: str
     created_at: datetime
 
 

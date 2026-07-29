@@ -7,9 +7,13 @@ const STORAGE_KEY = 'cocoa.locale';
 
 function detectInitialLanguage(): string {
   if (typeof window === 'undefined') return 'en';
-  const stored = window.localStorage.getItem(STORAGE_KEY);
-  if (stored === 'zh-CN' || stored === 'en') return stored;
-  const nav = window.navigator.language.toLowerCase();
+  try {
+    const stored = window.localStorage?.getItem(STORAGE_KEY);
+    if (stored === 'zh-CN' || stored === 'en') return stored;
+  } catch {
+    // jsdom / vitest may omit localStorage
+  }
+  const nav = window.navigator?.language?.toLowerCase() ?? '';
   if (nav.startsWith('zh')) return 'zh-CN';
   return 'en';
 }
@@ -27,7 +31,11 @@ i18n.use(initReactI18next).init({
 
 if (typeof window !== 'undefined') {
   i18n.on('languageChanged', (lng) => {
-    window.localStorage.setItem(STORAGE_KEY, lng);
+    try {
+      window.localStorage?.setItem(STORAGE_KEY, lng);
+    } catch {
+      // ignore
+    }
     document.documentElement.lang = lng;
   });
   document.documentElement.lang = i18n.language;

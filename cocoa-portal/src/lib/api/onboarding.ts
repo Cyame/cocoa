@@ -10,7 +10,7 @@ export async function fetchBaseClasses(): Promise<readonly BaseClass[]> {
 }
 
 export async function summonEntity(payload: OnboardingPayload): Promise<Employee> {
-  return api<Employee>('/employees', {
+  return api<Employee>('/entities', {
     method: 'POST',
     body: JSON.stringify(payload),
   });

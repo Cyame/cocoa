@@ -1,4 +1,4 @@
-"""Integration tests for P5 messaging endpoints — memberships, corridors,
+"""Integration tests for P5 messaging endpoints — memberships, passages,
 messages, and scaffold endpoints.
 
 All HTTP tests use the ``client`` fixture (from conftest.py). The
@@ -67,52 +67,52 @@ def _auth(token: str) -> dict:
 class TestMembershipCrud:
     """CRUD for /api/v1/messaging/memberships."""
 
-    def test_join_office(
+    def test_join_workspace(
         self, client: TestClient, auth_token: str, auth_user_id: str,
     ) -> None:
-        """POST /offices auto-creates the creator's owner membership (P14b-onboard2)."""
+        """POST /workspaces auto-creates the creator's owner membership (P14b-onboard2)."""
         h = _auth(auth_token)
 
         resp = client.post(
-            "/api/v1/offices",
+            "/api/v1/workspaces",
             headers=h,
-            json={"name": "Membership Office", "slug": "mem-office"},
+            json={"name": "Membership Workspace", "slug": "mem-workspace"},
         )
         assert resp.status_code == 201
-        office_id = resp.json()["id"]
+        workspace_id = resp.json()["id"]
 
         # Auto-membership: creator is added as owner without an explicit join.
         list_resp = client.get(
-            f"/api/v1/messaging/memberships?office_id={office_id}",
+            f"/api/v1/messaging/memberships?workspace_id={workspace_id}",
             headers=h,
         )
         assert list_resp.status_code == 200
         items = list_resp.json()["items"]
         assert len(items) == 1, f"expected 1 owner membership, got {len(items)}"
         body = items[0]
-        assert body["office_id"] == office_id
+        assert body["workspace_id"] == workspace_id
         assert body["user_id"] == auth_user_id
         assert body["role"] == "owner"
         assert "id" in body
 
-    def test_join_office_duplicate(
+    def test_join_workspace_duplicate(
         self, client: TestClient, auth_token: str, auth_user_id: str,
     ) -> None:
-        """Joining the same office twice returns 409."""
+        """Joining the same workspace twice returns 409."""
         h = _auth(auth_token)
 
         resp = client.post(
-            "/api/v1/offices",
+            "/api/v1/workspaces",
             headers=h,
-            json={"name": "Dup Office", "slug": "dup-office"},
+            json={"name": "Dup Workspace", "slug": "dup-workspace"},
         )
         assert resp.status_code == 201
-        office_id = resp.json()["id"]
+        workspace_id = resp.json()["id"]
 
         # P14b-onboard2: creator is auto-added as owner, so re-issuing the
         # owner join now returns 409.
         payload = {
-            "office_id": office_id,
+            "workspace_id": workspace_id,
             "user_id": auth_user_id,
             "role": "owner",
         }
@@ -132,16 +132,16 @@ class TestMembershipCrud:
         h = _auth(auth_token)
 
         resp = client.post(
-            "/api/v1/offices",
+            "/api/v1/workspaces",
             headers=h,
-            json={"name": "Role Office", "slug": "role-office"},
+            json={"name": "Role Workspace", "slug": "role-workspace"},
         )
         assert resp.status_code == 201
-        office_id = resp.json()["id"]
+        workspace_id = resp.json()["id"]
 
         # The creator is auto-added as owner.  Verify role change on that row.
         list_resp = client.get(
-            f"/api/v1/messaging/memberships?office_id={office_id}",
+            f"/api/v1/messaging/memberships?workspace_id={workspace_id}",
             headers=h,
         )
         items = list_resp.json()["items"]
@@ -164,16 +164,16 @@ class TestMembershipCrud:
         h = _auth(auth_token)
 
         resp = client.post(
-            "/api/v1/offices",
+            "/api/v1/workspaces",
             headers=h,
-            json={"name": "Owner Office", "slug": "owner-office"},
+            json={"name": "Owner Workspace", "slug": "owner-workspace"},
         )
         assert resp.status_code == 201
-        office_id = resp.json()["id"]
+        workspace_id = resp.json()["id"]
 
         # The creator is auto-added as the sole owner (P14b-onboard2).
         list_resp = client.get(
-            f"/api/v1/messaging/memberships?office_id={office_id}",
+            f"/api/v1/messaging/memberships?workspace_id={workspace_id}",
             headers=h,
         )
         items = list_resp.json()["items"]
@@ -189,48 +189,48 @@ class TestMembershipCrud:
 
 
 # =========================================================================
-# Group B: Corridor CRUD
+# Group B: Passage CRUD
 # =========================================================================
 
 
-class TestCorridorCrud:
-    """CRUD for /api/v1/messaging/corridors."""
+class TestPassageCrud:
+    """CRUD for /api/v1/messaging/passages."""
 
     @pytest.mark.asyncio
-    async def test_create_corridor(
+    async def test_create_passage(
         self,
         client: TestClient,
         auth_token: str,
         auth_user_id: str,
         session: AsyncSession,
     ) -> None:
-        """Register 2 users, both join an office, create corridor → 201."""
+        """Register 2 users, both join an workspace, create passage → 201."""
         h = _auth(auth_token)
 
-        # 1. Create office (P14b-onboard2: user1 auto-joins as owner)
+        # 1. Create workspace (P14b-onboard2: user1 auto-joins as owner)
         resp = client.post(
-            "/api/v1/offices",
+            "/api/v1/workspaces",
             headers=h,
-            json={"name": "Corr Office", "slug": "corr-office"},
+            json={"name": "Corr Workspace", "slug": "corr-workspace"},
         )
         assert resp.status_code == 201
-        office_id = resp.json()["id"]
+        workspace_id = resp.json()["id"]
 
         # 2. Register user2
         client.post("/api/v1/auth/register", json={
-            "username": "corridor_u2",
-            "email": "corridor_u2@test.com",
+            "username": "passage_u2",
+            "email": "passage_u2@test.com",
             "password": "password123",
         })
         result = await session.execute(
-            select(User).where(User.username == "corridor_u2"),
+            select(User).where(User.username == "passage_u2"),
         )
         user2 = result.scalars().first()
         assert user2 is not None
 
         # 3. Look up user1's auto-created owner membership
         list_resp = client.get(
-            f"/api/v1/messaging/memberships?office_id={office_id}",
+            f"/api/v1/messaging/memberships?workspace_id={workspace_id}",
             headers=h,
         )
         items = list_resp.json()["items"]
@@ -242,7 +242,7 @@ class TestCorridorCrud:
             "/api/v1/messaging/memberships",
             headers=h,
             json={
-                "office_id": office_id,
+                "workspace_id": workspace_id,
                 "user_id": user2.id,
                 "role": "viewer",
                 "posx": 100,
@@ -253,12 +253,12 @@ class TestCorridorCrud:
         m2_id = resp.json()["id"]
 
 
-        # 5. Create corridor u1 → u2
+        # 5. Create passage u1 → u2
         resp = client.post(
-            "/api/v1/messaging/corridors",
+            "/api/v1/messaging/passages",
             headers=h,
             json={
-                "office_id": office_id,
+                "workspace_id": workspace_id,
                 "from_membership_id": m1_id,
                 "to_membership_id": m2_id,
             },
@@ -269,23 +269,23 @@ class TestCorridorCrud:
         assert body["to_membership_id"] == m2_id
         assert body["is_active"] is True
 
-    def test_corridor_self_loop_rejected(
+    def test_passage_self_loop_rejected(
         self, client: TestClient, auth_token: str, auth_user_id: str,
     ) -> None:
-        """Corridor with from==to returns 409 (would create cycle)."""
+        """Passage with from==to returns 409 (would create cycle)."""
         h = _auth(auth_token)
 
         resp = client.post(
-            "/api/v1/offices",
+            "/api/v1/workspaces",
             headers=h,
-            json={"name": "Loop Office", "slug": "loop-office"},
+            json={"name": "Loop Workspace", "slug": "loop-workspace"},
         )
         assert resp.status_code == 201
-        office_id = resp.json()["id"]
+        workspace_id = resp.json()["id"]
 
         # Look up the auto-created owner membership (P14b-onboard2)
         list_resp = client.get(
-            f"/api/v1/messaging/memberships?office_id={office_id}",
+            f"/api/v1/messaging/memberships?workspace_id={workspace_id}",
             headers=h,
         )
         items = list_resp.json()["items"]
@@ -293,36 +293,36 @@ class TestCorridorCrud:
         m_id = items[0]["id"]
 
         resp = client.post(
-            "/api/v1/messaging/corridors",
+            "/api/v1/messaging/passages",
             headers=h,
             json={
-                "office_id": office_id,
+                "workspace_id": workspace_id,
                 "from_membership_id": m_id,
                 "to_membership_id": m_id,
             },
         )
         assert resp.status_code == 409
-        assert resp.json()["error_code"] == "corridor.would_create_cycle"
+        assert resp.json()["error_code"] == "passage.would_create_cycle"
 
-    def test_list_corridors(
+    def test_list_passages(
         self, client: TestClient, auth_token: str, auth_user_id: str,
     ) -> None:
-        """GET /corridors?office_id=... returns 200 with paginated result."""
+        """GET /passages?workspace_id=... returns 200 with paginated result."""
         h = _auth(auth_token)
 
         resp = client.post(
-            "/api/v1/offices",
+            "/api/v1/workspaces",
             headers=h,
-            json={"name": "List Office", "slug": "list-office"},
+            json={"name": "List Workspace", "slug": "list-workspace"},
         )
         assert resp.status_code == 201
-        office_id = resp.json()["id"]
+        workspace_id = resp.json()["id"]
 
-        # Creator is auto-added as owner (P14b-onboard2); corridor list still works.
+        # Creator is auto-added as owner (P14b-onboard2); passage list still works.
         resp = client.get(
-            "/api/v1/messaging/corridors",
+            "/api/v1/messaging/passages",
             headers=h,
-            params={"office_id": office_id},
+            params={"workspace_id": workspace_id},
         )
         assert resp.status_code == 200
         body = resp.json()
@@ -330,26 +330,26 @@ class TestCorridorCrud:
         assert "total" in body
 
     @pytest.mark.asyncio
-    async def test_delete_corridor(
+    async def test_delete_passage(
         self,
         client: TestClient,
         auth_token: str,
         auth_user_id: str,
         session: AsyncSession,
     ) -> None:
-        """DELETE corridor → 204; subsequent GET → 404."""
+        """DELETE passage → 204; subsequent GET → 404."""
         h = _auth(auth_token)
 
-        # 1. Create office (P14b-onboard2: user1 auto-joins as owner)
+        # 1. Create workspace (P14b-onboard2: user1 auto-joins as owner)
         resp = client.post(
-            "/api/v1/offices",
+            "/api/v1/workspaces",
             headers=h,
-            json={"name": "Del Office", "slug": "del-office"},
+            json={"name": "Del Workspace", "slug": "del-workspace"},
         )
         assert resp.status_code == 201
-        office_id = resp.json()["id"]
+        workspace_id = resp.json()["id"]
 
-        # 2. Register user2 for a valid corridor
+        # 2. Register user2 for a valid passage
         client.post("/api/v1/auth/register", json={
             "username": "del_u2",
             "email": "del_u2@test.com",
@@ -363,7 +363,7 @@ class TestCorridorCrud:
 
         # 3. Look up user1's auto-created owner membership
         list_resp = client.get(
-            f"/api/v1/messaging/memberships?office_id={office_id}",
+            f"/api/v1/messaging/memberships?workspace_id={workspace_id}",
             headers=h,
         )
         items = list_resp.json()["items"]
@@ -374,7 +374,7 @@ class TestCorridorCrud:
             "/api/v1/messaging/memberships",
             headers=h,
             json={
-                "office_id": office_id,
+                "workspace_id": workspace_id,
                 "user_id": user2.id,
                 "role": "viewer",
                 "posx": 200,
@@ -385,33 +385,33 @@ class TestCorridorCrud:
         m2_id = resp.json()["id"]
 
 
-        # 4. Create corridor
+        # 4. Create passage
         resp = client.post(
-            "/api/v1/messaging/corridors",
+            "/api/v1/messaging/passages",
             headers=h,
             json={
-                "office_id": office_id,
+                "workspace_id": workspace_id,
                 "from_membership_id": m1_id,
                 "to_membership_id": m2_id,
             },
         )
         assert resp.status_code == 201
-        corridor_id = resp.json()["id"]
+        passage_id = resp.json()["id"]
 
         # 5. Delete
         resp = client.delete(
-            f"/api/v1/messaging/corridors/{corridor_id}",
+            f"/api/v1/messaging/passages/{passage_id}",
             headers=h,
         )
         assert resp.status_code == 204
 
         # 6. GET → 404
         resp = client.get(
-            f"/api/v1/messaging/corridors/{corridor_id}",
+            f"/api/v1/messaging/passages/{passage_id}",
             headers=h,
         )
         assert resp.status_code == 404
-        assert resp.json()["error_code"] == "corridor.not_found"
+        assert resp.json()["error_code"] == "passage.not_found"
 
 
 # =========================================================================
@@ -466,7 +466,7 @@ class TestSchemaValidation:
         instance_id are None."""
         with pytest.raises(ValidationError) as exc_info:
             MembershipCreate(
-                office_id="test-office",
+                workspace_id="test-workspace",
                 user_id=None,
                 instance_id=None,
                 role="viewer",

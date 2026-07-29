@@ -2,7 +2,7 @@
 
 > **Status**: Living document. Canonical project roadmap + system goal blueprint.
 > **Authority**: Supersedes `.omo/plans/archive/cocoa-v2-roadmap.md` and `.omo/plans/archive/phase-15-foundation-roadmap.md` (archived 2026-07-29).
-> **Product specs**: `docs/prd-v1.md` (single-tenant MVP UX, implemented via P15f) · `docs/prd-v2.md` (multi-tenant + agent stack redesign, **next execution target**).
+> **Product specs**: `docs/prd-v1.md` (single-tenant MVP UX, P15f) · `docs/prd-v2.md` (multi-tenant + agent stack — **implemented 2026-07-29**).
 > **Naming**: `docs/terminology.md` + `docs/metaphor-name-table.md` (15d locked).
 > **Last revision**: 2026-07-29.
 
@@ -160,10 +160,10 @@ Cocoa no longer plans primarily as open-ended "P-N feature waves". After foundat
 | PRD | Intent | Engineering wave | Status |
 |---|---|---|---|
 | **v1** | Single-tenant MVP UX + distillation UI + 3-layer market scaffold | P15e (doc) → **P15f (impl)** | Doc done; backend+portal must-haves landed on master |
-| **v2** | Multi-tenant hierarchy + agent stack redesign + gene dual tables + IDE UX | **Next** — plan TBD in Plan mode | Doc decision-complete; **not yet implemented** |
+| **v2** | Multi-tenant hierarchy + agent stack redesign + gene dual tables + IDE UX | **Done** (2026-07-29) — `.omo/plans/prd-v2-implementation.md` | Hard-cut schema + APIs + portal; orbstack redeploy for human QA |
 | **v3+** | Session-engine multimodal, Tunnel, Voice, … | Far queue (§7) | Draft only |
 
-Code may temporarily keep pre-15d identifiers (`Office`, `Employee`, `EmployeePreset`, `Corridor`). New code and PRD language use 15d/v2 names. Bulk rename is a dedicated wave after schema stabilizes — not a blocker for PRD-v2 structural work.
+Code identifiers follow 15d/v2 names (`Workspace`, `Entity`, `Passage`, `BaseClass`). Pre-v2 names remain only in alembic history.
 
 ---
 
@@ -241,28 +241,19 @@ Full history: `.omo/plans/archive/` + `.omo/plans/archive/cocoa-v2-roadmap.md` (
 | P15e | PRD-v1 written |
 | P15f | PRD-v1 must-have implementation |
 | PRD-v2 generation | `docs/prd-v2.md` decision-complete |
+| **PRD-v2 impl** | Hard-cut tenant schema + genes + two-chain learning + portal IDE — `.omo/plans/prd-v2-implementation.md` |
 
 ### 5.2 Next (immediate)
 
 | Slot | Title | Spec | Plan | Notes |
 |---|---|---|---|---|
-| **PRD-v2 impl** | Multi-tenant + agent stack + gene dual tables + portal IA | `docs/prd-v2.md` | *Awaiting Plan-mode execution plan* | After plan approval: implement → test → **orbstack deploy** → human QA |
-
-Suggested work slices (for the upcoming plan — not committed until Plan mode):
-
-1. Schema: Organization / Namespace / Workspace FK chain + Entity `namespace_id` / `system_prompt` / `config_override`
-2. Genes: `user_genes` + unified `ai_genes` + junction tables; seed builtins
-3. Align learning actions + CapabilityMarket semantics to two-chain rules
-4. Portal: `/namespaces` hub + Workspace IDE shell + BaseClass detail + Organization providers
-5. Rename/alias bridge for Office→Workspace etc. as needed for API stability
-6. Evidence + orbstack redeploy + live smoke
+| *(empty)* | Awaiting post-v2 human QA on orbstack | — | — | Pick from §5.3 after live inspection |
 
 ### 5.3 Near backlog (after PRD-v2 lands)
 
 | Slot | Theme | Source |
 |---|---|---|
 | Polish | Empty states, error UX, audit filters, i18n sticky | Former P15c leftovers |
-| Rename wave | Bulk 15d identifier rename in code/API | Deferred until schema stable |
 | Tunnel / streaming | Token stream Composer | Former P16b |
 | Session engine v2 | Multimodal day-1 protocol | `.omo/drafts/session-engine-v2.md` |
 | Gene LLM real | Richer distill than heuristics | Former P16c |
@@ -355,7 +346,8 @@ Recorded so future planners do not lose intent:
 | 2026-07-29 | **Roadmap canonicalized to `docs/roadmap.md`**; archive `.omo/plans/cocoa-v2-roadmap.md` + `phase-15-foundation-roadmap.md`; next engineering wave = PRD-v2 implementation after Plan-mode plan |
 | 2026-07-29 | Reaffirm: every completed development wave deploys to orbstack for human test |
 | 2026-07-29 | PRD-v2 修订：Namespace = **场景分区**（非 env）；Vault = DB KV（MinIO/S3 远期）；ER 补全 **CerebellumAgent 中央智能体 1:1** |
+| 2026-07-29 | **PRD-v2 implementation Done** — hard-cut tenant/genes/portal; plan at `.omo/plans/prd-v2-implementation.md` |
 
----
+*Next update trigger: orbstack human QA feedback, or next backlog wave selected from §5.3.*
 
 *Next update trigger: PRD-v2 execution plan approved, or PRD-v2 wave merged + orbstack verified.*

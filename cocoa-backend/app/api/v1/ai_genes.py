@@ -1,0 +1,224 @@
+"""ai_genes CRUD + BaseClass junction attach/detach (PRD-v2).
+
+Routes:
+    GET    /api/v1/ai-genes                        — list
+    GET    /api/v1/ai-genes/by-slug/{slug}         — get by slug
+    GET    /api/v1/ai-genes/{id}                   — get by id
+    POST   /api/v1/ai-genes                        — create
+    PATCH  /api/v1/ai-genes/{id}                   — update
+    DELETE /api/v1/ai-genes/{id}                   — soft-delete
+    POST   /api/v1/ai-genes/{id}/attach-base-class — link to BaseClass
+    DELETE /api/v1/ai-genes/{id}/attach-base-class/{base_class_id} — unlink
+"""
+
+from __future__ import annotations
+
+from fastapi import APIRouter, status
+from sqlalchemy import select
+
+from app.api.deps import DB, CurrentUserDep
+from app.core.errors import ConflictError, NotFoundError
+from app.core.openapi import add_error_responses
+from app.core.pagination import OffsetPage, paginate_offset
+from app.core.permissions import require_super_admin
+from app.models.ai_gene import AiGene, BaseClassAiGene
+from app.models.base_class import BaseClass
+from app.schemas.ai_gene import (
+    AiGeneAttachBaseClassRequest,
+    AiGeneCreate,
+    AiGeneOut,
+    AiGeneUpdate,
+)
+
+router = APIRouter(prefix="/ai-genes", tags=["AiGenes"])
+add_error_responses(router)
+
+
+async def _get_active_gene(db: DB, gene_id: str) -> AiGene:
+    gene = await db.get(AiGene, gene_id)
+    if gene is None or gene.deleted_at is not None:
+        raise NotFoundError(
+            "ai_gene.not_found",
+            "errors.ai_gene.not_found",
+            f"AiGene '{gene_id}' not found",
+        )
+    return gene
+
+
+@router.get("", response_model=OffsetPage[AiGeneOut])
+async def list_ai_genes(
+    db: DB,
+    current_user: CurrentUserDep,
+    limit: int = 50,
+    offset: int = 0,
+) -> OffsetPage:
+    """Return all active ai genes."""
+    stmt = (
+        select(AiGene)
+        .where(AiGene.deleted_at.is_(None))
+        .order_by(AiGene.slug)
+    )
+    return await paginate_offset(db, stmt, offset, min(limit, 200))
+
+
+@router.get("/by-slug/{slug}", response_model=AiGeneOut)
+async def get_ai_gene_by_slug(
+    slug: str,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> AiGene:
+    """Return an ai gene by slug."""
+    result = await db.execute(
+        select(AiGene).where(
+            AiGene.slug == slug,
+            AiGene.deleted_at.is_(None),
+        )
+    )
+    gene = result.scalar_one_or_none()
+    if gene is None:
+        raise NotFoundError(
+            "ai_gene.not_found",
+            "errors.ai_gene.not_found",
+            f"AiGene '{slug}' not found",
+        )
+    return gene
+
+
+@router.get("/{gene_id}", response_model=AiGeneOut)
+async def get_ai_gene(
+    gene_id: str,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> AiGene:
+    """Return an ai gene by id."""
+    return await _get_active_gene(db, gene_id)
+
+
+@router.post("", response_model=AiGeneOut, status_code=status.HTTP_201_CREATED)
+async def create_ai_gene(
+    body: AiGeneCreate,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> AiGene:
+    """Create a new ai gene (super-admin)."""
+    require_super_admin(current_user)
+    existing = await db.execute(
+        select(AiGene).where(
+            AiGene.slug == body.slug,
+            AiGene.deleted_at.is_(None),
+        )
+    )
+    if existing.scalar_one_or_none() is not None:
+        raise ConflictError(
+            "ai_gene.slug_taken",
+            "errors.ai_gene.slug_taken",
+            f"AiGene slug '{body.slug}' is already taken",
+        )
+    gene = AiGene(
+        slug=body.slug,
+        name=body.name,
+        tags=body.tags,
+        manifest=body.manifest,
+        description=body.description,
+    )
+    db.add(gene)
+    await db.commit()
+    await db.refresh(gene)
+    return gene
+
+
+@router.patch("/{gene_id}", response_model=AiGeneOut)
+async def update_ai_gene(
+    gene_id: str,
+    body: AiGeneUpdate,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> AiGene:
+    """Partial-update an ai gene (super-admin). Slug is immutable."""
+    require_super_admin(current_user)
+    gene = await _get_active_gene(db, gene_id)
+    for field, value in body.model_dump(exclude_unset=True).items():
+        setattr(gene, field, value)
+    await db.commit()
+    await db.refresh(gene)
+    return gene
+
+
+@router.delete("/{gene_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_ai_gene(
+    gene_id: str,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> None:
+    """Soft-delete an ai gene (super-admin)."""
+    require_super_admin(current_user)
+    gene = await _get_active_gene(db, gene_id)
+    gene.soft_delete()
+    await db.commit()
+
+
+@router.post("/{gene_id}/attach-base-class", status_code=status.HTTP_201_CREATED)
+async def attach_ai_gene_to_base_class(
+    gene_id: str,
+    body: AiGeneAttachBaseClassRequest,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> dict[str, str]:
+    """Link an ai gene to a BaseClass via junction table (super-admin)."""
+    require_super_admin(current_user)
+    gene = await _get_active_gene(db, gene_id)
+    bc = await db.get(BaseClass, body.base_class_id)
+    if bc is None or bc.deleted_at is not None:
+        raise NotFoundError(
+            "base_class.not_found",
+            "errors.base_class.not_found",
+            f"BaseClass '{body.base_class_id}' not found",
+        )
+    existing = await db.execute(
+        select(BaseClassAiGene).where(
+            BaseClassAiGene.base_class_id == bc.id,
+            BaseClassAiGene.ai_gene_id == gene.id,
+            BaseClassAiGene.deleted_at.is_(None),
+        )
+    )
+    if existing.scalar_one_or_none() is not None:
+        return {
+            "base_class_id": bc.id,
+            "ai_gene_id": gene.id,
+            "status": "already_attached",
+        }
+    link = BaseClassAiGene(base_class_id=bc.id, ai_gene_id=gene.id)
+    db.add(link)
+    await db.commit()
+    return {"base_class_id": bc.id, "ai_gene_id": gene.id, "status": "attached"}
+
+
+@router.delete(
+    "/{gene_id}/attach-base-class/{base_class_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def detach_ai_gene_from_base_class(
+    gene_id: str,
+    base_class_id: str,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> None:
+    """Remove ai gene ↔ BaseClass junction link (super-admin)."""
+    require_super_admin(current_user)
+    await _get_active_gene(db, gene_id)
+    result = await db.execute(
+        select(BaseClassAiGene).where(
+            BaseClassAiGene.base_class_id == base_class_id,
+            BaseClassAiGene.ai_gene_id == gene_id,
+            BaseClassAiGene.deleted_at.is_(None),
+        )
+    )
+    link = result.scalar_one_or_none()
+    if link is None:
+        raise NotFoundError(
+            "ai_gene.not_attached",
+            "errors.ai_gene.not_attached",
+            f"AiGene '{gene_id}' is not attached to BaseClass '{base_class_id}'",
+        )
+    link.soft_delete()
+    await db.commit()

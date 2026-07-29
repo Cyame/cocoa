@@ -3,7 +3,7 @@
 The migration hash is the source of truth for "is this instance still in
 sync with the entity". Once defined, the formula must never change
 silently — otherwise existing ``migration_hash`` values stored on
-``employees`` and ``active_hash`` values stored on ``instances`` would
+``entities`` and ``active_hash`` values stored on ``instances`` would
 stop comparing correctly.
 
 These tests cover the determinism + format contract of the helper.
@@ -18,10 +18,10 @@ import hashlib
 import pytest
 
 from app.core.migration_hash import (
-    compute_employee_migration_hash,
+    compute_entity_migration_hash,
     compute_migration_hash,
 )
-from app.models.employee import Employee
+from app.models.entity import Entity
 
 
 def _caps(*names: str) -> list[dict]:
@@ -110,28 +110,28 @@ class TestComputeMigrationHash:
             compute_migration_hash(42, "")  # type: ignore[arg-type]
 
 
-class TestComputeEmployeeMigrationHash:
-    """Wrapper that reads fields off an Employee ORM model."""
+class TestComputeEntityMigrationHash:
+    """Wrapper that reads fields off an Entity ORM model."""
 
-    def test_wrapper_uses_employee_fields(self) -> None:
-        """The wrapper reads ``capabilities`` and ``prompt_regen_snapshot``."""
-        emp = Employee(
+    def test_wrapper_uses_entity_fields(self) -> None:
+        """The wrapper reads ``capabilities`` and ``system_prompt``."""
+        emp = Entity(
             name="test",
             slug="test-emp",
             capabilities=_caps("foo", "bar"),
-            prompt_regen_snapshot="hello",
+            system_prompt="hello",
         )
         direct = compute_migration_hash(_caps("foo", "bar"), "hello")
-        wrapped = compute_employee_migration_hash(emp)
+        wrapped = compute_entity_migration_hash(emp)
         assert direct == wrapped
 
     def test_wrapper_handles_null_capabilities(self) -> None:
         """Legacy rows with ``capabilities=NULL`` hash the same as ``[]``."""
-        emp = Employee(
+        emp = Entity(
             name="legacy",
             slug="legacy-emp",
             capabilities=None,
-            prompt_regen_snapshot=None,
+            system_prompt=None,
         )
         empty = compute_migration_hash([], None)
-        assert compute_employee_migration_hash(emp) == empty
+        assert compute_entity_migration_hash(emp) == empty

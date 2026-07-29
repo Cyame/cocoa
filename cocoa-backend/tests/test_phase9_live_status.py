@@ -1,7 +1,7 @@
 """Integration tests for the P9 live-status aggregation endpoint.
 
 Phase-15f T4: also verifies that the phase-15f fields (``outdated`` and
-``active_hash``) are correctly joined from the Instance/Employee tables.
+``active_hash``) are correctly joined from the Instance/Entity tables.
 """
 
 import pytest
@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.testclient import TestClient
 
 from app.models.instance import Instance
-from app.models.office import Membership
+from app.models.workspace import Membership
 from app.models.user import User
 
 
@@ -54,7 +54,7 @@ def _auth(token: str) -> dict[str, str]:
 async def _create_membership(
     session: AsyncSession,
     *,
-    office_id: str,
+    workspace_id: str,
     user_id: str | None = None,
     instance_id: str | None = None,
     posx: int,
@@ -62,7 +62,7 @@ async def _create_membership(
 ) -> Membership:
     """Insert one membership for endpoint fixture setup."""
     membership = Membership(
-        office_id=office_id,
+        workspace_id=workspace_id,
         user_id=user_id,
         instance_id=instance_id,
         posx=posx,
@@ -80,24 +80,24 @@ async def test_live_status_aggregates_user_and_instance_memberships(
     phase9_auth_token: str,
     phase9_auth_user_id: str,
     session: AsyncSession,
-    office_factory,
+    workspace_factory,
     instance_factory,
     loop_state_factory,
 ) -> None:
-    """An authorized office returns user and running-instance glow items."""
+    """An authorized workspace returns user and running-instance glow items."""
     user_id = phase9_auth_user_id
-    office = await office_factory()
-    instance = await instance_factory(office_id=office.id)
+    workspace = await workspace_factory()
+    instance = await instance_factory(workspace_id=workspace.id)
     await _create_membership(
         session,
-        office_id=office.id,
+        workspace_id=workspace.id,
         user_id=user_id,
         posx=10,
         posy=20,
     )
     await _create_membership(
         session,
-        office_id=office.id,
+        workspace_id=workspace.id,
         instance_id=instance.id,
         posx=30,
         posy=40,
@@ -106,7 +106,7 @@ async def test_live_status_aggregates_user_and_instance_memberships(
     await session.commit()
 
     response = client.get(
-        f"/api/v1/offices/{office.id}/live-status",
+        f"/api/v1/workspaces/{workspace.id}/live-status",
         headers=_auth(phase9_auth_token),
     )
 
@@ -119,42 +119,42 @@ async def test_live_status_aggregates_user_and_instance_memberships(
 
 
 @pytest.mark.asyncio
-async def test_live_status_rejects_non_member_office(
+async def test_live_status_rejects_non_member_workspace(
     client: TestClient,
     phase9_auth_token: str,
-    office_factory,
+    workspace_factory,
 ) -> None:
-    """An authenticated user without office membership receives 403."""
-    office = await office_factory()
+    """An authenticated user without workspace membership receives 403."""
+    workspace = await workspace_factory()
 
     response = client.get(
-        f"/api/v1/offices/{office.id}/live-status",
+        f"/api/v1/workspaces/{workspace.id}/live-status",
         headers=_auth(phase9_auth_token),
     )
 
     assert response.status_code == 403
-    assert response.json()["error_code"] == "office.not_member"
+    assert response.json()["error_code"] == "workspace.not_member"
 
 
 @pytest.mark.asyncio
-async def test_live_status_returns_empty_for_empty_office(
+async def test_live_status_returns_empty_for_empty_workspace(
     client: TestClient,
     phase9_auth_token: str,
-    office_factory,
+    workspace_factory,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """An office with no active memberships returns an empty list."""
-    office = await office_factory()
+    """An workspace with no active memberships returns an empty list."""
+    workspace = await workspace_factory()
 
-    async def allow_office_role(*_args: object, **_kwargs: object) -> None:
+    async def allow_workspace_role(*_args: object, **_kwargs: object) -> None:
         return None
 
     monkeypatch.setattr(
-        "app.api.v1.office_live_status.require_office_role",
-        allow_office_role,
+        "app.api.v1.workspace_live_status.require_workspace_role",
+        allow_workspace_role,
     )
     response = client.get(
-        f"/api/v1/offices/{office.id}/live-status",
+        f"/api/v1/workspaces/{workspace.id}/live-status",
         headers=_auth(phase9_auth_token),
     )
 
@@ -168,15 +168,15 @@ async def test_live_status_uses_static_glow_without_loop_state(
     phase9_auth_token: str,
     phase9_auth_user_id: str,
     session: AsyncSession,
-    office_factory,
-    employee_factory,
+    workspace_factory,
+    entity_factory,
 ) -> None:
     """An instance membership without loop state uses static glow."""
     user_id = phase9_auth_user_id
-    office = await office_factory()
+    workspace = await workspace_factory()
     await _create_membership(
         session,
-        office_id=office.id,
+        workspace_id=workspace.id,
         user_id=user_id,
         posx=1,
         posy=2,
@@ -185,17 +185,17 @@ async def test_live_status_uses_static_glow_without_loop_state(
 
     from app.models.instance import Instance
 
-    employee = await employee_factory()
+    entity = await entity_factory()
     instance = Instance(
-        employee_id=employee.id,
-        office_id=office.id,
+        entity_id=entity.id,
+        workspace_id=workspace.id,
         proxy_token="unused",
     )
     session.add(instance)
     await session.flush()
     membership = await _create_membership(
         session,
-        office_id=office.id,
+        workspace_id=workspace.id,
         instance_id=instance.id,
         posx=3,
         posy=4,
@@ -203,7 +203,7 @@ async def test_live_status_uses_static_glow_without_loop_state(
     await session.commit()
 
     response = client.get(
-        f"/api/v1/offices/{office.id}/live-status",
+        f"/api/v1/workspaces/{workspace.id}/live-status",
         headers=_auth(phase9_auth_token),
     )
 
@@ -223,19 +223,19 @@ async def test_live_status_outdated_when_active_hash_is_null(
     phase9_auth_token: str,
     phase9_auth_user_id: str,
     session: AsyncSession,
-    office_factory,
-    employee_factory,
+    workspace_factory,
+    entity_factory,
 ) -> None:
     """An instance with no active_hash is reported as outdated (first-time spawn)."""
     user_id = phase9_auth_user_id
-    office = await office_factory()
-    emp = await employee_factory()
+    workspace = await workspace_factory()
+    emp = await entity_factory()
     emp.migration_hash = "a" * 64
     await session.flush()
 
     instance = Instance(
-        employee_id=emp.id,
-        office_id=office.id,
+        entity_id=emp.id,
+        workspace_id=workspace.id,
         proxy_token="unused",
         active_hash=None,
     )
@@ -243,15 +243,15 @@ async def test_live_status_outdated_when_active_hash_is_null(
     await session.flush()
 
     await _create_membership(
-        session, office_id=office.id, user_id=user_id, posx=1, posy=2,
+        session, workspace_id=workspace.id, user_id=user_id, posx=1, posy=2,
     )
     instance_membership = await _create_membership(
-        session, office_id=office.id, instance_id=instance.id, posx=3, posy=4,
+        session, workspace_id=workspace.id, instance_id=instance.id, posx=3, posy=4,
     )
     await session.commit()
 
     response = client.get(
-        f"/api/v1/offices/{office.id}/live-status",
+        f"/api/v1/workspaces/{workspace.id}/live-status",
         headers=_auth(phase9_auth_token),
     )
     assert response.status_code == 200
@@ -269,19 +269,19 @@ async def test_live_status_outdated_when_hash_mismatch(
     phase9_auth_token: str,
     phase9_auth_user_id: str,
     session: AsyncSession,
-    office_factory,
-    employee_factory,
+    workspace_factory,
+    entity_factory,
 ) -> None:
-    """An instance whose active_hash differs from Employee.migration_hash is outdated."""
+    """An instance whose active_hash differs from Entity.migration_hash is outdated."""
     user_id = phase9_auth_user_id
-    office = await office_factory()
-    emp = await employee_factory()
+    workspace = await workspace_factory()
+    emp = await entity_factory()
     emp.migration_hash = "b" * 64
     await session.flush()
 
     instance = Instance(
-        employee_id=emp.id,
-        office_id=office.id,
+        entity_id=emp.id,
+        workspace_id=workspace.id,
         proxy_token="unused",
         active_hash="c" * 64,
     )
@@ -289,15 +289,15 @@ async def test_live_status_outdated_when_hash_mismatch(
     await session.flush()
 
     await _create_membership(
-        session, office_id=office.id, user_id=user_id, posx=1, posy=2,
+        session, workspace_id=workspace.id, user_id=user_id, posx=1, posy=2,
     )
     await _create_membership(
-        session, office_id=office.id, instance_id=instance.id, posx=3, posy=4,
+        session, workspace_id=workspace.id, instance_id=instance.id, posx=3, posy=4,
     )
     await session.commit()
 
     response = client.get(
-        f"/api/v1/offices/{office.id}/live-status",
+        f"/api/v1/workspaces/{workspace.id}/live-status",
         headers=_auth(phase9_auth_token),
     )
     assert response.status_code == 200
@@ -314,19 +314,19 @@ async def test_live_status_in_sync_when_hashes_match(
     phase9_auth_token: str,
     phase9_auth_user_id: str,
     session: AsyncSession,
-    office_factory,
-    employee_factory,
+    workspace_factory,
+    entity_factory,
 ) -> None:
-    """An instance whose active_hash matches Employee.migration_hash is in-sync."""
+    """An instance whose active_hash matches Entity.migration_hash is in-sync."""
     user_id = phase9_auth_user_id
-    office = await office_factory()
-    emp = await employee_factory()
+    workspace = await workspace_factory()
+    emp = await entity_factory()
     emp.migration_hash = "d" * 64
     await session.flush()
 
     instance = Instance(
-        employee_id=emp.id,
-        office_id=office.id,
+        entity_id=emp.id,
+        workspace_id=workspace.id,
         proxy_token="unused",
         active_hash="d" * 64,
     )
@@ -334,15 +334,15 @@ async def test_live_status_in_sync_when_hashes_match(
     await session.flush()
 
     await _create_membership(
-        session, office_id=office.id, user_id=user_id, posx=1, posy=2,
+        session, workspace_id=workspace.id, user_id=user_id, posx=1, posy=2,
     )
     await _create_membership(
-        session, office_id=office.id, instance_id=instance.id, posx=3, posy=4,
+        session, workspace_id=workspace.id, instance_id=instance.id, posx=3, posy=4,
     )
     await session.commit()
 
     response = client.get(
-        f"/api/v1/offices/{office.id}/live-status",
+        f"/api/v1/workspaces/{workspace.id}/live-status",
         headers=_auth(phase9_auth_token),
     )
     assert response.status_code == 200
@@ -359,18 +359,18 @@ async def test_live_status_user_node_never_outdated(
     phase9_auth_token: str,
     phase9_auth_user_id: str,
     session: AsyncSession,
-    office_factory,
+    workspace_factory,
 ) -> None:
     """A user-membership node always reports outdated=False and active_hash=None."""
     user_id = phase9_auth_user_id
-    office = await office_factory()
+    workspace = await workspace_factory()
     await _create_membership(
-        session, office_id=office.id, user_id=user_id, posx=1, posy=2,
+        session, workspace_id=workspace.id, user_id=user_id, posx=1, posy=2,
     )
     await session.commit()
 
     response = client.get(
-        f"/api/v1/offices/{office.id}/live-status",
+        f"/api/v1/workspaces/{workspace.id}/live-status",
         headers=_auth(phase9_auth_token),
     )
     assert response.status_code == 200

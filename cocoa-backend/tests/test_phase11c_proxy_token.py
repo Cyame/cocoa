@@ -51,18 +51,18 @@ async def wired_factory(db_url: str):  # noqa: ARG001
 
 @pytest.mark.asyncio
 async def test_proxy_token_in_deployment_env(
-    session, office_factory, employee_factory,
+    session, workspace_factory, entity_factory,
 ) -> None:
     """``deploy_instance`` puts ``proxy_token`` into ``ctx.env_vars``."""
-    office = await office_factory()
-    employee = await employee_factory()
+    workspace = await workspace_factory()
+    entity = await entity_factory()
     proxy_token = "deadbeef-1234-5678-9abc-def012345678"
 
     record_id, ctx = await deploy_instance(
         name="proxy-token-instance",
         image_version="v1.0",
-        office_id=office.id,
-        employee_id=employee.id,
+        workspace_id=workspace.id,
+        entity_id=entity.id,
         proxy_token=proxy_token,
         db=session,
     )
@@ -83,20 +83,20 @@ async def test_proxy_token_in_deployment_env(
 @pytest.mark.asyncio
 async def test_proxy_token_in_emit_payload(
     wired_factory,  # noqa: ARG001
-    session, instance_factory, office_factory, employee_factory, loop_state_factory,
+    session, instance_factory, workspace_factory, entity_factory, loop_state_factory,
 ) -> None:
     """Supervisor ``_on_harness_event`` keeps ``proxy_token`` in the payload."""
     await supervisor.start()
-    office = await office_factory()
-    employee = await employee_factory()
+    workspace = await workspace_factory()
+    entity = await entity_factory()
     instance = await instance_factory(
-        employee_id=employee.id, office_id=office.id,
+        entity_id=entity.id, workspace_id=workspace.id,
     )
 
-    from app.models.office import Membership
+    from app.models.workspace import Membership
     session.add(
         Membership(
-            office_id=office.id, instance_id=instance.id,
+            workspace_id=workspace.id, instance_id=instance.id,
             posx=0, posy=0, role="member",
         )
     )

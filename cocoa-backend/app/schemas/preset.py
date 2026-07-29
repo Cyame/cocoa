@@ -1,6 +1,6 @@
 """Preset manifest Pydantic schema.
 
-Defines the shape of ``EmployeePreset.manifest`` JSONB values.
+Defines the shape of ``BaseClass.manifest`` JSONB values.
 The manifest is a structured blueprint that describes an agent preset's
 default model, system prompt, available skills, enabled tools, and
 per-preset slash commands.
@@ -34,7 +34,7 @@ _CMD_PATTERN = re.compile(r"^[a-z][a-z0-9-]*$")
 class PresetManifest(BaseModel):
     """Structured blueprint for an agent preset (灵格).
 
-    Serialised into the ``EmployeePreset.manifest`` JSONB column.
+    Serialised into the ``BaseClass.manifest`` JSONB column.
     Every field has a safe default so that minimal manifests are valid.
 
     Attributes:

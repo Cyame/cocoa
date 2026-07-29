@@ -2,7 +2,7 @@
 workspace isolation, and event emission.
 
 All tests use the ``client`` fixture (isolated DB clone + JWT auth).
-Each test creates its own office/membership/employee data.
+Each test creates its own workspace/membership/entity data.
 """
 
 import pytest
@@ -50,32 +50,32 @@ def _auth(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
-def _setup_office_and_membership(
+def _setup_workspace_and_membership(
     client: TestClient,
     token: str,
     user_id: str,
-    office_name: str = "Runtime Office",
-    office_slug: str = "runtime-office",
+    workspace_name: str = "Runtime Workspace",
+    workspace_slug: str = "runtime-workspace",
 ) -> str:
-    """Create an office; the creator is auto-added as owner (P14b-onboard2).
+    """Create an workspace; the creator is auto-added as owner (P14b-onboard2).
 
     Before P14b-onboard2 the helper also called
     ``POST /api/v1/messaging/memberships`` to attach the creator as an owner.
-    That step now returns 409 Conflict because office creation already adds the
+    That step now returns 409 Conflict because workspace creation already adds the
     owner, so the manual call has been removed.  ``user_id`` is kept in the
     signature for backward compatibility with existing call sites.
     """
     h = _auth(token)
-    resp = client.post("/api/v1/offices", headers=h, json={
-        "name": office_name,
-        "slug": office_slug,
+    resp = client.post("/api/v1/workspaces", headers=h, json={
+        "name": workspace_name,
+        "slug": workspace_slug,
     })
     assert resp.status_code == 201
     return resp.json()["id"]
 
 
-def _create_employee(client: TestClient, token: str, slug: str, name: str) -> str:
-    resp = client.post("/api/v1/employees", headers=_auth(token), json={
+def _create_entity(client: TestClient, token: str, slug: str, name: str) -> str:
+    resp = client.post("/api/v1/entities", headers=_auth(token), json={
         "name": name,
         "slug": slug,
     })
@@ -100,16 +100,16 @@ class TestInstanceCrud:
         """POST /api/v1/instances returns 201 with status=creating, proxy_token set,
         workspace_path auto-generated."""
         h = _auth(auth_token)
-        office_id = _setup_office_and_membership(
+        workspace_id = _setup_workspace_and_membership(
             client, auth_token, auth_user_id,
         )
-        employee_id = _create_employee(
-            client, auth_token, "creater-emp", "Creator Employee",
+        entity_id = _create_entity(
+            client, auth_token, "creater-emp", "Creator Entity",
         )
 
         resp = client.post("/api/v1/instances", headers=h, json={
-            "employee_id": employee_id,
-            "office_id": office_id,
+            "entity_id": entity_id,
+            "workspace_id": workspace_id,
         })
         assert resp.status_code == 201
         body = resp.json()
@@ -127,24 +127,24 @@ class TestInstanceCrud:
     ) -> None:
         """GET /api/v1/instances returns paginated list; ?status= filter works."""
         h = _auth(auth_token)
-        office_id = _setup_office_and_membership(
+        workspace_id = _setup_workspace_and_membership(
             client, auth_token, auth_user_id,
         )
-        employee_id = _create_employee(
-            client, auth_token, "lister-emp", "Lister Employee",
+        entity_id = _create_entity(
+            client, auth_token, "lister-emp", "Lister Entity",
         )
 
         # Create two instances with different statuses
         resp1 = client.post("/api/v1/instances", headers=h, json={
-            "employee_id": employee_id,
-            "office_id": office_id,
+            "entity_id": entity_id,
+            "workspace_id": workspace_id,
         })
         assert resp1.status_code == 201
         inst1_id = resp1.json()["id"]
 
         resp2 = client.post("/api/v1/instances", headers=h, json={
-            "employee_id": employee_id,
-            "office_id": office_id,
+            "entity_id": entity_id,
+            "workspace_id": workspace_id,
         })
         assert resp2.status_code == 201
         inst2_id = resp2.json()["id"]
@@ -181,16 +181,16 @@ class TestInstanceCrud:
         """Create instance, fail it (not running), then DELETE returns 204;
         subsequent GET returns 404."""
         h = _auth(auth_token)
-        office_id = _setup_office_and_membership(
+        workspace_id = _setup_workspace_and_membership(
             client, auth_token, auth_user_id,
         )
-        employee_id = _create_employee(
-            client, auth_token, "deleter-emp", "Deleter Employee",
+        entity_id = _create_entity(
+            client, auth_token, "deleter-emp", "Deleter Entity",
         )
 
         resp = client.post("/api/v1/instances", headers=h, json={
-            "employee_id": employee_id,
-            "office_id": office_id,
+            "entity_id": entity_id,
+            "workspace_id": workspace_id,
         })
         assert resp.status_code == 201
         inst_id = resp.json()["id"]
@@ -232,16 +232,16 @@ class TestInstanceStateMachine:
     ) -> None:
         """create → POST deploy → 200 status='deploying'; verify INSTANCE_DEPLOYED event."""
         h = _auth(auth_token)
-        office_id = _setup_office_and_membership(
+        workspace_id = _setup_workspace_and_membership(
             client, auth_token, auth_user_id,
         )
-        employee_id = _create_employee(
-            client, auth_token, "deployer-emp", "Deployer Employee",
+        entity_id = _create_entity(
+            client, auth_token, "deployer-emp", "Deployer Entity",
         )
 
         resp = client.post("/api/v1/instances", headers=h, json={
-            "employee_id": employee_id,
-            "office_id": office_id,
+            "entity_id": entity_id,
+            "workspace_id": workspace_id,
         })
         assert resp.status_code == 201
         inst_id = resp.json()["id"]
@@ -276,16 +276,16 @@ class TestInstanceStateMachine:
     ) -> None:
         """create → deploy → start (status=running) → POST deploy returns 409."""
         h = _auth(auth_token)
-        office_id = _setup_office_and_membership(
+        workspace_id = _setup_workspace_and_membership(
             client, auth_token, auth_user_id,
         )
-        employee_id = _create_employee(
-            client, auth_token, "runner-emp", "Runner Employee",
+        entity_id = _create_entity(
+            client, auth_token, "runner-emp", "Runner Entity",
         )
 
         resp = client.post("/api/v1/instances", headers=h, json={
-            "employee_id": employee_id,
-            "office_id": office_id,
+            "entity_id": entity_id,
+            "workspace_id": workspace_id,
         })
         assert resp.status_code == 201
         inst_id = resp.json()["id"]
@@ -314,17 +314,17 @@ class TestInstanceStateMachine:
     ) -> None:
         """create → deploy → start → stop → delete; running→delete blocked."""
         h = _auth(auth_token)
-        office_id = _setup_office_and_membership(
+        workspace_id = _setup_workspace_and_membership(
             client, auth_token, auth_user_id,
         )
-        employee_id = _create_employee(
-            client, auth_token, "lifecycle-emp", "Lifecycle Employee",
+        entity_id = _create_entity(
+            client, auth_token, "lifecycle-emp", "Lifecycle Entity",
         )
 
         # create
         resp = client.post("/api/v1/instances", headers=h, json={
-            "employee_id": employee_id,
-            "office_id": office_id,
+            "entity_id": entity_id,
+            "workspace_id": workspace_id,
         })
         assert resp.status_code == 201
         inst_id = resp.json()["id"]
@@ -365,16 +365,16 @@ class TestInstanceStateMachine:
         """create → POST /fail {"reason":"crash"} → 200 status='failed';
         verify INSTANCE_FAILED event with reason in payload."""
         h = _auth(auth_token)
-        office_id = _setup_office_and_membership(
+        workspace_id = _setup_workspace_and_membership(
             client, auth_token, auth_user_id,
         )
-        employee_id = _create_employee(
-            client, auth_token, "failer-emp", "Failer Employee",
+        entity_id = _create_entity(
+            client, auth_token, "failer-emp", "Failer Entity",
         )
 
         resp = client.post("/api/v1/instances", headers=h, json={
-            "employee_id": employee_id,
-            "office_id": office_id,
+            "entity_id": entity_id,
+            "workspace_id": workspace_id,
         })
         assert resp.status_code == 201
         inst_id = resp.json()["id"]
@@ -415,25 +415,25 @@ class TestInstanceIsolation:
         auth_token: str,
         auth_user_id: str,
     ) -> None:
-        """Create 2 instances for same employee — both have different workspace_path."""
+        """Create 2 instances for same entity — both have different workspace_path."""
         h = _auth(auth_token)
-        office_id = _setup_office_and_membership(
+        workspace_id = _setup_workspace_and_membership(
             client, auth_token, auth_user_id,
         )
-        employee_id = _create_employee(
-            client, auth_token, "iso-emp", "Isolation Employee",
+        entity_id = _create_entity(
+            client, auth_token, "iso-emp", "Isolation Entity",
         )
 
         resp1 = client.post("/api/v1/instances", headers=h, json={
-            "employee_id": employee_id,
-            "office_id": office_id,
+            "entity_id": entity_id,
+            "workspace_id": workspace_id,
         })
         assert resp1.status_code == 201
         ws1 = resp1.json()["workspace_path"]
 
         resp2 = client.post("/api/v1/instances", headers=h, json={
-            "employee_id": employee_id,
-            "office_id": office_id,
+            "entity_id": entity_id,
+            "workspace_id": workspace_id,
         })
         assert resp2.status_code == 201
         ws2 = resp2.json()["workspace_path"]
@@ -461,16 +461,16 @@ class TestInstanceEvents:
     ) -> None:
         """create → deploy → query events → INSTANCE_CREATED and INSTANCE_DEPLOYED."""
         h = _auth(auth_token)
-        office_id = _setup_office_and_membership(
+        workspace_id = _setup_workspace_and_membership(
             client, auth_token, auth_user_id,
         )
-        employee_id = _create_employee(
-            client, auth_token, "event-cd-emp", "Event CD Employee",
+        entity_id = _create_entity(
+            client, auth_token, "event-cd-emp", "Event CD Entity",
         )
 
         resp = client.post("/api/v1/instances", headers=h, json={
-            "employee_id": employee_id,
-            "office_id": office_id,
+            "entity_id": entity_id,
+            "workspace_id": workspace_id,
         })
         assert resp.status_code == 201
         inst_id = resp.json()["id"]
@@ -506,16 +506,16 @@ class TestInstanceEvents:
         """create → deploy → start → fail → query events →
         INSTANCE_CREATED, INSTANCE_DEPLOYED, INSTANCE_STARTED, INSTANCE_FAILED."""
         h = _auth(auth_token)
-        office_id = _setup_office_and_membership(
+        workspace_id = _setup_workspace_and_membership(
             client, auth_token, auth_user_id,
         )
-        employee_id = _create_employee(
-            client, auth_token, "event-full-emp", "Event Full Employee",
+        entity_id = _create_entity(
+            client, auth_token, "event-full-emp", "Event Full Entity",
         )
 
         resp = client.post("/api/v1/instances", headers=h, json={
-            "employee_id": employee_id,
-            "office_id": office_id,
+            "entity_id": entity_id,
+            "workspace_id": workspace_id,
         })
         assert resp.status_code == 201
         inst_id = resp.json()["id"]

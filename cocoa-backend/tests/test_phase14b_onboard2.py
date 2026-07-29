@@ -2,16 +2,16 @@
 
 Three production issues were fixed in P14b-onboard2:
 
-1. ``POST /offices`` now auto-creates an owner :class:`Membership` for the
-   authenticated creator so that the office is immediately navigable.
-2. The portal "Learning" nav link now points to ``/offices/:id/employees``
-   (the new ``EmployeesListPage``) instead of the broken ``/employees``.
-3. The portal "Members" nav link points to the new ``/offices/:id/members``
+1. ``POST /workspaces`` now auto-creates an owner :class:`Membership` for the
+   authenticated creator so that the workspace is immediately navigable.
+2. The portal "Learning" nav link now points to ``/workspaces/:id/entities``
+   (the new ``EntitysListPage``) instead of the broken ``/entities``.
+3. The portal "Members" nav link points to the new ``/workspaces/:id/members``
    (``MembersListPage``).
 
 These tests cover the backend half (Fix 1) plus a secondary scenario for
 the ``POST /messaging/memberships`` pathway (which still works for adding
-editors/viewers to an office after the owner is auto-created).
+editors/viewers to an workspace after the owner is auto-created).
 """
 
 from __future__ import annotations
@@ -101,47 +101,47 @@ def _auth(token: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Fix 1: auto-create owner Membership on POST /offices
+# Fix 1: auto-create owner Membership on POST /workspaces
 # ---------------------------------------------------------------------------
 
 
-class TestCreateOfficeAutoMembership:
-    """POST /offices must auto-add the creator as an owner Membership."""
+class TestCreateWorkspaceAutoMembership:
+    """POST /workspaces must auto-add the creator as an owner Membership."""
 
-    def test_create_office_returns_201(
+    def test_create_workspace_returns_201(
         self, client: TestClient, auth_token: str,
     ) -> None:
-        """POST /offices with a fresh slug returns 201 (smoke)."""
+        """POST /workspaces with a fresh slug returns 201 (smoke)."""
         resp = client.post(
-            "/api/v1/offices",
+            "/api/v1/workspaces",
             headers=_auth(auth_token),
-            json={"name": "Onboard2 Office", "slug": "onboard2-office"},
+            json={"name": "Onboard2 Workspace", "slug": "onboard2-workspace"},
         )
         assert resp.status_code == 201
         body = resp.json()
-        assert body["slug"] == "onboard2-office"
-        assert body["name"] == "Onboard2 Office"
+        assert body["slug"] == "onboard2-workspace"
+        assert body["name"] == "Onboard2 Workspace"
         assert "id" in body
 
-    def test_create_office_auto_creates_owner_membership(
+    def test_create_workspace_auto_creates_owner_membership(
         self,
         client: TestClient,
         auth_token: str,
         creator_user_id: str,
     ) -> None:
-        """After POST /offices, the creator appears as an owner in memberships."""
+        """After POST /workspaces, the creator appears as an owner in memberships."""
         h = _auth(auth_token)
 
         resp = client.post(
-            "/api/v1/offices",
+            "/api/v1/workspaces",
             headers=h,
             json={"name": "Auto Membership", "slug": "auto-membership"},
         )
         assert resp.status_code == 201
-        office_id = resp.json()["id"]
+        workspace_id = resp.json()["id"]
 
         members = client.get(
-            f"/api/v1/messaging/memberships?office_id={office_id}",
+            f"/api/v1/messaging/memberships?workspace_id={workspace_id}",
             headers=h,
         )
         assert members.status_code == 200
@@ -152,53 +152,53 @@ class TestCreateOfficeAutoMembership:
         only = items[0]
         assert only["role"] == "owner"
         assert only["user_id"] == creator_user_id
-        assert only["office_id"] == office_id
+        assert only["workspace_id"] == workspace_id
 
-    def test_create_office_duplicate_slug_returns_409(
+    def test_create_workspace_duplicate_slug_returns_409(
         self, client: TestClient, auth_token: str,
     ) -> None:
-        """POST /offices with an existing active slug returns 409."""
+        """POST /workspaces with an existing active slug returns 409."""
         h = _auth(auth_token)
         first = client.post(
-            "/api/v1/offices",
+            "/api/v1/workspaces",
             headers=h,
             json={"name": "First", "slug": "dup-slug"},
         )
         assert first.status_code == 201
 
         second = client.post(
-            "/api/v1/offices",
+            "/api/v1/workspaces",
             headers=h,
             json={"name": "Second", "slug": "dup-slug"},
         )
         assert second.status_code == 409
 
-    def test_office_detail_returns_to_owner(
+    def test_workspace_detail_returns_to_owner(
         self,
         client: TestClient,
         auth_token: str,
         creator_user_id: str,
     ) -> None:
-        """The creator can GET /offices/{id} immediately after creation."""
+        """The creator can GET /workspaces/{id} immediately after creation."""
         h = _auth(auth_token)
 
         create = client.post(
-            "/api/v1/offices",
+            "/api/v1/workspaces",
             headers=h,
             json={"name": "Detail Check", "slug": "detail-check"},
         )
         assert create.status_code == 201
-        office_id = create.json()["id"]
+        workspace_id = create.json()["id"]
 
-        detail = client.get(f"/api/v1/offices/{office_id}", headers=h)
+        detail = client.get(f"/api/v1/workspaces/{workspace_id}", headers=h)
         assert detail.status_code == 200
         body = detail.json()
-        assert body["id"] == office_id
+        assert body["id"] == workspace_id
         assert body["slug"] == "detail-check"
         # The creator's user_id should appear in the membership list of the
-        # returned office, proving they are now an active member.
+        # returned workspace, proving they are now an active member.
         members = client.get(
-            f"/api/v1/messaging/memberships?office_id={office_id}",
+            f"/api/v1/messaging/memberships?workspace_id={workspace_id}",
             headers=h,
         )
         assert members.status_code == 200
@@ -216,15 +216,15 @@ class TestCreateOfficeAutoMembership:
         h = _auth(auth_token)
 
         create = client.post(
-            "/api/v1/offices",
+            "/api/v1/workspaces",
             headers=h,
             json={"name": "Persist Check", "slug": "persist-check"},
         )
         assert create.status_code == 201
-        office_id = create.json()["id"]
+        workspace_id = create.json()["id"]
 
         members = client.get(
-            f"/api/v1/messaging/memberships?office_id={office_id}",
+            f"/api/v1/messaging/memberships?workspace_id={workspace_id}",
             headers=h,
         )
         assert members.status_code == 200
@@ -235,30 +235,30 @@ class TestCreateOfficeAutoMembership:
         assert item["user_id"] == creator_user_id
         assert item["posx"] == 0
         assert item["posy"] == 0
-        assert item["office_id"] == office_id
+        assert item["workspace_id"] == workspace_id
 
-    def test_two_offices_get_two_owner_memberships(
+    def test_two_workspaces_get_two_owner_memberships(
         self,
         client: TestClient,
         auth_token: str,
         creator_user_id: str,
     ) -> None:
-        """Creating two offices yields two owner memberships (one per office)."""
+        """Creating two workspaces yields two owner memberships (one per workspace)."""
         h = _auth(auth_token)
 
-        office_ids = []
+        workspace_ids = []
         for slug in ("two-a", "two-b"):
             resp = client.post(
-                "/api/v1/offices",
+                "/api/v1/workspaces",
                 headers=h,
                 json={"name": slug, "slug": slug},
             )
             assert resp.status_code == 201
-            office_ids.append(resp.json()["id"])
+            workspace_ids.append(resp.json()["id"])
 
-        for office_id in office_ids:
+        for workspace_id in workspace_ids:
             members = client.get(
-                f"/api/v1/messaging/memberships?office_id={office_id}",
+                f"/api/v1/messaging/memberships?workspace_id={workspace_id}",
                 headers=h,
             )
             assert members.status_code == 200
@@ -283,23 +283,23 @@ class TestDirectMembershipCreation:
         creator_user_id: str,
         second_user_id: str,
     ) -> None:
-        """Owner creates an office, then adds a second user as editor."""
+        """Owner creates an workspace, then adds a second user as editor."""
         h = _auth(auth_token)
 
         create = client.post(
-            "/api/v1/offices",
+            "/api/v1/workspaces",
             headers=h,
-            json={"name": "Editor Office", "slug": "editor-office"},
+            json={"name": "Editor Workspace", "slug": "editor-workspace"},
         )
         assert create.status_code == 201
-        office_id = create.json()["id"]
+        workspace_id = create.json()["id"]
 
         # Add the editor as an editor-role membership
         resp = client.post(
             "/api/v1/messaging/memberships",
             headers=h,
             json={
-                "office_id": office_id,
+                "workspace_id": workspace_id,
                 "user_id": second_user_id,
                 "posx": 1,
                 "posy": 0,
@@ -310,13 +310,13 @@ class TestDirectMembershipCreation:
         body = resp.json()
         assert body["role"] == "editor"
         assert body["user_id"] == second_user_id
-        assert body["office_id"] == office_id
+        assert body["workspace_id"] == workspace_id
         assert body["posx"] == 1
         assert body["posy"] == 0
 
         # Membership list now has 2 entries: owner + editor
         members = client.get(
-            f"/api/v1/messaging/memberships?office_id={office_id}",
+            f"/api/v1/messaging/memberships?workspace_id={workspace_id}",
             headers=h,
         )
         assert members.status_code == 200
@@ -344,11 +344,11 @@ class TestPortalRoutesAvailable:
     backend after a rebuild.
     """
 
-    def test_employees_endpoint_returns_200(
+    def test_entities_endpoint_returns_200(
         self, client: TestClient, auth_token: str,
     ) -> None:
-        """GET /employees (the data source for EmployeesListPage) is reachable."""
-        resp = client.get("/api/v1/employees", headers=_auth(auth_token))
+        """GET /entities (the data source for EntitysListPage) is reachable."""
+        resp = client.get("/api/v1/entities", headers=_auth(auth_token))
         assert resp.status_code == 200
         body = resp.json()
         assert "items" in body
@@ -360,7 +360,7 @@ class TestPortalRoutesAvailable:
         """GET /messaging/memberships (the data source for MembersListPage) is reachable."""
         # Use a random UUID — even with no rows, the endpoint should be 200.
         resp = client.get(
-            "/api/v1/messaging/memberships?office_id="
+            "/api/v1/messaging/memberships?workspace_id="
             "00000000-0000-0000-0000-000000000000",
             headers=_auth(auth_token),
         )

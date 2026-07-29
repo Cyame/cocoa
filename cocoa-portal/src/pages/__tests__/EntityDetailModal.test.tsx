@@ -120,7 +120,7 @@ beforeEach(() => {
   mockedApi.mockReset();
   useEntityModalStore.setState({ entityId: null });
   mockedApi.mockImplementation((path, init) => {
-    if (path === `/employees/${ENTITY_ID}` && (!init || init.method === undefined)) {
+    if (path === `/entities/${ENTITY_ID}` && (!init || init.method === undefined)) {
       return Promise.resolve(ENTITY_RESPONSE);
     }
     if (path.startsWith(`/instances?employee_id=${ENTITY_ID}`)) {
@@ -130,7 +130,7 @@ beforeEach(() => {
       return Promise.resolve(PROMOTE_RESPONSE);
     }
     if (
-      path === `/learning/entities/${ENTITY_ID}/distill?action=transmute` &&
+      path === `/learning/entities/${ENTITY_ID}/transmute` &&
       (init?.method ?? 'GET') === 'POST'
     ) {
       return Promise.resolve(TRANSMUTE_RESPONSE);
@@ -149,7 +149,7 @@ describe('EntityDetailModal', () => {
     expect(screen.getByTestId('entity-modal-slug')).toHaveTextContent('mi-shi');
     expect(screen.getByTestId('entity-modal-tabs')).toBeInTheDocument();
     expect(screen.getByText('Display name')).toBeInTheDocument();
-    expect(mockedApi).toHaveBeenCalledWith(`/employees/${ENTITY_ID}`);
+    expect(mockedApi).toHaveBeenCalledWith(`/entities/${ENTITY_ID}`);
   });
 
   it('navigates between the 5 tabs via keyboard arrows and click', async () => {
@@ -236,8 +236,7 @@ describe('EntityDetailModal', () => {
 
     const transmuteCall = mockedApi.mock.calls.find(
       ([path, init]) =>
-        path === `/learning/entities/${ENTITY_ID}/distill?action=transmute` &&
-        (init?.method ?? 'GET') === 'POST',
+        path === `/learning/entities/${ENTITY_ID}/transmute` && (init?.method ?? 'GET') === 'POST',
     );
     expect(transmuteCall).toBeDefined();
     if (transmuteCall === undefined) throw new Error('expected transmute call');
@@ -269,7 +268,7 @@ describe('EntityDetailModal', () => {
     expect(
       mockedApi.mock.calls.find(
         ([path, init]) =>
-          path === `/learning/entities/${ENTITY_ID}/distill?action=transmute` &&
+          path === `/learning/entities/${ENTITY_ID}/transmute` &&
           (init?.method ?? 'GET') === 'POST',
       ),
     ).toBeUndefined();

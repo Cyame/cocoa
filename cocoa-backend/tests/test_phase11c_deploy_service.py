@@ -45,18 +45,18 @@ async def test_precheck_pass(session: AsyncSession) -> None:
 @pytest.mark.asyncio
 async def test_deploy_instance_creates_record(
     session: AsyncSession,
-    office_factory,
-    employee_factory,
+    workspace_factory,
+    entity_factory,
 ) -> None:
     """``deploy_instance`` persists Instance + DeployRecord and returns ctx."""
-    office = await office_factory()
-    employee = await employee_factory()
+    workspace = await workspace_factory()
+    entity = await entity_factory()
 
     record_id, ctx = await deploy_instance(
         name="test-deploy-2",
         image_version="v1.0",
-        office_id=office.id,
-        employee_id=employee.id,
+        workspace_id=workspace.id,
+        entity_id=entity.id,
         db=session,
     )
 
@@ -83,19 +83,19 @@ async def test_deploy_instance_creates_record(
 @pytest.mark.asyncio
 async def test_execute_pipeline_runs_9_steps_mocked(
     session: AsyncSession,
-    office_factory,
-    employee_factory,
+    workspace_factory,
+    entity_factory,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The 9-step K8s pipeline publishes 9 SSE events + sets success."""
-    office = await office_factory()
-    employee = await employee_factory()
+    workspace = await workspace_factory()
+    entity = await entity_factory()
 
     record_id, ctx = await deploy_instance(
         name="test-deploy-3",
         image_version="v2.0",
-        office_id=office.id,
-        employee_id=employee.id,
+        workspace_id=workspace.id,
+        entity_id=entity.id,
         db=session,
     )
     record = await session.get(DeployRecord, record_id)

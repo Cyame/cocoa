@@ -115,11 +115,9 @@ async def test_proxy_token_in_payload(monkeypatch: pytest.MonkeyPatch) -> None:
     checkpoint = next(
         call for call in emit_event.await_args_list if call.args[0] == HARNESS_CHECKPOINT
     )
-    assert checkpoint.kwargs["payload"] == {
-        "iteration": 0,
-        "instance_id": "instance-proxy",
-        "proxy_token": "proxy-from-env",
-    }
+    assert checkpoint.kwargs["payload"]["proxy_token"] == "proxy-from-env"
+    assert checkpoint.kwargs["payload"].get("token_estimate") is not None
+    assert checkpoint.kwargs["payload"].get("snapshot", {}).get("iteration") == 0
 
 
 @pytest.mark.asyncio

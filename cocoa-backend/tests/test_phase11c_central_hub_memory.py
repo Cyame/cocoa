@@ -4,7 +4,7 @@ Three tests pin the wiring:
 
 1. ``test_local_mode_writes_memory`` — given an Instance with an active
    Membership and a ``running`` loop, emitting ``HARNESS_CHECKPOINT``
-   results in a fresh :class:`MemoryEntry` row whose key is
+   results in a fresh :class:`Memory` row whose key is
    ``checkpoint_<instance[:8]>_<iteration>``.
 2. ``test_no_writes_when_loop_interrupted`` — emitting only
    ``HARNESS_INTERRUPTED`` creates no memory rows (the writer fires
@@ -30,8 +30,8 @@ from app.core.events import emit, register_handler
 from app.core.harness_supervisor import supervisor
 from app.models.central_hub import CentralHub
 from app.models.loop_state import LoopStatus
-from app.models.memory import MemoryEntry
-from app.models.office import Membership
+from app.models.memory import Memory
+from app.models.workspace import Membership
 
 # ── fixtures copied from conftest pattern (this module is heavily filtered) ──
 
@@ -63,18 +63,18 @@ async def wired_factory(db_url: str):  # noqa: ARG001
 
 
 async def _seed_running_instance(
-    session: AsyncSession, employee_factory, office_factory, instance_factory,
+    session: AsyncSession, entity_factory, workspace_factory, instance_factory,
     loop_state_factory,
     *, loop_status: str = LoopStatus.running.value,
 ):
-    """Seed an Office/Employee/Instance/Membership/LoopState set up."""
-    office = await office_factory()
-    employee = await employee_factory()
+    """Seed an Workspace/Entity/Instance/Membership/LoopState set up."""
+    workspace = await workspace_factory()
+    entity = await entity_factory()
     instance = await instance_factory(
-        employee_id=employee.id, office_id=office.id,
+        entity_id=entity.id, workspace_id=workspace.id,
     )
     membership = Membership(
-        office_id=office.id,
+        workspace_id=workspace.id,
         instance_id=instance.id,
         posx=0,
         posy=0,
@@ -83,26 +83,26 @@ async def _seed_running_instance(
     session.add(membership)
     await loop_state_factory(instance, loop_status=loop_status)
     await session.commit()
-    return office, employee, instance
+    return workspace, entity, instance
 
 
-# ── 1. CHECKPOINT writes memory + blackboard ─────────────────────────────
+# ── 1. CHECKPOINT writes memory + central_hub ─────────────────────────────
 
 
 @pytest.mark.asyncio
 async def test_local_mode_writes_memory(
     wired_factory,  # noqa: ARG001
     session: AsyncSession,
-    employee_factory,
-    office_factory,
+    entity_factory,
+    workspace_factory,
     instance_factory,
     loop_state_factory,
 ) -> None:
-    """A running instance's ``HARNESS_CHECKPOINT`` persists a MemoryEntry."""
+    """A running instance's ``HARNESS_CHECKPOINT`` persists a Memory."""
     await supervisor.start()
-    office, employee, instance = await _seed_running_instance(
+    workspace, entity, instance = await _seed_running_instance(
         session,
-        employee_factory, office_factory, instance_factory, loop_state_factory,
+        entity_factory, workspace_factory, instance_factory, loop_state_factory,
     )
 
     await emit(
@@ -115,7 +115,7 @@ async def test_local_mode_writes_memory(
     await session.commit()
 
     result = await session.execute(
-        select(MemoryEntry).where(MemoryEntry.employee_id == employee.id)
+        select(Memory).where(Memory.entity_id == entity.id)
     )
     entries = list(result.scalars().all())
     assert len(entries) == 1
@@ -126,11 +126,11 @@ async def test_local_mode_writes_memory(
     assert entry.source_instance_id == instance.id
 
     result = await session.execute(
-        select(CentralHub).where(CentralHub.office_id == office.id)
+        select(CentralHub).where(CentralHub.workspace_id == workspace.id)
     )
-    blackboard = result.scalar_one()
-    assert blackboard.content is not None
-    assert "Checkpoint" in blackboard.content
+    central_hub = result.scalar_one()
+    assert central_hub.content is not None
+    assert "Checkpoint" in central_hub.content
 
 
 # ── 2. Non-checkpoint events do not produce writes ───────────────────────
@@ -140,16 +140,16 @@ async def test_local_mode_writes_memory(
 async def test_no_writes_when_loop_interrupted(
     wired_factory,  # noqa: ARG001
     session: AsyncSession,
-    employee_factory,
-    office_factory,
+    entity_factory,
+    workspace_factory,
     instance_factory,
     loop_state_factory,
 ) -> None:
-    """Emitting only ``HARNESS_INTERRUPTED`` does NOT create a MemoryEntry."""
+    """Emitting only ``HARNESS_INTERRUPTED`` does NOT create a Memory."""
     await supervisor.start()
-    office, employee, instance = await _seed_running_instance(
+    workspace, entity, instance = await _seed_running_instance(
         session,
-        employee_factory, office_factory, instance_factory, loop_state_factory,
+        entity_factory, workspace_factory, instance_factory, loop_state_factory,
         loop_status=LoopStatus.interrupted.value,
     )
 
@@ -163,17 +163,17 @@ async def test_no_writes_when_loop_interrupted(
     await session.commit()
 
     memory = await session.execute(
-        select(MemoryEntry).where(MemoryEntry.employee_id == employee.id)
+        select(Memory).where(Memory.entity_id == entity.id)
     )
     assert list(memory.scalars().all()) == [], (
         "interrupted-only emit must not create memory entries"
     )
 
-    blackboard = await session.execute(
-        select(CentralHub).where(CentralHub.office_id == office.id)
+    central_hub = await session.execute(
+        select(CentralHub).where(CentralHub.workspace_id == workspace.id)
     )
-    assert blackboard.scalar_one_or_none() is None, (
-        "interrupted-only emit must not lazy-create a Blackboard row"
+    assert central_hub.scalar_one_or_none() is None, (
+        "interrupted-only emit must not lazy-create a CentralHub row"
     )
 
     _ = instance  # silence unused-arg on the no-member path
@@ -186,8 +186,8 @@ async def test_no_writes_when_loop_interrupted(
 async def test_handler_chains(
     wired_factory,  # noqa: ARG001
     session: AsyncSession,
-    employee_factory,
-    office_factory,
+    entity_factory,
+    workspace_factory,
     instance_factory,
     loop_state_factory,
 ) -> None:
@@ -204,9 +204,9 @@ async def test_handler_chains(
 
     register_handler("harness.checkpoint", extra_handler)
 
-    office, employee, instance = await _seed_running_instance(
+    workspace, entity, instance = await _seed_running_instance(
         session,
-        employee_factory, office_factory, instance_factory, loop_state_factory,
+        entity_factory, workspace_factory, instance_factory, loop_state_factory,
     )
 
     await emit(
@@ -224,7 +224,7 @@ async def test_handler_chains(
 
     entries = (
         await session.execute(
-            select(MemoryEntry).where(MemoryEntry.employee_id == employee.id)
+            select(Memory).where(Memory.entity_id == entity.id)
         )
     ).scalars().all()
     assert len(entries) == 1, (

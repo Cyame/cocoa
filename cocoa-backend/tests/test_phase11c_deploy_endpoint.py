@@ -111,22 +111,29 @@ async def _make_deploy_record(session: AsyncSession) -> DeployRecord:
     model accepts without constraint violations.
     """
     import app.core.db as db_mod
-    from app.models.employee import Employee
+    from sqlalchemy import select
+    from app.models.entity import Entity
     from app.models.instance import Instance, InstanceStatus
-    from app.models.office import Office
+    from app.models.organization import Namespace
+    from app.models.workspace import Workspace
 
     # Ensure the session uses the per-test DB, not any cached factory.
     db_mod._engine = None
     db_mod._session_factory = None
 
-    office = Office(name=f"o-{uuid.uuid4().hex[:6]}", slug=f"o-{uuid.uuid4().hex[:6]}")
-    employee = Employee(name=f"e-{uuid.uuid4().hex[:6]}", slug=f"e-{uuid.uuid4().hex[:6]}")
-    session.add_all([office, employee])
+    ns = (
+        await session.execute(
+            select(Namespace).where(Namespace.slug == "default", Namespace.deleted_at.is_(None))
+        )
+    ).scalar_one()
+    workspace = Workspace(namespace_id=ns.id, name=f"o-{uuid.uuid4().hex[:6]}", slug=f"o-{uuid.uuid4().hex[:6]}")
+    entity = Entity(namespace_id=ns.id, name=f"e-{uuid.uuid4().hex[:6]}", slug=f"e-{uuid.uuid4().hex[:6]}")
+    session.add_all([workspace, entity])
     await session.flush()
 
     instance = Instance(
-        office_id=office.id,
-        employee_id=employee.id,
+        workspace_id=workspace.id,
+        entity_id=entity.id,
         status=InstanceStatus.creating.value,
         proxy_token=str(uuid.uuid4()),
     )

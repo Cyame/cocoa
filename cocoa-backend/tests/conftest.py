@@ -17,13 +17,13 @@ from _pytest.monkeypatch import MonkeyPatch
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from starlette.testclient import TestClient
 
-_ADMIN_DSN = "postgresql://postgres:postgres@localhost:5432/postgres"
+_ADMIN_DSN = "postgresql://postgres:postgres@127.0.0.1:5432/postgres"
 _TEMPLATE_DB = "cocoa_test_template"
 _BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def _url(db: str) -> str:
-    return f"postgresql+asyncpg://postgres:postgres@localhost:5432/{db}"
+    return f"postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/{db}"
 
 
 async def _exec_admin(sql: str) -> None:
@@ -133,42 +133,100 @@ async def loop_state_factory(session: AsyncSession):
 
 
 @pytest_asyncio.fixture
-async def office_factory(session: AsyncSession):
-    """Return an async factory of :class:`Office` rows bound to *session*."""
+async def namespace_factory(session: AsyncSession):
+    """Ensure a default Organization+Namespace exist; return Namespace."""
 
     async def _make(**overrides):
         import uuid as _uuid
 
-        from app.models.office import Office
+        from sqlalchemy import select
 
-        defaults = {
-            "name": overrides.pop("name", "Test Office"),
-            "slug": overrides.pop("slug", f"test-office-{_uuid.uuid4().hex[:8]}"),
-        }
-        defaults.update(overrides)
-        office = Office(**defaults)
-        session.add(office)
-        await session.flush()
-        return office
+        from app.models.organization import Namespace, Organization
+
+        org = (
+            await session.execute(
+                select(Organization).where(
+                    Organization.slug == "default",
+                    Organization.deleted_at.is_(None),
+                )
+            )
+        ).scalar_one_or_none()
+        if org is None:
+            org = Organization(slug="default", name="Default World")
+            session.add(org)
+            await session.flush()
+
+        slug = overrides.pop("slug", "default")
+        ns = (
+            await session.execute(
+                select(Namespace).where(
+                    Namespace.org_id == org.id,
+                    Namespace.slug == slug,
+                    Namespace.deleted_at.is_(None),
+                )
+            )
+        ).scalar_one_or_none()
+        if ns is None:
+            ns = Namespace(
+                org_id=org.id,
+                slug=slug,
+                name=overrides.pop("name", "Default Scenario"),
+                description=overrides.pop("description", None),
+                tags=overrides.pop("tags", None),
+            )
+            session.add(ns)
+            await session.flush()
+        return ns
 
     return _make
 
 
 @pytest_asyncio.fixture
-async def employee_factory(session: AsyncSession):
-    """Return an async factory of :class:`Employee` rows bound to *session*."""
+async def workspace_factory(session: AsyncSession, namespace_factory):
+    """Return an async factory of :class:`Workspace` rows bound to *session*."""
 
     async def _make(**overrides):
         import uuid as _uuid
 
-        from app.models.employee import Employee
+        from app.models.workspace import Workspace
+
+        if "namespace_id" not in overrides:
+            ns = await namespace_factory()
+            overrides["namespace_id"] = ns.id
 
         defaults = {
-            "name": overrides.pop("name", "Test Employee"),
-            "slug": overrides.pop("slug", f"test-emp-{_uuid.uuid4().hex[:8]}"),
+            "name": overrides.pop("name", "Test Workspace"),
+            "slug": overrides.pop("slug", f"test-workspace-{_uuid.uuid4().hex[:8]}"),
         }
         defaults.update(overrides)
-        emp = Employee(**defaults)
+        workspace = Workspace(**defaults)
+        session.add(workspace)
+        await session.flush()
+        return workspace
+
+    return _make
+
+
+@pytest_asyncio.fixture
+async def entity_factory(session: AsyncSession, namespace_factory):
+    """Return an async factory of :class:`Entity` rows bound to *session*."""
+
+    async def _make(**overrides):
+        import uuid as _uuid
+
+        from app.models.entity import Entity
+
+        if "namespace_id" not in overrides:
+            ns = await namespace_factory()
+            overrides["namespace_id"] = ns.id
+
+        defaults = {
+            "name": overrides.pop("name", "Test Entity"),
+            "slug": overrides.pop("slug", f"test-emp-{_uuid.uuid4().hex[:8]}"),
+            "rank": overrides.pop("rank", "intern"),
+        }
+        defaults.update(overrides)
+        emp = Entity(**defaults)
         session.add(emp)
         await session.flush()
         return emp
@@ -177,7 +235,7 @@ async def employee_factory(session: AsyncSession):
 
 
 @pytest_asyncio.fixture
-async def instance_factory(session: AsyncSession, employee_factory, office_factory):
+async def instance_factory(session: AsyncSession, entity_factory, workspace_factory):
     """Return an async factory of :class:`Instance` rows bound to *session*."""
 
     async def _make(**overrides):
@@ -185,12 +243,12 @@ async def instance_factory(session: AsyncSession, employee_factory, office_facto
 
         from app.models.instance import Instance, InstanceStatus
 
-        if "employee_id" not in overrides:
-            emp = await employee_factory()
-            overrides["employee_id"] = emp.id
-        if "office_id" not in overrides:
-            office = await office_factory()
-            overrides["office_id"] = office.id
+        if "entity_id" not in overrides:
+            emp = await entity_factory()
+            overrides["entity_id"] = emp.id
+        if "workspace_id" not in overrides:
+            workspace = await workspace_factory()
+            overrides["workspace_id"] = workspace.id
         defaults = {
             "status": InstanceStatus.creating.value,
             "proxy_token": str(_uuid.uuid4()),

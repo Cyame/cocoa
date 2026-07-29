@@ -15,16 +15,16 @@ class TestParseDirective:
         result = parse_directive("/read")
         assert isinstance(result, Directive)
         assert result.cmd == "/read"
-        assert result.target_employee is None
+        assert result.target_entity is None
         assert result.args == []
         assert result.content_ref is None
 
     def test_parse_targeted_directive(self) -> None:
-        """@target before /cmd sets target_employee."""
+        """@target before /cmd sets target_entity."""
         result = parse_directive("@reviewer /review")
         assert isinstance(result, Directive)
         assert result.cmd == "/review"
-        assert result.target_employee == "reviewer"
+        assert result.target_entity == "reviewer"
         assert result.args == []
         assert result.content_ref is None
 
@@ -41,7 +41,7 @@ class TestParseDirective:
         """@target /cmd @scope:path — all fields populated."""
         result = parse_directive("@reviewer /review @fornix:docs/draft.md")
         assert isinstance(result, Directive)
-        assert result.target_employee == "reviewer"
+        assert result.target_entity == "reviewer"
         assert result.cmd == "/review"
         assert result.content_ref is not None
         assert result.content_ref.scope == "fornix"
@@ -79,8 +79,8 @@ class TestParseTurn:
         result = parse_turn("@mi-shi /plan\n/review")
         assert isinstance(result, Turn)
         assert len(result.directives) == 2
-        assert result.directives[0].target_employee == "mi-shi"
+        assert result.directives[0].target_entity == "mi-shi"
         assert result.directives[0].cmd == "/plan"
-        assert result.directives[1].target_employee is None
+        assert result.directives[1].target_entity is None
         assert result.directives[1].cmd == "/review"
         assert result.general_text is None

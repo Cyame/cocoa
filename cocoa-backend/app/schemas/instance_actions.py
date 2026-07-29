@@ -14,7 +14,7 @@ class RestartRequest(BaseModel):
     """Payload for ``POST /api/v1/instances/{instance_id}/restart``.
 
     Per PRD §13.6.7: re-sync an outdated instance to the current
-    ``Employee.migration_hash``. Refuses if the instance is running
+    ``Entity.migration_hash``. Refuses if the instance is running
     unless ``force=true``.
     """
 

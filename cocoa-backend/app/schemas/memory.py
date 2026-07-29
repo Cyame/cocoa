@@ -1,4 +1,4 @@
-"""MemoryEntry schemas — append-only employee learning log."""
+"""Memory schemas — append-only entity learning log."""
 
 from __future__ import annotations
 
@@ -9,10 +9,10 @@ from pydantic import BaseModel, ConfigDict, field_validator
 from app.models.memory import MemoryKind
 
 
-class MemoryEntryCreate(BaseModel):
-    """Append a new immutable memory entry for an employee."""
+class MemoryCreate(BaseModel):
+    """Append a new immutable memory entry for an entity."""
 
-    employee_id: str
+    entity_id: str
     kind: str
     key: str | None = None
     content: str | None = None
@@ -28,13 +28,13 @@ class MemoryEntryCreate(BaseModel):
         return v
 
 
-class MemoryEntryOut(BaseModel):
-    """Read-only representation of a MemoryEntry."""
+class MemoryOut(BaseModel):
+    """Read-only representation of a Memory."""
 
     model_config = ConfigDict(from_attributes=True)
 
     id: str
-    employee_id: str
+    entity_id: str
     kind: str
     key: str | None
     content: str | None

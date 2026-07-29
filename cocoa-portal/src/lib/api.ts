@@ -63,6 +63,26 @@ export async function api(path: string, init?: RequestInit): Promise<unknown> {
       }
     }
 
+    if (response.status === 403) {
+      const details =
+        typeof payload === 'object' && payload !== null ? (payload as Record<string, unknown>) : {};
+      const missing =
+        typeof details.missing === 'string'
+          ? details.missing
+          : Array.isArray(details.missing)
+            ? details.missing.join(',')
+            : '';
+      const gene = typeof details.gene === 'string' ? details.gene : '';
+      const from = encodeURIComponent(window.location.pathname + window.location.search);
+      const params = new URLSearchParams();
+      if (missing.length > 0) params.set('missing', missing);
+      if (gene.length > 0) params.set('gene', gene);
+      params.set('from', from);
+      if (window.location.pathname !== '/403') {
+        window.location.assign(`/403?${params.toString()}`);
+      }
+    }
+
     throw new ApiError(response.status, payload);
   }
 

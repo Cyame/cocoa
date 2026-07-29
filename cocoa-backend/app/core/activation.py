@@ -3,7 +3,7 @@
 Three trigger types:
 1. daily_report — self-sync timer via TaskQueue (P5 emits events only; P8 harness runs real logic)
 2. on_mention — triggered after successful message delivery (P5 emits events only)
-3. intern_hot_load — stateless invocation for intern-rank employees (creates Instance directly)
+3. intern_hot_load — stateless invocation for intern-rank entities (creates Instance directly)
 """
 
 from uuid import uuid4
@@ -17,9 +17,9 @@ from app.core.event_types import MESSAGING_ACTIVATION_TRIGGERED
 from app.core.events import emit
 from app.core.queue import TaskQueue
 from app.core.workspace import generate_workspace_path
-from app.models.employee import Employee
+from app.models.entity import Entity
 from app.models.instance import Instance, InstanceStatus
-from app.models.office import Office
+from app.models.workspace import Workspace
 
 # ---------------------------------------------------------------------------
 # Module-level state for daily-report anti-duplicate
@@ -38,9 +38,9 @@ _pending_daily_report: str | None = None
 
 
 async def _daily_report_handler(payload: dict) -> None:
-    """Iterate every active Office and emit activation events for all running employees.
+    """Iterate every active Workspace and emit activation events for all running entities.
 
-    Opens an independent session, iterates all offices and their employees
+    Opens an independent session, iterates all workspaces and their entities
     via Instance records, emits activation events for each, and re-schedules
     itself for the next day.
     """
@@ -55,48 +55,48 @@ async def _daily_report_handler(payload: dict) -> None:
     factory = get_session_factory()
     async with factory() as session:
         try:
-            # Query all active (non-deleted) Offices
+            # Query all active (non-deleted) Workspaces
             result = await session.execute(
-                select(Office).where(Office.deleted_at.is_(None))
+                select(Workspace).where(Workspace.deleted_at.is_(None))
             )
-            offices = result.scalars().all()
+            workspaces = result.scalars().all()
 
-            for office in offices:
-                # Find Employees with a running Instance in this Office
+            for workspace in workspaces:
+                # Find Entitys with a running Instance in this Workspace
                 emp_result = await session.execute(
-                    select(Employee)
-                    .join(Instance, Instance.employee_id == Employee.id)
+                    select(Entity)
+                    .join(Instance, Instance.entity_id == Entity.id)
                     .where(
-                        Instance.office_id == office.id,
+                        Instance.workspace_id == workspace.id,
                         Instance.status == InstanceStatus.running.value,
                         Instance.deleted_at.is_(None),
-                        Employee.deleted_at.is_(None),
+                        Entity.deleted_at.is_(None),
                     )
                 )
-                employees = emp_result.scalars().all()
+                entities = emp_result.scalars().all()
 
-                for emp in employees:
+                for emp in entities:
                     await emit(
                         MESSAGING_ACTIVATION_TRIGGERED,
                         actor_type="system",
-                        resource_type="employee",
+                        resource_type="entity",
                         resource_id=str(emp.id),
                         payload={
                             "trigger": "daily_report",
-                            "office_id": str(office.id),
+                            "workspace_id": str(workspace.id),
                         },
                         session=session,
                     )
                     logger.debug(
                         "Daily report activation emitted",
-                        employee_id=str(emp.id),
-                        office_id=str(office.id),
+                        entity_id=str(emp.id),
+                        workspace_id=str(workspace.id),
                     )
 
             await session.commit()
             logger.info(
                 "Daily report sync complete",
-                office_count=len(offices),
+                workspace_count=len(workspaces),
             )
         except Exception:
             await session.rollback()
@@ -133,8 +133,8 @@ async def schedule_daily_report_sync(task_queue: TaskQueue) -> None:
 
 async def trigger_on_mention(
     session: AsyncSession,
-    employee_id: str,
-    office_id: str,
+    entity_id: str,
+    workspace_id: str,
 ) -> None:
     """Emit an activation_triggered event for on-mention.
 
@@ -144,11 +144,11 @@ async def trigger_on_mention(
     await emit(
         MESSAGING_ACTIVATION_TRIGGERED,
         actor_type="system",
-        resource_type="employee",
-        resource_id=employee_id,
+        resource_type="entity",
+        resource_id=entity_id,
         payload={
             "trigger": "on_mention",
-            "office_id": office_id,
+            "workspace_id": workspace_id,
         },
         session=session,
     )
@@ -161,26 +161,26 @@ async def trigger_on_mention(
 
 async def handle_intern_invocation(
     session: AsyncSession,
-    employee_slug: str,
-    office_id: str,
+    entity_slug: str,
+    workspace_id: str,
 ) -> Instance | None:
-    """Create or reuse an Instance for an intern employee.
+    """Create or reuse an Instance for an intern entity.
 
-    Intern employees are stateless: no MemoryEntry read/write, ephemeral
+    Intern entities are stateless: no Memory read/write, ephemeral
     instances.  Returns an existing running Instance if one exists, or
     creates a new one (status ``"creating"``).
 
     Returns
     -------
     Instance | None
-        The running or newly created Instance, or ``None`` if the employee
+        The running or newly created Instance, or ``None`` if the entity
         is not found or is not an intern.
     """
-    # Look up Employee by slug
+    # Look up Entity by slug
     result = await session.execute(
-        select(Employee).where(
-            Employee.slug == employee_slug,
-            Employee.deleted_at.is_(None),
+        select(Entity).where(
+            Entity.slug == entity_slug,
+            Entity.deleted_at.is_(None),
         )
     )
     emp = result.scalar_one_or_none()
@@ -189,11 +189,11 @@ async def handle_intern_invocation(
     if emp.rank != "intern":
         return None
 
-    # Check for an existing running Instance in this office
+    # Check for an existing running Instance in this workspace
     result = await session.execute(
         select(Instance).where(
-            Instance.employee_id == emp.id,
-            Instance.office_id == office_id,
+            Instance.entity_id == emp.id,
+            Instance.workspace_id == workspace_id,
             Instance.status == InstanceStatus.running.value,
             Instance.deleted_at.is_(None),
         )
@@ -204,8 +204,8 @@ async def handle_intern_invocation(
 
     # Create a fresh Instance
     instance = Instance(
-        employee_id=emp.id,
-        office_id=office_id,
+        entity_id=emp.id,
+        workspace_id=workspace_id,
         workspace_path=generate_workspace_path(emp.slug, str(uuid4())),
         status=InstanceStatus.creating.value,
         proxy_token=str(uuid4()),
@@ -215,8 +215,8 @@ async def handle_intern_invocation(
 
     logger.info(
         "Intern instance created",
-        employee_id=str(emp.id),
-        office_id=office_id,
+        entity_id=str(emp.id),
+        workspace_id=workspace_id,
         instance_id=str(instance.id),
     )
     return instance

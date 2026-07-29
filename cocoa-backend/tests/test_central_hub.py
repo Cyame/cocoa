@@ -1,4 +1,4 @@
-"""Tests for Blackboard, FornixFile, Vault, VaultEntry models and VaultEntrySourceType enum."""
+"""Tests for CentralHub, FornixFile, Vault, VaultEntry models and VaultEntrySourceType enum."""
 
 from sqlalchemy import CheckConstraint
 
@@ -32,19 +32,19 @@ class TestVaultEntrySourceType:
 
 
 class TestCentralHubModel:
-    """Verify Blackboard SQLAlchemy model structure."""
+    """Verify CentralHub SQLAlchemy model structure."""
 
     def test_tablename(self) -> None:
-        """Table name must be 'blackboards'."""
-        assert CentralHub.__tablename__ == "blackboards"
+        """Table name must be 'central_hubs'."""
+        assert CentralHub.__tablename__ == "central_hubs"
 
     def test_imports(self) -> None:
         """Model must be importable and a class."""
         assert isinstance(CentralHub, type)
 
-    def test_office_id_column_exists(self) -> None:
-        """office_id FK column must be present and NOT NULL."""
-        col = CentralHub.__table__.columns["office_id"]
+    def test_workspace_id_column_exists(self) -> None:
+        """workspace_id FK column must be present and NOT NULL."""
+        col = CentralHub.__table__.columns["workspace_id"]
         assert col is not None
         assert not col.nullable
 
@@ -59,40 +59,40 @@ class TestCentralHubModel:
         assert col.nullable is True
 
     def test_inherits_base_model(self) -> None:
-        """Blackboard must have id, created_at, updated_at, deleted_at."""
+        """CentralHub must have id, created_at, updated_at, deleted_at."""
         assert "id" in CentralHub.__table__.columns
         assert "created_at" in CentralHub.__table__.columns
         assert "updated_at" in CentralHub.__table__.columns
         assert "deleted_at" in CentralHub.__table__.columns
 
-    def test_office_id_foreign_key(self) -> None:
-        """office_id must have a ForeignKey to offices.id."""
-        col = CentralHub.__table__.columns["office_id"]
+    def test_workspace_id_foreign_key(self) -> None:
+        """workspace_id must have a ForeignKey to workspaces.id."""
+        col = CentralHub.__table__.columns["workspace_id"]
         fks = list(col.foreign_keys)
         assert len(fks) == 1
         fk = fks[0]
-        assert fk._colspec == "offices.id"
+        assert fk._colspec == "workspaces.id"
 
-    def test_office_id_partial_unique_index(self) -> None:
-        """office_id must have a partial unique index for 1:1 enforcement."""
+    def test_workspace_id_partial_unique_index(self) -> None:
+        """workspace_id must have a partial unique index for 1:1 enforcement."""
         indexes = {idx.name: idx for idx in CentralHub.__table__.indexes}
-        assert "uq_blackboards_office" in indexes
+        assert "uq_central_hubs_workspace" in indexes
 
 
 class TestFornixFileModel:
     """Verify FornixFile SQLAlchemy model structure."""
 
     def test_tablename(self) -> None:
-        """Table name must be 'blackboard_files'."""
-        assert FornixFile.__tablename__ == "blackboard_files"
+        """Table name must be 'fornix_files'."""
+        assert FornixFile.__tablename__ == "fornix_files"
 
     def test_imports(self) -> None:
         """Model must be importable and a class."""
         assert isinstance(FornixFile, type)
 
-    def test_office_id_column_exists(self) -> None:
-        """office_id FK column must be present and NOT NULL."""
-        col = FornixFile.__table__.columns["office_id"]
+    def test_workspace_id_column_exists(self) -> None:
+        """workspace_id FK column must be present and NOT NULL."""
+        col = FornixFile.__table__.columns["workspace_id"]
         assert col is not None
         assert not col.nullable
 
@@ -144,13 +144,13 @@ class TestFornixFileModel:
         assert "updated_at" in FornixFile.__table__.columns
         assert "deleted_at" in FornixFile.__table__.columns
 
-    def test_office_id_foreign_key(self) -> None:
-        """office_id must have a ForeignKey to offices.id."""
-        col = FornixFile.__table__.columns["office_id"]
+    def test_workspace_id_foreign_key(self) -> None:
+        """workspace_id must have a ForeignKey to workspaces.id."""
+        col = FornixFile.__table__.columns["workspace_id"]
         fks = list(col.foreign_keys)
         assert len(fks) == 1
         fk = fks[0]
-        assert fk._colspec == "offices.id"
+        assert fk._colspec == "workspaces.id"
 
     def test_uploader_user_id_foreign_key(self) -> None:
         """uploader_user_id must have a ForeignKey to users.id."""
@@ -169,16 +169,16 @@ class TestFornixFileModel:
         assert fk._colspec == "instances.id"
 
     def test_path_partial_unique_index(self) -> None:
-        """(office_id, parent_path, name) partial unique index must exist."""
+        """(workspace_id, parent_path, name) partial unique index must exist."""
         indexes = {idx.name: idx for idx in FornixFile.__table__.indexes}
-        assert "uq_blackboard_files_path" in indexes
+        assert "uq_fornix_files_path" in indexes
 
     def test_storage_key_global_unique_index(self) -> None:
         """storage_key must have a global (non-partial) unique index."""
         indexes = {idx.name: idx for idx in FornixFile.__table__.indexes}
-        assert "uq_blackboard_files_storage_key" in indexes
+        assert "uq_fornix_files_storage_key" in indexes
         # Global unique = no postgresql_where clause
-        idx = indexes["uq_blackboard_files_storage_key"]
+        idx = indexes["uq_fornix_files_storage_key"]
         assert idx.dialect_options.get("postgresql_where") is None
 
     def test_exclusive_uploader_check_constraint(self) -> None:
@@ -188,7 +188,7 @@ class TestFornixFileModel:
             for c in FornixFile.__table__.constraints
             if isinstance(c, CheckConstraint)
         }
-        assert "ck_blackboard_files_exclusive_uploader" in constraints
+        assert "ck_fornix_files_exclusive_uploader" in constraints
 
 
 class TestVaultModel:
@@ -202,9 +202,9 @@ class TestVaultModel:
         """Model must be importable and a class."""
         assert isinstance(Vault, type)
 
-    def test_office_id_column_exists(self) -> None:
-        """office_id FK column must be present and NOT NULL."""
-        col = Vault.__table__.columns["office_id"]
+    def test_workspace_id_column_exists(self) -> None:
+        """workspace_id FK column must be present and NOT NULL."""
+        col = Vault.__table__.columns["workspace_id"]
         assert col is not None
         assert not col.nullable
 
@@ -215,18 +215,18 @@ class TestVaultModel:
         assert "updated_at" in Vault.__table__.columns
         assert "deleted_at" in Vault.__table__.columns
 
-    def test_office_id_foreign_key(self) -> None:
-        """office_id must have a ForeignKey to offices.id."""
-        col = Vault.__table__.columns["office_id"]
+    def test_workspace_id_foreign_key(self) -> None:
+        """workspace_id must have a ForeignKey to workspaces.id."""
+        col = Vault.__table__.columns["workspace_id"]
         fks = list(col.foreign_keys)
         assert len(fks) == 1
         fk = fks[0]
-        assert fk._colspec == "offices.id"
+        assert fk._colspec == "workspaces.id"
 
-    def test_office_id_partial_unique_index(self) -> None:
-        """office_id must have a partial unique index for 1:1 enforcement."""
+    def test_workspace_id_partial_unique_index(self) -> None:
+        """workspace_id must have a partial unique index for 1:1 enforcement."""
         indexes = {idx.name: idx for idx in Vault.__table__.indexes}
-        assert "uq_vaults_office" in indexes
+        assert "uq_vaults_workspace" in indexes
 
 
 class TestVaultEntryModel:

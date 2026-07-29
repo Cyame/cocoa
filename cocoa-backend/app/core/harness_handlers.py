@@ -7,7 +7,7 @@ to :mod:`app.core.harness_supervisor` (which delegates to
 DB on a caller-owned session — the P3.5 dispatcher contract.
 
 The ``handle_checkpoint_writes`` corollary owns its own short-lived
-session to persist the per-checkpoint Blackboard summary and MemoryEntry
+session to persist the per-checkpoint CentralHub summary and Memory
 append-log rows that P11c wired up. The P3.5 contract is preserved: no
 caller session is borrowed, no business-DB write happens on the
 checkpoint caller's transaction.
@@ -24,15 +24,15 @@ from datetime import datetime, timezone
 
 
 async def handle_checkpoint_writes(**kwargs: object) -> None:
-    """Persist the P11c checkpoint side effects: Blackboard summary + MemoryEntry.
+    """Persist the P11c checkpoint side effects: CentralHub summary + Memory.
 
     Accepts the full :func:`app.core.events.emit` keyword envelope so the
     same function is callable from the supervisor dispatch chain
     (positional ``resource_id``/``payload``) and from a standalone
     ``register_handler("harness.checkpoint", handle_checkpoint_writes)``
     registration. Looks up the instance's active :class:`Membership` to
-    discover ``office_id`` and ``employee_id`` (MemoryEntry requires an
-    ``employee_id`` FK; Blackboard is keyed by ``office_id``). Skips
+    discover ``workspace_id`` and ``entity_id`` (Memory requires an
+    ``entity_id`` FK; CentralHub is keyed by ``workspace_id``). Skips
     silently when:
 
     * the instance does not exist, is soft-deleted, or has no live
@@ -59,8 +59,8 @@ async def handle_checkpoint_writes(**kwargs: object) -> None:
     from app.models.central_hub import CentralHub
     from app.models.instance import Instance
     from app.models.loop_state import InstanceLoopState, LoopStatus
-    from app.models.memory import MemoryEntry, MemoryKind
-    from app.models.office import Membership
+    from app.models.memory import Memory, MemoryKind
+    from app.models.workspace import Membership
 
     factory = get_session_factory()
     async with factory() as session:
@@ -100,24 +100,24 @@ async def handle_checkpoint_writes(**kwargs: object) -> None:
                    f"{instance_id[:8]}"
             )[:500]
 
-            blackboard_result = await session.execute(
+            central_hub_result = await session.execute(
                 select(CentralHub).where(
-                    CentralHub.office_id == membership.office_id,
+                    CentralHub.workspace_id == membership.workspace_id,
                     CentralHub.deleted_at.is_(None),
                 )
             )
-            blackboard = blackboard_result.scalar_one_or_none()
-            if blackboard is None:
-                blackboard = CentralHub(
-                    office_id=membership.office_id, content=text
+            central_hub = central_hub_result.scalar_one_or_none()
+            if central_hub is None:
+                central_hub = CentralHub(
+                    workspace_id=membership.workspace_id, content=text
                 )
-                session.add(blackboard)
+                session.add(central_hub)
             else:
-                blackboard.content = text
+                central_hub.content = text
 
             session.add(
-                MemoryEntry(
-                    employee_id=instance.employee_id,
+                Memory(
+                    entity_id=instance.entity_id,
                     kind=MemoryKind.experience.value,
                     key=f"checkpoint_{instance_id[:8]}_{iteration}",
                     content=text,

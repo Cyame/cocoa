@@ -23,7 +23,7 @@ from app.api.deps import DB, CurrentUserDep
 from app.core.errors import NotFoundError
 from app.core.harness_supervisor import supervisor
 from app.core.openapi import add_error_responses
-from app.core.permissions import require_office_role
+from app.core.permissions import require_workspace_role
 from app.models.instance import Instance
 from app.models.loop_state import InstanceLoopState
 from app.schemas.loop_state import BoulderSnapshotOut, InstanceLoopStateOut
@@ -89,7 +89,7 @@ async def interrupt_instance(
 ) -> InstanceLoopStateOut:
     """Send a kill signal to the agent loop and mark it interrupted."""
     instance = await _get_instance_or_404(instance_id, db)
-    await require_office_role(db, current_user.user_id, instance.office_id, "editor")
+    await require_workspace_role(db, current_user.user_id, instance.workspace_id, "editor")
     state = await supervisor.handle_interrupt(instance_id, db)
     await db.commit()
     await db.refresh(state)
@@ -104,7 +104,7 @@ async def pause_instance(
 ) -> InstanceLoopStateOut:
     """Pause the agent loop and mark its loop state paused."""
     instance = await _get_instance_or_404(instance_id, db)
-    await require_office_role(db, current_user.user_id, instance.office_id, "editor")
+    await require_workspace_role(db, current_user.user_id, instance.workspace_id, "editor")
     state = await supervisor.handle_pause(instance_id, db)
     await db.commit()
     await db.refresh(state)
@@ -119,7 +119,7 @@ async def resume_instance(
 ) -> InstanceLoopStateOut:
     """Resume the agent loop and ensure its runtime task is started."""
     instance = await _get_instance_or_404(instance_id, db)
-    await require_office_role(db, current_user.user_id, instance.office_id, "editor")
+    await require_workspace_role(db, current_user.user_id, instance.workspace_id, "editor")
     state = await supervisor.handle_resume(instance_id, db)
     await db.commit()
     await db.refresh(state)
@@ -135,7 +135,7 @@ async def get_instance_status(
 ) -> InstanceLoopStateOut:
     """Return the persisted loop state merged with live supervisor metrics."""
     instance = await _get_instance_or_404(instance_id, db)
-    await require_office_role(db, current_user.user_id, instance.office_id, "editor")
+    await require_workspace_role(db, current_user.user_id, instance.workspace_id, "editor")
     state = await _ensure_loop_state(instance_id, db)
     return InstanceLoopStateOut.model_validate(_to_status_payload(state))
 
@@ -148,7 +148,7 @@ async def snapshot_instance(
 ) -> BoulderSnapshotOut:
     """Capture and validate the current Boulder snapshot."""
     instance = await _get_instance_or_404(instance_id, db)
-    await require_office_role(db, current_user.user_id, instance.office_id, "editor")
+    await require_workspace_role(db, current_user.user_id, instance.workspace_id, "editor")
     snapshot, continuation_count, captured_at = await supervisor.capture_snapshot(
         instance_id, db
     )

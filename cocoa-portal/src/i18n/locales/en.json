@@ -19,12 +19,7 @@
     "operator": "Operator"
   },
   "nav": {
-    "offices": "Office list",
-    "debug": "Debug",
-    "topology": "Topology",
-    "composer": "Composer",
-    "learning": "Learning",
-    "members": "Members"
+    "organization": "Organization settings"
   },
   "login": {
     "signInHeading": "Sign in",
@@ -108,7 +103,13 @@
     "title": "Topology",
     "tagline": "Drag to pan. Wheel to zoom. Events refresh every 2 seconds.",
     "loading": "Loading topology",
-    "canvasAria": "Topology canvas for office {{officeId}}",
+    "canvasAria": "Topology canvas for workspace {{workspaceId}}",
+    "membershipNode": "Membership",
+    "mode": {
+      "select": "Select",
+      "connect": "Connect",
+      "move": "Move"
+    },
     "selectMode": "Select",
     "connectMode": "Connect",
     "moveMode": "Move",
@@ -116,7 +117,7 @@
     "dismissError": "Dismiss error",
     "toolbarAria": "Topology interaction mode",
     "failedLoad": "Failed to load topology",
-    "failedCreate": "Failed to create corridor",
+    "failedCreate": "Failed to create passage",
     "failedMove": "Failed to move node",
     "failedDelete": "Failed to delete node",
     "userLabel": "user",
@@ -132,6 +133,7 @@
     "send": "Send",
     "sending": "Sending...",
     "sendFailed": "Send failed",
+    "sentDirectives": "Sent {{count}} directive(s)",
     "parseError": "Parse error",
     "selectTarget": "Choose target(s) to address",
     "noTargets": "No employees are available yet. Add an office first.",
@@ -531,6 +533,79 @@
       "successTitle": "Summon successful",
       "successDetail": "Your first deity's servant is ready."
     }
+  },
+  "namespaces": {
+    "title": "Namespace hub",
+    "subtitle": "Manage workspaces, base classes, contracts, entities, and capabilities.",
+    "summonEntity": "Summon entity",
+    "summonFromBaseClass": "Summon from this base class",
+    "enterWorkspace": "Enter workspace",
+    "noWorkspacesTitle": "No workspaces yet",
+    "noWorkspacesDetail": "Summon your first entity or browse the base class market.",
+    "contractsTitle": "Contracts",
+    "contractsDetail": "Global user permission management will appear here.",
+    "noEntities": "No entities in this namespace yet.",
+    "viewDetail": "View detail",
+    "capabilityMarketTitle": "Capability market",
+    "capabilityMarketDetail": "Atomic capability browser coming soon.",
+    "tabs": {
+      "workspace": "Workspaces",
+      "baseClasses": "Base classes",
+      "contracts": "Contracts",
+      "entities": "Entities",
+      "capabilityMarket": "Capability market",
+      "debug": "Debug"
+    }
+  },
+  "workspace": {
+    "idMissing": "Workspace identifier is missing.",
+    "members": "members",
+    "instances": "instances",
+    "tabs": {
+      "topology": "Topology",
+      "memberships": "Contracts",
+      "instances": "Avatars",
+      "memory": "Memory"
+    },
+    "emptyMembershipsTitle": "No contracts",
+    "emptyMembershipsDetail": "This workspace has no active memberships.",
+    "emptyInstancesTitle": "No avatars",
+    "emptyInstancesDetail": "No runtime instances in this workspace.",
+    "emptyMemoryDetail": "Shared memory is not initialized yet.",
+    "sharedContext": "Shared context",
+    "noSharedContext": "No shared context recorded.",
+    "manualNotes": "Manual notes",
+    "noManualNotes": "No manual notes recorded."
+  },
+  "ide": {
+    "backToNamespaces": "Back to namespaces",
+    "sidebar": {
+      "workspaces": "Workspaces",
+      "baseClasses": "Base classes",
+      "contracts": "Contracts",
+      "entities": "Entities",
+      "capabilityMarket": "Capability market",
+      "debug": "Debug"
+    }
+  },
+  "forbidden": {
+    "title": "Permission denied",
+    "detail": "You do not have the required capability for this action.",
+    "currentGene": "Current user gene",
+    "missing": "Missing capability",
+    "from": "Requested from",
+    "goBack": "Go back",
+    "goNamespaces": "Back to namespaces"
+  },
+  "organization": {
+    "title": "Organization settings",
+    "name": "Name",
+    "slug": "Slug",
+    "providerHint": "Provider configuration will be managed here.",
+    "notAvailable": "Organization API is not available yet."
+  },
+  "baseClass": {
+    "slugMissing": "Base class slug is missing."
   },
   "language": {
     "label": "Language",

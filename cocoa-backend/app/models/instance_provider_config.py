@@ -26,7 +26,7 @@ from app.models.base import BaseModel
 class InstanceProviderConfig(BaseModel, Base):
     """Per-Instance LLM provider configuration.
 
-    Overrides the EmployeePreset's provider config for this specific Instance.
+    Overrides the BaseClass's provider config for this specific Instance.
     """
 
     __tablename__ = "instance_provider_configs"

@@ -10,6 +10,8 @@ import type { LiveStatusItem } from '@/lib/types';
  * restart" badge and surface outdated instances in the batch-restart
  * modal.
  */
-export function fetchLiveStatus(officeId: string): Promise<readonly LiveStatusItem[]> {
-  return api<readonly LiveStatusItem[]>(`/offices/${encodeURIComponent(officeId)}/live-status`);
+export function fetchLiveStatus(workspaceId: string): Promise<readonly LiveStatusItem[]> {
+  return api<readonly LiveStatusItem[]>(
+    `/workspaces/${encodeURIComponent(workspaceId)}/live-status`,
+  );
 }

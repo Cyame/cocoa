@@ -39,7 +39,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.auth import router as auth_router
 from app.api.v1.instances import router as instances_router
-from app.models.office import Membership, MembershipRole
+from app.models.workspace import Membership, MembershipRole
 
 
 @pytest_asyncio.fixture
@@ -85,10 +85,10 @@ async def _register_and_login(ac: AsyncClient, username: str) -> str:
     return resp.json()["access_token"]
 
 
-async def _link_user_to_office(
-    session: AsyncSession, user_id: str, office_id: str
+async def _link_user_to_workspace(
+    session: AsyncSession, user_id: str, workspace_id: str
 ) -> None:
-    """Insert an editor-role Membership so ``require_office_role`` passes.
+    """Insert an editor-role Membership so ``require_workspace_role`` passes.
 
     The Membership's ``posx`` / ``posy`` are set to (0, 0) — only the
     role matters for the endpoint under test.
@@ -96,7 +96,7 @@ async def _link_user_to_office(
     session.add(
         Membership(
             user_id=user_id,
-            office_id=office_id,
+            workspace_id=workspace_id,
             posx=0,
             posy=0,
             role=MembershipRole.editor.value,
@@ -154,7 +154,7 @@ async def test_deploy_calls_deploy_service(
 
 
         user_id = jwt.get_unverified_claims(token)["sub"]
-        await _link_user_to_office(session, user_id, instance.office_id)
+        await _link_user_to_workspace(session, user_id, instance.workspace_id)
 
         resp = await ac.post(
             f"/api/v1/instances/{instance.id}/deploy",
@@ -208,7 +208,7 @@ async def test_deploy_local_mode_falls_back_to_db_transition(
         from jose import jwt
 
         user_id = jwt.get_unverified_claims(token)["sub"]
-        await _link_user_to_office(session, user_id, instance.office_id)
+        await _link_user_to_workspace(session, user_id, instance.workspace_id)
 
         resp = await ac.post(
             f"/api/v1/instances/{instance.id}/deploy",
@@ -270,7 +270,7 @@ async def test_delete_calls_k8s_delete_namespace(
         from jose import jwt
 
         user_id = jwt.get_unverified_claims(token)["sub"]
-        await _link_user_to_office(session, user_id, instance.office_id)
+        await _link_user_to_workspace(session, user_id, instance.workspace_id)
 
         resp = await ac.delete(
             f"/api/v1/instances/{instance.id}",

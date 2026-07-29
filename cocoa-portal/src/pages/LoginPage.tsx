@@ -27,7 +27,7 @@ export default function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (token !== null) {
-    return <Navigate to="/offices" replace />;
+    return <Navigate to="/namespaces" replace />;
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -50,7 +50,7 @@ export default function LoginPage() {
         body: JSON.stringify(body),
       });
       setToken(response.access_token);
-      navigate('/offices', { replace: true });
+      navigate('/namespaces', { replace: true });
     } catch (error) {
       if (error instanceof ApiError) {
         const apiMessage =

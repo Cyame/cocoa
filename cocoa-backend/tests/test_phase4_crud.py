@@ -1,4 +1,4 @@
-"""Integration tests for P4 CRUD endpoints — employee-presets, employees, offices.
+"""Integration tests for P4 CRUD endpoints — entity-presets, entities, workspaces.
 
 All HTTP tests use the ``client`` fixture (from conftest.py) which handles
 lifespan + registry loading.  The ``auth_token`` fixture registers+logs in a
@@ -29,17 +29,17 @@ def _auth_headers(token: str) -> dict:
 
 
 # =========================================================================
-# EmployeePreset CRUD
+# BaseClass CRUD
 # =========================================================================
 
 
-class TestEmployeePresetCrud:
-    """CRUD for /api/v1/employee-presets."""
+class TestBaseClassCrud:
+    """CRUD for /api/v1/base-classes."""
 
-    def test_list_employee_presets(self, client: TestClient, auth_token: str) -> None:
-        """GET /api/v1/employee-presets returns the 6 built-in presets."""
+    def test_list_base_classes(self, client: TestClient, auth_token: str) -> None:
+        """GET /api/v1/base-classes returns the 6 built-in presets."""
         response = client.get(
-            "/api/v1/employee-presets",
+            "/api/v1/base-classes",
             headers=_auth_headers(auth_token),
         )
         assert response.status_code == 200
@@ -49,10 +49,10 @@ class TestEmployeePresetCrud:
         for expected in ("mi-shi", "zhu-jin", "ling-shi", "you-hun", "heng-pan", "zong-jian"):
             assert expected in slugs, f"Built-in preset {expected} missing"
 
-    def test_create_employee_preset(self, client: TestClient, auth_token: str) -> None:
-        """POST /api/v1/employee-presets returns 201 with the new preset."""
+    def test_create_base_class(self, client: TestClient, auth_token: str) -> None:
+        """POST /api/v1/base-classes returns 201 with the new preset."""
         response = client.post(
-            "/api/v1/employee-presets",
+            "/api/v1/base-classes",
             headers=_auth_headers(auth_token),
             json={
                 "slug": "my-custom",
@@ -67,7 +67,7 @@ class TestEmployeePresetCrud:
         assert body["name"] == "My Custom Preset"
         assert "id" in body
 
-    def test_create_employee_preset_duplicate_slug(
+    def test_create_base_class_duplicate_slug(
         self, client: TestClient, auth_token: str,
     ) -> None:
         """Creating a preset with an existing slug returns 409."""
@@ -76,27 +76,27 @@ class TestEmployeePresetCrud:
             "name": "Original",
         }
         resp1 = client.post(
-            "/api/v1/employee-presets",
+            "/api/v1/base-classes",
             headers=_auth_headers(auth_token),
             json=payload,
         )
         assert resp1.status_code == 201
 
         resp2 = client.post(
-            "/api/v1/employee-presets",
+            "/api/v1/base-classes",
             headers=_auth_headers(auth_token),
             json=payload,
         )
         assert resp2.status_code == 409
-        assert resp2.json()["error_code"] == "employee_preset.slug_taken"
+        assert resp2.json()["error_code"] == "base_class.slug_taken"
 
-    def test_delete_employee_preset_soft_delete(
+    def test_delete_base_class_soft_delete(
         self, client: TestClient, auth_token: str,
     ) -> None:
         """DELETE soft-deletes; subsequent GET returns 404."""
         # Create
         create_resp = client.post(
-            "/api/v1/employee-presets",
+            "/api/v1/base-classes",
             headers=_auth_headers(auth_token),
             json={"slug": "to-delete", "name": "To Delete"},
         )
@@ -105,34 +105,34 @@ class TestEmployeePresetCrud:
 
         # Delete
         del_resp = client.delete(
-            f"/api/v1/employee-presets/{preset_id}",
+            f"/api/v1/base-classes/{preset_id}",
             headers=_auth_headers(auth_token),
         )
         assert del_resp.status_code == 204
 
         # Get by ID → 404
         get_resp = client.get(
-            f"/api/v1/employee-presets/{preset_id}",
+            f"/api/v1/base-classes/{preset_id}",
             headers=_auth_headers(auth_token),
         )
         assert get_resp.status_code == 404
-        assert get_resp.json()["error_code"] == "employee_preset.not_found"
+        assert get_resp.json()["error_code"] == "base_class.not_found"
 
 
 # =========================================================================
-# Employee CRUD
+# Entity CRUD
 # =========================================================================
 
 
-class TestEmployeeCrud:
-    """CRUD for /api/v1/employees."""
+class TestEntityCrud:
+    """CRUD for /api/v1/entities."""
 
-    def test_create_employee_with_valid_preset(
+    def test_create_entity_with_valid_preset(
         self, client: TestClient, auth_token: str,
     ) -> None:
-        """POST /api/v1/employees with valid preset_slug returns 201."""
+        """POST /api/v1/entities with valid preset_slug returns 201."""
         response = client.post(
-            "/api/v1/employees",
+            "/api/v1/entities",
             headers=_auth_headers(auth_token),
             json={
                 "name": "Alice Agent",
@@ -151,12 +151,12 @@ class TestEmployeeCrud:
         assert body["rank"] == "researcher"
         assert "id" in body
 
-    def test_create_employee_with_invalid_preset(
+    def test_create_entity_with_invalid_preset(
         self, client: TestClient, auth_token: str,
     ) -> None:
-        """POST /api/v1/employees with nonexistent preset_slug returns 422."""
+        """POST /api/v1/entities with nonexistent preset_slug returns 422."""
         response = client.post(
-            "/api/v1/employees",
+            "/api/v1/entities",
             headers=_auth_headers(auth_token),
             json={
                 "name": "Bad Agent",
@@ -166,37 +166,37 @@ class TestEmployeeCrud:
         )
         assert response.status_code == 422
         body = response.json()
-        assert body["error_code"] == "employee.preset_not_found"
+        assert body["error_code"] == "entity.preset_not_found"
 
-    def test_create_employee_duplicate_slug(
+    def test_create_entity_duplicate_slug(
         self, client: TestClient, auth_token: str,
     ) -> None:
-        """Creating an employee with an existing slug returns 409."""
+        """Creating an entity with an existing slug returns 409."""
         payload = {
             "name": "First",
             "slug": "dup-emp",
         }
         resp1 = client.post(
-            "/api/v1/employees",
+            "/api/v1/entities",
             headers=_auth_headers(auth_token),
             json=payload,
         )
         assert resp1.status_code == 201
 
         resp2 = client.post(
-            "/api/v1/employees",
+            "/api/v1/entities",
             headers=_auth_headers(auth_token),
             json=payload,
         )
         assert resp2.status_code == 409
-        assert resp2.json()["error_code"] == "employee.slug_taken"
+        assert resp2.json()["error_code"] == "entity.slug_taken"
 
-    def test_delete_employee_soft_delete(
+    def test_delete_entity_soft_delete(
         self, client: TestClient, auth_token: str,
     ) -> None:
         """DELETE soft-deletes; subsequent GET returns 404."""
         create_resp = client.post(
-            "/api/v1/employees",
+            "/api/v1/entities",
             headers=_auth_headers(auth_token),
             json={"name": "To Delete", "slug": "to-delete-emp"},
         )
@@ -204,31 +204,31 @@ class TestEmployeeCrud:
         emp_id = create_resp.json()["id"]
 
         del_resp = client.delete(
-            f"/api/v1/employees/{emp_id}",
+            f"/api/v1/entities/{emp_id}",
             headers=_auth_headers(auth_token),
         )
         assert del_resp.status_code == 204
 
         get_resp = client.get(
-            f"/api/v1/employees/{emp_id}",
+            f"/api/v1/entities/{emp_id}",
             headers=_auth_headers(auth_token),
         )
         assert get_resp.status_code == 404
-        assert get_resp.json()["error_code"] == "employee.not_found"
+        assert get_resp.json()["error_code"] == "entity.not_found"
 
 
 # =========================================================================
-# Office CRUD
+# Workspace CRUD
 # =========================================================================
 
 
-class TestOfficeCrud:
-    """CRUD for /api/v1/offices."""
+class TestWorkspaceCrud:
+    """CRUD for /api/v1/workspaces."""
 
-    def test_create_office(self, client: TestClient, auth_token: str) -> None:
-        """POST /api/v1/offices returns 201 with the new office."""
+    def test_create_workspace(self, client: TestClient, auth_token: str) -> None:
+        """POST /api/v1/workspaces returns 201 with the new workspace."""
         response = client.post(
-            "/api/v1/offices",
+            "/api/v1/workspaces",
             headers=_auth_headers(auth_token),
             json={
                 "name": "War Room",
@@ -241,67 +241,67 @@ class TestOfficeCrud:
         assert body["name"] == "War Room"
         assert "id" in body
 
-    def test_create_office_duplicate_slug(
+    def test_create_workspace_duplicate_slug(
         self, client: TestClient, auth_token: str,
     ) -> None:
-        """Creating an office with an existing slug returns 409."""
-        payload = {"name": "Original", "slug": "dup-office"}
+        """Creating an workspace with an existing slug returns 409."""
+        payload = {"name": "Original", "slug": "dup-workspace"}
         resp1 = client.post(
-            "/api/v1/offices",
+            "/api/v1/workspaces",
             headers=_auth_headers(auth_token),
             json=payload,
         )
         assert resp1.status_code == 201
 
         resp2 = client.post(
-            "/api/v1/offices",
+            "/api/v1/workspaces",
             headers=_auth_headers(auth_token),
             json=payload,
         )
         assert resp2.status_code == 409
-        assert resp2.json()["error_code"] == "office.slug_taken"
+        assert resp2.json()["error_code"] == "workspace.slug_taken"
 
-    def test_delete_office_soft_delete(
+    def test_delete_workspace_soft_delete(
         self, client: TestClient, auth_token: str,
     ) -> None:
         """DELETE soft-deletes; subsequent GET returns 404."""
         create_resp = client.post(
-            "/api/v1/offices",
+            "/api/v1/workspaces",
             headers=_auth_headers(auth_token),
-            json={"name": "To Delete", "slug": "to-delete-office"},
+            json={"name": "To Delete", "slug": "to-delete-workspace"},
         )
         assert create_resp.status_code == 201
-        office_id = create_resp.json()["id"]
+        workspace_id = create_resp.json()["id"]
 
         del_resp = client.delete(
-            f"/api/v1/offices/{office_id}",
+            f"/api/v1/workspaces/{workspace_id}",
             headers=_auth_headers(auth_token),
         )
         assert del_resp.status_code == 204
 
         get_resp = client.get(
-            f"/api/v1/offices/{office_id}",
+            f"/api/v1/workspaces/{workspace_id}",
             headers=_auth_headers(auth_token),
         )
         assert get_resp.status_code == 404
-        assert get_resp.json()["error_code"] == "office.not_found"
+        assert get_resp.json()["error_code"] == "workspace.not_found"
 
-    def test_list_offices(self, client: TestClient, auth_token: str) -> None:
-        """GET /api/v1/offices returns a paginated list."""
-        # Create two offices
+    def test_list_workspaces(self, client: TestClient, auth_token: str) -> None:
+        """GET /api/v1/workspaces returns a paginated list."""
+        # Create two workspaces
         client.post(
-            "/api/v1/offices",
+            "/api/v1/workspaces",
             headers=_auth_headers(auth_token),
-            json={"name": "Office A", "slug": "office-a"},
+            json={"name": "Workspace A", "slug": "workspace-a"},
         )
         client.post(
-            "/api/v1/offices",
+            "/api/v1/workspaces",
             headers=_auth_headers(auth_token),
-            json={"name": "Office B", "slug": "office-b"},
+            json={"name": "Workspace B", "slug": "workspace-b"},
         )
 
         response = client.get(
-            "/api/v1/offices",
+            "/api/v1/workspaces",
             headers=_auth_headers(auth_token),
         )
         assert response.status_code == 200
@@ -309,5 +309,5 @@ class TestOfficeCrud:
         assert body["total"] >= 2
         assert len(body["items"]) >= 2
         slugs = {item["slug"] for item in body["items"]}
-        assert "office-a" in slugs
-        assert "office-b" in slugs
+        assert "workspace-a" in slugs
+        assert "workspace-b" in slugs

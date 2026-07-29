@@ -22,20 +22,20 @@ def _validate_no_traversal(value: str) -> None:
         raise ValueError(f"Path traversal rejected: {value!r} contains '..'")
 
 
-def employee_dir(employee_slug: str) -> str:
-    """Relative path to the per-employee preset directory.
+def entity_dir(entity_slug: str) -> str:
+    """Relative path to the per-entity preset directory.
 
-    ``.pi/<employee_slug>/`` holds per-employee manifests and configs
+    ``.pi/<entity_slug>/`` holds per-entity manifests and configs
     that are assembled at bootstrap time.
 
     Args:
-        employee_slug: URL-safe employee identifier (e.g. ``"analyst"``).
+        entity_slug: URL-safe entity identifier (e.g. ``"analyst"``).
 
     Returns:
         Relative path ending with ``/``.
     """
-    _validate_no_traversal(employee_slug)
-    return f".pi/{employee_slug}/"
+    _validate_no_traversal(entity_slug)
+    return f".pi/{entity_slug}/"
 
 
 def workspace_dir(instance_id: str) -> str:
@@ -54,51 +54,51 @@ def workspace_dir(instance_id: str) -> str:
     return f"workspace/{instance_id}/"
 
 
-def fornix_dir(office_id: str) -> str:
-    """Relative path to the per-office 穹窿 (fornix) shared work directory.
+def fornix_dir(workspace_id: str) -> str:
+    """Relative path to the per-workspace 穹窿 (fornix) shared work directory.
 
-    The 穹窿 is the file-share brain area inside the per-office CentralHub.
-    ``fornix/<office_id>/`` is the shared read/write space for all
-    employees in the same office.
+    The 穹窿 is the file-share brain area inside the per-workspace CentralHub.
+    ``fornix/<workspace_id>/`` is the shared read/write space for all
+    entities in the same workspace.
 
     Args:
-        office_id: Unique office identifier (UUID).
+        workspace_id: Unique workspace identifier (UUID).
 
     Returns:
         Relative path ending with ``/``.
     """
-    _validate_no_traversal(office_id)
-    return f"fornix/{office_id}/"
+    _validate_no_traversal(workspace_id)
+    return f"fornix/{workspace_id}/"
 
 
-def vault_dir(office_id: str) -> str:
-    """Relative path to the per-office cold-archive directory.
+def vault_dir(workspace_id: str) -> str:
+    """Relative path to the per-workspace cold-archive directory.
 
-    ``vault/<office_id>/`` is the long-term archive space — write
+    ``vault/<workspace_id>/`` is the long-term archive space — write
     semantics are append-only once a run concludes.
 
     Args:
-        office_id: Unique office identifier (UUID).
+        workspace_id: Unique workspace identifier (UUID).
 
     Returns:
         Relative path ending with ``/``.
     """
-    _validate_no_traversal(office_id)
-    return f"vault/{office_id}/"
+    _validate_no_traversal(workspace_id)
+    return f"vault/{workspace_id}/"
 
 
-def memory_export_path(employee_slug: str) -> str:
+def memory_export_path(entity_slug: str) -> str:
     """Relative path for the optional /distill JSONL export.
 
-    ``memory/<employee_slug>.jsonl`` is produced by the agent memory
+    ``memory/<entity_slug>.jsonl`` is produced by the agent memory
     distillation pipeline when an operator requests an export.
     Memory is DB-backed at runtime; this file is a one-off artifact.
 
     Args:
-        employee_slug: URL-safe employee identifier (e.g. ``"analyst"``).
+        entity_slug: URL-safe entity identifier (e.g. ``"analyst"``).
 
     Returns:
         Relative file path (no trailing ``/``).
     """
-    _validate_no_traversal(employee_slug)
-    return f"memory/{employee_slug}.jsonl"
+    _validate_no_traversal(entity_slug)
+    return f"memory/{entity_slug}.jsonl"

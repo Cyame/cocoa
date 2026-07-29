@@ -1,23 +1,47 @@
-"""Request/response schemas for the BaseClass (L3 神职) market.
-
-Pure DTOs — no ORM config. The list endpoint is needed for the T5
-onboarding modal so it can offer pre-built roles to the user without
-hard-coding them in the portal.
-"""
+"""Request/response schemas for BaseClass CRUD (PRD-v2)."""
 
 from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
+
+from app.schemas.preset import PresetManifest
+
+
+class BaseClassCreate(BaseModel):
+    slug: str
+    name: str
+    version: str | None = None
+    manifest: dict | None = None
+    display_name: str | None = None
+    description: str | None = None
+    tags: list[str] | None = None
+
+
+class BaseClassUpdate(BaseModel):
+    name: str | None = None
+    version: str | None = None
+    manifest: dict | None = None
+    display_name: str | None = None
+    description: str | None = None
+    tags: list[str] | None = None
+
+
+class PresetManifestOut(PresetManifest):
+    """Out variant — accepts ``None`` and falls back to defaults."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_none(cls, data: object) -> object:
+        if data is None:
+            return {}
+        return data
 
 
 class BaseClassOut(BaseModel):
-    """Response body for a single BaseClass row.
-
-    Used by ``GET /api/v1/base-classes`` (offset-paginated list).
-    """
-
     model_config = ConfigDict(from_attributes=True)
 
     id: str
@@ -25,7 +49,8 @@ class BaseClassOut(BaseModel):
     name: str
     display_name: str | None = None
     description: str | None = None
-    manifest: dict | None = None
+    manifest: dict | PresetManifestOut | None = None
     version: str | None = None
     tags: list[str] | None = None
     created_at: datetime
+    updated_at: datetime | None = None

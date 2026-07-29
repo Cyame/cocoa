@@ -8,7 +8,7 @@ workspace reusable AI role template. It composes:
 - i18n display name (display_name field is an i18n key, not the actual label)
 
 BaseClass is a NEW table — it does NOT replace the existing
-``employee_presets`` table (which P10 distillation still writes to).
+``base_classes`` table (which P10 distillation still writes to).
 A future 15d-rename-2 wave will consolidate them. Until then, both
 tables coexist; new code that needs a 神职 reads / writes BaseClass.
 

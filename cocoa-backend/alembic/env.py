@@ -19,21 +19,8 @@ from alembic import context
 # Make ``app`` importable when alembic is invoked from the project root.
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-import app.models.ai_gene  # noqa: E402, F401
-import app.models.base_class  # noqa: E402, F401
-import app.models.capability_market  # noqa: E402, F401
-import app.models.central_hub  # noqa: E402, F401
-import app.models.deploy_record  # noqa: E402, F401
-import app.models.employee  # noqa: E402, F401
-import app.models.event  # noqa: E402, F401
-import app.models.instance  # noqa: E402, F401
-import app.models.instance_provider_config  # noqa: E402, F401
-import app.models.loop_state  # noqa: E402, F401
-import app.models.memory  # noqa: E402, F401
-import app.models.office  # noqa: E402, F401
-
 # Import all model modules so Base.metadata reflects every table.
-import app.models.user  # noqa: E402, F401
+import app.models  # noqa: E402, F401
 from app.core.config import settings  # noqa: E402
 from app.core.db import Base  # noqa: E402
 

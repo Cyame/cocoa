@@ -3,7 +3,7 @@
 GET /api/v1/events  — cursor-paginated audit log with 6 filters.
 
 The events table is append-only (P3.5 contract). This endpoint is
-read-only and serves P9 debug panels (Topology viz corridor-animation
+read-only and serves P9 debug panels (Topology viz passage-animation
 detection, Instance detail event panel, Debug page raw event stream).
 
 No POST / PATCH / DELETE — the audit log is write-once. No ``emit()`` is

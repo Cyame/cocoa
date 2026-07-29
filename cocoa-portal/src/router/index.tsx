@@ -1,20 +1,16 @@
 import { createBrowserRouter, Navigate } from 'react-router';
-import App from '@/App';
-import ComposerPage from '@/pages/ComposerPage';
-import DebugPage from '@/pages/DebugPage';
-import EmployeeLearningPage from '@/pages/EmployeeLearningPage';
-import EmployeesListPage from '@/pages/EmployeesListPage';
-import InstanceDetailPage from '@/pages/InstanceDetailPage';
+import AppShell from '@/components/AppShell';
+import BaseClassDetailPage from '@/pages/BaseClassDetailPage';
+import ForbiddenPage from '@/pages/ForbiddenPage';
 import LoginPage from '@/pages/LoginPage';
-import MembersListPage from '@/pages/MembersListPage';
-import OfficeDetailPage from '@/pages/OfficeDetailPage';
-import OfficeListPage from '@/pages/OfficeListPage';
-import TopologyPage from '@/pages/TopologyPage';
+import NamespacesPage from '@/pages/NamespacesPage';
+import OrganizationPage from '@/pages/OrganizationPage';
+import WorkspaceIdePage from '@/pages/WorkspaceIdePage';
 import { useSessionStore } from '@/stores/session';
 
 function RootRedirect() {
   const token = useSessionStore((state) => state.token);
-  return <Navigate to={token === null ? '/login' : '/offices'} replace />;
+  return <Navigate to={token === null ? '/login' : '/namespaces'} replace />;
 }
 
 const router = createBrowserRouter([
@@ -27,43 +23,27 @@ const router = createBrowserRouter([
     Component: LoginPage,
   },
   {
-    Component: App,
+    path: '/403',
+    Component: ForbiddenPage,
+  },
+  {
+    path: '/workspaces/:id',
+    Component: WorkspaceIdePage,
+  },
+  {
+    Component: AppShell,
     children: [
       {
-        path: '/offices',
-        Component: OfficeListPage,
+        path: '/namespaces',
+        Component: NamespacesPage,
       },
       {
-        path: '/offices/:id',
-        Component: OfficeDetailPage,
+        path: '/base-classes/:slug',
+        Component: BaseClassDetailPage,
       },
       {
-        path: '/offices/:id/employees',
-        Component: EmployeesListPage,
-      },
-      {
-        path: '/offices/:id/members',
-        Component: MembersListPage,
-      },
-      {
-        path: '/offices/:id/instances/:iid',
-        Component: InstanceDetailPage,
-      },
-      {
-        path: '/offices/:id/composer',
-        Component: ComposerPage,
-      },
-      {
-        path: '/offices/:id/topology',
-        Component: TopologyPage,
-      },
-      {
-        path: '/employees/:employeeId/learning',
-        Component: EmployeeLearningPage,
-      },
-      {
-        path: '/debug',
-        Component: DebugPage,
+        path: '/organization',
+        Component: OrganizationPage,
       },
     ],
   },

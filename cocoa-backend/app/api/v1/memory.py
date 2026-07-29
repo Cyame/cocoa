@@ -1,9 +1,9 @@
-"""Memory API routes — append-only employee learning log.
+"""Memory API routes — append-only entity learning log.
 
 GET  /api/v1/memory/entries  — cursor-paginated list, optional kind/key filter
 POST /api/v1/memory/entries  — append a new immutable entry (201)
 
-P6 allows any authenticated user to write any employee's memory.
+P6 allows any authenticated user to write any entity's memory.
 P7 tightens this via instance_proxy_token.
 """
 
@@ -21,9 +21,9 @@ from app.core.event_types import MEMORY_ENTRY_APPENDED
 from app.core.events import emit
 from app.core.openapi import add_error_responses
 from app.core.pagination import CursorPage, paginate_cursor
-from app.models.employee import Employee
-from app.models.memory import MemoryEntry
-from app.schemas.memory import MemoryEntryCreate, MemoryEntryOut
+from app.models.entity import Entity
+from app.models.memory import Memory
+from app.schemas.memory import MemoryCreate, MemoryOut
 
 router = APIRouter(prefix="/memory", tags=["Learning"])
 add_error_responses(router)
@@ -40,56 +40,56 @@ def _decode_cursor(cursor: str) -> datetime:
     return datetime.fromisoformat(iso)
 
 
-@router.get("/entries", response_model=CursorPage[MemoryEntryOut])
-async def list_memory_entries(
+@router.get("/entries", response_model=CursorPage[MemoryOut])
+async def list_memories(
     db: DB,
     current_user: CurrentUserDep,
-    employee_id: str = Query(...),
+    entity_id: str = Query(...),
     limit: int = Query(50, ge=1, le=200),
     cursor: str | None = Query(None),
     kind: str | None = Query(None),
     key: str | None = Query(None),
 ) -> CursorPage:
-    employee = await db.get(Employee, employee_id)
-    if employee is None or employee.deleted_at is not None:
+    entity = await db.get(Entity, entity_id)
+    if entity is None or entity.deleted_at is not None:
         raise NotFoundError(
-            "employee.not_found",
-            "errors.employee.not_found",
-            f"Employee '{employee_id}' not found",
+            "entity.not_found",
+            "errors.entity.not_found",
+            f"Entity '{entity_id}' not found",
         )
 
     if key is not None:
         stmt = (
-            select(MemoryEntry)
+            select(Memory)
             .where(
-                MemoryEntry.employee_id == employee_id,
-                MemoryEntry.key == key,
-                MemoryEntry.deleted_at.is_(None),
+                Memory.entity_id == entity_id,
+                Memory.key == key,
+                Memory.deleted_at.is_(None),
             )
-            .order_by(MemoryEntry.created_at.desc())
+            .order_by(Memory.created_at.desc())
             .limit(1)
         )
         result = await db.execute(stmt)
         item = result.scalar_one_or_none()
-        items: list[MemoryEntry] = [item] if item else []
+        items: list[Memory] = [item] if item else []
         return CursorPage(items=items, next_cursor=None)
 
-    stmt = select(MemoryEntry).where(
-        MemoryEntry.employee_id == employee_id,
-        MemoryEntry.deleted_at.is_(None),
+    stmt = select(Memory).where(
+        Memory.entity_id == entity_id,
+        Memory.deleted_at.is_(None),
     )
     if kind is not None:
-        stmt = stmt.where(MemoryEntry.kind == kind)
+        stmt = stmt.where(Memory.kind == kind)
 
-    stmt = stmt.order_by(MemoryEntry.created_at.asc())
+    stmt = stmt.order_by(Memory.created_at.asc())
 
     if cursor is None:
         return await paginate_cursor(
-            db, stmt, MemoryEntry.created_at, limit, _decode_cursor
+            db, stmt, Memory.created_at, limit, _decode_cursor
         )
 
     page = await paginate_cursor(
-        db, stmt, MemoryEntry.created_at, limit, _decode_cursor, cursor=cursor
+        db, stmt, Memory.created_at, limit, _decode_cursor, cursor=cursor
     )
     if page.next_cursor is not None:
         last = page.items[-1]
@@ -97,21 +97,21 @@ async def list_memory_entries(
     return page
 
 
-@router.post("/entries", response_model=MemoryEntryOut, status_code=status.HTTP_201_CREATED)
+@router.post("/entries", response_model=MemoryOut, status_code=status.HTTP_201_CREATED)
 async def create_memory_entry(
-    body: MemoryEntryCreate,
+    body: MemoryCreate,
     db: DB,
     current_user: CurrentUserDep,
-) -> MemoryEntry:
-    employee = await db.get(Employee, body.employee_id)
-    if employee is None or employee.deleted_at is not None:
+) -> Memory:
+    entity = await db.get(Entity, body.entity_id)
+    if entity is None or entity.deleted_at is not None:
         raise NotFoundError(
-            "employee.not_found",
-            "errors.employee.not_found",
-            f"Employee '{body.employee_id}' not found",
+            "entity.not_found",
+            "errors.entity.not_found",
+            f"Entity '{body.entity_id}' not found",
         )
 
-    entry = MemoryEntry(**body.model_dump())
+    entry = Memory(**body.model_dump())
     db.add(entry)
 
     await emit(
@@ -120,7 +120,7 @@ async def create_memory_entry(
         actor_id=current_user.user_id,
         resource_type="memory_entry",
         resource_id=entry.id,
-        payload={"employee_id": body.employee_id, "kind": body.kind},
+        payload={"entity_id": body.entity_id, "kind": body.kind},
         session=db,
     )
 

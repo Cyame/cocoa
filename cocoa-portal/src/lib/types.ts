@@ -7,18 +7,32 @@ export type JsonValue =
 
 export type JsonObject = { readonly [key: string]: JsonValue };
 
-export type Office = {
+export type Workspace = {
   readonly id: string;
+  readonly namespace_id: string;
   readonly name: string;
   readonly slug: string;
-  readonly central_hub_ref: string | null;
   readonly created_at: string;
   readonly updated_at: string;
 };
 
-export type OfficeRole = 'owner' | 'editor' | 'viewer';
+/** @deprecated Use Workspace */
+export type Office = Workspace;
 
-export type OfficeMember =
+export type Namespace = {
+  readonly id: string;
+  readonly org_id: string;
+  readonly slug: string;
+  readonly name: string;
+  readonly description: string | null;
+  readonly tags: readonly string[] | null;
+  readonly created_at: string;
+  readonly updated_at: string;
+};
+
+export type WorkspaceRole = 'owner' | 'editor' | 'viewer';
+
+export type WorkspaceMember =
   | {
       readonly user_id: string;
       readonly instance_id: null;
@@ -28,23 +42,33 @@ export type OfficeMember =
       readonly instance_id: string;
     };
 
-export type OfficeMembership = OfficeMember & {
+export type WorkspaceMembership = WorkspaceMember & {
   readonly id: string;
-  readonly office_id: string;
+  readonly workspace_id: string;
   readonly posx: number;
   readonly posy: number;
-  readonly role: OfficeRole;
+  readonly role: WorkspaceRole;
   readonly permissions: JsonObject | null;
   readonly created_at: string;
   readonly updated_at: string;
 };
 
-export type Membership = OfficeMembership;
+export type Membership = WorkspaceMembership;
 
-export type EmployeeRank = 'intern' | 'researcher' | 'director';
+/** @deprecated Use WorkspaceRole */
+export type OfficeRole = WorkspaceRole;
 
-export type Employee = {
+/** @deprecated Use WorkspaceMembership */
+export type OfficeMembership = WorkspaceMembership;
+
+/** @deprecated Use WorkspaceMember */
+export type OfficeMember = WorkspaceMember;
+
+export type EmployeeRank = 'intern' | 'researcher';
+
+export type Entity = {
   readonly id: string;
+  readonly namespace_id: string;
   readonly name: string;
   readonly slug: string;
   readonly rank: EmployeeRank;
@@ -54,6 +78,9 @@ export type Employee = {
   readonly created_at: string;
   readonly updated_at: string;
 };
+
+/** @deprecated Use Entity */
+export type Employee = Entity;
 
 export type PresetManifest = {
   readonly model: string;
@@ -84,8 +111,8 @@ export type InstanceStatus =
 
 export type Instance = {
   readonly id: string;
-  readonly employee_id: string;
-  readonly office_id: string;
+  readonly entity_id: string;
+  readonly workspace_id: string;
   readonly workspace_path: string | null;
   readonly status: InstanceStatus;
   readonly runtime_config: JsonObject | null;
@@ -126,7 +153,7 @@ export type MemoryKind = 'experience' | 'lesson' | 'decision' | 'problem';
 
 export type MemoryEntry = {
   readonly id: string;
-  readonly employee_id: string;
+  readonly entity_id: string;
   readonly kind: MemoryKind;
   readonly key: string | null;
   readonly content: string | null;
@@ -158,7 +185,7 @@ export type LiveStatusItem = {
 };
 
 export type TopologyNode = {
-  readonly kind: 'membership' | 'corridor_node';
+  readonly kind: 'membership';
   readonly id: string;
   readonly instanceId: string | null;
   readonly x: number;
@@ -174,7 +201,16 @@ export type TopologyNode = {
   readonly activeHash: string | null;
 };
 
-export type CorridorNodeStatus = 'active' | 'paused' | 'archived';
+export type Passage = {
+  readonly id: string;
+  readonly workspace_id: string;
+  readonly from_membership_id: string;
+  readonly to_membership_id: string;
+  readonly is_active: boolean;
+  readonly edge_meta: JsonObject | null;
+  readonly created_at: string;
+  readonly updated_at: string;
+};
 
 export type AggregatedMemoryCount = {
   readonly experience: number;
@@ -185,7 +221,7 @@ export type AggregatedMemoryCount = {
 };
 
 export type MemorySummaryOut = {
-  readonly employee_id: string;
+  readonly entity_id: string;
   readonly aggregated_counts: AggregatedMemoryCount;
   readonly sample_lessons: readonly string[];
   readonly sample_keys_by_kind: Readonly<Record<string, readonly string[]>>;
@@ -212,21 +248,8 @@ export type DistillResultOut = {
   readonly new_preset_name: string;
   readonly manifest_preview: SkillManifestPreview;
   readonly aggregated_memory: AggregatedMemoryCount;
-  readonly source_employee_id: string;
+  readonly source_entity_id: string;
   readonly source_preset_slug: string | null;
-};
-
-export type CorridorNode = {
-  readonly id: string;
-  readonly office_id: string;
-  readonly posx: number;
-  readonly posy: number;
-  readonly display_name: string;
-  readonly glow_color: string | null;
-  readonly status: CorridorNodeStatus;
-  readonly created_by: string | null;
-  readonly created_at: string;
-  readonly updated_at: string;
 };
 
 export type CapabilityType = 'skill' | 'tool' | 'mcp' | 'lsp';
@@ -301,7 +324,7 @@ export type TransmuteResult = {
   readonly new_base_class_slug: string;
   readonly new_base_class_name: string;
   readonly manifest_preview: JsonObject;
-  readonly source_employee_id: string;
+  readonly source_entity_id: string;
 };
 
 export type ReapResult = {

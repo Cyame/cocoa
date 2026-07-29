@@ -1,7 +1,7 @@
 """Migration-hash helper for the phase-15f capability lifecycle.
 
-The ``migration_hash`` field on :class:`app.models.employee.Employee` is a
-deterministic SHA-256 fingerprint of the employee's current *effective*
+The ``migration_hash`` field on :class:`app.models.entity.Entity` is a
+deterministic SHA-256 fingerprint of the entity's current *effective*
 capability surface (the list of capability dicts + the prompt regen
 snapshot). It is the source of truth for "is this instance still in
 sync with the entity it belongs to?" — see PRD §13.6.4.
@@ -17,7 +17,7 @@ Formula
 Notes
 -----
 * The capabilities list is sorted *before* JSON serialization so two
-  Employee rows with the same capabilities in different insertion order
+  Entity rows with the same capabilities in different insertion order
   produce the same hash.
 * The prompt snapshot is hashed *separately* (not concatenated to the
   JSON) to keep the hash input short and avoid pathological cases where
@@ -35,7 +35,7 @@ import hashlib
 import json
 from collections.abc import Iterable
 
-from app.models.employee import Employee
+from app.models.entity import Entity
 
 _CAPABILITIES_SEPARATOR = (",", ":")
 _PROMPT_DELIMITER = ":"
@@ -72,7 +72,7 @@ def compute_migration_hash(
     ----------
     capabilities:
         Iterable of capability dicts (the same shape stored on
-        ``Employee.capabilities``). ``None`` and empty iterables both
+        ``Entity.capabilities``). ``None`` and empty iterables both
         hash to the same value.
     prompt_snapshot:
         The prompt snapshot string (or ``None``).
@@ -88,13 +88,13 @@ def compute_migration_hash(
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def compute_employee_migration_hash(employee: Employee) -> str:
-    """Compute the migration hash for an :class:`Employee` instance.
+def compute_entity_migration_hash(entity: Entity) -> str:
+    """Compute the migration hash for an :class:`Entity` instance.
 
     Convenience wrapper that reads the relevant fields off the ORM
     model. The capability list is coalesced to ``[]`` for legacy rows
     where the JSONB column is ``NULL`` (pre-migration rows survive the
     additive column add with NULL).
     """
-    caps = employee.capabilities or []
-    return compute_migration_hash(caps, employee.prompt_regen_snapshot)
+    caps = entity.capabilities or []
+    return compute_migration_hash(caps, entity.system_prompt)

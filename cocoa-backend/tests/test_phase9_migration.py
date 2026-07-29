@@ -5,7 +5,7 @@ Covers:
    rename migration runs; upgrade to head; verify posx=5, posy=-3;
    downgrade; verify hex_q=5, hex_r=-3 again. Run three passes so the
    migration is exercised as a round-trip.
-2. Partial unique index — two active memberships in the same office at
+2. Partial unique index — two active memberships in the same workspace at
    the same (posx, posy) must collide via IntegrityError (DB level) and
    the API must surface that as a 409 ConflictError
    ("membership.position_taken").
@@ -29,7 +29,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.testclient import TestClient
 
-from app.models.office import Membership, MembershipRole, Office
+from app.models.workspace import Membership, MembershipRole, Workspace
 from app.models.user import User
 
 # ---------------------------------------------------------------------------
@@ -62,6 +62,9 @@ async def _admin_exec(sql: str) -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(
+    reason="PRD-v2 nuclear rebuild dropped hex_q/hex_r rename; no historical data to round-trip",
+)
 async def test_round_trip_preserves_data_three_passes() -> None:
     """Insert membership before the rename migration; verify data survives
     3 passes of upgrade -> downgrade.
@@ -88,16 +91,16 @@ async def test_round_trip_preserves_data_three_passes() -> None:
 
         conn = await asyncpg.connect(pg_url_sync)
         try:
-            # Step 2: pre-insert offices + users + memberships at
+            # Step 2: pre-insert workspaces + users + memberships at
             # hex_q=5, hex_r=-3
             user_id = str(uuid.uuid4())
-            office_id = str(uuid.uuid4())
+            workspace_id = str(uuid.uuid4())
             membership_id = str(uuid.uuid4())
 
             await conn.execute(
-                "INSERT INTO offices (id, name, slug, created_at, updated_at) "
+                "INSERT INTO workspaces (id, name, slug, created_at, updated_at) "
                 "VALUES ($1, $2, $3, now(), now())",
-                office_id, "Round-Trip Office", f"rt-{uuid.uuid4().hex[:6]}",
+                workspace_id, "Round-Trip Workspace", f"rt-{uuid.uuid4().hex[:6]}",
             )
             await conn.execute(
                 "INSERT INTO users (id, username, email, password_hash, "
@@ -107,12 +110,12 @@ async def test_round_trip_preserves_data_three_passes() -> None:
             )
             await conn.execute(
                 "INSERT INTO memberships ("
-                "id, office_id, user_id, instance_id, hex_q, hex_r, role, "
+                "id, workspace_id, user_id, instance_id, hex_q, hex_r, role, "
                 "created_at, updated_at"
                 ") VALUES ("
                 "$1, $2, $3, NULL, 5, -3, 'owner', now(), now()"
                 ")",
-                membership_id, office_id, user_id,
+                membership_id, workspace_id, user_id,
             )
 
             # Step 3: 3 passes of upgrade -> downgrade
@@ -167,10 +170,10 @@ async def test_round_trip_preserves_data_three_passes() -> None:
             indexes = await conn.fetch(
                 "SELECT indexname, indexdef FROM pg_indexes "
                 "WHERE tablename = 'memberships' "
-                "AND indexname = 'uq_memberships_office_pos'"
+                "AND indexname = 'uq_memberships_workspace_pos'"
             )
             assert len(indexes) == 1, (
-                f"uq_memberships_office_pos index missing after round-trip; "
+                f"uq_memberships_workspace_pos index missing after round-trip; "
                 f"got {indexes}"
             )
         finally:
@@ -186,13 +189,14 @@ async def test_round_trip_preserves_data_three_passes() -> None:
 
 @pytest.mark.asyncio
 async def test_unique_pos_constraint_blocks_duplicate_active(
-    session: AsyncSession,
+    session: AsyncSession, namespace_factory,
 ) -> None:
-    """Two active memberships in the same office at the same (posx, posy)
+    """Two active memberships in the same workspace at the same (posx, posy)
     must fail with IntegrityError because of the
-    ``uq_memberships_office_pos`` partial unique index."""
-    office = Office(name="Dup Pos Office", slug="dup-pos-office")
-    session.add(office)
+    ``uq_memberships_workspace_pos`` partial unique index."""
+    ns = await namespace_factory()
+    workspace = Workspace(namespace_id=ns.id, name="Dup Pos Workspace", slug="dup-pos-workspace")
+    session.add(workspace)
     await session.commit()
 
     user_a = User(
@@ -209,7 +213,7 @@ async def test_unique_pos_constraint_blocks_duplicate_active(
     await session.commit()
 
     member_a = Membership(
-        office_id=office.id,
+        workspace_id=workspace.id,
         user_id=user_a.id,
         instance_id=None,
         posx=42,
@@ -220,7 +224,7 @@ async def test_unique_pos_constraint_blocks_duplicate_active(
     await session.commit()
 
     member_b = Membership(
-        office_id=office.id,
+        workspace_id=workspace.id,
         user_id=user_b.id,
         instance_id=None,
         posx=42,  # same as member_a
@@ -235,14 +239,15 @@ async def test_unique_pos_constraint_blocks_duplicate_active(
 
 @pytest.mark.asyncio
 async def test_unique_pos_constraint_allows_soft_deleted_overlap(
-    session: AsyncSession,
+    session: AsyncSession, namespace_factory,
 ) -> None:
     """A soft-deleted membership at (5,5) does NOT block a new active
     membership at the same coords. Partial index excludes
     ``deleted_at IS NULL`` filter; matches Cocoa soft-delete pattern.
     """
-    office = Office(name="SoftDel Pos Office", slug="softdel-pos-office")
-    session.add(office)
+    ns = await namespace_factory()
+    workspace = Workspace(namespace_id=ns.id, name="SoftDel Pos Workspace", slug="softdel-pos-workspace")
+    session.add(workspace)
     await session.commit()
 
     user_a = User(username="p9-pos-c", email="p9-pos-c@test.com", password_hash="x")
@@ -251,7 +256,7 @@ async def test_unique_pos_constraint_allows_soft_deleted_overlap(
     await session.commit()
 
     old = Membership(
-        office_id=office.id,
+        workspace_id=workspace.id,
         user_id=user_a.id,
         instance_id=None,
         posx=5,
@@ -264,7 +269,7 @@ async def test_unique_pos_constraint_allows_soft_deleted_overlap(
     await session.commit()
 
     new = Membership(
-        office_id=office.id,
+        workspace_id=workspace.id,
         user_id=user_b.id,
         instance_id=None,
         posx=5,
@@ -317,7 +322,7 @@ async def test_api_create_membership_at_taken_pos_returns_409(
     session: AsyncSession,
 ) -> None:
     """POST /messaging/memberships with a posx/posy already used by
-    another active membership in the same office returns 409 with
+    another active membership in the same workspace returns 409 with
     ``membership.position_taken`` error_code.
     """
     token_a = _register_login_token(client, "p9-pos-user-a")
@@ -326,15 +331,15 @@ async def test_api_create_membership_at_taken_pos_returns_409(
     h_a = _auth(token_a)
     h_b = _auth(token_b)
 
-    office = client.post("/api/v1/offices", headers=h_a, json={
-        "name": "API Dup Pos Office",
+    workspace = client.post("/api/v1/workspaces", headers=h_a, json={
+        "name": "API Dup Pos Workspace",
         "slug": "api-dup-pos",
     }).json()
 
-    # P14b-onboard2: office creation auto-adds user_a as owner at (0, 0).
+    # P14b-onboard2: workspace creation auto-adds user_a as owner at (0, 0).
     # Patch user_a's auto-membership to occupy (10, 10) instead.
     list_resp = client.get(
-        f"/api/v1/messaging/memberships?office_id={office['id']}",
+        f"/api/v1/messaging/memberships?workspace_id={workspace['id']}",
         headers=h_a,
     )
     items = list_resp.json()["items"]
@@ -349,7 +354,7 @@ async def test_api_create_membership_at_taken_pos_returns_409(
 
     # Second user joins at the SAME pos -> IntegrityError -> 409
     collision = client.post("/api/v1/messaging/memberships", headers=h_b, json={
-        "office_id": office["id"],
+        "workspace_id": workspace["id"],
         "user_id": user_b_id,
         "role": "viewer",
         "posx": 10,
@@ -373,14 +378,14 @@ async def test_api_patch_membership_to_taken_pos_returns_409(
     h_a = _auth(token_a)
     h_b = _auth(token_b)
 
-    office = client.post("/api/v1/offices", headers=h_a, json={
-        "name": "Patch Move Office",
+    workspace = client.post("/api/v1/workspaces", headers=h_a, json={
+        "name": "Patch Move Workspace",
         "slug": "patch-move",
     }).json()
 
     # P14b-onboard2: user_a auto-joined as owner at (0, 0); look it up.
     list_resp = client.get(
-        f"/api/v1/messaging/memberships?office_id={office['id']}",
+        f"/api/v1/messaging/memberships?workspace_id={workspace['id']}",
         headers=h_a,
     )
     items = list_resp.json()["items"]
@@ -388,7 +393,7 @@ async def test_api_patch_membership_to_taken_pos_returns_409(
     membership_a_id = items[0]["id"]
 
     client.post("/api/v1/messaging/memberships", headers=h_b, json={
-        "office_id": office["id"],
+        "workspace_id": workspace["id"],
         "user_id": user_b_id,
         "role": "viewer",
         "posx": 100,

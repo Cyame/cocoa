@@ -1,7 +1,7 @@
 """Request/response schemas for Membership CRUD endpoints.
 
 These DTOs are decoupled from the ORM model — they define what the API
-accepts and returns, while the model (``app.models.office.Membership``)
+accepts and returns, while the model (``app.models.workspace.Membership``)
 owns the DB schema.
 """
 
@@ -18,7 +18,7 @@ class MembershipCreate(BaseModel):
     Exactly one of ``user_id`` or ``instance_id`` must be provided.
     """
 
-    office_id: str
+    workspace_id: str
     user_id: str | None = None
     instance_id: str | None = None
     posx: int = 0
@@ -65,7 +65,7 @@ class MembershipOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
-    office_id: str
+    workspace_id: str
     user_id: str | None
     instance_id: str | None
     posx: int

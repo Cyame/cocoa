@@ -19,12 +19,7 @@
     "operator": "操作员"
   },
   "nav": {
-    "offices": "办公室列表",
-    "debug": "调试",
-    "topology": "拓扑视图",
-    "composer": "编辑器",
-    "learning": "学习",
-    "members": "成员"
+    "organization": "世界设置"
   },
   "login": {
     "signInHeading": "登录",
@@ -108,7 +103,13 @@
     "title": "拓扑视图",
     "tagline": "拖动平移，滚轮缩放，事件每 2 秒刷新。",
     "loading": "正在加载拓扑",
-    "canvasAria": "办公室 {{officeId}} 的拓扑画布",
+    "canvasAria": "空间 {{workspaceId}} 的拓扑画布",
+    "membershipNode": "成员关系",
+    "mode": {
+      "select": "选择",
+      "connect": "连接",
+      "move": "移动"
+    },
     "selectMode": "选择",
     "connectMode": "连接",
     "moveMode": "移动",
@@ -116,7 +117,7 @@
     "dismissError": "关闭错误",
     "toolbarAria": "拓扑交互模式",
     "failedLoad": "加载拓扑失败",
-    "failedCreate": "创建走廊失败",
+    "failedCreate": "创建通道失败",
     "failedMove": "移动节点失败",
     "failedDelete": "删除节点失败",
     "userLabel": "用户",
@@ -132,6 +133,7 @@
     "send": "发送",
     "sending": "发送中...",
     "sendFailed": "发送失败",
+    "sentDirectives": "已发送 {{count}} 条指令",
     "parseError": "解析错误",
     "selectTarget": "选择目标员工",
     "noTargets": "暂无员工，请先创建办公室。",
@@ -531,6 +533,79 @@
       "successTitle": "召唤成功",
       "successDetail": "你的第一位眷族已就绪。"
     }
+  },
+  "namespaces": {
+    "title": "次元枢纽",
+    "subtitle": "管理空间、神职、契印、眷族与能力市场。",
+    "summonEntity": "召唤眷族",
+    "summonFromBaseClass": "基于此神职召唤眷族",
+    "enterWorkspace": "进入空间",
+    "noWorkspacesTitle": "还没有空间",
+    "noWorkspacesDetail": "召唤首位眷族，或浏览神职市场。",
+    "contractsTitle": "契印",
+    "contractsDetail": "全局用户权限管理将在此展示。",
+    "noEntities": "当前次元尚无眷族。",
+    "viewDetail": "查看详情",
+    "capabilityMarketTitle": "能力市场",
+    "capabilityMarketDetail": "原子能力浏览器即将上线。",
+    "tabs": {
+      "workspace": "空间",
+      "baseClasses": "神职市场",
+      "contracts": "契印",
+      "entities": "眷族",
+      "capabilityMarket": "能力市场",
+      "debug": "调试"
+    }
+  },
+  "workspace": {
+    "idMissing": "缺少空间标识。",
+    "members": "成员",
+    "instances": "化身",
+    "tabs": {
+      "topology": "拓扑",
+      "memberships": "契印",
+      "instances": "化身",
+      "memory": "记忆"
+    },
+    "emptyMembershipsTitle": "暂无契印",
+    "emptyMembershipsDetail": "该空间尚无活跃成员关系。",
+    "emptyInstancesTitle": "暂无化身",
+    "emptyInstancesDetail": "该空间尚未分配运行时。",
+    "emptyMemoryDetail": "共享记忆尚未初始化。",
+    "sharedContext": "共享上下文",
+    "noSharedContext": "暂无共享上下文。",
+    "manualNotes": "手动备注",
+    "noManualNotes": "暂无手动备注。"
+  },
+  "ide": {
+    "backToNamespaces": "返回次元枢纽",
+    "sidebar": {
+      "workspaces": "空间",
+      "baseClasses": "神职",
+      "contracts": "契印",
+      "entities": "眷族",
+      "capabilityMarket": "能力市场",
+      "debug": "调试"
+    }
+  },
+  "forbidden": {
+    "title": "权限不足",
+    "detail": "你没有执行此操作所需的能力位。",
+    "currentGene": "当前觉醒基因",
+    "missing": "缺失能力位",
+    "from": "请求来源",
+    "goBack": "返回上一页",
+    "goNamespaces": "返回次元枢纽"
+  },
+  "organization": {
+    "title": "智能系统配置",
+    "name": "名称",
+    "slug": "标识",
+    "providerHint": "Provider 配置将在此管理。",
+    "notAvailable": "组织 API 暂不可用。"
+  },
+  "baseClass": {
+    "slugMissing": "缺少神职标识。"
   },
   "language": {
     "label": "语言",

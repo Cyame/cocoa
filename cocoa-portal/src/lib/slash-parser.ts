@@ -28,7 +28,7 @@ export type ContentRef = {
 };
 
 export type Directive = {
-  readonly target_employee: string | null;
+  readonly target_entity: string | null;
   readonly cmd: string;
   readonly args: readonly string[];
   readonly content_ref: ContentRef | null;
@@ -127,7 +127,7 @@ export function parse_directive(line: string): Directive | string {
   const args = remaining.split(/\s+/).filter((a) => a.length > 0);
 
   return {
-    target_employee: target,
+    target_entity: target,
     cmd: `/${cmd}`,
     args,
     content_ref: contentRef,
@@ -190,7 +190,7 @@ export function parse_turn(rawText: string): Turn {
  * Segmentation rules (cocoa-v2-program.md L171-179):
  * - First compartment = "general" (text before any @employee + directives
  *   with no target).
- * - Subsequent compartments = per {@link Directive.target_employee} slug.
+ * - Subsequent compartments = per {@link Directive.target_entity} slug.
  */
 export type Compartment = {
   readonly label: string;
@@ -209,10 +209,10 @@ export function segmentCompartments(turn: Turn): readonly Compartment[] {
   const slugOrder: string[] = [];
 
   for (const d of turn.directives) {
-    if (d.target_employee === null) {
+    if (d.target_entity === null) {
       generalDirectives.push(d);
     } else {
-      const slug = d.target_employee;
+      const slug = d.target_entity;
       let bucket = bySlug.get(slug);
       if (bucket === undefined) {
         bucket = [];

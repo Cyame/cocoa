@@ -46,15 +46,15 @@ class TestInstanceModel:
         """Model must be importable and a class."""
         assert isinstance(Instance, type)
 
-    def test_employee_id_column_exists(self) -> None:
-        """employee_id FK column must be present."""
-        col = Instance.__table__.columns["employee_id"]
+    def test_entity_id_column_exists(self) -> None:
+        """entity_id FK column must be present."""
+        col = Instance.__table__.columns["entity_id"]
         assert col is not None
         assert not col.nullable
 
-    def test_office_id_column_exists(self) -> None:
-        """office_id FK column must be present (forward reference to Office model)."""
-        col = Instance.__table__.columns["office_id"]
+    def test_workspace_id_column_exists(self) -> None:
+        """workspace_id FK column must be present (forward reference to Workspace model)."""
+        col = Instance.__table__.columns["workspace_id"]
         assert col is not None
         assert not col.nullable
 
@@ -88,34 +88,34 @@ class TestInstanceModel:
         assert "updated_at" in Instance.__table__.columns
         assert "deleted_at" in Instance.__table__.columns
 
-    def test_employee_id_foreign_key(self) -> None:
-        """employee_id must have a ForeignKey to employees.id."""
-        col = Instance.__table__.columns["employee_id"]
+    def test_entity_id_foreign_key(self) -> None:
+        """entity_id must have a ForeignKey to entities.id."""
+        col = Instance.__table__.columns["entity_id"]
         fks = list(col.foreign_keys)
         assert len(fks) == 1
-        # Use _colspec to avoid FK resolution which requires the employees
+        # Use _colspec to avoid FK resolution which requires the entities
         # table to be present in metadata (created in Todo 2, not yet loaded).
-        assert fks[0]._colspec == "employees.id"
+        assert fks[0]._colspec == "entities.id"
 
-    def test_office_id_foreign_key(self) -> None:
-        """office_id must have a ForeignKey to offices.id (forward reference)."""
-        col = Instance.__table__.columns["office_id"]
+    def test_workspace_id_foreign_key(self) -> None:
+        """workspace_id must have a ForeignKey to workspaces.id (forward reference)."""
+        col = Instance.__table__.columns["workspace_id"]
         fks = list(col.foreign_keys)
         assert len(fks) == 1
-        # Use _colspec to avoid FK resolution which requires the offices
+        # Use _colspec to avoid FK resolution which requires the workspaces
         # table to be present in metadata (forward reference, created in Todo 4).
-        assert fks[0]._colspec == "offices.id"
+        assert fks[0]._colspec == "workspaces.id"
 
     def test_workspace_path_partial_unique_index(self) -> None:
         """workspace_path must have a partial unique index for active instances."""
         indexes = {idx.name: idx for idx in Instance.__table__.indexes}
         assert "uq_instances_workspace_path" in indexes
 
-    def test_no_employee_office_unique_constraint(self) -> None:
-        """(employee_id, office_id) must NOT have a unique constraint.
-        Multi-instance per employee per office is the key design feature.
+    def test_no_entity_workspace_unique_constraint(self) -> None:
+        """(entity_id, workspace_id) must NOT have a unique constraint.
+        Multi-instance per entity per workspace is the key design feature.
         """
         indexes = Instance.__table__.indexes
         for idx in indexes:
             cols = [c.name for c in idx.columns]
-            assert set(cols) != {"employee_id", "office_id"}
+            assert set(cols) != {"entity_id", "workspace_id"}

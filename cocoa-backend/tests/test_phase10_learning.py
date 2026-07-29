@@ -1,8 +1,8 @@
 """Integration tests for P10 Wave 2 Learning API endpoints.
 
 Covers:
-- GET  /api/v1/learning/memories/{employee_id}/summary  (summary)
-- POST /api/v1/learning/employees/{employee_id}/distill  (distillation)
+- GET  /api/v1/learning/memories/{entity_id}/summary  (summary)
+- POST /api/v1/learning/entities/{entity_id}/distill  (distillation)
 - GET  /api/v1/learning/presets/{preset_id}              (preset fetch)
 - P5  directive_router learning command branch            (route_turn)
 """
@@ -55,33 +55,33 @@ def _auth(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
-def _setup_office_and_membership(
+def _setup_workspace_and_membership(
     client: TestClient,
     token: str,
     user_id: str,
-    office_name: str = "Learning Office",
-    office_slug: str = "learning-office",
+    workspace_name: str = "Learning Workspace",
+    workspace_slug: str = "learning-workspace",
     role: str = "owner",
 ) -> str:
-    """Create an office. The creator is auto-added as owner (P14b-onboard2).
+    """Create an workspace. The creator is auto-added as owner (P14b-onboard2).
 
     ``user_id`` and ``role`` parameters are kept for backward compatibility
     with existing call sites; the auto-membership is always ``role='owner'``
-    attached to the office creator (the token holder).  Tests that need a
+    attached to the workspace creator (the token holder).  Tests that need a
     non-owner membership should add it explicitly for a *different* user.
     """
     h = _auth(token)
-    resp = client.post("/api/v1/offices", headers=h, json={
-        "name": office_name,
-        "slug": office_slug,
+    resp = client.post("/api/v1/workspaces", headers=h, json={
+        "name": workspace_name,
+        "slug": workspace_slug,
     })
     assert resp.status_code == 201, resp.text
     return resp.json()["id"]
 
 
-def _create_employee(client: TestClient, token: str, slug: str, name: str) -> str:
-    """Create an employee and return its UUID."""
-    resp = client.post("/api/v1/employees", headers=_auth(token), json={
+def _create_entity(client: TestClient, token: str, slug: str, name: str) -> str:
+    """Create an entity and return its UUID."""
+    resp = client.post("/api/v1/entities", headers=_auth(token), json={
         "name": name,
         "slug": slug,
     })
@@ -92,13 +92,13 @@ def _create_employee(client: TestClient, token: str, slug: str, name: str) -> st
 def _create_instance(
     client: TestClient,
     token: str,
-    employee_id: str,
-    office_id: str,
+    entity_id: str,
+    workspace_id: str,
 ) -> str:
     """Create an instance and return its UUID."""
     resp = client.post("/api/v1/instances", headers=_auth(token), json={
-        "employee_id": employee_id,
-        "office_id": office_id,
+        "entity_id": entity_id,
+        "workspace_id": workspace_id,
     })
     assert resp.status_code == 201, resp.text
     return resp.json()["id"]
@@ -107,7 +107,7 @@ def _create_instance(
 def _create_memory(
     client: TestClient,
     token: str,
-    employee_id: str,
+    entity_id: str,
     *,
     kind: str,
     key: str | None = None,
@@ -115,7 +115,7 @@ def _create_memory(
 ) -> str:
     """Create a memory entry and return its UUID."""
     body: dict = {
-        "employee_id": employee_id,
+        "entity_id": entity_id,
         "kind": kind,
     }
     if key is not None:
@@ -128,7 +128,7 @@ def _create_memory(
 
 
 # =========================================================================
-# GET /learning/memories/{employee_id}/summary
+# GET /learning/memories/{entity_id}/summary
 # =========================================================================
 
 
@@ -143,34 +143,34 @@ class TestMemorySummary:
     ) -> None:
         """GET summary returns correct counts when memories exist."""
         h = _auth(auth_token)
-        office_id = _setup_office_and_membership(
+        workspace_id = _setup_workspace_and_membership(
             client, auth_token, auth_user_id,
-            office_name="Summary Office", office_slug=f"summary-office-{uuid.uuid4().hex[:6]}",
+            workspace_name="Summary Workspace", workspace_slug=f"summary-workspace-{uuid.uuid4().hex[:6]}",
         )
-        employee_id = _create_employee(
-            client, auth_token, f"summary-emp-{uuid.uuid4().hex[:6]}", "Summary Employee",
+        entity_id = _create_entity(
+            client, auth_token, f"summary-emp-{uuid.uuid4().hex[:6]}", "Summary Entity",
         )
-        _create_instance(client, auth_token, employee_id, office_id)
+        _create_instance(client, auth_token, entity_id, workspace_id)
 
         # Create 2 experience, 3 lesson, 1 decision, 1 problem memories.
         for i in range(2):
-            _create_memory(client, auth_token, employee_id, kind="experience",
+            _create_memory(client, auth_token, entity_id, kind="experience",
                            key=f"exp-key-{i}", content=f"Experience {i} content")
         for i in range(3):
-            _create_memory(client, auth_token, employee_id, kind="lesson",
+            _create_memory(client, auth_token, entity_id, kind="lesson",
                            key=f"lesson-key-{i}", content=f"Lesson {i} is a great insight about coding")
-        _create_memory(client, auth_token, employee_id, kind="decision",
+        _create_memory(client, auth_token, entity_id, kind="decision",
                        key="decide-stack", content="We decided to use FastAPI")
-        _create_memory(client, auth_token, employee_id, kind="problem",
+        _create_memory(client, auth_token, entity_id, kind="problem",
                        key="bug-oom", content="Out of memory error occurred")
 
         resp = client.get(
-            f"/api/v1/learning/memories/{employee_id}/summary",
+            f"/api/v1/learning/memories/{entity_id}/summary",
             headers=h,
         )
         assert resp.status_code == 200, resp.text
         body = resp.json()
-        assert body["employee_id"] == employee_id
+        assert body["entity_id"] == entity_id
         counts = body["aggregated_counts"]
         assert counts["experience"] == 2
         assert counts["lesson"] == 3
@@ -188,24 +188,24 @@ class TestMemorySummary:
     ) -> None:
         """GET summary with kind filter returns only matching kinds."""
         h = _auth(auth_token)
-        office_id = _setup_office_and_membership(
+        workspace_id = _setup_workspace_and_membership(
             client, auth_token, auth_user_id,
-            office_name="Filter Office", office_slug=f"filter-office-{uuid.uuid4().hex[:6]}",
+            workspace_name="Filter Workspace", workspace_slug=f"filter-workspace-{uuid.uuid4().hex[:6]}",
         )
-        employee_id = _create_employee(
-            client, auth_token, f"filter-emp-{uuid.uuid4().hex[:6]}", "Filter Employee",
+        entity_id = _create_entity(
+            client, auth_token, f"filter-emp-{uuid.uuid4().hex[:6]}", "Filter Entity",
         )
-        _create_instance(client, auth_token, employee_id, office_id)
+        _create_instance(client, auth_token, entity_id, workspace_id)
 
-        _create_memory(client, auth_token, employee_id, kind="experience",
+        _create_memory(client, auth_token, entity_id, kind="experience",
                        key="exp", content="Experience content")
-        _create_memory(client, auth_token, employee_id, kind="lesson",
+        _create_memory(client, auth_token, entity_id, kind="lesson",
                        key="lesson", content="A valuable lesson learned")
-        _create_memory(client, auth_token, employee_id, kind="decision",
+        _create_memory(client, auth_token, entity_id, kind="decision",
                        key="dec", content="Made a decision")
 
         resp = client.get(
-            f"/api/v1/learning/memories/{employee_id}/summary",
+            f"/api/v1/learning/memories/{entity_id}/summary",
             headers=h,
             params={"kind": ["experience", "lesson"]},
         )
@@ -220,12 +220,12 @@ class TestMemorySummary:
         # sample_keys_by_kind should only contain filtered kinds
         assert "decision" not in body["sample_keys_by_kind"]
 
-    def test_summary_nonexistent_employee(
+    def test_summary_nonexistent_entity(
         self,
         client: TestClient,
         auth_token: str,
     ) -> None:
-        """GET summary with a nonexistent employee ID returns 404."""
+        """GET summary with a nonexistent entity ID returns 404."""
         h = _auth(auth_token)
         fake_id = str(uuid.uuid4())
         resp = client.get(
@@ -234,26 +234,26 @@ class TestMemorySummary:
         )
         assert resp.status_code == 404, resp.text
 
-    def test_summary_employee_no_office(
+    def test_summary_entity_no_workspace(
         self,
         client: TestClient,
         auth_token: str,
     ) -> None:
-        """GET summary for an employee with no instance (no office) returns 404."""
+        """GET summary for an entity with no instance (no workspace) returns 404."""
         h = _auth(auth_token)
-        employee_id = _create_employee(
-            client, auth_token, f"no-office-{uuid.uuid4().hex[:6]}", "No Office Employee",
+        entity_id = _create_entity(
+            client, auth_token, f"no-workspace-{uuid.uuid4().hex[:6]}", "No Workspace Entity",
         )
-        # No instance created — employee has no office association.
+        # No instance created — entity has no workspace association.
         resp = client.get(
-            f"/api/v1/learning/memories/{employee_id}/summary",
+            f"/api/v1/learning/memories/{entity_id}/summary",
             headers=h,
         )
         assert resp.status_code == 404, resp.text
 
 
 # =========================================================================
-# POST /learning/employees/{employee_id}/distill
+# POST /learning/entities/{entity_id}/distill
 # =========================================================================
 
 
@@ -266,29 +266,29 @@ class TestDistill:
         auth_token: str,
         auth_user_id: str,
     ) -> None:
-        """POST distill creates a new EmployeePreset with 201 and correct fields."""
+        """POST distill creates a new BaseClass with 201 and correct fields."""
         h = _auth(auth_token)
-        office_id = _setup_office_and_membership(
+        workspace_id = _setup_workspace_and_membership(
             client, auth_token, auth_user_id,
-            office_name="Distill Office", office_slug=f"distill-office-{uuid.uuid4().hex[:6]}",
+            workspace_name="Distill Workspace", workspace_slug=f"distill-workspace-{uuid.uuid4().hex[:6]}",
         )
-        employee_id = _create_employee(
-            client, auth_token, f"distill-emp-{uuid.uuid4().hex[:6]}", "Distill Employee",
+        entity_id = _create_entity(
+            client, auth_token, f"distill-emp-{uuid.uuid4().hex[:6]}", "Distill Entity",
         )
-        _create_instance(client, auth_token, employee_id, office_id)
+        _create_instance(client, auth_token, entity_id, workspace_id)
 
         # Create memories with enough data for distillation.
-        _create_memory(client, auth_token, employee_id, kind="experience",
+        _create_memory(client, auth_token, entity_id, kind="experience",
                        key="exp", content="Experience content")
-        _create_memory(client, auth_token, employee_id, kind="lesson",
+        _create_memory(client, auth_token, entity_id, kind="lesson",
                        key="debug-memory-leak",
                        content="A" * 80 + " We found that memory leaks happen"
                                " when circular references are not broken.")
-        _create_memory(client, auth_token, employee_id, kind="decision",
+        _create_memory(client, auth_token, entity_id, kind="decision",
                        key="pick-framework", content="Decided to use FastAPI over Flask")
 
         resp = client.post(
-            f"/api/v1/learning/employees/{employee_id}/distill",
+            f"/api/v1/learning/entities/{entity_id}/distill",
             headers=h,
             json={
                 "target_skill_slug": "my-skill",
@@ -303,7 +303,7 @@ class TestDistill:
         assert body["new_preset_id"]
         assert body["new_preset_slug"] == "base-skill-my-skill"
         assert body["new_preset_name"] == "My Distilled Skill"
-        assert body["source_employee_id"] == employee_id
+        assert body["source_entity_id"] == entity_id
         assert body["source_preset_slug"] is None
 
         manifest = body["manifest_preview"]
@@ -323,21 +323,21 @@ class TestDistill:
     ) -> None:
         """POST distill returns 409 when the generated slug already exists."""
         h = _auth(auth_token)
-        office_id = _setup_office_and_membership(
+        workspace_id = _setup_workspace_and_membership(
             client, auth_token, auth_user_id,
-            office_name="Conflict Office", office_slug=f"conflict-office-{uuid.uuid4().hex[:6]}",
+            workspace_name="Conflict Workspace", workspace_slug=f"conflict-workspace-{uuid.uuid4().hex[:6]}",
         )
-        employee_id = _create_employee(
-            client, auth_token, f"conflict-emp-{uuid.uuid4().hex[:6]}", "Conflict Employee",
+        entity_id = _create_entity(
+            client, auth_token, f"conflict-emp-{uuid.uuid4().hex[:6]}", "Conflict Entity",
         )
-        _create_instance(client, auth_token, employee_id, office_id)
+        _create_instance(client, auth_token, entity_id, workspace_id)
 
-        _create_memory(client, auth_token, employee_id, kind="lesson",
+        _create_memory(client, auth_token, entity_id, kind="lesson",
                        key="some-lesson", content="A" * 60)
 
         # First distillation.
         resp1 = client.post(
-            f"/api/v1/learning/employees/{employee_id}/distill",
+            f"/api/v1/learning/entities/{entity_id}/distill",
             headers=h,
             json={"target_skill_slug": "my-skill"},
         )
@@ -345,13 +345,13 @@ class TestDistill:
 
         # Second distillation with same target_skill_slug → same generated slug.
         resp2 = client.post(
-            f"/api/v1/learning/employees/{employee_id}/distill",
+            f"/api/v1/learning/entities/{entity_id}/distill",
             headers=h,
             json={"target_skill_slug": "my-skill"},
         )
         assert resp2.status_code == 409, resp2.text
         body = resp2.json()
-        assert body["error_code"] == "employee_preset.slug_taken"
+        assert body["error_code"] == "base_class.slug_taken"
 
     def test_distill_no_memory(
         self,
@@ -359,19 +359,19 @@ class TestDistill:
         auth_token: str,
         auth_user_id: str,
     ) -> None:
-        """POST distill returns 422 when employee has no memory entries."""
+        """POST distill returns 422 when entity has no memory entries."""
         h = _auth(auth_token)
-        office_id = _setup_office_and_membership(
+        workspace_id = _setup_workspace_and_membership(
             client, auth_token, auth_user_id,
-            office_name="NoMem Office", office_slug=f"nomem-office-{uuid.uuid4().hex[:6]}",
+            workspace_name="NoMem Workspace", workspace_slug=f"nomem-workspace-{uuid.uuid4().hex[:6]}",
         )
-        employee_id = _create_employee(
-            client, auth_token, f"nomem-emp-{uuid.uuid4().hex[:6]}", "No Memory Employee",
+        entity_id = _create_entity(
+            client, auth_token, f"nomem-emp-{uuid.uuid4().hex[:6]}", "No Memory Entity",
         )
-        _create_instance(client, auth_token, employee_id, office_id)
+        _create_instance(client, auth_token, entity_id, workspace_id)
 
         resp = client.post(
-            f"/api/v1/learning/employees/{employee_id}/distill",
+            f"/api/v1/learning/entities/{entity_id}/distill",
             headers=h,
             json={"target_skill_slug": "foo-bar"},
         )
@@ -389,16 +389,16 @@ class TestDistill:
     ) -> None:
         """POST distill as a viewer returns 403."""
         h_owner = _auth(auth_token)
-        office_id = _setup_office_and_membership(
+        workspace_id = _setup_workspace_and_membership(
             client, auth_token, auth_user_id,
-            office_name="Viewer Office", office_slug=f"viewer-office-{uuid.uuid4().hex[:6]}",
+            workspace_name="Viewer Workspace", workspace_slug=f"viewer-workspace-{uuid.uuid4().hex[:6]}",
             role="owner",
         )
-        employee_id = _create_employee(
-            client, auth_token, f"viewer-emp-{uuid.uuid4().hex[:6]}", "Viewer Employee",
+        entity_id = _create_entity(
+            client, auth_token, f"viewer-emp-{uuid.uuid4().hex[:6]}", "Viewer Entity",
         )
-        _create_instance(client, auth_token, employee_id, office_id)
-        _create_memory(client, auth_token, employee_id, kind="lesson",
+        _create_instance(client, auth_token, entity_id, workspace_id)
+        _create_memory(client, auth_token, entity_id, kind="lesson",
                        key="lesson-key", content="A" * 60)
 
         viewer_username = f"distill-viewer-{uuid.uuid4().hex[:6]}"
@@ -419,28 +419,28 @@ class TestDistill:
         viewer_user: User = result.scalars().first()
 
         client.post("/api/v1/messaging/memberships", headers=h_owner, json={
-            "office_id": office_id,
+            "workspace_id": workspace_id,
             "user_id": viewer_user.id,
             "role": "viewer",
         })
 
         resp = client.post(
-            f"/api/v1/learning/employees/{employee_id}/distill",
+            f"/api/v1/learning/entities/{entity_id}/distill",
             headers=_auth(viewer_token),
             json={"target_skill_slug": "forbidden-skill"},
         )
         assert resp.status_code == 403, resp.text
 
-    def test_distill_nonexistent_employee(
+    def test_distill_nonexistent_entity(
         self,
         client: TestClient,
         auth_token: str,
     ) -> None:
-        """POST distill with a nonexistent employee ID returns 404."""
+        """POST distill with a nonexistent entity ID returns 404."""
         h = _auth(auth_token)
         fake_id = str(uuid.uuid4())
         resp = client.post(
-            f"/api/v1/learning/employees/{fake_id}/distill",
+            f"/api/v1/learning/entities/{fake_id}/distill",
             headers=h,
             json={"target_skill_slug": "ghost-skill"},
         )
@@ -463,20 +463,20 @@ class TestPresetFetch:
     ) -> None:
         """GET /learning/presets/{preset_id} returns 200 with manifest."""
         h = _auth(auth_token)
-        office_id = _setup_office_and_membership(
+        workspace_id = _setup_workspace_and_membership(
             client, auth_token, auth_user_id,
-            office_name="Fetch Office", office_slug=f"fetch-office-{uuid.uuid4().hex[:6]}",
+            workspace_name="Fetch Workspace", workspace_slug=f"fetch-workspace-{uuid.uuid4().hex[:6]}",
         )
-        employee_id = _create_employee(
-            client, auth_token, f"fetch-emp-{uuid.uuid4().hex[:6]}", "Fetch Employee",
+        entity_id = _create_entity(
+            client, auth_token, f"fetch-emp-{uuid.uuid4().hex[:6]}", "Fetch Entity",
         )
-        _create_instance(client, auth_token, employee_id, office_id)
-        _create_memory(client, auth_token, employee_id, kind="lesson",
+        _create_instance(client, auth_token, entity_id, workspace_id)
+        _create_memory(client, auth_token, entity_id, kind="lesson",
                        key="fetch-lesson", content="B" * 60)
 
         # First distill to create a preset.
         distill_resp = client.post(
-            f"/api/v1/learning/employees/{employee_id}/distill",
+            f"/api/v1/learning/entities/{entity_id}/distill",
             headers=h,
             json={"target_skill_slug": "fetch-skill", "target_preset_name": "Fetch Skill"},
         )
@@ -528,45 +528,45 @@ class TestP5RouteTurnLearningBranch:
         auth_user_id: str,
         session: AsyncSession,
     ) -> None:
-        """@target /distill creates new EmployeePreset and emits LEARNING_DISTILLATION_COMPLETED."""
-        office_id = _setup_office_and_membership(
+        """@target /distill creates new BaseClass and emits LEARNING_DISTILLATION_COMPLETED."""
+        workspace_id = _setup_workspace_and_membership(
             client, auth_token, auth_user_id,
-            office_name="RT Distill Office",
-            office_slug=f"rt-distill-office-{uuid.uuid4().hex[:6]}",
+            workspace_name="RT Distill Workspace",
+            workspace_slug=f"rt-distill-workspace-{uuid.uuid4().hex[:6]}",
         )
-        employee_slug = f"rt-distill-emp-{uuid.uuid4().hex[:6]}"
-        employee_id = _create_employee(
-            client, auth_token, employee_slug, "RT Distill Employee",
+        entity_slug = f"rt-distill-emp-{uuid.uuid4().hex[:6]}"
+        entity_id = _create_entity(
+            client, auth_token, entity_slug, "RT Distill Entity",
         )
-        _create_instance(client, auth_token, employee_id, office_id)
+        _create_instance(client, auth_token, entity_id, workspace_id)
 
-        _create_memory(client, auth_token, employee_id, kind="lesson",
+        _create_memory(client, auth_token, entity_id, kind="lesson",
                        key="debug-memory-leak",
                        content="A" * 80 + " We found that memory leaks happen"
                                 " when circular references are not broken.")
-        _create_memory(client, auth_token, employee_id, kind="experience",
+        _create_memory(client, auth_token, entity_id, kind="experience",
                        key="first-exp", content="Worked on a big project.")
 
         from app.core.directive_router import route_turn
         from app.core.event_types import LEARNING_DISTILLATION_COMPLETED
-        from app.models.employee import EmployeePreset
+        from app.models.base_class import BaseClass
         from app.models.event import Event
 
-        raw_text = f"@{employee_slug} /distill my-skill"
-        results = await route_turn(session, raw_text, office_id, auth_user_id)
+        raw_text = f"@{entity_slug} /distill my-skill"
+        results = await route_turn(session, raw_text, workspace_id, auth_user_id)
 
         assert len(results) == 1
         assert results[0].cmd == "/distill"
-        assert results[0].target_employee == employee_slug
+        assert results[0].target_entity == entity_slug
 
         preset_result = await session.execute(
-            select(EmployeePreset).where(
-                EmployeePreset.slug == "base-skill-my-skill",
-                EmployeePreset.deleted_at.is_(None),
+            select(BaseClass).where(
+                BaseClass.slug == "base-skill-my-skill",
+                BaseClass.deleted_at.is_(None),
             )
         )
         preset = preset_result.scalars().first()
-        assert preset is not None, "Expected new EmployeePreset for base-skill-my-skill"
+        assert preset is not None, "Expected new BaseClass for base-skill-my-skill"
         assert preset.name == "Skill: my-skill"
         assert preset.manifest is not None
         assert isinstance(preset.manifest, dict)
@@ -579,7 +579,7 @@ class TestP5RouteTurnLearningBranch:
         )
         event = event_result.scalars().first()
         assert event is not None, "Expected LEARNING_DISTILLATION_COMPLETED event"
-        assert event.payload["employee_id"] == employee_id
+        assert event.payload["entity_id"] == entity_id
 
     @pytest.mark.asyncio
     async def test_route_turn_bare_distill_dropped(
@@ -590,20 +590,20 @@ class TestP5RouteTurnLearningBranch:
         session: AsyncSession,
     ) -> None:
         """Bare /distill (no @target) is silently dropped."""
-        office_id = _setup_office_and_membership(
+        workspace_id = _setup_workspace_and_membership(
             client, auth_token, auth_user_id,
-            office_name="RT Bare Distill Office",
-            office_slug=f"rt-bare-distill-{uuid.uuid4().hex[:6]}",
+            workspace_name="RT Bare Distill Workspace",
+            workspace_slug=f"rt-bare-distill-{uuid.uuid4().hex[:6]}",
         )
 
         from app.core.directive_router import route_turn
 
         raw_text = "/distill"
-        results = await route_turn(session, raw_text, office_id, auth_user_id)
+        results = await route_turn(session, raw_text, workspace_id, auth_user_id)
 
         assert len(results) == 1
         assert results[0].cmd == "/distill"
-        assert results[0].target_employee is None
+        assert results[0].target_entity is None
 
     @pytest.mark.asyncio
     async def test_route_turn_learning_vs_control_no_conflict(
@@ -614,18 +614,18 @@ class TestP5RouteTurnLearningBranch:
         session: AsyncSession,
     ) -> None:
         """/distill does not conflict with /interrupt — both route to separate branches."""
-        office_id = _setup_office_and_membership(
+        workspace_id = _setup_workspace_and_membership(
             client, auth_token, auth_user_id,
-            office_name="RT NoConflict Office",
-            office_slug=f"rt-noconflict-{uuid.uuid4().hex[:6]}",
+            workspace_name="RT NoConflict Workspace",
+            workspace_slug=f"rt-noconflict-{uuid.uuid4().hex[:6]}",
         )
-        employee_slug = f"rt-noconflict-emp-{uuid.uuid4().hex[:6]}"
-        employee_id = _create_employee(
-            client, auth_token, employee_slug, "RT NoConflict Employee",
+        entity_slug = f"rt-noconflict-emp-{uuid.uuid4().hex[:6]}"
+        entity_id = _create_entity(
+            client, auth_token, entity_slug, "RT NoConflict Entity",
         )
-        _create_instance(client, auth_token, employee_id, office_id)
+        _create_instance(client, auth_token, entity_id, workspace_id)
 
-        _create_memory(client, auth_token, employee_id, kind="lesson",
+        _create_memory(client, auth_token, entity_id, kind="lesson",
                        key="debug-memory-leak",
                        content="A" * 80 + " We found that memory leaks happen"
                                 " when circular references are not broken.")
@@ -633,8 +633,8 @@ class TestP5RouteTurnLearningBranch:
         from app.core.directive_router import route_turn
         from app.core.preset_registry import is_control_command, is_learning_command
 
-        distill_text = f"@{employee_slug} /distill test-skill"
-        distill_results = await route_turn(session, distill_text, office_id, auth_user_id)
+        distill_text = f"@{entity_slug} /distill test-skill"
+        distill_results = await route_turn(session, distill_text, workspace_id, auth_user_id)
         assert len(distill_results) == 1
         assert distill_results[0].cmd == "/distill"
 

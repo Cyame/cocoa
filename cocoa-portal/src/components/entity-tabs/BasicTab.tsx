@@ -80,7 +80,6 @@ export default function BasicTab({ entity, canEdit, onUpdated, onFindInWorkspace
           display_name: displayName,
           display_color: entity.display_color,
           preset_slug: entity.preset_slug,
-          rank: entity.rank,
         },
         etag,
       );

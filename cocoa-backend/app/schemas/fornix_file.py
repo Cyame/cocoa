@@ -1,6 +1,6 @@
 """FornixFile schemas — 穹窿脑区 (virtual filesystem inside a CentralHub).
 
-> **15d-rename (2026-07-29)**: Renamed from `blackboard_file.py`. Class names
+> **15d-rename (2026-07-29)**: Renamed from `fornix_file.py`. Class names
 > `FornixFileCreate` / `FornixFileUpdate` / `FornixFileOut` are 15d+
 > canonical. No back-compat aliases.
 """
@@ -15,7 +15,7 @@ from pydantic import BaseModel, ConfigDict, field_validator
 class FornixFileCreate(BaseModel):
     """Create a file or directory inside the 穹窿 (fornix) brain of a CentralHub."""
 
-    office_id: str
+    workspace_id: str
     name: str
     parent_path: str | None = None
     storage_key: str = ""
@@ -45,7 +45,7 @@ class FornixFileOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
-    office_id: str
+    workspace_id: str
     name: str
     parent_path: str | None
     storage_key: str

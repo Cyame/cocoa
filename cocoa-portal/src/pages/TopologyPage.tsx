@@ -1,15 +1,4 @@
-import {
-  AlertCircle,
-  Bot,
-  Brain,
-  Cpu,
-  Link,
-  LoaderCircle,
-  Network,
-  Trash,
-  User,
-  X,
-} from 'lucide-react';
+import { AlertCircle, Bot, Cpu, Link, LoaderCircle, Network, Trash, User, X } from 'lucide-react';
 import {
   type ReactElement,
   type MouseEvent as ReactMouseEvent,
@@ -32,11 +21,11 @@ import TopologyGlowDefs, {
 import { ApiError, api } from '@/lib/api';
 import { fetchTopologyLiveStatus } from '@/lib/api/topology';
 import type {
-  CorridorNode as CorridorNodeModel,
   Event,
   GlowIntensity,
   LiveStatusItem,
   Membership,
+  Passage,
   TopologyNode,
 } from '@/lib/types';
 import { useSelectedStore } from '@/stores/selected';
@@ -46,15 +35,7 @@ import { useTabStore } from '@/stores/tabStore';
 // Types
 // ---------------------------------------------------------------------------
 
-type Corridor = {
-  readonly id: string;
-  readonly office_id: string;
-  readonly from_membership_id: string | null;
-  readonly to_membership_id: string | null;
-  readonly from_corridor_node_id: string | null;
-  readonly to_corridor_node_id: string | null;
-  readonly is_active: boolean;
-};
+type PassageEdge = Passage;
 
 type OffsetPage<T> = {
   readonly items: readonly T[];
@@ -67,25 +48,14 @@ type CursorPage<T> = {
   readonly total: number | null;
 };
 
-type NodeKind = 'membership' | 'corridor_node';
+type ResolvedEndpoint = {
+  readonly id: string;
+  readonly x: number;
+  readonly y: number;
+};
 
-type ResolvedEndpoint =
-  | {
-      readonly kind: 'membership';
-      readonly id: string;
-      readonly x: number;
-      readonly y: number;
-    }
-  | {
-      readonly kind: 'corridor_node';
-      readonly id: string;
-      readonly x: number;
-      readonly y: number;
-      readonly label: string;
-    };
-
-type ResolvedCorridor = {
-  readonly corridor: Corridor;
+type ResolvedPassage = {
+  readonly passage: PassageEdge;
   readonly from: ResolvedEndpoint;
   readonly to: ResolvedEndpoint;
 };
@@ -94,12 +64,10 @@ type NodeSummary = TopologyNode;
 
 type PendingConnection = {
   readonly id: string;
-  readonly kind: NodeKind;
 };
 
 type DragState = {
   readonly id: string;
-  readonly kind: NodeKind;
   readonly originX: number;
   readonly originY: number;
   readonly currentX: number;
@@ -111,12 +79,15 @@ type NodeDragPatchBody = {
   readonly posy: number;
 };
 
-type CorridorCreateBody = {
-  readonly office_id: string;
-  readonly from_membership_id: string | null;
-  readonly to_membership_id: string | null;
-  readonly from_corridor_node_id: string | null;
-  readonly to_corridor_node_id: string | null;
+type PassageCreateBody = {
+  readonly workspace_id: string;
+  readonly from_membership_id: string;
+  readonly to_membership_id: string;
+};
+
+type TopologyPageProps = {
+  readonly embedded?: boolean;
+  readonly workspaceId?: string;
 };
 
 // ---------------------------------------------------------------------------
@@ -167,22 +138,21 @@ function instanceFillColor(): string {
 
 type TopologyStaticData = {
   readonly memberships: readonly Membership[];
-  readonly corridors: readonly Corridor[];
-  readonly corridorNodes: readonly CorridorNodeModel[];
+  readonly passages: readonly PassageEdge[];
 };
 
-async function fetchStaticData(officeId: string): Promise<TopologyStaticData> {
-  const [membershipPage, corridorPage, corridorNodePage] = await Promise.all([
-    api<OffsetPage<Membership>>(`/messaging/memberships?office_id=${encodeURIComponent(officeId)}`),
-    api<OffsetPage<Corridor>>(`/messaging/corridors?office_id=${encodeURIComponent(officeId)}`),
-    api<CursorPage<CorridorNodeModel>>(
-      `/learning/corridor-nodes?office_id=${encodeURIComponent(officeId)}`,
+async function fetchStaticData(workspaceId: string): Promise<TopologyStaticData> {
+  const [membershipPage, passagePage] = await Promise.all([
+    api<OffsetPage<Membership>>(
+      `/messaging/memberships?workspace_id=${encodeURIComponent(workspaceId)}`,
+    ),
+    api<OffsetPage<PassageEdge>>(
+      `/messaging/passages?workspace_id=${encodeURIComponent(workspaceId)}`,
     ),
   ]);
   return {
     memberships: membershipPage.items,
-    corridors: corridorPage.items,
-    corridorNodes: corridorNodePage.items,
+    passages: passagePage.items,
   };
 }
 
@@ -190,14 +160,17 @@ async function fetchStaticData(officeId: string): Promise<TopologyStaticData> {
 // TopologyPage
 // ---------------------------------------------------------------------------
 
-export default function TopologyPage() {
-  const { id: routeOfficeId } = useParams<{ id: string }>();
-  const setOfficeId = useSelectedStore((state) => state.setOfficeId);
+export default function TopologyPage({
+  embedded = false,
+  workspaceId: workspaceIdProp,
+}: TopologyPageProps = {}) {
+  const { id: routeWorkspaceId } = useParams<{ id: string }>();
+  const setWorkspaceId = useSelectedStore((state) => state.setWorkspaceId);
   const interactionMode = useSelectedStore((state) => state.interactionMode);
   const addTab = useTabStore((state) => state.addTab);
   const [staticData, setStaticData] = useState<TopologyStaticData | null>(null);
   const [liveStatus, setLiveStatus] = useState<readonly LiveStatusItem[]>([]);
-  const [activeCorridors, setActiveCorridors] = useState<ReadonlyMap<string, number>>(
+  const [activePassages, setActivePassages] = useState<ReadonlyMap<string, number>>(
     () => new Map(),
   );
   const [isStaticLoading, setIsStaticLoading] = useState(true);
@@ -240,26 +213,25 @@ export default function TopologyPage() {
     zoomRef.current = zoom;
   }, [zoom]);
 
-  const officeId = routeOfficeId ?? null;
+  const workspaceId = workspaceIdProp ?? routeWorkspaceId ?? null;
 
-  // Sync store with URL office id (matches OfficeDetailPage pattern)
   useEffect(() => {
-    if (officeId === null) return;
-    setOfficeId(officeId);
-    return () => setOfficeId(null);
-  }, [officeId, setOfficeId]);
+    if (workspaceId === null) return;
+    setWorkspaceId(workspaceId);
+    return () => setWorkspaceId(null);
+  }, [workspaceId, setWorkspaceId]);
 
   // ---- Initial topology load ----
   useEffect(() => {
-    if (officeId === null) return;
-    const officeIdValue = officeId;
+    if (workspaceId === null) return;
+    const workspaceIdValue = workspaceId;
     let isActive = true;
     setIsStaticLoading(true);
     setErrorMessage(null);
 
     async function load() {
       try {
-        const data = await fetchStaticData(officeIdValue);
+        const data = await fetchStaticData(workspaceIdValue);
         if (isActive) {
           setStaticData(data);
         }
@@ -277,19 +249,19 @@ export default function TopologyPage() {
     return () => {
       isActive = false;
     };
-  }, [officeId, t]);
+  }, [workspaceId, t]);
 
   // ---- Live status polling (every 2s) ----
   useEffect(() => {
-    if (officeId === null) return;
-    const officeIdValue = officeId;
+    if (workspaceId === null) return;
+    const workspaceIdValue = workspaceId;
     let cancelled = false;
     let timerId: ReturnType<typeof setTimeout> | null = null;
 
     async function poll() {
       if (cancelled) return;
       try {
-        const items = await fetchTopologyLiveStatus(officeIdValue);
+        const items = await fetchTopologyLiveStatus(workspaceIdValue);
         if (!cancelled) setLiveStatus(items);
       } catch {
         // Live status is best-effort; do not propagate polling errors
@@ -305,11 +277,11 @@ export default function TopologyPage() {
       cancelled = true;
       if (timerId !== null) clearTimeout(timerId);
     };
-  }, [officeId]);
+  }, [workspaceId]);
 
-  // ---- Messaging event polling + active corridor animation ----
+  // ---- Messaging event polling + active passage animation ----
   useEffect(() => {
-    if (officeId === null) return;
+    if (workspaceId === null) return;
     let cancelled = false;
     let timerId: ReturnType<typeof setTimeout> | null = null;
 
@@ -323,13 +295,13 @@ export default function TopologyPage() {
 
         const now = Date.now();
         let mutated = false;
-        setActiveCorridors((prev) => {
+        setActivePassages((prev) => {
           const next = new Map(prev);
           for (const event of page.items) {
             if (event.type !== 'messaging.message_sent') continue;
-            const corridorId = event.payload.corridor_id;
-            if (typeof corridorId !== 'string') continue;
-            next.set(corridorId, now + PARTICLE_DURATION_MS);
+            const passageId = event.payload.passage_id ?? event.payload.corridor_id;
+            if (typeof passageId !== 'string') continue;
+            next.set(passageId, now + PARTICLE_DURATION_MS);
             mutated = true;
           }
           return mutated ? next : prev;
@@ -348,13 +320,13 @@ export default function TopologyPage() {
       cancelled = true;
       if (timerId !== null) clearTimeout(timerId);
     };
-  }, [officeId]);
+  }, [workspaceId]);
 
-  // ---- Expire activeCorridors entries ----
+  // ---- Expire activePassages entries ----
   useEffect(() => {
     const interval = setInterval(() => {
       const now = Date.now();
-      setActiveCorridors((prev) => {
+      setActivePassages((prev) => {
         if (prev.size === 0) return prev;
         let changed = false;
         const next = new Map<string, number>();
@@ -371,7 +343,7 @@ export default function TopologyPage() {
     return () => clearInterval(interval);
   }, []);
 
-  // ---- Derived node + corridor summaries ----
+  // ---- Derived node + passage summaries ----
   const nodes = useMemo<readonly NodeSummary[]>(() => {
     if (staticData === null) return [];
     const statusByMembership = new Map<string, LiveStatusItem>();
@@ -412,47 +384,23 @@ export default function TopologyPage() {
       };
     });
 
-    const corridorNodeNodes: NodeSummary[] = staticData.corridorNodes.map((cn) => ({
-      kind: 'corridor_node',
-      id: cn.id,
-      instanceId: null,
-      x: cn.posx,
-      y: cn.posy,
-      label: cn.display_name,
-      slug: cn.display_name,
-      role: cn.status,
-      status: cn.status,
-      fillColor: '#f8fafc',
-      glowColor: cn.glow_color ?? '#475569',
-      glowIntensity: 'low',
-      outdated: false,
-      activeHash: null,
-    }));
-
-    return [...membershipNodes, ...corridorNodeNodes];
+    return membershipNodes;
   }, [staticData, liveStatus, t]);
 
-  const resolvedCorridors = useMemo<readonly ResolvedCorridor[]>(() => {
+  const resolvedPassages = useMemo<readonly ResolvedPassage[]>(() => {
     if (staticData === null) return [];
     const membershipById = new Map(staticData.memberships.map((m) => [m.id, m]));
-    const corridorNodeById = new Map(staticData.corridorNodes.map((cn) => [cn.id, cn]));
 
-    const result: ResolvedCorridor[] = [];
-    for (const corridor of staticData.corridors) {
-      const from = resolveEndpoint(
-        corridor.from_membership_id,
-        corridor.from_corridor_node_id,
-        membershipById,
-        corridorNodeById,
-      );
-      const to = resolveEndpoint(
-        corridor.to_membership_id,
-        corridor.to_corridor_node_id,
-        membershipById,
-        corridorNodeById,
-      );
-      if (from === null || to === null) continue;
-      result.push({ corridor, from, to });
+    const result: ResolvedPassage[] = [];
+    for (const passage of staticData.passages) {
+      const fromMembership = membershipById.get(passage.from_membership_id);
+      const toMembership = membershipById.get(passage.to_membership_id);
+      if (fromMembership === undefined || toMembership === undefined) continue;
+      result.push({
+        passage,
+        from: { id: fromMembership.id, x: fromMembership.posx, y: fromMembership.posy },
+        to: { id: toMembership.id, x: toMembership.posx, y: toMembership.posy },
+      });
     }
     return result;
   }, [staticData]);
@@ -546,7 +494,7 @@ export default function TopologyPage() {
       }
       if (interactionMode === 'connect') {
         if (pendingConnection === null) {
-          setPendingConnection({ id: node.id, kind: node.kind });
+          setPendingConnection({ id: node.id });
           setActionError(null);
           return;
         }
@@ -556,7 +504,7 @@ export default function TopologyPage() {
         }
         setPendingConnectionCompletion({
           source: pendingConnection,
-          target: { id: node.id, kind: node.kind },
+          target: { id: node.id },
         });
         setPendingConnection(null);
         return;
@@ -570,33 +518,26 @@ export default function TopologyPage() {
     readonly target: PendingConnection;
   } | null>(null);
 
-  // Effect: when a connect-mode pair is completed, POST /messaging/corridors.
-  // The fetch is deferred to an effect (not inlined in the click handler) so
-  // the call is observable by tests and so a slow network cannot block the
-  // click-driven UI state transitions.
+  // Effect: when a connect-mode pair is completed, POST /messaging/passages.
   useEffect(() => {
     if (pendingConnectionCompletion === null) return;
-    if (officeId === null) return;
+    if (workspaceId === null) return;
     const completion = pendingConnectionCompletion;
     let cancelled = false;
 
-    async function createCorridor() {
-      const body: CorridorCreateBody = {
-        office_id: officeId as string,
-        from_membership_id: completion.source.kind === 'membership' ? completion.source.id : null,
-        to_membership_id: completion.target.kind === 'membership' ? completion.target.id : null,
-        from_corridor_node_id:
-          completion.source.kind === 'corridor_node' ? completion.source.id : null,
-        to_corridor_node_id:
-          completion.target.kind === 'corridor_node' ? completion.target.id : null,
+    async function createPassage() {
+      const body: PassageCreateBody = {
+        workspace_id: workspaceId as string,
+        from_membership_id: completion.source.id,
+        to_membership_id: completion.target.id,
       };
       try {
-        await api<Corridor>('/messaging/corridors', {
+        await api<PassageEdge>('/messaging/passages', {
           method: 'POST',
           body: JSON.stringify(body),
         });
         if (cancelled) return;
-        const fresh = await fetchStaticData(officeId as string);
+        const fresh = await fetchStaticData(workspaceId as string);
         if (cancelled) return;
         setStaticData(fresh);
         setActionError(null);
@@ -607,11 +548,11 @@ export default function TopologyPage() {
       }
     }
 
-    void createCorridor();
+    void createPassage();
     return () => {
       cancelled = true;
     };
-  }, [pendingConnectionCompletion, officeId, t]);
+  }, [pendingConnectionCompletion, workspaceId, t]);
 
   // ---- Move mode: drag handlers ----
 
@@ -622,7 +563,6 @@ export default function TopologyPage() {
       event.stopPropagation();
       const initial: DragState = {
         id: node.id,
-        kind: node.kind,
         originX: node.x,
         originY: node.y,
         currentX: node.x,
@@ -687,19 +627,15 @@ export default function TopologyPage() {
         posx: Math.round(drag.currentX),
         posy: Math.round(drag.currentY),
       };
-      const endpoint =
-        drag.kind === 'membership'
-          ? `/messaging/memberships/${encodeURIComponent(drag.id)}`
-          : `/learning/corridor-nodes/${encodeURIComponent(drag.id)}`;
+      const endpoint = `/messaging/memberships/${encodeURIComponent(drag.id)}`;
 
       try {
         await api(endpoint, {
           method: 'PATCH',
           body: JSON.stringify(patchBody),
         });
-        // Refetch so server-truth coordinates replace the optimistic drag pos.
-        if (officeId !== null) {
-          const fresh = await fetchStaticData(officeId);
+        if (workspaceId !== null) {
+          const fresh = await fetchStaticData(workspaceId);
           setStaticData(fresh);
         }
         setActionError(null);
@@ -709,7 +645,7 @@ export default function TopologyPage() {
         // falls back to the original (originX, originY) from the server.
         const message =
           error instanceof ApiError && error.status === 409
-            ? `Position (${patchBody.posx}, ${patchBody.posy}) is already used in this office`
+            ? `Position (${patchBody.posx}, ${patchBody.posy}) is already used in this workspace`
             : error instanceof Error
               ? error.message
               : t('topology.failedMove');
@@ -723,7 +659,7 @@ export default function TopologyPage() {
       window.removeEventListener('mousemove', handleMove);
       window.removeEventListener('mouseup', handleUp);
     };
-  }, [dragState, officeId, t]);
+  }, [dragState, workspaceId, t]);
 
   useEffect(() => {
     if (interactionMode !== 'connect') setPendingConnection(null);
@@ -731,11 +667,11 @@ export default function TopologyPage() {
   }, [interactionMode]);
 
   // ---- Render ----
-  if (officeId === null) {
+  if (workspaceId === null) {
     return (
       <section className="mx-auto w-full max-w-6xl p-6 lg:p-8">
         <p className="rounded-lg border border-dashed border-red-300 bg-red-50 px-6 py-12 text-center text-sm text-red-700">
-          Office identifier is missing.
+          {t('workspace.idMissing')}
         </p>
       </section>
     );
@@ -746,26 +682,28 @@ export default function TopologyPage() {
 
   return (
     <section
-      className="mx-auto flex h-full w-full max-w-full flex-col p-0"
+      className={`flex h-full w-full max-w-full flex-col ${embedded ? 'p-0' : 'p-0'}`}
       aria-labelledby="topology-title"
     >
-      <header className="flex shrink-0 items-center justify-between gap-4 border-b border-slate-200 bg-white px-4 py-3 sm:px-6">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-blue-600 text-white">
-            <Network className="size-5" aria-hidden="true" />
-          </span>
-          <div className="min-w-0">
-            <p className="font-mono text-xs text-slate-500">{officeId}</p>
-            <h1
-              id="topology-title"
-              className="truncate text-lg font-semibold tracking-tight text-slate-950"
-            >
-              {t('topology.title')}
-            </h1>
+      {!embedded ? (
+        <header className="flex shrink-0 items-center justify-between gap-4 border-b border-slate-200 bg-white px-4 py-3 sm:px-6">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-blue-600 text-white">
+              <Network className="size-5" aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <p className="font-mono text-xs text-slate-500">{workspaceId}</p>
+              <h1
+                id="topology-title"
+                className="truncate text-lg font-semibold tracking-tight text-slate-950"
+              >
+                {t('topology.title')}
+              </h1>
+            </div>
           </div>
-        </div>
-        <p className="hidden text-xs text-slate-500 sm:block">{t('topology.tagline')}</p>
-      </header>
+          <p className="hidden text-xs text-slate-500 sm:block">{t('topology.tagline')}</p>
+        </header>
+      ) : null}
 
       {pendingConnection !== null ? (
         <div
@@ -826,7 +764,7 @@ export default function TopologyPage() {
             <svg
               ref={svgRef}
               role="img"
-              aria-label={t('topology.canvasAria', { officeId: officeId ?? '' })}
+              aria-label={t('topology.canvasAria', { workspaceId: workspaceId ?? '' })}
               data-testid="topology-canvas"
               viewBox={VIEW_BOX}
               preserveAspectRatio="xMidYMid meet"
@@ -863,11 +801,11 @@ export default function TopologyPage() {
               </g>
 
               <g data-testid="topology-canvas-content" transform={transform}>
-                {resolvedCorridors.map((entry) => (
-                  <CorridorView
-                    key={entry.corridor.id}
+                {resolvedPassages.map((entry) => (
+                  <PassageView
+                    key={entry.passage.id}
                     entry={entry}
-                    isActive={activeCorridors.has(entry.corridor.id)}
+                    isActive={activePassages.has(entry.passage.id)}
                     now={now}
                   />
                 ))}
@@ -882,7 +820,7 @@ export default function TopologyPage() {
                       : null;
                   return (
                     <NodeView
-                      key={`${node.kind}:${node.id}`}
+                      key={node.id}
                       node={node}
                       onClick={handleNodeClick}
                       onDoubleClick={(clickedNode) => {
@@ -942,15 +880,9 @@ function NodeView({
 }: NodeViewProps): ReactElement {
   const haloOpacity = intensityOpacity(node.glowIntensity);
   const coreStrokeOpacity = intensityStrokeOpacity(node.glowIntensity);
-  const isUser = node.kind === 'membership' && node.fillColor === DEFAULT_USER_FILL;
+  const isUser = node.fillColor === DEFAULT_USER_FILL;
   const tooltip = `${node.label} | ${node.role} | ${node.status}`;
-  const Icon = isUser
-    ? User
-    : node.instanceId !== null
-      ? Cpu
-      : node.kind === 'corridor_node'
-        ? Brain
-        : Bot;
+  const Icon = isUser ? User : node.instanceId !== null ? Cpu : Bot;
   const renderX = dragOverride !== null ? dragOverride.x : node.x;
   const renderY = dragOverride !== null ? dragOverride.y : node.y;
   const highlightStroke =
@@ -1049,6 +981,7 @@ type NodeDrawerProps = {
 };
 
 export function NodeDrawer({ node, isEditor, onClose, onDelete }: NodeDrawerProps): ReactElement {
+  const { t } = useTranslation();
   return (
     <aside
       className="flex w-72 shrink-0 flex-col gap-3 border-l border-slate-200 bg-white p-4"
@@ -1058,7 +991,7 @@ export function NodeDrawer({ node, isEditor, onClose, onDelete }: NodeDrawerProp
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-            {node.kind === 'membership' ? 'Membership' : 'Corridor node'}
+            {t('topology.membershipNode')}
           </p>
           <h2 className="truncate text-base font-semibold text-slate-950">{node.label}</h2>
         </div>
@@ -1123,19 +1056,19 @@ export function NodeDrawer({ node, isEditor, onClose, onDelete }: NodeDrawerProp
   );
 }
 
-type CorridorViewProps = {
-  readonly entry: ResolvedCorridor;
+type PassageViewProps = {
+  readonly entry: ResolvedPassage;
   readonly isActive: boolean;
   readonly now: number;
 };
 
-function CorridorView({ entry, isActive, now }: CorridorViewProps): ReactElement {
-  const { corridor, from, to } = entry;
+function PassageView({ entry, isActive, now }: PassageViewProps): ReactElement {
+  const { passage, from, to } = entry;
   const stroke = isActive ? ACTIVE_STROKE : DEFAULT_STROKE;
   const strokeWidth = isActive ? ACTIVE_STROKE_WIDTH : DEFAULT_STROKE_WIDTH;
 
   return (
-    <g data-testid={`topology-corridor-${corridor.id}`} data-corridor-id={corridor.id}>
+    <g data-testid={`topology-passage-${passage.id}`} data-passage-id={passage.id}>
       <line
         x1={from.x}
         y1={from.y}
@@ -1143,30 +1076,30 @@ function CorridorView({ entry, isActive, now }: CorridorViewProps): ReactElement
         y2={to.y}
         stroke={stroke}
         strokeWidth={strokeWidth}
-        data-testid={`topology-corridor-line-${corridor.id}`}
+        data-testid={`topology-passage-line-${passage.id}`}
         data-active={isActive ? 'true' : 'false'}
       />
       {isActive ? (
-        <ParticleView corridorId={corridor.id} from={from} to={to} startedAt={now} />
+        <ParticleView passageId={passage.id} from={from} to={to} startedAt={now} />
       ) : null}
     </g>
   );
 }
 
 type ParticleViewProps = {
-  readonly corridorId: string;
+  readonly passageId: string;
   readonly from: ResolvedEndpoint;
   readonly to: ResolvedEndpoint;
   readonly startedAt: number;
 };
 
-function ParticleView({ corridorId, from, to, startedAt }: ParticleViewProps): ReactElement {
+function ParticleView({ passageId, from, to, startedAt }: ParticleViewProps): ReactElement {
   const path = `M ${from.x} ${from.y} L ${to.x} ${to.y}`;
   return (
     <circle
       r={5}
       fill={ACTIVE_STROKE}
-      data-testid={`topology-corridor-particle-${corridorId}`}
+      data-testid={`topology-passage-particle-${passageId}`}
       data-started-at={startedAt}
     >
       <animateMotion
@@ -1178,29 +1111,6 @@ function ParticleView({ corridorId, from, to, startedAt }: ParticleViewProps): R
       />
     </circle>
   );
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function resolveEndpoint(
-  membershipId: string | null,
-  corridorNodeId: string | null,
-  membershipById: ReadonlyMap<string, Membership>,
-  corridorNodeById: ReadonlyMap<string, CorridorNodeModel>,
-): ResolvedEndpoint | null {
-  if (membershipId !== null) {
-    const m = membershipById.get(membershipId);
-    if (m === undefined) return null;
-    return { kind: 'membership', id: m.id, x: m.posx, y: m.posy };
-  }
-  if (corridorNodeId !== null) {
-    const cn = corridorNodeById.get(corridorNodeId);
-    if (cn === undefined) return null;
-    return { kind: 'corridor_node', id: cn.id, x: cn.posx, y: cn.posy, label: cn.display_name };
-  }
-  return null;
 }
 
 function clamp(value: number, min: number, max: number): number {

@@ -9,14 +9,18 @@ const DEFAULT_LIMIT = 100;
 
 const RESOURCE_TYPES = [
   'instance',
-  'office',
+  'workspace',
   'membership',
-  'corridor',
+  'passage',
   'message',
   'memory_entry',
   'learning',
   'central_hub',
 ] as const;
+
+type DebugPageProps = {
+  readonly embedded?: boolean;
+};
 
 type FilterState = {
   readonly typePrefix: string;
@@ -75,7 +79,7 @@ function previewPayload(payload: JsonObject): string {
   return text.length > 80 ? `${text.slice(0, 77)}...` : text;
 }
 
-export default function DebugPage() {
+export default function DebugPage({ embedded: _embedded = false }: DebugPageProps = {}) {
   const { t } = useTranslation();
   const [draftFilters, setDraftFilters] = useState<FilterState>(INITIAL_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState<FilterState>(INITIAL_FILTERS);

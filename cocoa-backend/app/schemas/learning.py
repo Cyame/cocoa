@@ -29,7 +29,7 @@ class DistillRequest(BaseModel):
     """Payload for ``POST /api/v1/learning/distill``.
 
     Triggers a skill-distillation job: collect memories matching
-    ``memory_kind_filter`` from the source employee/preset, extract a
+    ``memory_kind_filter`` from the source entity/preset, extract a
     reusable skill at ``target_skill_slug``, and create a new preset
     (optionally naming it via ``target_preset_name``).
 
@@ -39,8 +39,8 @@ class DistillRequest(BaseModel):
             ``problem``.
         target_skill_slug: Slug for the extracted skill.
             Must match ``/^[a-z][a-z0-9-]*$/``.
-        source_preset_slug: Source EmployeePreset slug whose memories to
-            mine.  ``None`` means mine the employee's own memories.
+        source_preset_slug: Source BaseClass slug whose memories to
+            mine.  ``None`` means mine the entity's own memories.
         target_preset_name: Human-readable name for the new preset.
             ``None`` lets the system auto-generate one.
     """
@@ -56,7 +56,7 @@ class DistillRequest(BaseModel):
     )
     source_preset_slug: str | None = Field(
         default=None,
-        description="Source preset slug; None means mine employee's own memories.",
+        description="Source preset slug; None means mine entity's own memories.",
     )
     target_preset_name: str | None = Field(
         default=None,
@@ -102,20 +102,20 @@ class AggregatedMemoryCount(BaseModel):
 
 
 class MemorySummaryOut(BaseModel):
-    """Snapshot of an employee's memory profile.
+    """Snapshot of an entity's memory profile.
 
     Returned as part of ``DistillResultOut`` and available standalone via
-    ``GET /api/v1/learning/memory-summary/{employee_id}`` (P10 Wave 1 Todo 4).
+    ``GET /api/v1/learning/memory-summary/{entity_id}`` (P10 Wave 1 Todo 4).
 
     Attributes:
-        employee_id: UUID of the employee.
+        entity_id: UUID of the entity.
         aggregated_counts: Per-kind memory counts.
         sample_lessons: Up to 5 recent lesson titles/snippets.
         sample_keys_by_kind: Representative memory keys keyed by kind
             (e.g. ``{"decision": ["key1", "key2"], ...}``).
     """
 
-    employee_id: str
+    entity_id: str
     aggregated_counts: AggregatedMemoryCount
     sample_lessons: list[str] = Field(
         default_factory=list,
@@ -174,17 +174,17 @@ class DistillResultOut(BaseModel):
 
     Contains everything needed to confirm a successful distillation:
     the new preset identity, a manifest preview, aggregated memory stats,
-    and a trail back to the source employee/preset.
+    and a trail back to the source entity/preset.
 
     Attributes:
-        new_preset_id: UUID of the freshly created EmployeePreset.
+        new_preset_id: UUID of the freshly created BaseClass.
         new_preset_slug: Slug of the new preset.
         new_preset_name: Human-readable name of the new preset.
         manifest_preview: Preview of the new preset's manifest.
         aggregated_memory: Per-kind memory counts from the source.
-        source_employee_id: UUID of the source employee.
+        source_entity_id: UUID of the source entity.
         source_preset_slug: Slug of the source preset, or ``None`` if
-            employee-own memories were used.
+            entity-own memories were used.
     """
 
     new_preset_id: str
@@ -192,7 +192,7 @@ class DistillResultOut(BaseModel):
     new_preset_name: str
     manifest_preview: SkillManifestPreview
     aggregated_memory: AggregatedMemoryCount
-    source_employee_id: str
+    source_entity_id: str
     source_preset_slug: str | None = None
 
 
@@ -208,7 +208,7 @@ class ReapRequest(BaseModel):
     """Payload for ``POST /api/v1/learning/instances/{iid}/reap``.
 
     Per PRD §13.6.3: distil reusable capabilities from an instance's
-    MemoryEntry log. The defaults are tuned for the common "reap all
+    Memory log. The defaults are tuned for the common "reap all
     recent memory" flow.
 
     Attributes:
@@ -252,7 +252,7 @@ class ReapResultOut(BaseModel):
 
     Per PRD §13.6.10.3: reap only writes to the *instance-private* cap
     surface (here via ``runtime_config["reaped_capabilities"]``) and the
-    L1 capability_market. The Employee row is untouched
+    L1 capability_market. The Entity row is untouched
     (``entity_changed: false``).
     """
 
@@ -270,13 +270,13 @@ class PromoteRequest(BaseModel):
     """Payload for ``POST /api/v1/learning/entities/{eid}/promote``.
 
     Per PRD §13.6.4: push an instance's effective capability set into the
-    Employee's shared surface (idempotent by capability name) and update
-    the migration_hash. Other instances of the same Employee become
+    Entity's shared surface (idempotent by capability name) and update
+    the migration_hash. Other instances of the same Entity become
     outdated — they must be restarted to pick up the new hash.
 
     Attributes:
         from_instance_id: Which instance to source caps from. Defaults
-            to the first active instance of the Employee.
+            to the first active instance of the Entity.
         include_prompt_regen: If true, regen the prompt snapshot from
             the capability set. v1 keeps this as a flag (no LLM).
         snapshot_only: If true, return preview without writing.
@@ -299,7 +299,7 @@ class PromoteRequest(BaseModel):
 class PromoteResultOut(BaseModel):
     """Response for ``POST /api/v1/learning/entities/{eid}/promote``.
 
-    The new migration_hash is the canonical fingerprint of the employee
+    The new migration_hash is the canonical fingerprint of the entity
     going forward — instances whose ``active_hash`` does not match it
     are outdated.
     """
@@ -318,8 +318,8 @@ class PromoteResultOut(BaseModel):
 class TransmuteRequest(BaseModel):
     """Payload for ``POST /api/v1/learning/entities/{eid}/distill?action=transmute``.
 
-    Per PRD §13.6.5: snapshot an Employee into a new BaseClass (L3
-    神职). The source Employee is NOT mutated — transmute is a
+    Per PRD §13.6.5: snapshot an Entity into a new BaseClass (L3
+    神职). The source Entity is NOT mutated — transmute is a
     derivative operation.
 
     Attributes:
@@ -357,24 +357,11 @@ class TransmuteResultOut(BaseModel):
     new_base_class_slug: str
     new_base_class_name: str
     manifest_preview: dict
-    source_employee_id: str
+    source_entity_id: str
 
 
 class CombineRequest(BaseModel):
-    """Payload for ``POST /api/v1/learning/capabilities/combine``.
-
-    Per PRD §13.6.10.2.2: package N L1 capabilities into a single L2
-    Gene (AiGene). The referenced capabilities must exist in the
-    capability_market; missing names produce a 404.
-
-    Attributes:
-        capability_names: Slugs of the L1 capabilities to combine.
-        gene_slug: Slug for the new AiGene row.
-        gene_name: Display name for the new AiGene row.
-        kind: One of the 4 AiGene kinds.
-        tags: Optional free-form tags for filtering.
-        snapshot_only: If true, return preview without writing.
-    """
+    """Payload for ``POST /api/v1/learning/capabilities/combine`` (PRD-v2 unified gene)."""
 
     capability_names: list[str] = Field(
         ...,
@@ -392,10 +379,6 @@ class CombineRequest(BaseModel):
         max_length=255,
         description="Display name for the new AiGene.",
     )
-    kind: str = Field(
-        default="tool-gene",
-        description="AiGeneKind: tool-gene | meta-gene | genome | workflow-gene.",
-    )
     tags: list[str] | None = Field(
         default=None,
         description="Optional free-form tags for filtering.",
@@ -404,16 +387,6 @@ class CombineRequest(BaseModel):
         default=False,
         description="If true, return preview without writing.",
     )
-
-    @field_validator("kind")
-    @classmethod
-    def _validate_kind(cls, v: str) -> str:
-        allowed = {"tool-gene", "meta-gene", "genome", "workflow-gene"}
-        if v not in allowed:
-            raise ValueError(
-                f"Invalid kind {v!r}. Must be one of: {sorted(allowed)}"
-            )
-        return v
 
 
 class CombineResultOut(BaseModel):

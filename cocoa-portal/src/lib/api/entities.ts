@@ -31,7 +31,7 @@ export type EntityDetail = {
 };
 
 export function fetchEntity(entityId: string): Promise<EntityDetail> {
-  return api<EntityDetail>(`/employees/${encodeURIComponent(entityId)}`);
+  return api<EntityDetail>(`/entities/${encodeURIComponent(entityId)}`);
 }
 
 export function patchEntity(
@@ -39,7 +39,7 @@ export function patchEntity(
   payload: EntityPatchPayload,
   ifMatch: string,
 ): Promise<EntityDetail> {
-  return api<EntityDetail>(`/employees/${encodeURIComponent(entityId)}`, {
+  return api<EntityDetail>(`/entities/${encodeURIComponent(entityId)}`, {
     method: 'PATCH',
     headers: { 'If-Match': ifMatch },
     body: JSON.stringify(payload),
@@ -66,16 +66,13 @@ export function transmuteEntity(
   targetBaseClassName: string,
   memoryKindFilter: readonly string[] | null,
 ): Promise<TransmuteResult> {
-  return api<TransmuteResult>(
-    `/learning/entities/${encodeURIComponent(entityId)}/distill?action=transmute`,
-    {
-      method: 'POST',
-      body: JSON.stringify({
-        target_base_class_slug: targetBaseClassSlug,
-        target_base_class_name: targetBaseClassName,
-        memory_kind_filter: memoryKindFilter,
-        snapshot_only: false,
-      }),
-    },
-  );
+  return api<TransmuteResult>(`/learning/entities/${encodeURIComponent(entityId)}/transmute`, {
+    method: 'POST',
+    body: JSON.stringify({
+      target_base_class_slug: targetBaseClassSlug,
+      target_base_class_name: targetBaseClassName,
+      memory_kind_filter: memoryKindFilter,
+      snapshot_only: false,
+    }),
+  });
 }

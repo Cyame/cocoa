@@ -2,8 +2,8 @@
 
 Tests for the supervisor's checkpoint flow, breaker tripping, agent
 runtime skeleton, and continuation engine. Shared fixtures
-(``_clear_handlers``, ``loop_state_factory``, ``office_factory``,
-``employee_factory``, ``instance_factory``) live in
+(``_clear_handlers``, ``loop_state_factory``, ``workspace_factory``,
+``entity_factory``, ``instance_factory``) live in
 ``tests/conftest.py``.
 """
 

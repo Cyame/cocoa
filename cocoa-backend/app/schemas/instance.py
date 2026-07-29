@@ -10,8 +10,8 @@ from pydantic import BaseModel, ConfigDict
 class InstanceCreate(BaseModel):
     """Payload for ``POST /api/v1/instances``."""
 
-    employee_id: str
-    office_id: str
+    entity_id: str
+    workspace_id: str
     workspace_path: str | None = None
     runtime_config: dict | None = None
 
@@ -33,8 +33,8 @@ class InstanceOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
-    employee_id: str
-    office_id: str
+    entity_id: str
+    workspace_id: str
     workspace_path: str | None = None
     status: str
     runtime_config: dict | None = None
