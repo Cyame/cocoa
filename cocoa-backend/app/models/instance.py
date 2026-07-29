@@ -73,6 +73,13 @@ class Instance(BaseModel, Base):
     proxy_token: Mapped[str | None] = mapped_column(
         String(255), nullable=True, default=None
     )
+    # phase-15f: set to Employee.migration_hash at spawn / restart. Mismatch
+    # with the current Employee.migration_hash means the running instance is
+    # outdated and should be restarted. Stored on the instance (not computed
+    # live) because each instance independently tracks when it was last synced.
+    active_hash: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, default=None
+    )
 
     def __repr__(self) -> str:
         cls = type(self).__name__

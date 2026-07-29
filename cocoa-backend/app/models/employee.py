@@ -2,7 +2,7 @@
 
 import enum
 
-from sqlalchemy import Index, String, text
+from sqlalchemy import Index, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -64,6 +64,18 @@ class Employee(BaseModel, Base):
     )
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     display_color: Mapped[str | None] = mapped_column(String(7), nullable=True)
+    # phase-15f: migration_hash = SHA-256(capabilities_sorted + prompt_snapshot_sha);
+    # updated by promote (PRD §13.6.4). All nullable so existing rows survive the
+    # additive migration.
+    migration_hash: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, default=None
+    )
+    capabilities: Mapped[list[dict] | None] = mapped_column(
+        JSONB, nullable=True, default=list
+    )
+    prompt_regen_snapshot: Mapped[str | None] = mapped_column(
+        Text, nullable=True, default=None
+    )
 
     def __repr__(self) -> str:
         cls = type(self).__name__

@@ -12,9 +12,12 @@
 > - 脑干 (brainstem) = scheduled tasks → table added in 15d-rename-2
 > - 小脑 (cerebellum) = central system agent → table added in 15d-rename-2
 >
-> v1: This file ships the **container** (`CentralHub`) and the **fornix
-> virtual filesystem** (`FornixFile`). The remaining 3 brain tables are planned
-> for 15d-rename-2.
+> v1 (P2-P8): This file shipped the **container** (`CentralHub`) and the
+> **fornix virtual filesystem** (`FornixFile`).
+>
+> v1.5 (phase-15f): adds the remaining 3 brain region tables —
+> 额叶 (`FrontalLobeKanban`) / 脑干 (`BrainstemSchedule`) /
+> 小脑 (`CerebellumAgent`).
 """
 
 from datetime import datetime
@@ -27,10 +30,12 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     String,
     Text,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -181,4 +186,145 @@ class VaultEntry(BaseModel, Base):
         return (
             f"<{cls} {self.id!r} vault={self.vault_id!r}"
             f" source_type={self.source_type!r}>"
+        )
+
+
+# ---------------------------------------------------------------------------
+# phase-15f: 3 remaining brain region subtables (see docs/blackboard-system.md).
+# 额叶 / 脑干 / 小脑 FK to `blackboards.id` (CentralHub's table), not to offices.
+# ---------------------------------------------------------------------------
+
+
+class FrontalLobeKanbanStatus(str, Enum):
+    """Kanban card status for the 额叶 (frontal lobe) brain region."""
+
+    todo = "todo"
+    in_progress = "in_progress"
+    done = "done"
+
+
+class FrontalLobeKanban(BaseModel, Base):
+    """额叶 (frontal lobe) = Kanban / todo card attached to a CentralHub.
+
+    Lightweight task board inside the workspace's CentralHub. Position is an
+    int (caller-defined — e.g. ordering within a column). Assignee is an
+    optional FK to ``employees.id`` (the agent who will own the work).
+    """
+
+    __tablename__ = "frontal_lobe_kanbans"
+    __table_args__ = (
+        Index(
+            "uq_frontal_lobe_kanbans_hub_position",
+            "central_hub_id",
+            "position",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+    )
+
+    central_hub_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("blackboards.id"), nullable=False
+    )
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default=FrontalLobeKanbanStatus.todo.value,
+    )
+    assignee_employee_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("employees.id"), nullable=True
+    )
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    due_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    def __repr__(self) -> str:
+        cls = type(self).__name__
+        return (
+            f"<{cls} {self.id!r} hub={self.central_hub_id!r}"
+            f" status={self.status!r} title={self.title!r}>"
+        )
+
+
+class BrainstemSchedule(BaseModel, Base):
+    """脑干 (brainstem) = scheduled task attached to a CentralHub.
+
+    Cron-driven background action. ``action_payload`` is opaque JSON whose
+    shape depends on the handler that consumes it (e.g. {type, target, body}).
+    ``last_run_at`` / ``next_run_at`` are managed by the scheduler; this
+    schema only stores them.
+    """
+
+    __tablename__ = "brainstem_schedules"
+
+    central_hub_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("blackboards.id"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    cron_expr: Mapped[str] = mapped_column(String(100), nullable=False)
+    action_payload: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    last_run_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    next_run_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    def __repr__(self) -> str:
+        cls = type(self).__name__
+        return (
+            f"<{cls} {self.id!r} hub={self.central_hub_id!r}"
+            f" cron={self.cron_expr!r} enabled={self.enabled!r}>"
+        )
+
+
+class CerebellumAgentType(str, Enum):
+    """Agent role for the 小脑 (cerebellum) brain region."""
+
+    orchestrator = "orchestrator"
+    planner = "planner"
+    executor = "executor"
+    observer = "observer"
+
+
+class CerebellumAgent(BaseModel, Base):
+    """小脑 (cerebellum) = central system agent config attached to a CentralHub.
+
+    Holds config (LLM / tools / prompts / runtime hints) for the CentralHub's
+    systemic agent. ``is_active`` enforces "only one active agent per hub"
+    via application-layer logic + a partial unique index.
+    """
+
+    __tablename__ = "cerebellum_agents"
+    __table_args__ = (
+        Index(
+            "uq_cerebellum_agents_active",
+            "central_hub_id",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL AND is_active = true"),
+        ),
+    )
+
+    central_hub_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("blackboards.id"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    agent_type: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default=CerebellumAgentType.orchestrator.value,
+    )
+    config: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
+
+    def __repr__(self) -> str:
+        cls = type(self).__name__
+        return (
+            f"<{cls} {self.id!r} hub={self.central_hub_id!r}"
+            f" type={self.agent_type!r} active={self.is_active!r}>"
         )
