@@ -417,19 +417,16 @@ interface Capability {
   - 「召唤眷族」按钮：POST 创建 Entity，成功后自动进入 Step 3
   - 「上一步」按钮：回到 Step 1
 
-#### Step 3：打招呼
-- **标题**："和你的眷族打个招呼"
-- **副标题**：这是你第一次和眷族互动。发一条消息让 TA 回应。
-- **主体**：
-  - 自动填充 Composer（不可编辑）：`@<slug> 你好，认识一下。`
-  - 「发送」按钮 + 实时显示化身回复
-- **状态**：
-  - 发送中：「发送」loader，回复区域显示打字点动画
-  - 已回复：完整显示化身的首次回应
-  - 错误：化身暂时没回应（retry 按钮 + 5s 后自动 retry 一次）
+#### Step 3：选择智能与知识
+- **标题**："配置 AI 大脑与知识库"
+- **副标题**：为该眷族 spawn 的第一个化身设定 LLM 提供商 + 模型，可选注入知识（env / file）
+- **主体**（详见 §6.U.4 UI 规格）：
+  - 上 2/3：智能配置（Provider 选择 + Model 选择 + Optional override system prompt + max_tokens / temperature）
+  - 下 1/3：知识注入（env key=value 行 + 文件上传）+ 知识作用域选择
 - **操作**：
-  - 「再发一条」按钮：清空 Composer 重新输入
-  - 「完成」按钮：关闭 modal，导航到 Workspace 详情页 `/workspaces/:id`
+  - 「上一步」按钮：回到 Step 2 改身份表单
+  - 「跳过，下一步再配置」按钮：保留已填配置到 context，跳 workspace dashboard
+  - 「创建并 spawn」按钮：POST spawn Instance → 成功关闭 modal + 跳 workspace dashboard
 
 ### 6.3 神职卡片组 UX 细节
 
@@ -552,45 +549,85 @@ interface Capability {
 
 ### 6.U.3 Step 2 眷族创建表单 UI
 
-**表单布局**：
+**表单布局**（2 列，左侧表单 + 右侧预览）：
 ```
-┌───────────────────────────────────────┐
-│ ┌─ 眷族显示名 ────────────────────┐  │
-│ │ [____________________________]  │  │  实时去重：已占用 → 红框 + "该 workspace 已有同名眷族"
-│ │ 例如：奈亚探子、克总助理         │  │
-│ └──────────────────────────────────┘  │
-│                                        │
-│ ┌─ Slug (自动生成) ──────────────┐   │
-│ │ [nai-ya-tan-zi_____________]   │  │  自动生成：当用户输入 display_name 时
-│ │ kebab-case，小写字母开头         │  │  自动 slugify（去空格转小写插连字符）
-│ └──────────────────────────────────┘  │
-│                                        │
-│ ┌─ Rank 选择 (radio) ─────────────┐  │
-│ │ ◉ 深潜者（researcher）                │  │  默认选项
-│ │   AI 持久化 + Memory 跨化身 ──────  │
-│ │ ○ 浅识者（intern）                     │  │
-│ │   AI 无状态，每次重启              │  │
-│ └──────────────────────────────────┘  │
-│                                        │
-│ ┌─ 创建后冻结提示 ────────────────┐  │
-│ │ ⚠ 上述属性创建后将冻结。如需改 │  │
-│ │ 变，请新建 Entity。             │  │
-│ └──────────────────────────────────┘  │
-│                                        │
-│         [上一步]    [召唤眷族]       │
-└───────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│ 左栏：身份表单                      │ 右栏：预览区           │
+│                                    │                        │
+│ ┌─ 眷族显示名 ──────────────────┐  │ 实时渲染化身卡片：      │
+│ │ [____________________________] │  │                        │
+│ │ 例如：奈亚探子、克总助理        │  │    [神职 chip]         │
+│ └────────────────────────────────┘  │    奈亚探子             │
+│                                    │    深潜者 badge         │
+│ ┌─ Slug (自动生成) ────────────┐   │    Provider: claude-3.5 │
+│ │ [nai-ya-tan-zi_____________] │   │    Knowledge: 2 env     │
+│ │ kebab-case，小写字母开头       │   │                        │
+│ └────────────────────────────────┘  │                        │
+│                                    │                        │
+│ ┌─ Rank 选择 (radio) ──────────┐  │                        │
+│ │ ◉ 深潜者（researcher）        │  │                        │
+│ │   AI 持久化 + Memory 跨化身 →│  │                        │
+│ │ ○ 浅识者（intern）           │  │                        │
+│ │   AI 无状态，每次重启         │  │                        │
+│ └────────────────────────────────┘  │                        │
+│                                    │                        │
+│ ┌─ 模型绑定 ───────────────────┐  │                        │
+│ │ 智能系统: [Default ▼]         │  │ ← 选择 provider         │
+│ │ 模型: [claude-3.5-sonnet ▼]  │  │ ← 加载 catalog 后填充   │
+│ │ ⓘ 智能系统在 Organization 页 │  │                        │
+│ │   统一管理，此处选默认覆盖    │  │                        │
+│ └────────────────────────────────┘  │                        │
+│                                    │                        │
+│ ┌─ 知识绑定 ───────────────────┐  │                        │
+│ │ env: KEY=VALUE  [+ 添加]     │  │                        │
+│ │ file: 选择文件上传 ...       │  │                        │
+│ │ ⓘ 这些 env/file 将在 Instance│  │                        │
+│ │   spawn 时注入到容器。v1 流  │  │                        │
+│ │   程不允许实例重启后丢失。    │  │                        │
+│ └────────────────────────────────┘  │                        │
+│                                    │                        │
+│ ┌─ 创建后冻结提示 ─────────────┐  │                        │
+│ │ ⚠ 上述属性创建后将冻结。     │  │                        │
+│ │   如需改变，请新建 Entity。    │  │                        │
+│ └────────────────────────────────┘  │                        │
+│                                    │                        │
+│       [上一步]    [召唤眷族]        │                        │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 **表单验证规则**：
 | 字段 | 验证 | 反馈 |
 |---|---|---|
 | display_name | 必填 1-32 字符；同 workspace 不可重名 | 实时去重 + 红色 tooltip |
-| slug | 自动生成非空；手动编辑时匹配 `/^[a-z][a-z0-9-]*$/`；同 namespace 全局 unique | 红色 tooltip + SlugInput 自带 invalid shaker animation |
-| rank | 2 选 1（无必填校验，总是默认深潜者） | — |
+| slug | 自动生成非空；手动编辑时匹配 `/^[a-z][a-z0-9-]*$/`；同 namespace 全局 unique | invalid shaker animation + 红色 tooltip |
+| rank | 2 选 1（默认深潜者） | — |
+| 模型绑定 provider | 必选，默认继承 BaseClass.provider_config | dropdown：Default（推荐）/ 从 organization 已配置 provider 列表中选择 |
+| 模型绑定 model | 必选，默认继承 BaseClass.default_model | dropdown：当 provider 选定后，从 ModelCatalog 获取该 provider 的可用模型列表 |
+| 知识绑定 env | 可选，每行 `KEY=VALUE` 格式 | 实时解析 KEY=VALUE 格式 / 空行忽略 |
+| 知识绑定 file | 可选，选择本地文件 | 显示文件名 + 大小 |
 
-**右侧预览区**（desktop/tablet only，移动端折叠到下方）：
-- 实时渲染该 Entity spawn 后的化身卡片（含 rank badge + display_name + 神职 chip）
-- 用静态 SVG preview（非真正 API call）
+**Provider / Model 选择器逻辑**（参考 nodeskclaw 创建员工流程）：
+
+> Organization 维度的 provider 配置（智能系统）在 `/organization` 页面管理。Entity 创建时从 BaseClass 默认 provider 继承，可在此覆盖一个 provider。v1 简化：仅从已配置的 provider 列表中选择，**不支持此页面录入新 provider**。
+
+**Provider 下拉加载**：
+- mount 时从 `GET /api/v1/organization/providers` 拉取（返回 `ProviderConfig[]`）
+- 每个选项显示：provider type chip（openai-compatible / anthropic / custom）+ base_url 截断 + 已装载模型数
+- 加载中 → spinner + "加载智能系统..."
+- 加载失败 → "无法加载 provider 列表" error note + retry
+
+**Model 下拉加载**：
+- 当 provider 选定后，从 `GET /api/v1/model-catalog?provider=<type>&base_url=<url>` 拉取
+- 每个选项显示：model_id + 上下文长度 + 价格（in/out token）
+- 加载中 → spinner + "加载模型列表..."
+- 加载失败 → "无法加载模型列表" error note + fallback text input（手动输入 model id）
+
+**知识绑定字段**：
+- env row：[KEY]=[VALUE] text input（单行），「+ 添加」按钮追加新行
+- file row：文件选择器 + 上传进度条
+- 帮助文本 hover：`Knowledge 会注入到 Instance 容器作为环境变量 / 文件挂载。详见 §2.3 知识系统`
+- env 验证：ROW 为空时忽略（不发送空 KEY=VALUE 到 API）
+- file 上传：POST `/api/v1/knowledge/files` multipart → 返回 file_id → 关联到 subsequent instance spawn
 
 **「召唤眷族」按钮状态机**：
 1. **disabled**（表单任一字段 valid 未过）→ 置灰 + "请完成所有必填项"
@@ -599,26 +636,77 @@ interface Capability {
 4. **success** → 绿色 check + auto-advance 到 Step 3（delay 500ms）
 5. **error** → 表单不动，顶部 red banner + retry
 
-### 6.U.4 Step 3 打招呼 + 首发消息 UI
+### 6.U.4 Step 3 选择智能与知识
 
-**聊天区域**：
-- textarea（不可编辑，只读显示 `@<slug> 你好，认识一下。`）
-- 不可删除 / undo / insert
-- 「发送」按钮（默认 disabled——用户必须点"发送"才开始 talk）
+**页面定位**：Step 2 创建完 Entity 后，自动进入本 step。目标是配置该 Entity 派生 Instance 时需要的**默认 LLM provider + 模型**且注入**初始知识**。
 
-**"发送"后行为**：
-1. loading spinner + "化身回复中..."
-2. 一旦收到响应 → 显示该化身的首次回应（完整 markdown，可选中复制）
-3. 回复区域自动 scroll to bottom
-4. delay 500ms → "再发一条" + "完成" 两个并排按钮出现
+> **与 Step 2 的区别**：Step 2 的模型绑定是"快速绑定"（可选覆盖 BaseClass 默认），本 step 是对该 Entity 做**详细配置**（override prompt template、多 provider fallback、知识作用域选择等）。如果用户在 Step 2 已经做完所有配置，可以在 Step 3 直接点「完成」。
 
-**错误态**：
-- 化身没回应（timeout 15s）→ "无响应" banner + retry（POST 同一消息）+ skip（"直接跳到新化身页面"）
-- 网络错误 → "发送失败" toast + 「重试」按钮
+**布局**（上 2/3 智能配置 + 下 1/3 知识预览）：
+```
+┌──────────────────────────────────────────────────────────────┐
+│ 智能配置（LLM Provider + Model）                             │
+│                                                              │
+│ ┌─ Provider 选择 ──────────────────────────────────────┐    │
+│ │ 智能系统: [Default (OpenAI-Compat / gpt-4o-mini) ▼ ]  │    │
+│ │ ⓘ 可在 Organization 页添加新智能系统                    │    │
+│ └──────────────────────────────────────────────────────┘    │
+│                                                              │
+│ ┌─ Model 选择 ────────────────────────────────────────┐    │
+│ │ 模型: [claude-3.5-sonnet (200K / $3/$15) ▼ ]        │    │
+│ │ ⓘ 基于选定 provider 的可加载模型。如果模型不可用     │    │
+│ │    （404），spawn 时会默认 fallback 到 provider 默认   │    │
+│ └──────────────────────────────────────────────────────┘    │
+│                                                              │
+│ ┌─ Optional: Override System Prompt (可编辑 textarea) ─┐   │
+│ │ [BaseClass 默认 prompt 填充，可编辑]                   │   │
+│ │ ⓘ 此处覆盖仅对本 Entity 有效。BaseClass 原始 prompt    │   │
+│ │    不受影响。                                           │   │
+│ └──────────────────────────────────────────────────────┘    │
+│                                                              │
+│ ┌─ Optional: Max Tokens / Temperature (2 inline inputs) ─┐  │
+│ │ Max Tokens: [4096]     Temperature: [0\.7]              │  │
+│ └──────────────────────────────────────────────────────┘    │
+│                                                              │
+├──────────────────────────────────────────────────────────────┤
+│ 知识注入（Knowledge——env / file）                             │
+│                                                              │
+│ ┌─ 已添加的知识 ───────────────────────────────────────┐    │
+│ │ env:  KNOWLEDGE_DOCS_PATH=/workspace/docs         [×] │    │
+│ │ env:  MAX_WORKERS=8                               [×] │    │
+│ │ file: spec-v2.md (12KB)                          [×] │    │
+│ │                                         [+ 添加 env]      │    │
+│ │                                         [+ 上传 file]     │    │
+│ └──────────────────────────────────────────────────────┘    │
+│                                                              │
+│ ┌─ knowledge 作用域 ──────────────────────────────────┐    │
+│ │ ◉ 仅此 Instance 有效（私有）                          │    │
+│ │ ○ 该 Entity 所有现有 Instance 都共享（全局，需重启）  │    │
+│ │ ○ 该 Workspace 共享（谨慎！其他 AI 也能读取）         │    │
+│ └──────────────────────────────────────────────────────┘    │
+│                                                              │
+│          [上一步]    [跳过, 下一步再配置]   [创建并 spawn]   │
+└──────────────────────────────────────────────────────────────┘
+```
 
-**按钮**：
-- 「再发一条」→ 清空回复 + 重置发送区域为 clean state
-- 「完成」→ 关闭 modal + 跳 `/workspaces/:id?focus=memory&entity=:eid`（workspace dashboard 记忆 tab 定位新眷族）
+**智能配置 UI 行为**：
+- Provider 下拉：与 Step 2 相同逻辑（加载 + 挂载 + 错误）
+- Model 下拉：同上
+- System Prompt textarea：3 行 × 等宽字体（mono），默认填充 BaseClass.default_system_prompt（灰字），可编辑；实时字数计数器（默认 4096 上限）
+- Max Tokens / Temperature：inline number input（step 1, range 128-32000 / 0-2）
+- 所有字段默认来自 BaseClass manifest；可在此覆盖（**覆盖仅对当前 spawn Instance 生效**，不改变 BaseClass 本身）
+
+**知识注入 UI 行为**：
+- 显示已添加的 env / file 列表（来自 Step 2）
+- 「+ 添加 env」→ 新行（input key + value，追加到 lists，「+」按钮移到新行下方）
+- 「+ 上传 file」→ 文件选择器 + upload POST `/api/v1/knowledge/files` → file record 显示在列表
+- hover 问号按钮 tooltip："v1：env + file 注入到 Instance 容器。v2 候选：RAG / 向量 / 图谱"
+- 「作用域」radio：默认"仅此 Instance 私有"（推荐） / "该 Entity 共享"（需重启其他 Instance） / "该 Workspace 共享"（🔴 高危 — tooltip 防止误选）
+
+**底部按钮**：
+- 「上一步」：回到 Step 2 修改身份表单
+- 「跳过，下一步再配置」：保留所有已填内容到 context，跳 workspace dashboard（记忆 tab）
+- 「创建并 spawn」：`POST /api/v1/entities/:eid/instances`（body 含 provider + model + knowledge 字段） → 成功后关闭 modal + 跳 `/workspaces/:id?focus=memory&entity=:eid`（workspace dashboard 记忆 tab 定该新 Entity）
 
 ---
 
@@ -909,6 +997,20 @@ interface Capability {
 ### 8.6 调试 tab
 
 详见 §12。Namespace tab 提供与 workspace 调试同等的印痕流，但粒度为 namespace 全局。
+
+### 8.7 Organization 页（`/organization`）
+
+> **v1 范围**：Organization 页是 15d+ 新概念——provider 配置、能力位全局管理、namespace 列表等全局设置。v1 仅需 provider 列表可读，其余未来扩展。
+
+**路由**：`/organization`（无 namespace / workspace 依赖，sidebar 图标 `Settings`）
+
+**v1 实现**：
+- 「智能系统」tab：列出 organization 下已配置的 LLM provider（ProviderConfig 列表）
+  - 表格行：provider_type + base_url + default_model + 已使用 Entity 数 + 「测试连通性」按钮
+  - 「+ 新建 provider」按钮（需 `can_manage_organization`）
+- **Provider 详情**：编辑 provider 配置（api_key_ref, base_url, default_model, models_whitelist 等）
+
+> v1 不实现能力位全局管理 / namespace 管理 / quota 等——这些是 P16d 候选。
 
 ---
 
