@@ -17,9 +17,9 @@ Database columns use the backend names. UI labels use the frontend names. Backen
 
 | Backend (code/DB) | Frontend Display | Old Name (P0-P15) | Description |
 |---|---|---|---|
-| **Organization** | 世界 | (none, deferred) | Top-level isolation unit. Singleton for now, deferred to P16d. |
-| **Namespace** | 次元 | (none, deferred) | Within Organization. Singleton "default" for now, deferred to P16d. |
-| **Workspace** | 空间 | Office | Within Namespace, where agents collaborate. Current "Office" model. |
+| **Organization** | 世界 | (none / emerging) | Top-level isolation unit. PRD-v2 first-class; singleton default. |
+| **Namespace** | 次元 | (none / emerging) | Within Organization. PRD-v2 first-class; Entity scope. Singleton "default". |
+| **Workspace** | 空间 | Office | Within Namespace, where agents collaborate. Current "Office" model until rename. |
 | **BaseClass** | 神职 | EmployeePreset | Preset template: prompt, commands, tools, provider config. 11 built-in. |
 | **Entity** | 眷族 | Employee | Per-Workspace identity with BaseClass ref + accumulated Memory. |
 | **Instance** | 化身 | Instance (unchanged) | Running pod materialization of an Entity. Ephemeral. |

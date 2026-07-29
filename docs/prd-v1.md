@@ -1,8 +1,9 @@
 # Cocoa PRD v1 — 交互设计文档
 
-> **Status**: 写作中 (15e PRD wave)
-> **Scope**: 全部 10 个 portal 页面 + 首次运行引导 + 蒸馏 UI 的交互规格
+> **Status**: Frozen baseline (P15e written; P15f implemented must-haves). Superseded as *active product target* by `docs/prd-v2.md`.
+> **Scope**: 全部 10 个 portal 页面 + 首次运行引导 + 蒸馏 UI 的交互规格（单租户 MVP）
 > **基线**: `.omo/drafts/phase-15d-product-spec.md` + `phase-15d-naming-system.md`（36 项决策已锁）+ `docs/terminology.md` + `docs/metaphor-name-table.md`
+> **Roadmap**: `docs/roadmap.md` · **Next gen**: `docs/prd-v2.md`
 > **代码 rename**: pending 15d-rename wave — UI 文案与后端 API 路径暂不同步
 
 ---

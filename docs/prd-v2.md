@@ -1,9 +1,10 @@
 # Cocoa PRD v2 — 多租户架构与 Agent 栈重构
 
-> **Status**: 决策完成 (decision-complete)
+> **Status**: 决策完成 (decision-complete) — **active product target** for next implementation wave
 > **基线**: 2026-07-29 diary 三张图 + PRD-v1 模板 + 9 份 evidence 文件
-> **对比基线**: `docs/prd-v1.md` — PRD-v1 单租户 MVP；PRD-v2 多租户架构
+> **对比基线**: `docs/prd-v1.md` — PRD-v1 单租户 MVP（P15f 已落地）；PRD-v2 多租户架构
 > **命名权威**: `docs/terminology.md` + `docs/metaphor-name-table.md`
+> **Roadmap / blueprint**: `docs/roadmap.md` — 执行计划待 Plan 模式编写；完成后必须部署 orbstack 供人工测试
 
 ---
 

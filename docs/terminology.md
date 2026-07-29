@@ -11,9 +11,9 @@ One-line definitions for every Cocoa code-term (backend), display-name (frontend
 
 ### Tenant Hierarchy
 
-- **Organization** (世界) — Top-level isolation unit. Deferred to P16d; single-tenant singleton for now.
-- **Namespace** (次元) — Within an Organization, e.g. dev/staging/prod. Deferred to P16d; single-tenant singleton "default" for now.
-- **Workspace** (空间) — Within a Namespace, where agents collaborate. This is the current "Office" model, to be renamed in 15d-rename wave. Single-tenant default: one Workspace shared by all users. Starts empty (no auto-preloaded Entities).
+- **Organization** (世界) — Top-level isolation unit. **PRD-v2 first-class**; single-tenant default slug=`default`.
+- **Namespace** (次元) — Within an Organization (env / scenario partition). **PRD-v2 first-class**; Entity belongs here. Single-tenant default slug=`default`.
+- **Workspace** (空间) — Within a Namespace, where agents collaborate. Current code may still say `Office` until rename wave. Single-tenant default: one Workspace shared by all users. Starts empty (no auto-preloaded Entities).
 
 ### Entity Hierarchy (the "agent stack")
 

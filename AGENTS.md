@@ -4,7 +4,7 @@
 
 ## 0. 项目定位
 
-Cocoa v2 是 `nodeskclaw` 的 v2 重建（**轻量化 + 视觉优先**）。继承 nodeskclaw 的核心抽象（Employee = preset + memory / Instance = materialization / 近邻消息 / K8s-native 部署），但**做深不做宽**：单租户 / 极简前端 / 不复制 nodeskclaw 全部 6-registry 平台。完整对比见 `.omo/plans/cocoa-v2-roadmap.md` §1。
+Cocoa v2 是 `nodeskclaw` 的 v2 重建（**轻量化 + 视觉优先**）。继承 nodeskclaw 的核心抽象（Employee = preset + memory / Instance = materialization / 近邻消息 / K8s-native 部署），但**做深不做宽**：单租户默认 / 极简前端 / 不复制 nodeskclaw 全部 6-registry 平台。系统目标蓝图与活 roadmap 见 **`docs/roadmap.md`**；当前产品目标为 **`docs/prd-v2.md`**（PRD-v1 为已落地基线）。
 
 ## 0.1 Reference projects（planner / agent 必须先知道的外部参考）
 
@@ -16,7 +16,7 @@ Cocoa v2 是 `nodeskclaw` 的 v2 重建（**轻量化 + 视觉优先**）。继�
 **Planners 必须在回答"Cocoa 是否支持 X"类问题前**：
 1. 读 `.omo/evidence/nodeskclaw-capability-map.md`（外部参考）
 2. 读 `.omo/evidence/cocoa-capability-map.md`（当前实现）
-3. 读 `.omo/plans/cocoa-v2-roadmap.md`（项目级 roadmap + 阶段状态 + 远期方向）
+3. 读 `docs/roadmap.md`（系统蓝图 + 阶段状态 + 远期方向）+ 当前活跃 PRD（现为 `docs/prd-v2.md`）
 
 ## 0.2 Planning artifacts（`.omo/` 目录结构）
 
@@ -32,16 +32,19 @@ Cocoa v2 是 `nodeskclaw` 的 v2 重建（**轻量化 + 视觉优先**）。继�
 | `evidence/archive/` | 历史 phase 审计 + 历史 capability 快照（只读） | — | 历史参考 |
 | `notepads/` | **已废弃**（gitignored；本地 session-only） | — | — |
 
-**Canonical docs**（取代旧 plan 文件作为产品参考）：
-- `docs/*.md` — 13 个文件，15d 命名 canonical（terminology / metaphor-name-table / domain-model / api-architecture / preset-system / portal-system / messaging-system / blackboard-system / runtime-system / harness-system / learning-system / observability / product-positioning）
-- `docs/prd-v1.md` — 15e PRD（1253 行，覆盖 10 个 portal 页面 + 首次运行引导 + 蒸馏 UI）
+**Canonical docs**（产品与方向的单一事实来源）：
+- `docs/roadmap.md` — **系统目标蓝图 + 活 roadmap**（PRD 驱动迭代；orbstack 部署硬规则）
+- `docs/prd-v2.md` — **当前活跃产品目标**（多租户 + Agent 栈重构）
+- `docs/prd-v1.md` — PRD gen-1 冻结基线（P15f 已实现 must-have）
+- `docs/*.md` — 15d 命名 + 子系统契约（terminology / metaphor-name-table / domain-model / api-architecture / preset-system / portal-system / messaging-system / blackboard-system / runtime-system / harness-system / learning-system / observability / product-positioning）
 
 **Planners 在新会话开始时**：
-1. 读 `plans/cocoa-v2-roadmap.md` 看项目整体状态
-2. 读 `drafts/*.md` 看是否有进行中的设计讨论
-3. 读 `evidence/*-capability-map.md` 了解现状
-4. 读 `docs/terminology.md` + `docs/metaphor-name-table.md` 确认 15d 命名
-5. 然后进入 INTENT ROUTING
+1. 读 `docs/roadmap.md` 看系统蓝图与当前 wave
+2. 读当前活跃 PRD（现为 `docs/prd-v2.md`）
+3. 读 `drafts/*.md` 看是否有进行中的设计讨论
+4. 读 `evidence/*-capability-map.md` 了解现状
+5. 读 `docs/terminology.md` + `docs/metaphor-name-table.md` 确认 15d 命名
+6. 然后进入 INTENT ROUTING
 
 ## 项目概述
 
@@ -334,9 +337,9 @@ chore(repo): 初始化根目录约定与启动脚本
 - **功能覆盖**：等价 nodeskclaw Tunnel + Voice + Channel 表面
 - **搭建时锁定架构决策**：不能后补
 
-详细设计待 P15+ 启动时规划；当前仅 draft 状态。
+详细设计见 `.omo/drafts/session-engine-v2.md`；排队位置见 `docs/roadmap.md` §7。
 
-其他远期：参见 `.omo/plans/cocoa-v2-roadmap.md` §4 (P14+ 候选 wave 队列 13 个) + §5 (long-term directions)。
+其他远期 backlog：见 `docs/roadmap.md` §5.3 / §7（原 P16 队列已吸收为「PRD-v2 落地后再重排」）。
 
 ## Cocoa Deployment Operations Rules (2026-07-28)
 
@@ -357,11 +360,11 @@ User maintains a live test environment on **orbstack** K8s cluster for real-time
 - Ad-hoc integration tests must use `cocoa_test_<uuid>` or other test DB names — **never** `cocoa_dev`.
 - `scripts/deploy-to-orbstack.sh` deploys its own postgres pod with its own `cocoa_dev` database — completely separate from the shared `local-pgvector` one.
 
-### Rule 3 — After every phase, re-deploy
+### Rule 3 — After every phase / PRD implementation wave, re-deploy
 
-- Every phase that touches backend code, deployment manifests, or service config MUST invoke `scripts/deploy-to-orbstack.sh` before merge.
-- Commit the changes → run the script → verify pods are Ready → commit any additional evidence → merge.
-- This keeps the user's inspection environment in sync with master.
+- Every wave that touches backend code, portal, deployment manifests, or service config MUST invoke `scripts/deploy-to-orbstack.sh` after implementation (PRD-driven waves included — see `docs/roadmap.md` §6.1).
+- Commit the changes → merge to master (when accepted) → run the script → verify pods are Ready → commit any additional evidence.
+- This keeps the user's inspection environment in sync with master for live human QA.
 
 ### Rule 4 — Use orbstack for testing, not local-pgvector
 
@@ -391,14 +394,14 @@ User's standing rule for ALL bugfixes and updates to the Cocoa test environment.
 - **All bugfixes must be code changes.** Every fix flows through git commit → image rebuild (backend / portal) → K8s rollout restart or image swap. Never use SQL injections, manual DB tweaks, monkey-patches, or ad-hoc live DB writes as a "fix".
 - **The K8s test environment on orbstack is a persistent artifact.** The user gives real-time feedback based on what they see running on the live cluster. The deployment must always reflect the latest committed state — no "good enough for now" workarounds that drift away from master.
 - **Workflow for any bugfix or update**:
-  1. Identify the root cause in the source code (backend `cocoa-backend/app/` or frontend `cocoa-portal/src/`).
-  2. Write the fix as a code change (no shortcuts, no monkey-patches, no live DB updates).
-  3. Add or update tests in `cocoa-backend/tests/` or `cocoa-portal/src/**/*.test.ts(x)`.
-  4. Commit on the appropriate feature branch.
-  5. Merge to master (fast-forward when possible).
-  6. `bash scripts/deploy-to-orbstack.sh` to update the live environment.
-  7. Verify the fix end-to-end via curl + browser on the live cluster.
-  8. Commit evidence to `.omo/evidence/`.
+ 1. Identify the root cause in the source code (backend `cocoa-backend/app/` or frontend `cocoa-portal/src/`).
+ 2. Write the fix as a code change (no shortcuts, no monkey-patches, no live DB updates).
+ 3. Add or update tests in `cocoa-backend/tests/` or `cocoa-portal/src/**/*.test.ts(x)`.
+ 4. Commit on the appropriate feature branch.
+ 5. Merge to master (fast-forward when possible).
+ 6. `bash scripts/deploy-to-orbstack.sh` to update the live environment (**mandatory after every implementation / PRD wave** — `docs/roadmap.md` §6.1).
+ 7. Verify the fix end-to-end via curl + browser on the live cluster.
+ 8. Commit evidence to `.omo/evidence/`.
 - **Ad-hoc live SQL is investigation only.** Use `psql` against `cocoa_dev` (or the orbstack postgres pod) only to ask "is the data correct?" — never to "fix" a bug. If a query reveals missing data or wrong state, the next step is a code change + migration, not another SQL statement.
 - **Forbidden shortcuts** (any of these is a process violation):
   - `INSERT / UPDATE / DELETE` against the live DB to mask a bug
