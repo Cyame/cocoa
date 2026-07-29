@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, api } from '@/lib/api';
 import TopologyPage from '@/pages/TopologyPage';
 import { useSelectedStore } from '@/stores/selected';
+import { useTabStore } from '@/stores/tabStore';
 
 vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api')>();
@@ -130,6 +131,8 @@ const LIVE_STATUS_ITEMS: readonly {
   posy: number;
   node_type: 'user' | 'instance';
   glow: { color: string; intensity: 'static' | 'weak' | 'low' | 'medium' | 'strong' };
+  outdated: boolean;
+  active_hash: string | null;
 }[] = [
   {
     membership_id: 'membership-1',
@@ -137,6 +140,8 @@ const LIVE_STATUS_ITEMS: readonly {
     posy: 100,
     node_type: 'instance',
     glow: { color: '#10b981', intensity: 'strong' },
+    outdated: true,
+    active_hash: 'sha256:old',
   },
   {
     membership_id: 'membership-2',
@@ -144,6 +149,8 @@ const LIVE_STATUS_ITEMS: readonly {
     posy: -100,
     node_type: 'user',
     glow: { color: '#4f46e5', intensity: 'medium' },
+    outdated: false,
+    active_hash: null,
   },
 ];
 
@@ -228,6 +235,7 @@ function renderTopology() {
 beforeEach(() => {
   mockedApi.mockReset();
   useSelectedStore.setState({ officeId: null, instanceId: null, interactionMode: 'select' });
+  useTabStore.setState({ tabs: [], activeTabId: 'topology' });
 });
 
 afterEach(() => {
@@ -270,6 +278,21 @@ describe('TopologyPage', () => {
     expect(mockedApi).toHaveBeenCalledWith('/messaging/corridors?office_id=office-1');
     expect(mockedApi).toHaveBeenCalledWith('/learning/corridor-nodes?office_id=office-1');
     expect(mockedApi).toHaveBeenCalledWith('/offices/office-1/live-status');
+  });
+
+  it('renders the outdated overlay and opens a persistent instance tab on double click', async () => {
+    setupMockApi();
+    renderTopology();
+
+    const node = await screen.findByTestId('topology-node-membership-1');
+    expect(screen.getByTestId('topology-node-outdated-membership-1')).toBeInTheDocument();
+
+    fireEvent.doubleClick(node);
+    expect(useTabStore.getState().tabs).toEqual([
+      { id: 'instance-instance-1', label: 'instance-1', instanceId: 'instance-1' },
+    ]);
+    expect(useTabStore.getState().activeTabId).toBe('instance-instance-1');
+    expect(screen.queryByTestId('topology-node-modal')).not.toBeInTheDocument();
   });
 
   it('renders one line per resolved corridor with the default gray stroke', async () => {

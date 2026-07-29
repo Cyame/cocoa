@@ -1,4 +1,15 @@
-import { AlertCircle, Bot, Link, LoaderCircle, Network, Trash, User, X } from 'lucide-react';
+import {
+  AlertCircle,
+  Bot,
+  Brain,
+  Cpu,
+  Link,
+  LoaderCircle,
+  Network,
+  Trash,
+  User,
+  X,
+} from 'lucide-react';
 import {
   type ReactElement,
   type MouseEvent as ReactMouseEvent,
@@ -11,18 +22,25 @@ import {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
-import TopologyGlowDefs, { GLOW_INTENSITY_OPACITY } from '@/components/TopologyGlow';
-import TopologyToolbar from '@/components/TopologyToolbar';
+import { ModeToolbar } from '@/components/ModeToolbar';
+import { NodeModal } from '@/components/NodeModal';
+import { NodeTooltip } from '@/components/NodeTooltip';
+import TopologyGlowDefs, {
+  GLOW_INTENSITY_OPACITY,
+  OutdatedOverlay,
+} from '@/components/TopologyGlow';
 import { ApiError, api } from '@/lib/api';
+import { fetchTopologyLiveStatus } from '@/lib/api/topology';
 import type {
   CorridorNode as CorridorNodeModel,
   Event,
   GlowIntensity,
   LiveStatusItem,
   Membership,
+  TopologyNode,
 } from '@/lib/types';
 import { useSelectedStore } from '@/stores/selected';
-import { useSessionStore } from '@/stores/session';
+import { useTabStore } from '@/stores/tabStore';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -72,18 +90,7 @@ type ResolvedCorridor = {
   readonly to: ResolvedEndpoint;
 };
 
-type NodeSummary = {
-  readonly kind: NodeKind;
-  readonly id: string;
-  readonly x: number;
-  readonly y: number;
-  readonly label: string;
-  readonly role: string;
-  readonly status: string;
-  readonly fillColor: string;
-  readonly glowColor: string;
-  readonly glowIntensity: GlowIntensity;
-};
+type NodeSummary = TopologyNode;
 
 type PendingConnection = {
   readonly id: string;
@@ -187,7 +194,7 @@ export default function TopologyPage() {
   const { id: routeOfficeId } = useParams<{ id: string }>();
   const setOfficeId = useSelectedStore((state) => state.setOfficeId);
   const interactionMode = useSelectedStore((state) => state.interactionMode);
-  const sessionUser = useSessionStore((state) => state.user);
+  const addTab = useTabStore((state) => state.addTab);
   const [staticData, setStaticData] = useState<TopologyStaticData | null>(null);
   const [liveStatus, setLiveStatus] = useState<readonly LiveStatusItem[]>([]);
   const [activeCorridors, setActiveCorridors] = useState<ReadonlyMap<string, number>>(
@@ -282,9 +289,7 @@ export default function TopologyPage() {
     async function poll() {
       if (cancelled) return;
       try {
-        const items = await api<readonly LiveStatusItem[]>(
-          `/offices/${encodeURIComponent(officeIdValue)}/live-status`,
-        );
+        const items = await fetchTopologyLiveStatus(officeIdValue);
         if (!cancelled) setLiveStatus(items);
       } catch {
         // Live status is best-effort; do not propagate polling errors
@@ -382,6 +387,8 @@ export default function TopologyPage() {
         posy: m.posy,
         node_type: isUser ? 'user' : 'instance',
         glow: { color: '#94a3b8', intensity: 'static' },
+        outdated: false,
+        active_hash: null,
       };
       const effective = status ?? fallbackStatus;
       const label = isUser
@@ -390,28 +397,36 @@ export default function TopologyPage() {
       return {
         kind: 'membership',
         id: m.id,
+        instanceId: m.instance_id,
         x: m.posx,
         y: m.posy,
         label,
+        slug: label,
         role,
         status: effective.glow.intensity,
         fillColor: isUser ? userFillColor() : instanceFillColor(),
         glowColor: effective.glow.color,
         glowIntensity: effective.glow.intensity,
+        outdated: effective.outdated,
+        activeHash: effective.active_hash,
       };
     });
 
     const corridorNodeNodes: NodeSummary[] = staticData.corridorNodes.map((cn) => ({
       kind: 'corridor_node',
       id: cn.id,
+      instanceId: null,
       x: cn.posx,
       y: cn.posy,
       label: cn.display_name,
+      slug: cn.display_name,
       role: cn.status,
       status: cn.status,
       fillColor: '#f8fafc',
       glowColor: cn.glow_color ?? '#475569',
       glowIntensity: 'low',
+      outdated: false,
+      activeHash: null,
     }));
 
     return [...membershipNodes, ...corridorNodeNodes];
@@ -521,16 +536,6 @@ export default function TopologyPage() {
   // rAF token so we coalesce mousemove updates to one React state write per frame.
   const rafIdRef = useRef<number | null>(null);
   const lastDragPointerRef = useRef<{ x: number; y: number } | null>(null);
-
-  const isEditor = useMemo(() => {
-    if (sessionUser === null) return false;
-    if (sessionUser.is_super_admin) return true;
-    // The session store doesn't carry office-scoped role; the topology page
-    // is read-only for non-super-admins until P9.5 wires office membership
-    // into the session. Editors in practice authenticate as super_admin in
-    // the dev harness.
-    return false;
-  }, [sessionUser]);
 
   const handleNodeClick = useCallback(
     (node: NodeSummary) => {
@@ -762,8 +767,6 @@ export default function TopologyPage() {
         <p className="hidden text-xs text-slate-500 sm:block">{t('topology.tagline')}</p>
       </header>
 
-      <TopologyToolbar />
-
       {pendingConnection !== null ? (
         <div
           role="status"
@@ -811,6 +814,7 @@ export default function TopologyPage() {
           className="relative flex min-w-0 flex-1 items-center justify-center overflow-hidden bg-slate-50"
           data-testid="topology-canvas-container"
         >
+          <ModeToolbar />
           {isStaticLoading ? (
             <div className="flex items-center justify-center gap-3 text-sm text-slate-500">
               <LoaderCircle className="size-5 animate-spin" aria-hidden="true" />
@@ -826,7 +830,7 @@ export default function TopologyPage() {
               data-testid="topology-canvas"
               viewBox={VIEW_BOX}
               preserveAspectRatio="xMidYMid meet"
-              className="h-full w-full select-none"
+              className={`h-full w-full select-none transition-[filter,opacity] duration-200 ${selectedNode !== null ? 'blur-[8px] opacity-30' : ''} ${interactionMode === 'connect' ? 'cursor-crosshair' : interactionMode === 'move' ? 'cursor-move' : 'cursor-pointer'}`}
               onMouseDown={handleMouseDown}
               onWheel={handleWheel}
             >
@@ -881,6 +885,15 @@ export default function TopologyPage() {
                       key={`${node.kind}:${node.id}`}
                       node={node}
                       onClick={handleNodeClick}
+                      onDoubleClick={(clickedNode) => {
+                        if (clickedNode.instanceId === null) return;
+                        addTab({
+                          id: `instance-${clickedNode.instanceId}`,
+                          label: clickedNode.label,
+                          instanceId: clickedNode.instanceId,
+                        });
+                        setSelectedNode(null);
+                      }}
                       onMouseDown={handleNodeMouseDown}
                       isHighlighted={isPendingSource || isSelected}
                       highlightKind={isPendingSource ? 'pending' : isSelected ? 'selected' : null}
@@ -895,28 +908,7 @@ export default function TopologyPage() {
         </div>
 
         {selectedNode !== null ? (
-          <NodeDrawer
-            node={selectedNode}
-            isEditor={isEditor}
-            onClose={() => setSelectedNode(null)}
-            onDelete={async (node) => {
-              const endpoint =
-                node.kind === 'membership'
-                  ? `/messaging/memberships/${encodeURIComponent(node.id)}`
-                  : `/learning/corridor-nodes/${encodeURIComponent(node.id)}`;
-              try {
-                await api(endpoint, { method: 'DELETE' });
-                if (officeId !== null) {
-                  setStaticData(await fetchStaticData(officeId));
-                }
-                setSelectedNode(null);
-                setActionError(null);
-              } catch (error) {
-                const message = error instanceof Error ? error.message : t('topology.failedDelete');
-                setActionError(message);
-              }
-            }}
-          />
+          <NodeModal node={selectedNode} onClose={() => setSelectedNode(null)} />
         ) : null}
       </div>
     </section>
@@ -930,6 +922,7 @@ export default function TopologyPage() {
 type NodeViewProps = {
   readonly node: NodeSummary;
   readonly onClick: (node: NodeSummary) => void;
+  readonly onDoubleClick: (node: NodeSummary) => void;
   readonly onMouseDown: (node: NodeSummary, event: ReactMouseEvent<SVGGElement>) => void;
   readonly isHighlighted: boolean;
   readonly highlightKind: 'pending' | 'selected' | null;
@@ -940,6 +933,7 @@ type NodeViewProps = {
 function NodeView({
   node,
   onClick,
+  onDoubleClick,
   onMouseDown,
   isHighlighted,
   highlightKind,
@@ -950,11 +944,27 @@ function NodeView({
   const coreStrokeOpacity = intensityStrokeOpacity(node.glowIntensity);
   const isUser = node.kind === 'membership' && node.fillColor === DEFAULT_USER_FILL;
   const tooltip = `${node.label} | ${node.role} | ${node.status}`;
-  const Icon = isUser ? User : Bot;
+  const Icon = isUser
+    ? User
+    : node.instanceId !== null
+      ? Cpu
+      : node.kind === 'corridor_node'
+        ? Brain
+        : Bot;
   const renderX = dragOverride !== null ? dragOverride.x : node.x;
   const renderY = dragOverride !== null ? dragOverride.y : node.y;
   const highlightStroke =
     highlightKind === 'pending' ? '#f59e0b' : highlightKind === 'selected' ? '#2563eb' : null;
+  const [isTooltipVisible, setIsTooltipVisible] = useState(false);
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (hoverTimerRef.current !== null) clearTimeout(hoverTimerRef.current);
+      if (clickTimerRef.current !== null) clearTimeout(clickTimerRef.current);
+    },
+    [],
+  );
 
   return (
     /* biome-ignore lint/a11y/noStaticElementInteractions: SVG <g> has no semantic <button> */
@@ -967,7 +977,21 @@ function NodeView({
       className={isMoveCursor ? 'cursor-move' : 'cursor-pointer'}
       onClick={(event) => {
         event.stopPropagation();
-        onClick(node);
+        if (clickTimerRef.current !== null) clearTimeout(clickTimerRef.current);
+        clickTimerRef.current = setTimeout(() => onClick(node), 300);
+      }}
+      onDoubleClick={(event) => {
+        event.stopPropagation();
+        if (clickTimerRef.current !== null) clearTimeout(clickTimerRef.current);
+        clickTimerRef.current = null;
+        onDoubleClick(node);
+      }}
+      onMouseEnter={() => {
+        hoverTimerRef.current = setTimeout(() => setIsTooltipVisible(true), 500);
+      }}
+      onMouseLeave={() => {
+        if (hoverTimerRef.current !== null) clearTimeout(hoverTimerRef.current);
+        setIsTooltipVisible(false);
       }}
       onMouseDown={(event) => {
         onMouseDown(node, event);
@@ -1002,6 +1026,7 @@ function NodeView({
         strokeWidth={CORE_STROKE_WIDTH}
         data-testid={`topology-node-core-${node.id}`}
       />
+      {node.outdated ? <OutdatedOverlay nodeId={node.id} /> : null}
       <foreignObject x={-12} y={-12} width={24} height={24}>
         <div
           className="flex h-full w-full items-center justify-center text-slate-800"
@@ -1010,6 +1035,7 @@ function NodeView({
           <Icon size={20} strokeWidth={2} />
         </div>
       </foreignObject>
+      {isTooltipVisible ? <NodeTooltip node={node} onOpen={() => onClick(node)} /> : null}
       <title>{tooltip}</title>
     </g>
   );
@@ -1022,7 +1048,7 @@ type NodeDrawerProps = {
   readonly onDelete: (node: NodeSummary) => Promise<void>;
 };
 
-function NodeDrawer({ node, isEditor, onClose, onDelete }: NodeDrawerProps): ReactElement {
+export function NodeDrawer({ node, isEditor, onClose, onDelete }: NodeDrawerProps): ReactElement {
   return (
     <aside
       className="flex w-72 shrink-0 flex-col gap-3 border-l border-slate-200 bg-white p-4"

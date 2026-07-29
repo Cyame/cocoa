@@ -56,6 +56,19 @@ export default function TopologyGlowDefs() {
  * The mapping is intentionally monotone and never reaches 1.0 so the
  * halo always reads as a glow and not a solid ring.
  */
+export function OutdatedOverlay({ nodeId }: { readonly nodeId: string }) {
+  return (
+    <g data-testid={`topology-node-outdated-${nodeId}`}>
+      <circle r={58} stroke="#eab308" strokeWidth={2} strokeDasharray="6 3" fill="none" />
+      <foreignObject x={18} y={-46} width={28} height={16}>
+        <span className="block rounded bg-amber-500 px-1.5 py-0.5 font-mono text-[10px] leading-3 text-white">
+          outd.
+        </span>
+      </foreignObject>
+    </g>
+  );
+}
+
 export const GLOW_INTENSITY_OPACITY = {
   static: 0,
   weak: 0.2,
