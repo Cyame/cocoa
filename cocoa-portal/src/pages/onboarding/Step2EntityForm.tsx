@@ -8,10 +8,21 @@ import {
   Plus,
   Sparkles,
   Trash2,
+  Wand2,
   X,
 } from 'lucide-react';
-import { type ChangeEvent, useMemo } from 'react';
+import { type ChangeEvent, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ApiError } from '@/lib/api';
+import {
+  type CatalogModel,
+  fetchBaseClassProviderDefault,
+  fetchModelCatalog,
+  fetchSystemHub,
+  generateDescription,
+  listOrganizationProviders,
+  type OrganizationProvider,
+} from '@/lib/api/providers';
 import type { EmployeeRank } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { isValidSlug, useOnboardingStore } from '@/stores/onboardingStore';
@@ -52,24 +63,95 @@ export default function Step2EntityForm({
   const slug = useOnboardingStore((state) => state.slug);
   const slugTouched = useOnboardingStore((state) => state.slugTouched);
   const rank = useOnboardingStore((state) => state.rank);
-  const provider = useOnboardingStore((state) => state.provider);
-  const model = useOnboardingStore((state) => state.model);
+  const providerId = useOnboardingStore((state) => state.providerId ?? '');
+  const model = useOnboardingStore((state) => state.model ?? '');
+  const description = useOnboardingStore((state) => state.description ?? '');
   const knowledgeRows = useOnboardingStore((state) => state.knowledgeRows);
   const knowledgeFiles = useOnboardingStore((state) => state.knowledgeFiles);
   const selectedBaseClass = useOnboardingStore((state) => state.selectedBaseClass);
   const setDisplayName = useOnboardingStore((state) => state.setDisplayName);
   const setSlug = useOnboardingStore((state) => state.setSlug);
   const setRank = useOnboardingStore((state) => state.setRank);
-  const setProvider = useOnboardingStore((state) => state.setProvider);
+  const setProviderId = useOnboardingStore((state) => state.setProviderId);
   const setModel = useOnboardingStore((state) => state.setModel);
+  const setDescription = useOnboardingStore((state) => state.setDescription);
   const addKnowledgeRow = useOnboardingStore((state) => state.addKnowledgeRow);
   const updateKnowledgeRow = useOnboardingStore((state) => state.updateKnowledgeRow);
   const removeKnowledgeRow = useOnboardingStore((state) => state.removeKnowledgeRow);
   const addKnowledgeFile = useOnboardingStore((state) => state.addKnowledgeFile);
   const removeKnowledgeFile = useOnboardingStore((state) => state.removeKnowledgeFile);
 
+  const [providers, setProviders] = useState<readonly OrganizationProvider[]>([]);
+  const [models, setModels] = useState<readonly CatalogModel[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [systemHubConfigured, setSystemHubConfigured] = useState(false);
+  const [providersLoading, setProvidersLoading] = useState(true);
+  const [generateLoading, setGenerateLoading] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
+
   const trimmedDisplayName = displayName.trim();
   const trimmedSlug = slug.trim();
+  const trimmedDescription = description.trim();
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([listOrganizationProviders(true), fetchSystemHub()])
+      .then(([rows, hub]) => {
+        if (!active) return;
+        setProviders(rows);
+        setSystemHubConfigured(hub.configured);
+      })
+      .catch(() => {
+        if (active) setProviders([]);
+      })
+      .finally(() => {
+        if (active) setProvidersLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (selectedBaseClass === null || providers.length === 0) return;
+    let active = true;
+    fetchBaseClassProviderDefault(selectedBaseClass.id)
+      .then((defaults) => {
+        if (!active || defaults === null) return;
+        setProviderId(defaults.provider_id);
+        setModel(defaults.model);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [selectedBaseClass, providers.length, setModel, setProviderId]);
+
+  useEffect(() => {
+    if (providerId.trim().length === 0) {
+      setModels([]);
+      return;
+    }
+    let active = true;
+    setModelsLoading(true);
+    fetchModelCatalog(providerId)
+      .then((page) => {
+        if (!active) return;
+        setModels(page.items);
+        if (model.trim().length === 0 && page.default_model) {
+          setModel(page.default_model);
+        }
+      })
+      .catch(() => {
+        if (active) setModels([]);
+      })
+      .finally(() => {
+        if (active) setModelsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [providerId, model, setModel]);
 
   const displayNameError = useMemo<string | null>(() => {
     if (trimmedDisplayName.length === 0) return null;
@@ -96,6 +178,39 @@ export default function Step2EntityForm({
   const showDisplayNameInvalid = trimmedDisplayName.length > 0 && displayNameError !== null;
   const showSlugInvalid = trimmedSlug.length > 0 && slugError !== null;
 
+  const generateDisabledReason = useMemo(() => {
+    if (!systemHubConfigured) return t('onboarding.step2.generateDisabledHub');
+    if (trimmedDisplayName.length === 0) return t('onboarding.step2.generateDisabledName');
+    return null;
+  }, [systemHubConfigured, t, trimmedDisplayName.length]);
+
+  const generateLabel =
+    trimmedDescription.length > 0
+      ? t('onboarding.step2.optimizeDescription')
+      : t('onboarding.step2.generateDescription');
+
+  const selectedProvider = providers.find((p) => p.id === providerId) ?? null;
+  const previewProvider = selectedProvider?.name ?? t('onboarding.step2.providerInherit');
+  const previewModel = model.trim() === '' ? t('onboarding.step2.modelInherit') : model.trim();
+  const previewKnowledgeCount = knowledgeRows.filter((row) => row.key.trim() !== '').length;
+
+  async function handleGenerateDescription() {
+    if (generateDisabledReason !== null || generateLoading) return;
+    setGenerateLoading(true);
+    setGenerateError(null);
+    try {
+      const result = await generateDescription({
+        name: trimmedDisplayName,
+        description: trimmedDescription.length > 0 ? trimmedDescription : null,
+      });
+      setDescription(result.description);
+    } catch (error) {
+      setGenerateError(error instanceof ApiError ? error.message : t('errors.network'));
+    } finally {
+      setGenerateLoading(false);
+    }
+  }
+
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const list = event.currentTarget.files;
     if (list === null) return;
@@ -111,10 +226,6 @@ export default function Step2EntityForm({
     }
     event.currentTarget.value = '';
   }
-
-  const previewProvider = provider.trim() === '' ? 'default' : provider.trim();
-  const previewModel = model.trim() === '' ? 'gpt-4o-mini' : model.trim();
-  const previewKnowledgeCount = knowledgeRows.filter((row) => row.key.trim() !== '').length;
 
   return (
     <div className="space-y-5" data-testid="onboarding-step2">
@@ -188,6 +299,51 @@ export default function Step2EntityForm({
             ) : null}
           </div>
 
+          <div>
+            <div className="flex items-center justify-between gap-2">
+              <label
+                htmlFor="onboarding-description"
+                className="block text-xs font-semibold uppercase tracking-wide text-slate-600"
+              >
+                {t('onboarding.step2.descriptionLabel')}
+              </label>
+              <button
+                type="button"
+                onClick={() => void handleGenerateDescription()}
+                disabled={generateDisabledReason !== null || generateLoading}
+                title={generateDisabledReason ?? undefined}
+                data-testid="onboarding-generate-description"
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors',
+                  generateDisabledReason !== null || generateLoading
+                    ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400'
+                    : 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100',
+                )}
+              >
+                {generateLoading ? (
+                  <LoaderCircle className="size-3 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Wand2 className="size-3" aria-hidden="true" />
+                )}
+                {generateLabel}
+              </button>
+            </div>
+            <textarea
+              id="onboarding-description"
+              name="description"
+              rows={4}
+              value={description}
+              onChange={(event) => setDescription(event.currentTarget.value)}
+              placeholder={t('onboarding.step2.descriptionPlaceholder')}
+              className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            />
+            {generateError !== null ? (
+              <p role="alert" className="mt-1.5 text-xs text-red-700">
+                {generateError}
+              </p>
+            ) : null}
+          </div>
+
           <fieldset>
             <legend className="text-xs font-semibold uppercase tracking-wide text-slate-600">
               {t('onboarding.step2.rankLabel')}
@@ -220,42 +376,85 @@ export default function Step2EntityForm({
             </div>
           </fieldset>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <label
-                htmlFor="onboarding-provider"
-                className="block text-xs font-semibold uppercase tracking-wide text-slate-600"
-              >
-                {t('onboarding.step2.providerLabel')}
-              </label>
-              <input
-                id="onboarding-provider"
-                name="provider"
-                type="text"
-                value={provider}
-                onChange={(event) => setProvider(event.currentTarget.value)}
-                placeholder={t('onboarding.step2.providerPlaceholder')}
-                className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-              />
+          {providersLoading ? (
+            <p className="flex items-center gap-2 text-xs text-slate-500">
+              <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />
+              {t('onboarding.step2.loadingProviders')}
+            </p>
+          ) : providers.length === 0 ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              {t('onboarding.step2.noProviders')}{' '}
+              <a href="/organization" className="font-medium underline">
+                {t('onboarding.step2.configureProviders')}
+              </a>
             </div>
-            <div>
-              <label
-                htmlFor="onboarding-model"
-                className="block text-xs font-semibold uppercase tracking-wide text-slate-600"
-              >
-                {t('onboarding.step2.modelLabel')}
-              </label>
-              <input
-                id="onboarding-model"
-                name="model"
-                type="text"
-                value={model}
-                onChange={(event) => setModel(event.currentTarget.value)}
-                placeholder={t('onboarding.step2.modelPlaceholder')}
-                className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-              />
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label
+                  htmlFor="onboarding-provider"
+                  className="block text-xs font-semibold uppercase tracking-wide text-slate-600"
+                >
+                  {t('onboarding.step2.providerLabel')}
+                </label>
+                <select
+                  id="onboarding-provider"
+                  name="provider_id"
+                  value={providerId}
+                  onChange={(event) => setProviderId(event.currentTarget.value)}
+                  className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                >
+                  <option value="">{t('onboarding.step2.providerInherit')}</option>
+                  {providers.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label
+                  htmlFor="onboarding-model"
+                  className="block text-xs font-semibold uppercase tracking-wide text-slate-600"
+                >
+                  {t('onboarding.step2.modelLabel')}
+                </label>
+                {models.length > 0 ? (
+                  <select
+                    id="onboarding-model"
+                    name="model"
+                    value={model}
+                    disabled={providerId.length === 0}
+                    onChange={(event) => setModel(event.currentTarget.value)}
+                    className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:bg-slate-50"
+                  >
+                    <option value="">{t('onboarding.step2.modelInherit')}</option>
+                    {models.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    id="onboarding-model"
+                    name="model"
+                    type="text"
+                    value={model}
+                    disabled={providerId.length === 0}
+                    onChange={(event) => setModel(event.currentTarget.value)}
+                    placeholder={t('onboarding.step2.modelPlaceholder')}
+                    className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:bg-slate-50"
+                  />
+                )}
+                {modelsLoading ? (
+                  <p className="mt-1 text-xs text-slate-500">
+                    {t('onboarding.step2.loadingModels')}
+                  </p>
+                ) : null}
+              </div>
             </div>
-          </div>
+          )}
 
           <div>
             <div className="flex items-center justify-between">
@@ -393,14 +592,14 @@ export default function Step2EntityForm({
         <aside className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
             <Sparkles className="size-3.5" aria-hidden="true" />
-            Preview
+            {t('onboarding.step2.previewLabel')}
           </div>
           <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
             <p className="font-mono text-xs text-slate-500">
               {selectedBaseClass?.slug ?? 'unknown-deity'}
             </p>
             <p className="mt-1 text-base font-semibold text-slate-950">
-              {trimmedDisplayName === '' ? '（未命名眷族）' : trimmedDisplayName}
+              {trimmedDisplayName === '' ? t('onboarding.step2.unnamedEntity') : trimmedDisplayName}
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <span className="rounded-full bg-blue-50 px-2 py-0.5 font-mono text-[11px] text-blue-700">
@@ -419,27 +618,27 @@ export default function Step2EntityForm({
             </div>
             <dl className="mt-3 space-y-1.5 text-xs text-slate-600">
               <div className="flex items-center justify-between">
-                <dt className="text-slate-500">Provider</dt>
+                <dt className="text-slate-500">{t('onboarding.step2.providerLabel')}</dt>
                 <dd className="font-mono text-slate-900">{previewProvider}</dd>
               </div>
               <div className="flex items-center justify-between">
-                <dt className="text-slate-500">Model</dt>
+                <dt className="text-slate-500">{t('onboarding.step2.modelLabel')}</dt>
                 <dd className="font-mono text-slate-900">{previewModel}</dd>
               </div>
               <div className="flex items-center justify-between">
-                <dt className="text-slate-500">Knowledge env</dt>
+                <dt className="text-slate-500">{t('onboarding.step2.knowledgeEnvLabel')}</dt>
                 <dd className="text-slate-900">
-                  {previewKnowledgeCount} {previewKnowledgeCount === 1 ? 'entry' : 'entries'}
+                  {t('onboarding.step2.previewKnowledgeCount', { count: previewKnowledgeCount })}
                 </dd>
               </div>
               <div className="flex items-center justify-between">
-                <dt className="text-slate-500">Knowledge files</dt>
+                <dt className="text-slate-500">{t('onboarding.step2.knowledgeFileLabel')}</dt>
                 <dd className="text-slate-900">{knowledgeFiles.length}</dd>
               </div>
             </dl>
             <div className="mt-3 flex items-center gap-1.5 text-[11px] text-slate-500">
               <Cpu className="size-3" aria-hidden="true" />
-              <span>Phase-15f preview</span>
+              <span>{t('onboarding.step2.previewTag')}</span>
             </div>
           </div>
         </aside>

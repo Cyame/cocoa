@@ -3,6 +3,7 @@ import type {
   BaseClass,
   EmployeeRank,
   EmployeeRuntimeConfig,
+  EntityConfigOverride,
   KnowledgeEnvEntry,
   KnowledgeFileEntry,
   KnowledgeScope,
@@ -33,8 +34,9 @@ export type OnboardingState = {
   readonly slug: string;
   readonly slugTouched: boolean;
   readonly rank: EmployeeRank;
-  readonly provider: string;
+  readonly providerId: string;
   readonly model: string;
+  readonly description: string;
   readonly knowledgeRows: readonly KnowledgeRow[];
   readonly knowledgeFiles: readonly KnowledgeFileRow[];
   readonly knowledgeScope: KnowledgeScope;
@@ -47,8 +49,9 @@ export type OnboardingState = {
   readonly setSlug: (slug: string) => void;
   readonly setSlugTouched: (slugTouched: boolean) => void;
   readonly setRank: (rank: EmployeeRank) => void;
-  readonly setProvider: (provider: string) => void;
+  readonly setProviderId: (providerId: string) => void;
   readonly setModel: (model: string) => void;
+  readonly setDescription: (description: string) => void;
   readonly addKnowledgeRow: () => void;
   readonly updateKnowledgeRow: (id: string, patch: { key?: string; value?: string }) => void;
   readonly removeKnowledgeRow: (id: string) => void;
@@ -68,8 +71,9 @@ const INITIAL_STATE: Pick<
   | 'slug'
   | 'slugTouched'
   | 'rank'
-  | 'provider'
+  | 'providerId'
   | 'model'
+  | 'description'
   | 'knowledgeRows'
   | 'knowledgeFiles'
   | 'knowledgeScope'
@@ -81,8 +85,9 @@ const INITIAL_STATE: Pick<
   slug: '',
   slugTouched: false,
   rank: 'researcher',
-  provider: '',
+  providerId: '',
   model: '',
+  description: '',
   knowledgeRows: [],
   knowledgeFiles: [],
   knowledgeScope: 'instance',
@@ -110,14 +115,27 @@ function projectFiles(files: readonly KnowledgeFileRow[]): readonly KnowledgeFil
   }));
 }
 
-function buildRuntimeConfig(state: OnboardingState): EmployeeRuntimeConfig {
+function buildRuntimeConfig(state: OnboardingState): EmployeeRuntimeConfig | null {
   const env = pruneEmptyEnv(state.knowledgeRows);
   const files = projectFiles(state.knowledgeFiles);
+  if (env.length === 0 && files.length === 0) return null;
   return {
-    provider: state.provider.trim() === '' ? null : state.provider.trim(),
-    model: state.model.trim() === '' ? null : state.model.trim(),
     knowledge_env: env,
     knowledge_files: files,
+  };
+}
+
+function buildConfigOverride(state: OnboardingState): EntityConfigOverride | null {
+  const providerId = (state.providerId ?? '').trim();
+  const model = (state.model ?? '').trim();
+  const runtimeConfig = buildRuntimeConfig(state);
+  if (providerId.length === 0 && model.length === 0 && runtimeConfig === null) {
+    return null;
+  }
+  return {
+    provider_id: providerId.length > 0 ? providerId : null,
+    model: model.length > 0 ? model : null,
+    ...(runtimeConfig !== null ? { runtime_config: runtimeConfig } : {}),
   };
 }
 
@@ -149,8 +167,9 @@ export const useOnboardingStore = create<OnboardingState>()((set, get) => ({
   setSlug: (slug) => set({ slug, slugTouched: true }),
   setSlugTouched: (slugTouched) => set({ slugTouched }),
   setRank: (rank) => set({ rank }),
-  setProvider: (provider) => set({ provider }),
+  setProviderId: (providerId) => set({ providerId }),
   setModel: (model) => set({ model }),
+  setDescription: (description) => set({ description }),
   addKnowledgeRow: () =>
     set((current) => ({
       knowledgeRows: [...current.knowledgeRows, { id: makeRowId(), key: '', value: '' }],
@@ -178,13 +197,16 @@ export const useOnboardingStore = create<OnboardingState>()((set, get) => ({
   buildPayload: () => {
     const state = get();
     const presetSlug = state.selectedBaseClass?.slug ?? '';
+    const description = state.description.trim();
+    const configOverride = buildConfigOverride(state);
     return {
       name: state.displayName.trim(),
       slug: state.slug.trim(),
       rank: state.rank,
       preset_slug: presetSlug,
       display_name: state.displayName.trim(),
-      runtime_config: buildRuntimeConfig(state),
+      system_prompt: description.length > 0 ? description : null,
+      config_override: configOverride,
     };
   },
   reset: () => set({ ...INITIAL_STATE }),

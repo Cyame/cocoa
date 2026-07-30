@@ -28,6 +28,18 @@ class Organization(BaseModel, Base):
 
     slug: Mapped[str] = mapped_column(String(255), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    # System hub (implicit org assistant) default provider binding
+    system_hub_provider_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("organization_providers.id"), nullable=True
+    )
+    system_hub_model: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # World cerebellum (主脑) fallback binding
+    cerebellum_default_provider_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("organization_providers.id"), nullable=True
+    )
+    cerebellum_default_model: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )
 
     def __repr__(self) -> str:
         cls = type(self).__name__

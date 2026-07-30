@@ -50,13 +50,22 @@ export function fetchBaseClass(slug: string): Promise<BaseClass> {
   return api<BaseClass>(`/base-classes/${encodeURIComponent(slug)}`);
 }
 
+export type PromotePayload = {
+  readonly mode?: 'update' | 'fork';
+  readonly from_instance_id?: string | null;
+  readonly include_prompt_regen?: boolean;
+  readonly snapshot_only?: boolean;
+  readonly new_entity_name?: string | null;
+  readonly new_entity_slug?: string | null;
+};
+
 export function promoteEntity(
   entityId: string,
-  memoryKindFilter: readonly string[] | null,
+  payload: PromotePayload = {},
 ): Promise<PromoteResult> {
   return api<PromoteResult>(`/learning/entities/${encodeURIComponent(entityId)}/promote`, {
     method: 'POST',
-    body: JSON.stringify({ memory_kind_filter: memoryKindFilter }),
+    body: JSON.stringify(payload),
   });
 }
 

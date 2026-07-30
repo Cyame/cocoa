@@ -4,12 +4,14 @@ export type EntityModalTabId = 'basic' | 'capabilities' | 'ai_genes' | 'instance
 
 type EntityModalState = {
   readonly entityId: string | null;
-  readonly open: (entityId: string) => void;
+  readonly initialTab: EntityModalTabId | null;
+  readonly open: (entityId: string, initialTab?: EntityModalTabId | null) => void;
   readonly close: () => void;
 };
 
 export const useEntityModalStore = create<EntityModalState>((set) => ({
   entityId: null,
-  open: (entityId) => set({ entityId }),
-  close: () => set({ entityId: null }),
+  initialTab: null,
+  open: (entityId, initialTab = null) => set({ entityId, initialTab }),
+  close: () => set({ entityId: null, initialTab: null }),
 }));

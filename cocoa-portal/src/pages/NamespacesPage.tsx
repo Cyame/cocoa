@@ -2,6 +2,7 @@ import {
   AlertCircle,
   Building2,
   Cpu,
+  FlaskConical,
   LoaderCircle,
   Plus,
   RefreshCw,
@@ -333,7 +334,12 @@ export default function NamespacesPage() {
       {!isLoading && activeTab === 'contracts' ? <ContractsTab t={t} /> : null}
 
       {!isLoading && activeTab === 'entities' ? (
-        <EntitiesTab entities={entities} onOpen={openEntityModal} t={t} />
+        <EntitiesTab
+          entities={entities}
+          onOpen={(id) => openEntityModal(id)}
+          onOpenDistill={(id) => openEntityModal(id, 'distill')}
+          t={t}
+        />
       ) : null}
 
       {!isLoading && activeTab === 'capability-market' ? <CapabilityMarketTab t={t} /> : null}
@@ -456,10 +462,12 @@ function ContractsTab({ t }: { readonly t: TFn }) {
 function EntitiesTab({
   entities,
   onOpen,
+  onOpenDistill,
   t,
 }: {
   readonly entities: readonly Entity[];
   readonly onOpen: (id: string) => void;
+  readonly onOpenDistill: (id: string) => void;
   readonly t: TFn;
 }) {
   if (entities.length === 0) {
@@ -478,7 +486,7 @@ function EntitiesTab({
             <th className="px-4 py-3">{t('entityModal.fields.displayName')}</th>
             <th className="px-4 py-3">{t('entityModal.fields.slug')}</th>
             <th className="px-4 py-3">{t('entityModal.fields.rank')}</th>
-            <th className="px-4 py-3">{t('common.confirm')}</th>
+            <th className="px-4 py-3">{t('namespaces.entityActions')}</th>
           </tr>
         </thead>
         <tbody>
@@ -490,13 +498,33 @@ function EntitiesTab({
               <td className="px-4 py-3 font-mono text-xs text-slate-500">{entity.slug}</td>
               <td className="px-4 py-3 capitalize text-slate-600">{entity.rank}</td>
               <td className="px-4 py-3">
-                <button
-                  type="button"
-                  onClick={() => onOpen(entity.id)}
-                  className="text-blue-600 hover:text-blue-700"
-                >
-                  {t('namespaces.viewDetail')}
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onOpen(entity.id)}
+                    className="text-blue-600 hover:text-blue-700"
+                  >
+                    {t('namespaces.viewDetail')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onOpenDistill(entity.id)}
+                    className="inline-flex items-center gap-1 text-emerald-700 hover:text-emerald-800"
+                    data-testid={`entity-promote-${entity.id}`}
+                  >
+                    <Sparkles className="size-3.5" aria-hidden="true" />
+                    {t('promoteModal.open')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onOpenDistill(entity.id)}
+                    className="inline-flex items-center gap-1 text-purple-700 hover:text-purple-800"
+                    data-testid={`entity-transmute-${entity.id}`}
+                  >
+                    <FlaskConical className="size-3.5" aria-hidden="true" />
+                    {t('transmuteModal.open')}
+                  </button>
+                </div>
               </td>
             </tr>
           ))}

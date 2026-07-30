@@ -1,12 +1,12 @@
-"""LLMClient — unified LLM call wrapper for 4 provider types.
+"""LLMClient — unified LLM call wrapper.
 
-P14a provider types:
-- openai-compatible: any OpenAI-compatible API (OpenAI, Azure, local llama.cpp)
-- openai-responses: OpenAI's new /v1/responses endpoint
-- anthropic: Anthropic Claude API
-- custom: arbitrary OpenAI-compatible URL (e.g., internal LLM gateway)
+Supports request_format mapping:
+- completion → OpenAI chat.completions
+- response → OpenAI responses.create
+- anthropic → Anthropic messages.create
+- gemini → Google Generative Language generateContent (httpx)
 
-Each provider dispatches to the right SDK based on LLMProviderConfig.provider_type.
+Also accepts legacy provider_type values (openai-compatible, etc.).
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ import logging
 import os
 from typing import Any
 
+import httpx
 from anthropic import AsyncAnthropic
 from openai import AsyncOpenAI
 
@@ -31,7 +32,7 @@ class LLMError(Exception):
 
 
 class LLMResponse:
-    """Unified LLM response shape across all 4 providers."""
+    """Unified LLM response shape across providers."""
 
     def __init__(
         self,
@@ -50,13 +51,23 @@ class LLMResponse:
     def __repr__(self):
         return (
             f"<LLMResponse model={self.model!r} "
-            f"prompt_tokens={self.prompt_tokens} completion_tokens={self.completion_tokens} "
+            f"prompt_tokens={self.prompt_tokens} "
+            f"completion_tokens={self.completion_tokens} "
             f"stop_reason={self.stop_reason!r}>"
         )
 
 
+_LEGACY_TO_FORMAT: dict[str, str] = {
+    "openai-compatible": "completion",
+    "openai-responses": "response",
+    "anthropic": "anthropic",
+    "custom": "completion",
+    "gemini": "gemini",
+}
+
+
 class LLMClient:
-    """Wraps openai + anthropic SDKs. Dispatched by LLMProviderConfig.provider_type."""
+    """Wraps openai + anthropic + gemini. Dispatched by request_format / provider_type."""
 
     def __init__(
         self,
@@ -64,22 +75,44 @@ class LLMClient:
         api_key: str,
         base_url: str | None = None,
         default_model: str = "gpt-4o-mini",
+        *,
+        verify_ssl: bool = True,
+        request_format: str | None = None,
     ):
         self.provider_type = provider_type
         self.api_key = api_key
         self.base_url = base_url
         self.default_model = default_model
+        self.verify_ssl = verify_ssl
+        self.request_format = request_format or _LEGACY_TO_FORMAT.get(
+            provider_type, "completion"
+        )
 
-        if provider_type in ("openai-compatible", "openai-responses", "custom"):
-            self._openai = AsyncOpenAI(api_key=api_key, base_url=base_url)
-            self._anthropic = None
-        elif provider_type == "anthropic":
-            self._openai = None
-            self._anthropic = AsyncAnthropic(api_key=api_key)
+        self._openai: AsyncOpenAI | None = None
+        self._anthropic: AsyncAnthropic | None = None
+
+        if self.request_format in ("completion", "response"):
+            http_client = httpx.AsyncClient(verify=verify_ssl)
+            self._openai = AsyncOpenAI(
+                api_key=api_key,
+                base_url=base_url,
+                http_client=http_client,
+            )
+        elif self.request_format == "anthropic":
+            http_client = httpx.AsyncClient(verify=verify_ssl)
+            kwargs: dict[str, Any] = {
+                "api_key": api_key,
+                "http_client": http_client,
+            }
+            if base_url:
+                kwargs["base_url"] = base_url
+            self._anthropic = AsyncAnthropic(**kwargs)
+        elif self.request_format == "gemini":
+            pass  # httpx used per-call
         else:
             raise LLMError(
                 "errors.llm.unknown_provider",
-                f"Unknown provider_type: {provider_type}",
+                f"Unknown request_format/provider_type: {self.request_format}/{provider_type}",
             )
 
     async def complete(
@@ -93,17 +126,32 @@ class LLMClient:
         """Call the configured provider. Returns LLMResponse."""
         model = model or self.default_model
         try:
-            if self.provider_type == "anthropic":
-                return await self._complete_anthropic(messages, max_tokens, temperature, model)
-            elif self.provider_type == "openai-responses":
-                return await self._complete_openai_responses(messages, max_tokens, temperature, model)
-            else:  # openai-compatible or custom
-                return await self._complete_openai_chat(messages, max_tokens, temperature, model)
+            if self.request_format == "anthropic":
+                return await self._complete_anthropic(
+                    messages, max_tokens, temperature, model
+                )
+            if self.request_format == "response":
+                return await self._complete_openai_responses(
+                    messages, max_tokens, temperature, model
+                )
+            if self.request_format == "gemini":
+                return await self._complete_gemini(
+                    messages, max_tokens, temperature, model
+                )
+            return await self._complete_openai_chat(
+                messages, max_tokens, temperature, model
+            )
+        except LLMError:
+            raise
         except Exception as e:
-            logger.exception("LLM call failed", extra={"provider": self.provider_type, "model": model})
+            logger.exception(
+                "LLM call failed",
+                extra={"provider": self.provider_type, "model": model},
+            )
             raise LLMError("errors.llm.call_failed", str(e)) from e
 
     async def _complete_openai_chat(self, messages, max_tokens, temperature, model):
+        assert self._openai is not None
         resp = await self._openai.chat.completions.create(
             model=model,
             messages=messages,
@@ -121,8 +169,7 @@ class LLMClient:
         )
 
     async def _complete_openai_responses(self, messages, max_tokens, temperature, model):
-        """OpenAI's new /v1/responses endpoint (different from /v1/chat/completions)."""
-        # Convert messages to input items (simplified: last message is user input)
+        assert self._openai is not None
         user_input = messages[-1].get("content", "") if messages else ""
         resp = await self._openai.responses.create(
             model=model,
@@ -141,7 +188,7 @@ class LLMClient:
         )
 
     async def _complete_anthropic(self, messages, max_tokens, temperature, model):
-        """Anthropic Claude API. Convert messages: separate system from user/assistant."""
+        assert self._anthropic is not None
         system_msg = None
         chat_msgs = []
         for m in messages:
@@ -171,6 +218,60 @@ class LLMClient:
             stop_reason=resp.stop_reason or "end_turn",
         )
 
+    async def _complete_gemini(self, messages, max_tokens, temperature, model):
+        """Google Generative Language API (generateContent)."""
+        system_parts: list[str] = []
+        contents: list[dict[str, Any]] = []
+        for m in messages:
+            role = m.get("role", "user")
+            text = m.get("content", "")
+            if role == "system":
+                system_parts.append(text)
+            elif role == "assistant":
+                contents.append({"role": "model", "parts": [{"text": text}]})
+            else:
+                contents.append({"role": "user", "parts": [{"text": text}]})
+
+        base = (self.base_url or "https://generativelanguage.googleapis.com/v1beta").rstrip(
+            "/"
+        )
+        url = f"{base}/models/{model}:generateContent"
+        body: dict[str, Any] = {
+            "contents": contents,
+            "generationConfig": {
+                "maxOutputTokens": max_tokens,
+                "temperature": temperature,
+            },
+        }
+        if system_parts:
+            body["systemInstruction"] = {"parts": [{"text": "\n".join(system_parts)}]}
+
+        async with httpx.AsyncClient(verify=self.verify_ssl, timeout=60.0) as client:
+            resp = await client.post(
+                url,
+                params={"key": self.api_key},
+                json=body,
+            )
+            if resp.status_code >= 400:
+                raise LLMError(
+                    "errors.llm.call_failed",
+                    f"Gemini HTTP {resp.status_code}: {resp.text[:500]}",
+                )
+            data = resp.json()
+
+        text_out = ""
+        for cand in data.get("candidates") or []:
+            for part in (cand.get("content") or {}).get("parts") or []:
+                text_out += part.get("text") or ""
+        usage = data.get("usageMetadata") or {}
+        return LLMResponse(
+            content=text_out,
+            prompt_tokens=int(usage.get("promptTokenCount") or 0),
+            completion_tokens=int(usage.get("candidatesTokenCount") or 0),
+            model=model,
+            stop_reason="stop",
+        )
+
 
 def make_client_from_env(provider_type: str, default_model: str = "gpt-4o-mini") -> LLMClient:
     """Helper: build an LLMClient using env var for API key."""
@@ -179,9 +280,14 @@ def make_client_from_env(provider_type: str, default_model: str = "gpt-4o-mini")
         "openai-responses": "OPENAI_API_KEY",
         "anthropic": "ANTHROPIC_API_KEY",
         "custom": "CUSTOM_LLM_API_KEY",
+        "gemini": "GEMINI_API_KEY",
     }.get(provider_type, "OPENAI_API_KEY")
     api_key = os.environ.get(api_key_env, "")
-    base_url = os.environ.get("OPENAI_BASE_URL") if provider_type in ("openai-compatible", "custom") else None
+    base_url = (
+        os.environ.get("OPENAI_BASE_URL")
+        if provider_type in ("openai-compatible", "custom")
+        else None
+    )
     return LLMClient(
         provider_type=provider_type,
         api_key=api_key,

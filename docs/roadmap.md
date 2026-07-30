@@ -2,9 +2,9 @@
 
 > **Status**: Living document. Canonical project roadmap + system goal blueprint.
 > **Authority**: Supersedes `.omo/plans/archive/cocoa-v2-roadmap.md` and `.omo/plans/archive/phase-15-foundation-roadmap.md` (archived 2026-07-29).
-> **Product specs**: `docs/prd-v1.md` (single-tenant MVP UX, P15f) · `docs/prd-v2.md` (multi-tenant + agent stack — **implemented 2026-07-29**).
+> **Product specs**: `docs/prd-v1.md` (single-tenant MVP UX, P15f) · `docs/prd-v2.md` (multi-tenant + agent stack — **implemented 2026-07-29**) · `docs/prd-v3.md` (**next** — Provider defaults, system hub, promote/transmute UX).
 > **Naming**: `docs/terminology.md` + `docs/metaphor-name-table.md` (15d locked).
-> **Last revision**: 2026-07-29.
+> **Last revision**: 2026-07-30.
 
 ---
 
@@ -36,13 +36,15 @@ Traditional chat agents reset every session. Cocoa closes three loops that chat 
 | **Memory** | Context window only | Append-only Memory per Entity + promote / transmute |
 | **Collaboration** | 1:1 flat chat | Shared Workspace + Passage near-neighbor messaging + CentralHub + visual Topology |
 
-Inherited from `nodeskclaw`, rebuilt lighter and vision-first. Loop engineering (Boulder / circuit breakers / notepad) inherited from `oh-my-openagent` (pin tags; do not trust its unstable `dev` tree).
+Inherited from `nodeskclaw`, rebuilt lighter and vision-first. Loop engineering (Boulder / circuit breakers / notepad) is borrowed from `oh-my-openagent` (pin tags; do not trust its unstable `dev` tree) — that family (senpi / oh-my-openagent / oh-my-pi) is the **Workspace-layer** peer Cocoa aims to surpass in flexibility and observability. Each **化身 (Instance)** is driven by a sandboxed **pi** agent runtime (React runtime optional, less preferred) — never by Senpi CLI as the Instance driver.
 
 ### 1.3 What Cocoa is / is not
 
 | Is | Is not |
 |---|---|
 | Multi-agent **control plane** with visual portal | Generic chatbot / Copilot clone |
+| Workspace ≈ more flexible / observable senpi · oh-my-openagent · oh-my-pi | Senpi CLI as the per-Instance agent driver |
+| Per-化身 **pi** sandboxed runtime (React optional) | Equating "pi runtime" with "Senpi CLI" |
 | Persistent Entity memory + distillation market | Stateless prompt playground |
 | Near-neighbor Passage topology + glow live-status | Flat group-chat bus |
 | K8s-native Instance deploy (orbstack for live test) | Desktop-only toy runtime |
@@ -116,9 +118,17 @@ Topology is the flagship: SVG nodes + glow(`loop_status`) + Select/Connect/Move 
 
 ### 1.6 Runtime spine (already largely built)
 
+**Two layers — never conflate** (locked 2026-07-30):
+
+| Layer | Peer / driver | Cocoa role |
+|---|---|---|
+| **Workspace control plane** | senpi · oh-my-openagent · oh-my-pi (Cocoa = more flexible + more observable evolution) | Portal + Harness Supervisor + Passage + CentralHub + deploy + observability |
+| **Instance agent runtime** | **pi** (sandboxed; preferred). React runtime optional | Each 化身 pod runs under pi; Entity overlay → AgentConfig → pi |
+
 | Layer | Mechanism | Status vs PRD-v2 |
 |---|---|---|
-| Harness | Supervisor + 4 breakers + control commands | Done (P8); keep |
+| Harness | Supervisor + 4 breakers + control commands | Done (P8); keep (Workspace layer) |
+| Instance driver | **pi** sandboxed agent loop (skeleton → real pi) | Skeleton (`agent_runtime.py`); real pi wiring pending |
 | Deploy | 9-step K8s pipeline + DeployRecord + SSE | Done (P11–P15a); keep |
 | LLM | 4 providers + ModelCatalog + LLMDistiller | Done (P14a); keep |
 | Messaging | Passage-gated near-neighbor + 4 command families | Done (P5/P8/P10); rename Corridor→Passage pending |
@@ -211,7 +221,7 @@ Authoritative detail: `docs/prd-v2.md`. This section is the blueprint digest onl
 
 ### 4.2 Runtime compatibility
 
-Entity overlays serialize toward **pi / oh-my-openagent AgentConfig** (pin `oh-my-openagent` tag, e.g. v4.19.2). Boulder loop remains the control-plane engine; workflow-gene is intentionally rejected — orchestration stays in Harness.
+Entity overlays serialize toward **pi AgentConfig** (schema family shared with oh-my-openagent `AgentOverrideConfigSchema` overlay; pin `oh-my-openagent` tag, e.g. v4.19.2, for overlay field names only). The **Workspace** control plane (Harness / Boulder / Portal) is Cocoa's evolution of senpi · oh-my-openagent · oh-my-pi. Each **Instance** is driven by **pi**, not by Senpi CLI. Boulder remains the control-plane engine; workflow-gene is rejected — orchestration stays in Harness.
 
 ### 4.3 Default deployment shape
 
@@ -247,19 +257,23 @@ Full history: `.omo/plans/archive/` + `.omo/plans/archive/cocoa-v2-roadmap.md` (
 
 | Slot | Title | Spec | Plan | Notes |
 |---|---|---|---|---|
-| *(empty)* | Awaiting post-v2 human QA on orbstack | — | — | Pick from §5.3 after live inspection |
+| **PRD-v3** | Provider 默认 / System 中枢 description / 回魂·派生与炼化 / 空空间 | `docs/prd-v3.md` | 实现 plan 待开 | MVP = §1.1；Later-A/B/C/D 不进本刀 |
 
-### 5.3 Near backlog (after PRD-v2 lands)
+### 5.3 Near backlog (after PRD-v3 MVP)
 
 | Slot | Theme | Source |
 |---|---|---|
+| Avatar presets UI | 用户/眷族预设头像切换 | PRD-v3 Later-A |
+| Visual + 神职图 | 主视觉换皮、候选图挂卡片 | Later-B |
+| Empty IDE polish | 空空间 IDE 深打磨、神职预选 | Later-C |
+| Capability hub assist | skill/capability 中枢撰写 | Later-D |
 | Polish | Empty states, error UX, audit filters, i18n sticky | Former P15c leftovers |
 | Tunnel / streaming | Token stream Composer | Former P16b |
 | Session engine v2 | Multimodal day-1 protocol | `.omo/drafts/session-engine-v2.md` |
 | Gene LLM real | Richer distill than heuristics | Former P16c |
 | Voice / channels / multi-runtime / multi-compute / DLP / OTel / backup / S3 | nodeskclaw parity candidates | Former P16e–m |
 
-Priority among near-backlog items is **re-decided after PRD-v2 human QA on orbstack**, not copied blindly from the archived P16 queue.
+Priority among near-backlog items is **re-decided after PRD-v3 human QA on orbstack**, not copied blindly from the archived P16 queue.
 
 ---
 
@@ -329,10 +343,11 @@ Recorded so future planners do not lose intent:
 
 ### External references
 
-| Project | Path |
-|---|---|
-| nodeskclaw | `/Users/xuwenrui/Documents/Codes/Researches/nodeskclaw/` |
-| oh-my-openagent | `/Users/xuwenrui/Documents/Codes/github/oh-my-openagent/` (pin tags) |
+| Project | Path | Layer |
+|---|---|---|
+| nodeskclaw | `/Users/xuwenrui/Documents/Codes/Researches/nodeskclaw/` | product ancestor |
+| oh-my-openagent (senpi / oh-my-pi surface) | `/Users/xuwenrui/Documents/Codes/github/oh-my-openagent/` (pin tags) | **Workspace** peer |
+| pi (`@mariozechner/pi-coding-agent`) | upstream pi coding agent | **Instance / 化身** driver |
 
 ---
 
@@ -348,6 +363,7 @@ Recorded so future planners do not lose intent:
 | 2026-07-29 | PRD-v2 修订：Namespace = **场景分区**（非 env）；Vault = DB KV（MinIO/S3 远期）；ER 补全 **CerebellumAgent 中央智能体 1:1** |
 | 2026-07-29 | **PRD-v2 implementation Done** — hard-cut tenant/genes/portal; plan at `.omo/plans/prd-v2-implementation.md` |
 
-*Next update trigger: orbstack human QA feedback, or next backlog wave selected from §5.3.*
+| 2026-07-30 | **PRD-v3 written** — Provider defaults, implicit system hub, promote update/fork（回魂/派生）+ transmute UX; `AGENTS.md` Rule 5 orbstack-only |
+| 2026-07-30 | **Runtime spine lock** — Workspace ≈ more flexible/observable senpi·oh-my-openagent·oh-my-pi; each 化身 driven by **pi** (sandboxed preferred; React optional). Reject equating pi with Senpi CLI |
 
-*Next update trigger: PRD-v2 execution plan approved, or PRD-v2 wave merged + orbstack verified.*
+*Next update trigger: PRD-v3 implementation plan approved, or v3 wave merged + orbstack verified.*

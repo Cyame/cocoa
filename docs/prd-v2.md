@@ -5,7 +5,8 @@
 > **对比基线**: `docs/prd-v1.md` — PRD-v1 单租户 MVP（P15f 已落地）；PRD-v2 多租户架构
 > **命名权威**: `docs/terminology.md` + `docs/metaphor-name-table.md`
 > **Roadmap / blueprint**: `docs/roadmap.md` — 执行计划待 Plan 模式编写；完成后必须部署 orbstack 供人工测试
-> **Append（世界 Provider）**: [`docs/prd-v2-append-provider.md`](prd-v2-append-provider.md) — models.dev 全量预设 + 可持久化自定义端点 + 眷族下拉绑定；**覆盖并细化 §16 / §14 Provider 字段**
+> **Append（世界 Provider）**: [`docs/prd-v2-append-provider.md`](prd-v2-append-provider.md) — models.dev 全量预设 + 可持久化自定义端点 + 眷族下拉绑定  
+> **Next product target**: [`docs/prd-v3.md`](prd-v3.md) — Provider 默认绑定、隐式 System 中枢、晋升回写/派生与炼化 UX
 
 ---
 
@@ -19,7 +20,7 @@
 
 **工期与风险**：核心后端数据模型 18 张表 + 2 张 N:N 关联 + 4 个概念实体，Portal 前端 10 个页面 + VSCode IDE 布局。最大风险是 ai_genes 的 manifest 统一了 nodeskclaw 的 4 类基因形态，这个简化假设如果遇到"必须区分 4 类基因"的需求，需要回头重构。另一个风险是 BaseClass 的"业务无关"假设——如果用户发现所有神职需要内置业务 Prompt 片段，Entity.system_prompt 的 NULL-继承 模式可以兜底，但可能不够优雅。
 
-**关键决策 sanity-check**：① ai_genes 不按 kind 分表——统一 manifest，workflow-gene 砍掉（编排归 Harness/Boulder）② Entity 的 system_prompt NULL 时分叉到 BaseClass 继承——一个叠加模式，避免了"每创建一个眷族都得复制 Prompt"的麻烦 ③ 能力生命周期拆成两条独立线——Memory→Gene（内容线）和 Instance→BaseClass（身份线），纠正了 PRD-v1"四级跳"把两条线揉在一起的误解 ④ pi runtime 兼容：Boulder loop engine 基于 oh-my-openagent pi runtime，config_override 遵循 AgentOverrideConfigSchema overlay 模式。
+**关键决策 sanity-check**：① ai_genes 不按 kind 分表——统一 manifest，workflow-gene 砍掉（编排归 Harness/Boulder）② Entity 的 system_prompt NULL 时分叉到 BaseClass 继承——一个叠加模式，避免了"每创建一个眷族都得复制 Prompt"的麻烦 ③ 能力生命周期拆成两条独立线——Memory→Gene（内容线）和 Instance→BaseClass（身份线），纠正了 PRD-v1"四级跳"把两条线揉在一起的误解 ④ **Runtime spine**：Workspace 控制面 ≈ 更灵活/更可观测的 senpi·oh-my-openagent·oh-my-pi；每个化身由 **pi** 沙箱 runtime 驱动（React 可选）；`config_override` 遵循 AgentOverrideConfigSchema overlay，序列化为 pi AgentConfig。**禁止**把 pi 写成 Senpi CLI。
 
 ---
 
@@ -529,7 +530,14 @@ Memory 是能力生命周期的原料：Memory → (reap) → Capability → (co
 
 ## §9 运行时基础设施
 
-本节描述的 Boulder loop engine 兼容 oh-my-openagent pi runtime。Entity 的 system_prompt 和 config_override 通过 AgentOverrideConfigSchema overlay 序列化为 AgentConfig 格式，由 pi runtime 驱动 Agent 实例。
+### 9.0 Runtime spine（两层勿混）
+
+| 层 | 对标 / 驱动 | Cocoa 职责 |
+|---|---|---|
+| **Workspace 控制面** | senpi · oh-my-openagent · oh-my-pi（Cocoa 目标：更灵活、更可观测） | Portal、Harness Supervisor、Boulder、Passage、CentralHub、部署与可观测 |
+| **化身 Instance runtime** | **pi**（沙箱优先；React runtime 备选） | 每个化身 pod 的 agent loop；接收 AgentConfig |
+
+Entity 的 `system_prompt` 与 `config_override` 通过 AgentOverrideConfigSchema overlay 序列化为 **pi AgentConfig**，由 **pi** 驱动该化身。Harness/Boulder 是 Workspace 控制面引擎，不是 Senpi CLI，也不是「把 pi 叫成 Senpi」。
 
 ### 9.1 LoopState — 心智状态
 

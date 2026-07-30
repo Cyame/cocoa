@@ -105,6 +105,16 @@
     "loading": "正在加载拓扑",
     "canvasAria": "空间 {{workspaceId}} 的拓扑画布",
     "membershipNode": "成员关系",
+    "outdated": "配置过期",
+    "outdatedNotice": "配置已更新。可在方便时重启此化身以加载新设置。",
+    "yes": "是",
+    "no": "否",
+    "closeDetails": "关闭详情",
+    "instanceDetails": "化身详情",
+    "status": "状态",
+    "activeHash": "当前 hash",
+    "actions": "操作",
+    "backToTopology": "返回拓扑",
     "mode": {
       "select": "选择",
       "connect": "连接",
@@ -417,22 +427,23 @@
     "sizeBytes": "{{value}} B"
   },
   "batchRestart": {
-    "title": "批量重启 outdated 化身",
-    "subtitle": "当前 {{outdated}} / {{total}} 化身 hash 不匹配",
-    "subtitleAllMatch": "所有化身 hash 已匹配，无需重启。",
-    "empty": "当前没有 outdated 化身。",
+    "title": "应用已更新的配置",
+    "subtitle": "当前 {{outdated}} / {{total}} 个化身仍在使用旧配置 — 重启后可生效",
+    "subtitleAllMatch": "所有化身已与最新配置一致。",
+    "configUpdatedHint": "眷族或 Provider 设置已变更。重启为可选操作，但运行中的化身需重启后才能加载新配置。Memory 不会被回收。",
+    "empty": "当前没有需要刷新配置的化身。",
     "selectAll": "全部选中",
     "clearAll": "全不选",
-    "confirm": "确认重启 {{count}} 个化身",
-    "confirmStepTitle": "二次确认",
-    "confirmStepMessage": "即将重启 {{count}} 个化身。当前 loop 将停止，pod 重创建，新能力自动装入。Memory 不会被回收。是否继续？",
-    "confirmAction": "确认重启",
+    "confirm": "重启 {{count}} 个化身",
+    "confirmStepTitle": "确认重启以应用配置",
+    "confirmStepMessage": "即将重启 {{count}} 个化身以加载最新配置。当前 loop 将停止，pod 会重建。Memory 不会被回收。你也可以稍后在拓扑视图中再重启。",
+    "confirmAction": "重启并应用",
     "cancel": "取消",
     "close": "关闭",
-    "outdatedLabel": "outdated",
-    "runningLabel": "active",
+    "outdatedLabel": "配置过期",
+    "runningLabel": "运行中",
     "durationSuffixAgo": "前",
-    "runningDisabledHint": "正在运行的化身不会参与批量重启（需先手动停止）。",
+    "runningDisabledHint": "正在运行的化身不会参与批量重启（需先手动停止）。重启仍为可选，可按需进行。",
     "successToast": "已重启 {{count}} 个化身。",
     "errorGeneric": "批量重启失败。",
     "runningConflict": "所选化身中有正在运行的实例，请先停止它们再重试。",
@@ -498,9 +509,25 @@
       "rankIntern": "浅识者（intern）— AI 无状态，每次重启",
 
       "providerLabel": "智能系统（Provider）",
-      "providerPlaceholder": "例如：default / openai-compatible",
+      "providerPlaceholder": "选择世界 Provider",
+      "providerInherit": "继承神职默认",
       "modelLabel": "模型（Model）",
-      "modelPlaceholder": "例如：gpt-4o-mini",
+      "modelPlaceholder": "选择模型",
+      "modelInherit": "继承默认模型",
+      "loadingProviders": "正在加载 Provider...",
+      "loadingModels": "正在加载模型...",
+      "noProviders": "尚未启用任何 Provider。",
+      "configureProviders": "前往智能系统配置",
+      "descriptionLabel": "描述",
+      "descriptionPlaceholder": "眷族职责说明（可选）",
+      "generateDescription": "生成当前描述",
+      "optimizeDescription": "优化当前描述",
+      "generateDisabledName": "请先填入眷族名称",
+      "generateDisabledHub": "请先在世界设置中配置系统中枢供应商",
+      "previewLabel": "预览",
+      "previewTag": "创建预览",
+      "previewKnowledgeCount": "{{count}} 条",
+      "unnamedEntity": "（未命名眷族）",
 
       "knowledgeHeading": "知识绑定",
       "knowledgeEnvLabel": "环境变量",
@@ -557,6 +584,7 @@
     "contractsTitle": "契印",
     "contractsDetail": "全局用户权限管理将在此展示。",
     "noEntities": "当前次元尚无眷族。",
+    "entityActions": "操作",
     "viewDetail": "查看详情",
     "capabilityMarketTitle": "能力市场",
     "capabilityMarketDetail": "原子能力浏览器即将上线。",
@@ -577,7 +605,18 @@
       "topology": "拓扑",
       "memberships": "契印",
       "instances": "化身",
+      "brain": "主脑",
       "memory": "记忆"
+    },
+    "brain": {
+      "memory": "记忆",
+      "cerebellum": "小脑",
+      "cerebellumTitle": "小脑 Provider 覆盖",
+      "cerebellumSubtitle": "留空则继承世界小脑默认。",
+      "worldDefaultHint": "世界默认：{{provider}} / {{model}}",
+      "noWorldDefault": "尚未配置世界小脑默认。",
+      "inheritWorld": "继承世界默认",
+      "saveCerebellum": "保存小脑设置"
     },
     "emptyMembershipsTitle": "暂无契印",
     "emptyMembershipsDetail": "该空间尚无活跃成员关系。",
@@ -613,11 +652,124 @@
     "title": "智能系统配置",
     "name": "名称",
     "slug": "标识",
-    "providerHint": "Provider 配置将在此管理。",
-    "notAvailable": "组织 API 暂不可用。"
+    "providerHint": "管理世界 Provider、系统中枢与小脑默认。",
+    "notAvailable": "组织 API 暂不可用。",
+    "readOnlyHint": "只读视图。超级管理员可编辑 Provider 设置。",
+    "save": "保存",
+    "saving": "保存中...",
+    "cancel": "取消",
+    "loadingModels": "正在加载模型...",
+    "fields": {
+      "provider": "Provider",
+      "model": "Model",
+      "none": "无（清空）",
+      "selectModel": "选择模型"
+    },
+    "providers": {
+      "title": "世界 Provider",
+      "subtitle": "已启用的 Provider 可用于创建眷族与空间覆盖。",
+      "empty": "尚未配置 Provider。",
+      "enableCatalog": "从目录启用",
+      "addCustom": "添加自定义端点",
+      "enabled": "已启用",
+      "disabled": "已禁用",
+      "test": "测试",
+      "testOk": "通过",
+      "testFailed": "失败",
+      "notTested": "未测试",
+      "setDefault": "设为默认",
+      "enable": "启用",
+      "disable": "禁用",
+      "delete": "删除",
+      "columns": {
+        "name": "名称",
+        "origin": "来源",
+        "model": "默认模型",
+        "status": "状态",
+        "test": "最近测试",
+        "actions": "操作"
+      }
+    },
+    "systemHub": {
+      "title": "系统中枢",
+      "subtitle": "为眷族创建时的描述生成/优化提供能力。"
+    },
+    "cerebellum": {
+      "title": "小脑世界默认",
+      "subtitle": "各空间小脑 Agent 的 fallback Provider/Model。"
+    },
+    "catalogModal": {
+      "title": "启用目录 Provider",
+      "catalogProvider": "目录 Provider",
+      "select": "选择 Provider",
+      "alreadyEnabled": "已启用",
+      "apiKeyRef": "API Key 环境变量名",
+      "enable": "启用"
+    },
+    "customModal": {
+      "title": "添加自定义 Provider",
+      "name": "显示名称",
+      "slug": "Slug（可选）",
+      "baseUrl": "Base URL",
+      "requestFormat": "请求格式",
+      "defaultModel": "默认模型",
+      "apiKeyRef": "API Key 环境变量名",
+      "create": "创建 Provider"
+    },
+    "setDefaultModal": {
+      "title": "将 {{name}} 设为默认",
+      "target": "应用到",
+      "confirm": "应用默认",
+      "targets": {
+        "base_class": "神职（可多选）",
+        "system_hub": "系统中枢",
+        "cerebellum": "小脑世界默认"
+      }
+    }
+  },
+  "promoteModal": {
+    "title": "晋升（回魂 / 派生）",
+    "summary": "将化身能力写回眷族，或派生新眷族。",
+    "open": "回魂/派生",
+    "close": "关闭",
+    "cancel": "取消",
+    "modeLabel": "模式",
+    "confirmUpdate": "确认回魂",
+    "confirmFork": "确认派生",
+    "submitting": "处理中...",
+    "updateImpact": "将更新眷族 {{name}}。其下 {{count}} 个化身需在重启后同步。",
+    "forkName": "新眷族显示名",
+    "forkSlug": "新眷族 slug",
+    "forkNote": "源眷族与其化身保持不变。",
+    "successUpdate": "回魂完成。可在方便时重启 {{count}} 个过期化身。",
+    "successFork": "派生新眷族成功。",
+    "mode": {
+      "update": {
+        "label": "回魂",
+        "hint": "更新当前眷族；下属化身重启后同步。"
+      },
+      "fork": {
+        "label": "派生",
+        "hint": "创建新眷族；源眷族不变。"
+      }
+    }
+  },
+  "transmuteModal": {
+    "title": "炼化",
+    "summary": "从眷族记忆铸建新神职。",
+    "open": "炼化",
+    "close": "关闭",
+    "cancel": "取消",
+    "confirm": "确认炼化",
+    "submitting": "炼化中...",
+    "confirmCopy": "炼化仅创建新神职，不会影响任何现有眷族或其化身。"
   },
   "baseClass": {
-    "slugMissing": "缺少神职标识。"
+    "slugMissing": "缺少神职标识。",
+    "providerDefaultTitle": "默认供应商",
+    "providerDefaultHint": "从该神职召唤眷族时，预填 Provider / Model。",
+    "providerDefaultSaved": "默认供应商已保存。",
+    "saveProviderDefault": "保存默认"
   },
   "language": {
     "label": "语言",

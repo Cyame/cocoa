@@ -63,6 +63,48 @@ function mockApiSuccess() {
     if (path.startsWith('/base-classes') && (init?.method ?? 'GET') === 'GET') {
       return Promise.resolve(BASE_CLASSES_PAGE);
     }
+    if (path.startsWith('/organizations/default/providers') && (init?.method ?? 'GET') === 'GET') {
+      return Promise.resolve([
+        {
+          id: 'prov-1',
+          organization_id: 'org-1',
+          origin: 'custom',
+          catalog_provider_id: null,
+          name: 'OpenAI Compatible',
+          slug: 'openai-compatible',
+          request_format: 'completion',
+          base_url: 'https://api.example.com',
+          api_key_ref: 'OPENAI_API_KEY',
+          default_model: 'gpt-4o-mini',
+          models_allowlist: null,
+          verify_ssl: true,
+          models_endpoint_mode: 'inherit',
+          models_base_url: null,
+          enabled: true,
+          last_test_status: 'ok',
+          last_tested_at: null,
+          last_test_detail: null,
+          created_at: '2026-07-01T00:00:00Z',
+          updated_at: null,
+        },
+      ]);
+    }
+    if (path.startsWith('/organizations/default/system-hub') && (init?.method ?? 'GET') === 'GET') {
+      return Promise.resolve({ provider_id: 'prov-1', model: 'gpt-4o-mini', configured: true });
+    }
+    if (path.startsWith('/model-catalog') && (init?.method ?? 'GET') === 'GET') {
+      return Promise.resolve({
+        items: [
+          { id: 'gpt-4o-mini', name: 'gpt-4o-mini', provider: 'openai', context_length: 128000 },
+        ],
+        degraded: false,
+        default_model: 'gpt-4o-mini',
+        error: null,
+      });
+    }
+    if (path.startsWith('/base-classes/by-id/') && path.endsWith('/provider-default')) {
+      return Promise.resolve(null);
+    }
     if (path === '/entities' && init?.method === 'POST') {
       return Promise.resolve(CREATED_EMPLOYEE);
     }
@@ -80,8 +122,9 @@ beforeEach(() => {
     slug: '',
     slugTouched: false,
     rank: 'researcher',
-    provider: '',
+    providerId: '',
     model: '',
+    description: '',
     knowledgeRows: [],
     knowledgeFiles: [],
     knowledgeScope: 'instance',
@@ -97,8 +140,9 @@ afterEach(() => {
     slug: '',
     slugTouched: false,
     rank: 'researcher',
-    provider: '',
+    providerId: '',
     model: '',
+    description: '',
     knowledgeRows: [],
     knowledgeFiles: [],
     knowledgeScope: 'instance',
@@ -225,11 +269,9 @@ describe('FirstRunOnboardingModal', () => {
     fireEvent.change(screen.getByLabelText(/Display name/i), {
       target: { value: 'nyar-proutzi' },
     });
-    fireEvent.change(screen.getByLabelText(/Provider/i), {
-      target: { value: 'openai-compatible' },
-    });
-    fireEvent.change(screen.getByLabelText(/Model/i), {
-      target: { value: 'gpt-4o-mini' },
+    useOnboardingStore.setState({
+      providerId: 'prov-1',
+      model: 'gpt-4o-mini',
     });
 
     fireEvent.click(screen.getByTestId('onboarding-next'));
@@ -252,11 +294,10 @@ describe('FirstRunOnboardingModal', () => {
         rank: 'researcher',
         preset_slug: 'mi-shi',
         display_name: 'nyar-proutzi',
-        runtime_config: {
-          provider: 'openai-compatible',
+        system_prompt: null,
+        config_override: {
+          provider_id: 'prov-1',
           model: 'gpt-4o-mini',
-          knowledge_env: [],
-          knowledge_files: [],
         },
       });
     });

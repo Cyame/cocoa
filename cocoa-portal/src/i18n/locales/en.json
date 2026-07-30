@@ -99,12 +99,138 @@
       "failed": "failed"
     }
   },
+  "organization": {
+    "title": "Organization settings",
+    "name": "Name",
+    "slug": "Slug",
+    "providerHint": "Manage world providers, system hub, and cerebellum defaults.",
+    "notAvailable": "Organization API is not available yet.",
+    "readOnlyHint": "Read-only view. Super-admin can edit provider settings.",
+    "save": "Save",
+    "saving": "Saving...",
+    "cancel": "Cancel",
+    "loadingModels": "Loading models...",
+    "fields": {
+      "provider": "Provider",
+      "model": "Model",
+      "none": "None (clear)",
+      "selectModel": "Select model"
+    },
+    "providers": {
+      "title": "World providers",
+      "subtitle": "Enabled providers are available in onboarding and workspace overrides.",
+      "empty": "No providers configured yet.",
+      "enableCatalog": "Enable from catalog",
+      "addCustom": "Add custom endpoint",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "test": "Test",
+      "testOk": "OK",
+      "testFailed": "Failed",
+      "notTested": "Not tested",
+      "setDefault": "Set default",
+      "enable": "Enable",
+      "disable": "Disable",
+      "delete": "Delete",
+      "columns": {
+        "name": "Name",
+        "origin": "Origin",
+        "model": "Default model",
+        "status": "Status",
+        "test": "Last test",
+        "actions": "Actions"
+      }
+    },
+    "systemHub": {
+      "title": "System hub",
+      "subtitle": "Powers description generate/optimize in entity onboarding."
+    },
+    "cerebellum": {
+      "title": "Cerebellum world default",
+      "subtitle": "Fallback provider/model for workspace cerebellum agents."
+    },
+    "catalogModal": {
+      "title": "Enable catalog provider",
+      "catalogProvider": "Catalog provider",
+      "select": "Select a provider",
+      "alreadyEnabled": "enabled",
+      "apiKeyRef": "API key env ref",
+      "enable": "Enable"
+    },
+    "customModal": {
+      "title": "Add custom provider",
+      "name": "Display name",
+      "slug": "Slug (optional)",
+      "baseUrl": "Base URL",
+      "requestFormat": "Request format",
+      "defaultModel": "Default model",
+      "apiKeyRef": "API key env ref",
+      "create": "Create provider"
+    },
+    "setDefaultModal": {
+      "title": "Set default for {{name}}",
+      "target": "Apply default to",
+      "confirm": "Apply default",
+      "targets": {
+        "base_class": "Base classes (multi-select)",
+        "system_hub": "System hub",
+        "cerebellum": "Cerebellum world default"
+      }
+    }
+  },
+  "promoteModal": {
+    "title": "Promote (Reincarnate / Fork)",
+    "summary": "Write instance capabilities back into an entity, or fork a new one.",
+    "open": "Promote",
+    "close": "Close",
+    "cancel": "Cancel",
+    "modeLabel": "Mode",
+    "confirmUpdate": "Confirm reincarnate",
+    "confirmFork": "Confirm fork",
+    "submitting": "Promoting...",
+    "updateImpact": "Will update entity {{name}}. {{count}} instance(s) under it will sync after restart.",
+    "forkName": "New entity display name",
+    "forkSlug": "New entity slug",
+    "forkNote": "Source entity and its instances stay unchanged.",
+    "successUpdate": "Reincarnated. Restart {{count}} outdated instance(s) when ready.",
+    "successFork": "Forked a new entity successfully.",
+    "mode": {
+      "update": {
+        "label": "Reincarnate",
+        "hint": "Update the current entity; instances sync after restart."
+      },
+      "fork": {
+        "label": "Fork",
+        "hint": "Create a new entity; source stays untouched."
+      }
+    }
+  },
+  "transmuteModal": {
+    "title": "Transmute",
+    "summary": "Create a new base class from this entity's memory.",
+    "open": "Transmute",
+    "close": "Close",
+    "cancel": "Cancel",
+    "confirm": "Confirm transmute",
+    "submitting": "Transmuting...",
+    "confirmCopy": "Transmute only creates a new base class. It does not change any existing entity or instance."
+  },
   "topology": {
     "title": "Topology",
     "tagline": "Drag to pan. Wheel to zoom. Events refresh every 2 seconds.",
     "loading": "Loading topology",
     "canvasAria": "Topology canvas for workspace {{workspaceId}}",
     "membershipNode": "Membership",
+    "outdated": "Config stale",
+    "outdatedNotice": "Configuration was updated. Restart this instance when ready to apply the new settings.",
+    "yes": "Yes",
+    "no": "No",
+    "closeDetails": "Close details",
+    "instanceDetails": "Instance details",
+    "status": "Status",
+    "activeHash": "Active hash",
+    "actions": "Actions",
+    "backToTopology": "Back to topology",
     "mode": {
       "select": "Select",
       "connect": "Connect",
@@ -417,22 +543,23 @@
     "sizeBytes": "{{value}} B"
   },
   "batchRestart": {
-    "title": "Restart outdated instances",
-    "subtitle": "{{outdated}} of {{total}} instances have a mismatched hash",
-    "subtitleAllMatch": "All instances are in sync — no restart needed.",
-    "empty": "No outdated instances right now.",
+    "title": "Apply updated configuration",
+    "subtitle": "{{outdated}} of {{total}} instances are running on an older config — restart to apply changes",
+    "subtitleAllMatch": "All instances match the latest config.",
+    "configUpdatedHint": "Entity or provider settings changed. Restart is optional but required for running instances to pick up the new configuration. Memory is preserved.",
+    "empty": "No instances need a config refresh right now.",
     "selectAll": "Select all",
     "clearAll": "Clear all",
     "confirm": "Restart {{count}} instances",
-    "confirmStepTitle": "Confirm restart",
-    "confirmStepMessage": "About to restart {{count}} instances. The current loop will stop, pods will be recreated, and new capabilities will be loaded. Memory is preserved. Continue?",
-    "confirmAction": "Restart",
+    "confirmStepTitle": "Confirm restart to apply config",
+    "confirmStepMessage": "About to restart {{count}} instances so they load the latest configuration. The current loop will stop and pods will be recreated. Memory is preserved. You can also restart later from the topology view.",
+    "confirmAction": "Restart to apply",
     "cancel": "Cancel",
     "close": "Close",
-    "outdatedLabel": "outdated",
+    "outdatedLabel": "config stale",
     "runningLabel": "active",
     "durationSuffixAgo": "ago",
-    "runningDisabledHint": "Running instances are skipped from batch restart (stop them first).",
+    "runningDisabledHint": "Running instances are skipped from batch restart (stop them first). Restart remains optional until you are ready.",
     "successToast": "Restarted {{count}} instances.",
     "errorGeneric": "Batch restart failed.",
     "runningConflict": "Some selected instances are still running. Stop them and retry.",
@@ -498,9 +625,25 @@
       "rankIntern": "Intern — stateless AI, reset on each restart",
 
       "providerLabel": "Provider",
-      "providerPlaceholder": "e.g. default / openai-compatible",
+      "providerPlaceholder": "Select a world provider",
+      "providerInherit": "Inherit base-class default",
       "modelLabel": "Model",
-      "modelPlaceholder": "e.g. gpt-4o-mini",
+      "modelPlaceholder": "Select a model",
+      "modelInherit": "Inherit default model",
+      "loadingProviders": "Loading providers...",
+      "loadingModels": "Loading models...",
+      "noProviders": "No enabled providers yet.",
+      "configureProviders": "Configure in organization settings",
+      "descriptionLabel": "Description",
+      "descriptionPlaceholder": "Role summary for this entity (optional)",
+      "generateDescription": "Generate description",
+      "optimizeDescription": "Optimize description",
+      "generateDisabledName": "Enter a display name first",
+      "generateDisabledHub": "Configure the system hub provider in world settings first",
+      "previewLabel": "Preview",
+      "previewTag": "Onboarding preview",
+      "previewKnowledgeCount": "{{count}} entries",
+      "unnamedEntity": "Unnamed entity",
 
       "knowledgeHeading": "Knowledge binding",
       "knowledgeEnvLabel": "Environment variables",
@@ -557,6 +700,7 @@
     "contractsTitle": "Contracts",
     "contractsDetail": "Global user permission management will appear here.",
     "noEntities": "No entities in this namespace yet.",
+    "entityActions": "Actions",
     "viewDetail": "View detail",
     "capabilityMarketTitle": "Capability market",
     "capabilityMarketDetail": "Atomic capability browser coming soon.",
@@ -577,7 +721,18 @@
       "topology": "Topology",
       "memberships": "Contracts",
       "instances": "Avatars",
+      "brain": "Brain",
       "memory": "Memory"
+    },
+    "brain": {
+      "memory": "Memory",
+      "cerebellum": "Cerebellum",
+      "cerebellumTitle": "Cerebellum provider override",
+      "cerebellumSubtitle": "Leave empty to inherit the world cerebellum default.",
+      "worldDefaultHint": "World default: {{provider}} / {{model}}",
+      "noWorldDefault": "No world cerebellum default is configured yet.",
+      "inheritWorld": "Inherit world default",
+      "saveCerebellum": "Save cerebellum settings"
     },
     "emptyMembershipsTitle": "No contracts",
     "emptyMembershipsDetail": "This workspace has no active memberships.",
@@ -609,15 +764,12 @@
     "goBack": "Go back",
     "goNamespaces": "Back to namespaces"
   },
-  "organization": {
-    "title": "Organization settings",
-    "name": "Name",
-    "slug": "Slug",
-    "providerHint": "Provider configuration will be managed here.",
-    "notAvailable": "Organization API is not available yet."
-  },
   "baseClass": {
-    "slugMissing": "Base class slug is missing."
+    "slugMissing": "Base class slug is missing.",
+    "providerDefaultTitle": "Default provider",
+    "providerDefaultHint": "Pre-fills Provider/Model when summoning an entity from this base class.",
+    "providerDefaultSaved": "Default provider saved.",
+    "saveProviderDefault": "Save default"
   },
   "language": {
     "label": "Language",

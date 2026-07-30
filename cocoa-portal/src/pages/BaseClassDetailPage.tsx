@@ -4,15 +4,30 @@ import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 import { ApiError } from '@/lib/api';
 import { fetchBaseClass } from '@/lib/api/entities';
+import {
+  fetchBaseClassProviderDefault,
+  fetchModelCatalog,
+  listOrganizationProviders,
+  type OrganizationProvider,
+  updateBaseClassProviderDefault,
+} from '@/lib/api/providers';
 import type { BaseClass } from '@/lib/types';
 import { useOnboardingModalStore } from '@/stores/onboardingModalStore';
+import { useSessionStore } from '@/stores/session';
 
 export default function BaseClassDetailPage() {
   const { t } = useTranslation();
   const { slug } = useParams<{ slug: string }>();
+  const isSuperAdmin = useSessionStore((s) => s.user?.is_super_admin === true);
   const [baseClass, setBaseClass] = useState<BaseClass | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [providers, setProviders] = useState<readonly OrganizationProvider[]>([]);
+  const [providerId, setProviderId] = useState('');
+  const [model, setModel] = useState('');
+  const [models, setModels] = useState<readonly string[]>([]);
+  const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const openOnboarding = useOnboardingModalStore((state) => state.open);
 
   useEffect(() => {
@@ -21,7 +36,18 @@ export default function BaseClassDetailPage() {
     async function load() {
       try {
         const data = await fetchBaseClass(slug as string);
-        if (isActive) setBaseClass(data);
+        if (!isActive) return;
+        setBaseClass(data);
+        const [enabledProviders, binding] = await Promise.all([
+          listOrganizationProviders(true),
+          fetchBaseClassProviderDefault(data.id),
+        ]);
+        if (!isActive) return;
+        setProviders(enabledProviders);
+        if (binding) {
+          setProviderId(binding.provider_id);
+          setModel(binding.model);
+        }
       } catch (error) {
         if (!isActive) return;
         setErrorMessage(error instanceof ApiError ? error.message : t('errors.network'));
@@ -34,6 +60,41 @@ export default function BaseClassDetailPage() {
       isActive = false;
     };
   }, [slug, t]);
+
+  useEffect(() => {
+    if (!providerId) {
+      setModels([]);
+      return;
+    }
+    let cancelled = false;
+    void fetchModelCatalog(providerId)
+      .then((page) => {
+        if (!cancelled) setModels(page.items.map((m) => m.id));
+      })
+      .catch(() => {
+        if (!cancelled) setModels([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [providerId]);
+
+  async function handleSaveDefault() {
+    if (!baseClass || !providerId || !model) return;
+    setIsSaving(true);
+    setSaveMsg(null);
+    try {
+      await updateBaseClassProviderDefault(baseClass.id, {
+        provider_id: providerId,
+        model,
+      });
+      setSaveMsg(t('baseClass.providerDefaultSaved'));
+    } catch (error) {
+      setSaveMsg(error instanceof ApiError ? error.message : t('errors.network'));
+    } finally {
+      setIsSaving(false);
+    }
+  }
 
   if (slug === undefined) {
     return <p className="p-6 text-sm text-red-700">{t('baseClass.slugMissing')}</p>;
@@ -81,6 +142,61 @@ export default function BaseClassDetailPage() {
             </button>
           </header>
           <p className="text-sm leading-6 text-slate-600">{baseClass.description}</p>
+
+          <section className="mt-8 rounded-xl border border-slate-200 bg-white p-4">
+            <h2 className="text-sm font-semibold text-slate-900">
+              {t('baseClass.providerDefaultTitle')}
+            </h2>
+            <p className="mt-1 text-xs text-slate-500">{t('baseClass.providerDefaultHint')}</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <label className="block text-xs font-medium text-slate-600">
+                {t('organization.fields.provider')}
+                <select
+                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  value={providerId}
+                  disabled={!isSuperAdmin}
+                  onChange={(e) => {
+                    setProviderId(e.target.value);
+                    setModel('');
+                  }}
+                >
+                  <option value="">{t('organization.catalogModal.select')}</option>
+                  {providers.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-xs font-medium text-slate-600">
+                {t('organization.fields.model')}
+                <select
+                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  value={model}
+                  disabled={!isSuperAdmin || !providerId}
+                  onChange={(e) => setModel(e.target.value)}
+                >
+                  <option value="">{t('organization.fields.selectModel')}</option>
+                  {models.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            {isSuperAdmin ? (
+              <button
+                type="button"
+                disabled={isSaving || !providerId || !model}
+                onClick={() => void handleSaveDefault()}
+                className="mt-4 rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-40"
+              >
+                {isSaving ? t('organization.saving') : t('baseClass.saveProviderDefault')}
+              </button>
+            ) : null}
+            {saveMsg ? <p className="mt-2 text-xs text-slate-600">{saveMsg}</p> : null}
+          </section>
         </>
       ) : null}
     </section>

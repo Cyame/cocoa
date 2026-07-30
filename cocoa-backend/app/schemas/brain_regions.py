@@ -73,6 +73,8 @@ class CerebellumAgentUpdate(BaseModel):
     system_prompt: str | None = None
     base_slug: str | None = None
     installed_genes: list | dict | None = None
+    provider_id: str | None = None
+    model: str | None = None
 
 
 class CerebellumAgentOut(BaseModel):
@@ -86,6 +88,8 @@ class CerebellumAgentOut(BaseModel):
     loop_status: str
     heartbeat_at: datetime | None = None
     installed_genes: list | dict | None = None
+    provider_id: str | None = None
+    model: str | None = None
     created_at: datetime
     updated_at: datetime | None = None
 

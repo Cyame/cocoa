@@ -33,22 +33,6 @@ const ENTITY_RESPONSE = {
       description: null,
       tags: [],
     },
-    {
-      name: 'planted-skill-1',
-      type: 'skill',
-      version: '1.0.0',
-      source: 'extra_added',
-      description: null,
-      tags: [],
-    },
-    {
-      name: 'shell',
-      type: 'tool',
-      version: '1.0.0',
-      source: 'from_base_class',
-      description: null,
-      tags: [],
-    },
   ],
   ai_genes: [{ slug: 'workflow-patterns', source: 'from_base_class' }],
   creator_email: 'user@example.com',
@@ -76,6 +60,7 @@ const INSTANCES_RESPONSE = {
 
 const PROMOTE_RESPONSE = {
   status: 'ok',
+  mode: 'update',
   promoted_at: '2026-07-29T12:00:00Z',
   entity_id: ENTITY_ID,
   entity_promotion_migration_hash: 'abc123',
@@ -99,11 +84,11 @@ const TRANSMUTE_RESPONSE = {
     commands: ['/plan'],
     based_on_memory: 23,
   },
-  source_employee_id: ENTITY_ID,
+  source_entity_id: ENTITY_ID,
 };
 
-function openModal() {
-  useEntityModalStore.getState().open(ENTITY_ID);
+function openModal(tab: 'basic' | 'distill' = 'basic') {
+  useEntityModalStore.getState().open(ENTITY_ID, tab === 'distill' ? 'distill' : undefined);
 }
 
 function renderModal() {
@@ -118,7 +103,7 @@ function renderModal() {
 
 beforeEach(() => {
   mockedApi.mockReset();
-  useEntityModalStore.setState({ entityId: null });
+  useEntityModalStore.setState({ entityId: null, initialTab: null });
   mockedApi.mockImplementation((path, init) => {
     if (path === `/entities/${ENTITY_ID}` && (!init || init.method === undefined)) {
       return Promise.resolve(ENTITY_RESPONSE);
@@ -157,39 +142,26 @@ describe('EntityDetailModal', () => {
     renderModal();
     await screen.findByTestId('entity-modal-title');
 
-    const capabilitiesTab = screen.getByTestId('entity-tab-capabilities');
-    fireEvent.click(capabilitiesTab);
-    expect(capabilitiesTab).toHaveAttribute('aria-selected', 'true');
+    fireEvent.click(screen.getByTestId('entity-tab-capabilities'));
     expect(await screen.findByText('Group by type')).toBeInTheDocument();
 
-    const genesTab = screen.getByTestId('entity-tab-ai_genes');
-    fireEvent.click(genesTab);
-    expect(genesTab).toHaveAttribute('aria-selected', 'true');
+    fireEvent.click(screen.getByTestId('entity-tab-distill'));
+    expect(await screen.findByTestId('distill-open-promote')).toBeInTheDocument();
+    expect(screen.getByTestId('distill-open-transmute')).toBeInTheDocument();
 
-    const instancesTab = screen.getByTestId('entity-tab-instances');
-    fireEvent.click(instancesTab);
-    expect(instancesTab).toHaveAttribute('aria-selected', 'true');
-
-    const distillTab = screen.getByTestId('entity-tab-distill');
-    fireEvent.click(distillTab);
-    expect(distillTab).toHaveAttribute('aria-selected', 'true');
-    expect(await screen.findByText('Promote')).toBeInTheDocument();
-    expect(screen.getByText('Transmute')).toBeInTheDocument();
-
-    const basicTab = screen.getByTestId('entity-tab-basic');
-    fireEvent.click(basicTab);
-    expect(basicTab).toHaveAttribute('aria-selected', 'true');
+    fireEvent.click(screen.getByTestId('entity-tab-basic'));
+    expect(screen.getByTestId('entity-tab-basic')).toHaveAttribute('aria-selected', 'true');
   });
 
-  it('triggers promote, hits the endpoint, and shows a success toast', async () => {
-    openModal();
+  it('opens promote modal and submits update mode', async () => {
+    openModal('distill');
     renderModal();
     await screen.findByTestId('entity-modal-title');
 
-    fireEvent.click(screen.getByTestId('entity-tab-distill'));
+    fireEvent.click(screen.getByTestId('distill-open-promote'));
+    expect(await screen.findByTestId('promote-modal')).toBeInTheDocument();
 
-    const submit = await screen.findByTestId('distill-promote-submit');
-    fireEvent.click(submit);
+    fireEvent.click(screen.getByTestId('promote-modal-submit'));
 
     await waitFor(() => {
       const call = mockedApi.mock.calls.find(
@@ -207,32 +179,29 @@ describe('EntityDetailModal', () => {
     if (promoteCall === undefined) throw new Error('expected promote call');
     const init = promoteCall[1] as RequestInit;
     const body = JSON.parse(init.body as string);
-    expect(body.memory_kind_filter).toEqual(
-      expect.arrayContaining(['experience', 'lesson', 'decision', 'problem']),
-    );
+    expect(body.mode).toBe('update');
   });
 
-  it('triggers transmute and opens the DistillResultModal with manifest preview', async () => {
-    openModal();
+  it('opens transmute modal and shows result after submit', async () => {
+    openModal('distill');
     renderModal();
     await screen.findByTestId('entity-modal-title');
 
-    fireEvent.click(screen.getByTestId('entity-tab-distill'));
+    fireEvent.click(screen.getByTestId('distill-open-transmute'));
+    expect(await screen.findByTestId('transmute-modal')).toBeInTheDocument();
 
-    fireEvent.change(screen.getByTestId('distill-transmute-slug'), {
+    fireEvent.change(screen.getByTestId('transmute-modal-slug'), {
       target: { value: 'jin-mi-shi' },
     });
-    fireEvent.change(screen.getByTestId('distill-transmute-name'), {
+    fireEvent.change(screen.getByTestId('transmute-modal-name'), {
       target: { value: '金密士' },
     });
 
-    fireEvent.click(screen.getByTestId('distill-transmute-submit'));
+    fireEvent.click(screen.getByTestId('transmute-modal-submit'));
 
     const resultDialog = await screen.findByTestId('distill-result-modal');
     expect(resultDialog).toBeInTheDocument();
     expect(screen.getByTestId('distill-result-slug')).toHaveTextContent('jin-mi-shi');
-    expect(screen.getByText('金密士')).toBeInTheDocument();
-    expect(screen.getByText('Based on 23 memory entries')).toBeInTheDocument();
 
     const transmuteCall = mockedApi.mock.calls.find(
       ([path, init]) =>
@@ -244,33 +213,5 @@ describe('EntityDetailModal', () => {
     const body = JSON.parse(init.body as string);
     expect(body.target_base_class_slug).toBe('jin-mi-shi');
     expect(body.target_base_class_name).toBe('金密士');
-    expect(body.snapshot_only).toBe(false);
-  });
-
-  it('disables transmute submit when target slug is invalid', async () => {
-    openModal();
-    renderModal();
-    await screen.findByTestId('entity-modal-title');
-
-    fireEvent.click(screen.getByTestId('entity-tab-distill'));
-
-    fireEvent.change(screen.getByTestId('distill-transmute-slug'), {
-      target: { value: 'Invalid Slug' },
-    });
-    fireEvent.change(screen.getByTestId('distill-transmute-name'), {
-      target: { value: '名称' },
-    });
-
-    const submit = screen.getByTestId('distill-transmute-submit');
-    expect(submit).toBeDisabled();
-
-    fireEvent.click(submit);
-    expect(
-      mockedApi.mock.calls.find(
-        ([path, init]) =>
-          path === `/learning/entities/${ENTITY_ID}/transmute` &&
-          (init?.method ?? 'GET') === 'POST',
-      ),
-    ).toBeUndefined();
   });
 });

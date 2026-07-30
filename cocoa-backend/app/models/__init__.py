@@ -2,6 +2,7 @@
 
 import app.models.ai_gene  # noqa: E402, F401
 import app.models.base_class  # noqa: E402, F401
+import app.models.base_class_provider_default  # noqa: E402, F401
 import app.models.capability_market  # noqa: E402, F401
 import app.models.central_hub  # noqa: E402, F401
 import app.models.deploy_record  # noqa: E402, F401
@@ -12,12 +13,16 @@ import app.models.instance_provider_config  # noqa: E402, F401
 import app.models.loop_state  # noqa: E402, F401
 import app.models.memory  # noqa: E402, F401
 import app.models.organization  # noqa: E402, F401
+import app.models.organization_provider  # noqa: E402, F401
 import app.models.user  # noqa: E402, F401
 import app.models.user_gene  # noqa: E402, F401
 import app.models.workspace  # noqa: E402, F401
 
 from app.models.ai_gene import AiGene, BaseClassAiGene  # noqa: E402, F401
 from app.models.base_class import BaseClass  # noqa: E402, F401
+from app.models.base_class_provider_default import (  # noqa: E402, F401
+    BaseClassProviderDefault,
+)
 from app.models.capability_market import (  # noqa: E402, F401
     CapabilityCreatedVia,
     CapabilityMarketEntry,
@@ -37,6 +42,7 @@ from app.models.central_hub import (  # noqa: E402, F401
 from app.models.entity import Entity, EntityRank  # noqa: E402, F401
 from app.models.memory import Memory, Memory, MemoryKind  # noqa: E402, F401
 from app.models.organization import Namespace, Organization  # noqa: E402, F401
+from app.models.organization_provider import OrganizationProvider  # noqa: E402, F401
 from app.models.user_gene import UserGene, UserGeneKind, UserUserGene  # noqa: E402, F401
 from app.models.workspace import (  # noqa: E402, F401
     Membership,

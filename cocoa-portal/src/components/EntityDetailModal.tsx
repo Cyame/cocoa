@@ -39,6 +39,7 @@ type EntityDetailModalProps = {
 export default function EntityDetailModal({ onClose }: EntityDetailModalProps) {
   const { t } = useTranslation();
   const entityId = useEntityModalStore((state) => state.entityId);
+  const initialTab = useEntityModalStore((state) => state.initialTab);
   const [tab, setTab] = useState<EntityModalTabId>('basic');
   const [entity, setEntity] = useState<EntityDetail | null>(null);
   const [instances, setInstances] = useState<readonly EntityInstanceStatus[]>([]);
@@ -97,9 +98,10 @@ export default function EntityDetailModal({ onClose }: EntityDetailModalProps) {
 
   useEffect(() => {
     if (entityId === null) return;
+    setTab(initialTab ?? 'basic');
     void loadEntity(entityId);
     void loadInstances(entityId);
-  }, [entityId, loadEntity, loadInstances]);
+  }, [entityId, initialTab, loadEntity, loadInstances]);
 
   useEffect(() => {
     if (entityId === null) return;
@@ -149,10 +151,14 @@ export default function EntityDetailModal({ onClose }: EntityDetailModalProps) {
   const canTransmute = true;
 
   const handlePromote = useCallback(
-    async (kinds: readonly MemoryKind[] | null) => {
+    async (payload: import('@/lib/api/entities').PromotePayload) => {
       if (entityId === null) return;
-      await promoteEntity(entityId, kinds);
-      setToast({ kind: 'success', message: t('entityModal.distillTab.promote.success') });
+      const result = await promoteEntity(entityId, payload);
+      const message =
+        result.mode === 'fork'
+          ? t('promoteModal.successFork')
+          : t('promoteModal.successUpdate', { count: result.outdated_instances_count });
+      setToast({ kind: 'success', message });
     },
     [entityId, t],
   );
@@ -358,6 +364,7 @@ export default function EntityDetailModal({ onClose }: EntityDetailModalProps) {
           ) : (
             <DistillTab
               entity={entity}
+              instanceCount={instances.length}
               canTransmute={canTransmute}
               onPromote={handlePromote}
               onTransmute={handleTransmute}

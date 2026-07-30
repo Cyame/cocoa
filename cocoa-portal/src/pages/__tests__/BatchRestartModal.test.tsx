@@ -84,8 +84,12 @@ describe('BatchRestartModal', () => {
   it('renders the title, subtitle, and one row per outdated instance', () => {
     renderModal();
 
-    expect(screen.getByRole('dialog', { name: 'Restart outdated instances' })).toBeInTheDocument();
-    expect(screen.getByText('3 of 5 instances have a mismatched hash')).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Apply updated configuration' })).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        '3 of 5 instances are running on an older config — restart to apply changes',
+      ),
+    ).toBeInTheDocument();
 
     for (const r of OUTDATED_ROWS) {
       expect(screen.getByTestId(`batch-restart-row-${r.instance_id}`)).toBeInTheDocument();

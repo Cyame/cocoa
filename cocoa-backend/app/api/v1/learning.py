@@ -579,13 +579,7 @@ async def promote_entity(
     db: DB,
     current_user: CurrentUserDep,
 ) -> PromoteResultOut:
-    """Promote an instance's capability set into the Entity.
-
-    Per PRD §13.6.4: idempotent union of instance caps into
-    ``Entity.capabilities`` (matched by capability name), refresh of
-    ``migration_hash``, and an event payload that lists how many
-    other instances are now outdated (``active_hash != migration_hash``).
-    """
+    """Promote an instance's capability set into the Entity (回魂) or fork a new Entity (派生)."""
     entity = await db.get(Entity, entity_id)
     if entity is None or entity.deleted_at is not None:
         raise NotFoundError(
@@ -593,6 +587,27 @@ async def promote_entity(
             "errors.entity.not_found",
             f"Entity {entity_id!r} not found",
         )
+
+    if body.mode == "fork":
+        if not body.new_entity_name or not body.new_entity_slug:
+            raise ValidationError(
+                "promote.fork_fields_required",
+                "errors.promote.fork_fields_required",
+                "new_entity_name and new_entity_slug are required when mode=fork",
+            )
+        slug_clash = await db.execute(
+            select(Entity).where(
+                Entity.namespace_id == entity.namespace_id,
+                Entity.slug == body.new_entity_slug,
+                Entity.deleted_at.is_(None),
+            )
+        )
+        if slug_clash.scalar_one_or_none() is not None:
+            raise ConflictError(
+                "entity.slug_taken",
+                "errors.entity.slug_taken",
+                f"Entity slug '{body.new_entity_slug}' already taken in namespace",
+            )
 
     # 1. Resolve source instance.
     if body.from_instance_id:
@@ -662,11 +677,59 @@ async def promote_entity(
     # 5. snapshot_only → preview without writing.
     if body.snapshot_only:
         return PromoteResultOut(
+            mode=body.mode,
             promoted_at=datetime.now(timezone.utc).isoformat(),
             entity_id=entity_id,
             entity_promotion_migration_hash=compute_migration_hash(
                 merged, prompt_regen,
             ),
+            capability_promoted_count=promoted_now,
+            prompt_regenerated=body.include_prompt_regen,
+            new_prompt_preview=prompt_regen or "",
+            outdated_instances_count=0,
+            capability_market_uploaded=0,
+        )
+
+    if body.mode == "fork":
+        new_entity = Entity(
+            namespace_id=entity.namespace_id,
+            name=body.new_entity_name,
+            slug=body.new_entity_slug,
+            preset_slug=entity.preset_slug,
+            rank=entity.rank,
+            display_name=body.new_entity_name,
+            display_color=entity.display_color,
+            system_prompt=prompt_regen if body.include_prompt_regen else entity.system_prompt,
+            config_override=entity.config_override,
+            capabilities=merged,
+        )
+        db.add(new_entity)
+        await db.flush()
+        new_migration_hash = compute_entity_migration_hash(new_entity)
+        new_entity.migration_hash = new_migration_hash
+
+        await emit(
+            LEARNING_PROMOTE_COMPLETED,
+            actor_type="user",
+            actor_id=current_user.user_id,
+            resource_type="entity",
+            resource_id=new_entity.id,
+            payload={
+                "mode": "fork",
+                "source_entity_id": entity_id,
+                "entity_id": new_entity.id,
+                "new_migration_hash": new_migration_hash,
+                "capability_promoted_count": promoted_now,
+            },
+            session=db,
+        )
+        await db.commit()
+        return PromoteResultOut(
+            mode="fork",
+            promoted_at=datetime.now(timezone.utc).isoformat(),
+            entity_id=entity_id,
+            new_entity_id=new_entity.id,
+            entity_promotion_migration_hash=new_migration_hash,
             capability_promoted_count=promoted_now,
             prompt_regenerated=body.include_prompt_regen,
             new_prompt_preview=prompt_regen or "",
@@ -705,6 +768,7 @@ async def promote_entity(
         resource_type="entity",
         resource_id=entity.id,
         payload={
+            "mode": "update",
             "entity_id": entity_id,
             "new_migration_hash": new_migration_hash,
             "capability_promoted_count": promoted_now,
@@ -716,6 +780,7 @@ async def promote_entity(
     await db.commit()
 
     return PromoteResultOut(
+        mode="update",
         promoted_at=datetime.now(timezone.utc).isoformat(),
         entity_id=entity_id,
         entity_promotion_migration_hash=new_migration_hash,

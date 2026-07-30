@@ -297,8 +297,7 @@ export default function Step1DivinityCards({ onLoadingChange, onErrorChange }: S
   }, [onErrorChange, onLoadingChange, t]);
 
   const dataSource: readonly BaseClass[] = useMemo(() => {
-    const source =
-      classes !== null && classes.length > 0 ? classes : FALLBACK_BASE_CLASSES;
+    const source = classes !== null && classes.length > 0 ? classes : FALLBACK_BASE_CLASSES;
     return source.filter((entry) => !isInternalBaseClass(entry));
   }, [classes]);
 

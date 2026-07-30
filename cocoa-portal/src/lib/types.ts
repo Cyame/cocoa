@@ -309,6 +309,7 @@ export type EntityPatchPayload = {
 
 export type PromoteResult = {
   readonly status: string;
+  readonly mode?: string;
   readonly promoted_at: string;
   readonly entity_id: string;
   readonly entity_promotion_migration_hash: string;
@@ -317,6 +318,7 @@ export type PromoteResult = {
   readonly new_prompt_preview: string;
   readonly outdated_instances_count: number;
   readonly capability_market_uploaded: number;
+  readonly new_entity_id?: string | null;
 };
 
 export type TransmuteResult = {
@@ -357,10 +359,14 @@ export type KnowledgeFileEntry = {
 };
 
 export type EmployeeRuntimeConfig = {
-  readonly provider?: string | null;
-  readonly model?: string | null;
   readonly knowledge_env?: readonly KnowledgeEnvEntry[];
   readonly knowledge_files?: readonly KnowledgeFileEntry[];
+};
+
+export type EntityConfigOverride = {
+  readonly provider_id?: string | null;
+  readonly model?: string | null;
+  readonly runtime_config?: EmployeeRuntimeConfig;
 };
 
 export type OnboardingPayload = {
@@ -369,7 +375,8 @@ export type OnboardingPayload = {
   readonly rank: EmployeeRank;
   readonly preset_slug: string;
   readonly display_name: string;
-  readonly runtime_config?: EmployeeRuntimeConfig;
+  readonly system_prompt?: string | null;
+  readonly config_override?: EntityConfigOverride | null;
 };
 
 export type KnowledgeScope = 'instance' | 'entity' | 'workspace';

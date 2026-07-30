@@ -1,10 +1,21 @@
-import { AlertCircle, Cpu, LoaderCircle, Notebook, UserRound, Users } from 'lucide-react';
+import { AlertCircle, Brain, Cpu, LoaderCircle, Notebook, UserRound, Users } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 import IdeShell from '@/components/IdeShell';
 import { ApiError, api } from '@/lib/api';
 import { fetchLiveStatus } from '@/lib/api/liveStatus';
+import {
+  type CatalogModel,
+  type CerebellumAgent,
+  type CerebellumDefaults,
+  fetchCerebellumDefaults,
+  fetchModelCatalog,
+  fetchWorkspaceCerebellum,
+  listOrganizationProviders,
+  type OrganizationProvider,
+  patchWorkspaceCerebellum,
+} from '@/lib/api/providers';
 import { fetchWorkspace } from '@/lib/api/workspaces';
 import type {
   Entity,
@@ -17,7 +28,8 @@ import type {
 import TopologyPage from '@/pages/TopologyPage';
 import { useSelectedStore } from '@/stores/selected';
 
-type CanvasTab = 'topology' | 'memberships' | 'instances' | 'memory';
+type CanvasTab = 'topology' | 'memberships' | 'instances' | 'brain';
+type BrainSubTab = 'memory' | 'cerebellum';
 
 type OffsetPage<T> = {
   readonly items: readonly T[];
@@ -60,10 +72,15 @@ export default function WorkspaceIdePage() {
 
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [activeTab, setActiveTab] = useState<CanvasTab>('topology');
+  const [brainSubTab, setBrainSubTab] = useState<BrainSubTab>('memory');
   const [memberships, setMemberships] = useState<readonly Membership[]>([]);
   const [instances, setInstances] = useState<readonly Instance[]>([]);
   const [entities, setEntities] = useState<readonly Entity[]>([]);
   const [centralHub, setCentralHub] = useState<CentralHub | null>(null);
+  const [cerebellum, setCerebellum] = useState<CerebellumAgent | null>(null);
+  const [worldCerebellumDefaults, setWorldCerebellumDefaults] = useState<CerebellumDefaults | null>(
+    null,
+  );
   const [liveStatus, setLiveStatus] = useState<readonly LiveStatusItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -79,20 +96,25 @@ export default function WorkspaceIdePage() {
     setIsLoading(true);
     setErrorMessage(null);
     try {
-      const [ws, membershipPage, instancePage, entityPage, hub] = await Promise.all([
-        fetchWorkspace(id),
-        api<OffsetPage<Membership>>(
-          `/messaging/memberships?workspace_id=${encodeURIComponent(id)}`,
-        ),
-        api<OffsetPage<Instance>>(`/instances?workspace_id=${encodeURIComponent(id)}`),
-        api<OffsetPage<Entity>>('/entities?limit=200'),
-        api<CentralHub>(`/central-hubs?workspace_id=${encodeURIComponent(id)}`).catch(() => null),
-      ]);
+      const [ws, membershipPage, instancePage, entityPage, hub, cerebellumAgent, defaults] =
+        await Promise.all([
+          fetchWorkspace(id),
+          api<OffsetPage<Membership>>(
+            `/messaging/memberships?workspace_id=${encodeURIComponent(id)}`,
+          ),
+          api<OffsetPage<Instance>>(`/instances?workspace_id=${encodeURIComponent(id)}`),
+          api<OffsetPage<Entity>>('/entities?limit=200'),
+          api<CentralHub>(`/central-hubs?workspace_id=${encodeURIComponent(id)}`).catch(() => null),
+          fetchWorkspaceCerebellum(id).catch(() => null),
+          fetchCerebellumDefaults().catch(() => null),
+        ]);
       setWorkspace(ws);
       setMemberships(membershipPage.items);
       setInstances(instancePage.items);
       setEntities(entityPage.items);
       if (hub !== null) setCentralHub(hub);
+      if (cerebellumAgent !== null) setCerebellum(cerebellumAgent);
+      if (defaults !== null) setWorldCerebellumDefaults(defaults);
     } catch (error) {
       if (error instanceof ApiError) {
         setErrorMessage(error.message);
@@ -143,7 +165,7 @@ export default function WorkspaceIdePage() {
     { id: 'topology', label: t('workspace.tabs.topology'), Icon: Users },
     { id: 'memberships', label: t('workspace.tabs.memberships'), Icon: Users },
     { id: 'instances', label: t('workspace.tabs.instances'), Icon: Cpu },
-    { id: 'memory', label: t('workspace.tabs.memory'), Icon: Notebook },
+    { id: 'brain', label: t('workspace.tabs.brain'), Icon: Brain },
   ];
 
   if (id === undefined) {
@@ -229,31 +251,207 @@ export default function WorkspaceIdePage() {
             />
           ) : null}
 
-          {!isLoading && activeTab === 'memory' ? (
-            <div className="p-6">
-              {centralHub === null ? (
-                <p className="text-sm text-slate-500">{t('workspace.emptyMemoryDetail')}</p>
-              ) : (
-                <div className="grid gap-4 lg:grid-cols-2">
-                  <article className="rounded-lg border border-slate-200 bg-white p-4">
-                    <h2 className="text-sm font-semibold">{t('workspace.sharedContext')}</h2>
-                    <p className="mt-3 whitespace-pre-wrap text-sm text-slate-600">
-                      {centralHub.content ?? t('workspace.noSharedContext')}
-                    </p>
-                  </article>
-                  <article className="rounded-lg border border-slate-200 bg-white p-4">
-                    <h2 className="text-sm font-semibold">{t('workspace.manualNotes')}</h2>
-                    <p className="mt-3 whitespace-pre-wrap text-sm text-slate-600">
-                      {centralHub.manual_notes ?? t('workspace.noManualNotes')}
-                    </p>
-                  </article>
-                </div>
-              )}
+          {!isLoading && activeTab === 'brain' ? (
+            <div className="flex h-full flex-col">
+              <div className="flex shrink-0 gap-1 border-b border-slate-200 bg-slate-50 px-4 py-2">
+                {(['memory', 'cerebellum'] as const).map((subTab) => (
+                  <button
+                    key={subTab}
+                    type="button"
+                    role="tab"
+                    aria-selected={brainSubTab === subTab}
+                    onClick={() => setBrainSubTab(subTab)}
+                    className={`rounded-md px-3 py-1.5 text-xs font-semibold ${
+                      brainSubTab === subTab
+                        ? 'bg-white text-slate-900 shadow-sm'
+                        : 'text-slate-600 hover:bg-white'
+                    }`}
+                  >
+                    {subTab === 'memory' ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        <Notebook className="size-3.5" aria-hidden="true" />
+                        {t('workspace.brain.memory')}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5">
+                        <Brain className="size-3.5" aria-hidden="true" />
+                        {t('workspace.brain.cerebellum')}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto p-6">
+                {brainSubTab === 'memory' ? (
+                  centralHub === null ? (
+                    <p className="text-sm text-slate-500">{t('workspace.emptyMemoryDetail')}</p>
+                  ) : (
+                    <div className="grid gap-4 lg:grid-cols-2">
+                      <article className="rounded-lg border border-slate-200 bg-white p-4">
+                        <h2 className="text-sm font-semibold">{t('workspace.sharedContext')}</h2>
+                        <p className="mt-3 whitespace-pre-wrap text-sm text-slate-600">
+                          {centralHub.content ?? t('workspace.noSharedContext')}
+                        </p>
+                      </article>
+                      <article className="rounded-lg border border-slate-200 bg-white p-4">
+                        <h2 className="text-sm font-semibold">{t('workspace.manualNotes')}</h2>
+                        <p className="mt-3 whitespace-pre-wrap text-sm text-slate-600">
+                          {centralHub.manual_notes ?? t('workspace.noManualNotes')}
+                        </p>
+                      </article>
+                    </div>
+                  )
+                ) : (
+                  <CerebellumPanel
+                    workspaceId={id}
+                    cerebellum={cerebellum}
+                    worldDefaults={worldCerebellumDefaults}
+                    onUpdated={(next) => setCerebellum(next)}
+                  />
+                )}
+              </div>
             </div>
           ) : null}
         </div>
       </div>
     </IdeShell>
+  );
+}
+
+function CerebellumPanel({
+  workspaceId,
+  cerebellum,
+  worldDefaults,
+  onUpdated,
+}: {
+  readonly workspaceId: string;
+  readonly cerebellum: CerebellumAgent | null;
+  readonly worldDefaults: CerebellumDefaults | null;
+  readonly onUpdated: (next: CerebellumAgent) => void;
+}) {
+  const { t } = useTranslation();
+  const [providers, setProviders] = useState<readonly OrganizationProvider[]>([]);
+  const [models, setModels] = useState<readonly CatalogModel[]>([]);
+  const [providerId, setProviderId] = useState(cerebellum?.provider_id ?? '');
+  const [model, setModel] = useState(cerebellum?.model ?? '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    listOrganizationProviders(true)
+      .then(setProviders)
+      .catch(() => setProviders([]));
+  }, []);
+
+  useEffect(() => {
+    setProviderId(cerebellum?.provider_id ?? '');
+    setModel(cerebellum?.model ?? '');
+  }, [cerebellum]);
+
+  useEffect(() => {
+    if (providerId.length === 0) {
+      setModels([]);
+      return;
+    }
+    fetchModelCatalog(providerId)
+      .then((page) => setModels(page.items))
+      .catch(() => setModels([]));
+  }, [providerId]);
+
+  const worldHint =
+    worldDefaults?.provider_id && worldDefaults.model
+      ? t('workspace.brain.worldDefaultHint', {
+          provider:
+            providers.find((p) => p.id === worldDefaults.provider_id)?.name ??
+            worldDefaults.provider_id,
+          model: worldDefaults.model,
+        })
+      : t('workspace.brain.noWorldDefault');
+
+  async function handleSave() {
+    setSaving(true);
+    setError(null);
+    try {
+      const next = await patchWorkspaceCerebellum(workspaceId, {
+        provider_id: providerId || null,
+        model: model || null,
+      });
+      onUpdated(next);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t('errors.network'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <article className="max-w-xl rounded-lg border border-slate-200 bg-white p-5">
+      <h2 className="text-sm font-semibold text-slate-900">
+        {t('workspace.brain.cerebellumTitle')}
+      </h2>
+      <p className="mt-1 text-xs text-slate-500">{t('workspace.brain.cerebellumSubtitle')}</p>
+      <p className="mt-3 rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-600">{worldHint}</p>
+
+      <div className="mt-4 space-y-3">
+        <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600">
+          {t('organization.fields.provider')}
+          <select
+            value={providerId}
+            onChange={(e) => setProviderId(e.target.value)}
+            className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          >
+            <option value="">{t('workspace.brain.inheritWorld')}</option>
+            {providers.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="block text-xs font-semibold uppercase tracking-wide text-slate-600">
+          {t('organization.fields.model')}
+          {models.length > 0 ? (
+            <select
+              aria-label={t('organization.fields.model')}
+              value={model}
+              disabled={providerId.length === 0}
+              onChange={(e) => setModel(e.target.value)}
+              className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm disabled:bg-slate-50"
+            >
+              <option value="">{t('workspace.brain.inheritWorld')}</option>
+              {models.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              aria-label={t('organization.fields.model')}
+              type="text"
+              value={model}
+              disabled={providerId.length === 0}
+              onChange={(e) => setModel(e.target.value)}
+              className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm disabled:bg-slate-50"
+            />
+          )}
+        </div>
+        {error !== null ? (
+          <p role="alert" className="text-xs text-red-700">
+            {error}
+          </p>
+        ) : null}
+        <button
+          type="button"
+          onClick={() => void handleSave()}
+          disabled={saving}
+          className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-500 disabled:opacity-60"
+        >
+          {saving ? <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" /> : null}
+          {t('workspace.brain.saveCerebellum')}
+        </button>
+      </div>
+    </article>
   );
 }
 

@@ -10,6 +10,7 @@ These are pure data-transfer schemas — no ORM config, no SQLAlchemy imports.
 from __future__ import annotations
 
 import re
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -269,19 +270,14 @@ class ReapResultOut(BaseModel):
 class PromoteRequest(BaseModel):
     """Payload for ``POST /api/v1/learning/entities/{eid}/promote``.
 
-    Per PRD §13.6.4: push an instance's effective capability set into the
-    Entity's shared surface (idempotent by capability name) and update
-    the migration_hash. Other instances of the same Entity become
-    outdated — they must be restarted to pick up the new hash.
-
-    Attributes:
-        from_instance_id: Which instance to source caps from. Defaults
-            to the first active instance of the Entity.
-        include_prompt_regen: If true, regen the prompt snapshot from
-            the capability set. v1 keeps this as a flag (no LLM).
-        snapshot_only: If true, return preview without writing.
+    mode=update (回魂): mutate source Entity + bump migration_hash.
+    mode=fork (派生): create a new Entity; source untouched.
     """
 
+    mode: Literal["update", "fork"] = Field(
+        default="update",
+        description="update=回魂 (mutate source); fork=派生 (new Entity)",
+    )
     from_instance_id: str | None = Field(
         default=None,
         description="Source instance; defaults to first active instance.",
@@ -294,17 +290,22 @@ class PromoteRequest(BaseModel):
         default=False,
         description="If true, return preview without writing.",
     )
+    # fork-only
+    new_entity_name: str | None = Field(
+        default=None,
+        description="Required when mode=fork — display name for new Entity",
+    )
+    new_entity_slug: str | None = Field(
+        default=None,
+        description="Required when mode=fork — slug for new Entity",
+    )
 
 
 class PromoteResultOut(BaseModel):
-    """Response for ``POST /api/v1/learning/entities/{eid}/promote``.
-
-    The new migration_hash is the canonical fingerprint of the entity
-    going forward — instances whose ``active_hash`` does not match it
-    are outdated.
-    """
+    """Response for promote (回魂 / 派生)."""
 
     status: str = "ok"
+    mode: str = "update"
     promoted_at: str
     entity_id: str
     entity_promotion_migration_hash: str
@@ -313,6 +314,7 @@ class PromoteResultOut(BaseModel):
     new_prompt_preview: str
     outdated_instances_count: int
     capability_market_uploaded: int
+    new_entity_id: str | None = None
 
 
 class TransmuteRequest(BaseModel):

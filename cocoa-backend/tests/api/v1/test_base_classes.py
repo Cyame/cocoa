@@ -63,7 +63,8 @@ class TestBaseClassesList:
         assert body["total"] >= 6
         slugs = {item["slug"] for item in body["items"]}
         assert "mi-shi" in slugs
-        assert "cerebellum-baseclass" in slugs
+        # cerebellum-baseclass is API-hidden by default (PRD-v3)
+        assert "cerebellum-baseclass" not in slugs
 
     async def test_list_returns_active_base_classes(
         self, client: TestClient, auth_token: str, session: AsyncSession,

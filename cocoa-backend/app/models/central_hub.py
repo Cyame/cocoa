@@ -237,3 +237,8 @@ class CerebellumAgent(BaseModel, Base):
     name: Mapped[str] = mapped_column(
         String(255), nullable=False, default="cerebellum"
     )
+    # Per-workspace override; null = inherit Organization cerebellum defaults
+    provider_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("organization_providers.id"), nullable=True
+    )
+    model: Mapped[str | None] = mapped_column(String(255), nullable=True)
