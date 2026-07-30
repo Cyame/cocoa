@@ -15,6 +15,7 @@ class OrganizationOut(BaseModel):
     id: str
     slug: str
     name: str
+    description: str | None = None
     system_hub_provider_id: str | None = None
     system_hub_model: str | None = None
     cerebellum_default_provider_id: str | None = None
@@ -25,6 +26,7 @@ class OrganizationOut(BaseModel):
 
 class OrganizationUpdate(BaseModel):
     name: str | None = None
+    description: str | None = None
 
 
 class ProviderOrigin(str, Enum):
@@ -67,8 +69,6 @@ class OrganizationProviderCreate(BaseModel):
         else:
             if not self.name:
                 raise ValueError("name is required when origin=custom")
-            if not self.slug:
-                raise ValueError("slug is required when origin=custom")
             if not self.request_format:
                 raise ValueError("request_format is required when origin=custom")
             if not self.default_model:
@@ -81,6 +81,18 @@ class OrganizationProviderCreate(BaseModel):
         ):
             raise ValueError("models_base_url is required when models_endpoint_mode=separate")
         return self
+
+
+class PreviewModelsRequest(BaseModel):
+    """Fetch /models before saving a provider row."""
+
+    api_key_ref: str
+    base_url: str | None = None
+    request_format: RequestFormat = RequestFormat.completion
+    verify_ssl: bool = True
+    models_endpoint_mode: ModelsEndpointMode = ModelsEndpointMode.inherit
+    models_base_url: str | None = None
+    catalog_provider_id: str | None = None
 
 
 class OrganizationProviderUpdate(BaseModel):
@@ -223,6 +235,8 @@ class ProviderTestOut(BaseModel):
 class GenerateDescriptionRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     description: str | None = None
+    # entity (default) | world | namespace | gene | generic
+    kind: str = "entity"
 
 
 class GenerateDescriptionOut(BaseModel):

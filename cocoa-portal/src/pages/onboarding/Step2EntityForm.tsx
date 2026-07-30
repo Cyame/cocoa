@@ -25,6 +25,7 @@ import {
 } from '@/lib/api/providers';
 import type { EmployeeRank } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { ModelInputCombobox } from '@/components/ModelInputCombobox';
 import { isValidSlug, useOnboardingStore } from '@/stores/onboardingStore';
 
 type Step2Props = {
@@ -419,34 +420,18 @@ export default function Step2EntityForm({
                 >
                   {t('onboarding.step2.modelLabel')}
                 </label>
-                {models.length > 0 ? (
-                  <select
-                    id="onboarding-model"
-                    name="model"
-                    value={model}
-                    disabled={providerId.length === 0}
-                    onChange={(event) => setModel(event.currentTarget.value)}
-                    className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:bg-slate-50"
-                  >
-                    <option value="">{t('onboarding.step2.modelInherit')}</option>
-                    {models.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    id="onboarding-model"
-                    name="model"
-                    type="text"
-                    value={model}
-                    disabled={providerId.length === 0}
-                    onChange={(event) => setModel(event.currentTarget.value)}
-                    placeholder={t('onboarding.step2.modelPlaceholder')}
-                    className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:bg-slate-50"
-                  />
-                )}
+                <ModelInputCombobox
+                  id="onboarding-model"
+                  name="model"
+                  aria-label={t('onboarding.step2.modelLabel')}
+                  value={model}
+                  onChange={setModel}
+                  options={models}
+                  disabled={providerId.length === 0}
+                  placeholder={t('onboarding.step2.modelPlaceholder')}
+                  emptyOptionLabel={t('onboarding.step2.modelInherit')}
+                  className="mt-2"
+                />
                 {modelsLoading ? (
                   <p className="mt-1 text-xs text-slate-500">
                     {t('onboarding.step2.loadingModels')}

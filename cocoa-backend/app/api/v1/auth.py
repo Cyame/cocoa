@@ -1,22 +1,50 @@
-"""Authentication endpoints: register and login.
+"""Authentication endpoints: register, login, and me.
 
-Both endpoints return a JWT ``TokenResponse`` on success.
+Register/login return a JWT ``TokenResponse`` that includes a ``user`` payload
+so the portal can hydrate ``session.user`` (username + is_super_admin).
 """
 
 from fastapi import APIRouter
 from sqlalchemy import func, select
 
-from app.api.deps import DB
+from app.api.deps import DB, CurrentUserDep
 from app.core.config import settings
-from app.core.errors import ConflictError, UnauthorizedError
+from app.core.errors import ConflictError, NotFoundError, UnauthorizedError
+from app.core.identity import resolve_user_identity, sync_identity_pack
 from app.core.openapi import add_error_responses
 from app.core.security import create_access_token, hash_password, verify_password
 from app.models.user import User
-from app.models.user_gene import UserGene, UserUserGene
-from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse
+from app.schemas.auth import (
+    AuthUserOut,
+    LoginRequest,
+    RegisterRequest,
+    TokenResponse,
+)
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 add_error_responses(router)
+
+
+async def _user_out(db: DB, user: User) -> AuthUserOut:
+    identity, locked, extras = await resolve_user_identity(db, user.id)
+    return AuthUserOut(
+        id=user.id,
+        username=user.username,
+        email=user.email,
+        is_super_admin=bool(user.is_super_admin),
+        identity=identity,
+        locked_gene_slugs=locked,
+        extra_gene_slugs=extras,
+    )
+
+
+async def _token_for(db: DB, user: User) -> TokenResponse:
+    token = create_access_token(
+        user_id=user.id,
+        is_super_admin=user.is_super_admin,
+        secret=settings.JWT_SECRET,
+    )
+    return TokenResponse(access_token=token, user=await _user_out(db, user))
 
 
 @router.post("/register", status_code=201)
@@ -56,28 +84,15 @@ async def register(body: RegisterRequest, db: DB) -> TokenResponse:
     db.add(user)
     await db.flush()
 
-    # First registrant receives admin-gene (PRD-v2 §7).
+    # First registrant receives identity-system pack (PRD-v3-post).
     if is_first_user:
-        gene = (
-            await db.execute(
-                select(UserGene).where(
-                    UserGene.slug == "admin-gene",
-                    UserGene.deleted_at.is_(None),
-                )
-            )
-        ).scalar_one_or_none()
-        if gene is not None:
-            db.add(UserUserGene(user_id=user.id, user_gene_id=gene.id))
+        await sync_identity_pack(db, user, "system")
+    else:
+        await sync_identity_pack(db, user, "member")
 
     await db.commit()
     await db.refresh(user)
-
-    token = create_access_token(
-        user_id=user.id,
-        is_super_admin=user.is_super_admin,
-        secret=settings.JWT_SECRET,
-    )
-    return TokenResponse(access_token=token)
+    return await _token_for(db, user)
 
 
 @router.post("/login", status_code=200)
@@ -98,9 +113,23 @@ async def login(body: LoginRequest, db: DB) -> TokenResponse:
             "Invalid username or password",
         )
 
-    token = create_access_token(
-        user_id=user.id,
-        is_super_admin=user.is_super_admin,
-        secret=settings.JWT_SECRET,
+    return await _token_for(db, user)
+
+
+@router.get("/me", response_model=AuthUserOut)
+async def get_me(db: DB, current_user: CurrentUserDep) -> AuthUserOut:
+    """Return the authenticated user profile (for session hydration)."""
+    result = await db.execute(
+        select(User).where(
+            User.id == current_user.user_id,
+            User.deleted_at.is_(None),
+        )
     )
-    return TokenResponse(access_token=token)
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise NotFoundError(
+            "auth.user_not_found",
+            "errors.auth.user_not_found",
+            "Authenticated user not found",
+        )
+    return await _user_out(db, user)

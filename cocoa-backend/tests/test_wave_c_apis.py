@@ -115,13 +115,13 @@ class TestUserGenes:
     def test_list_and_get_by_slug(self, client: TestClient, auth_token: str) -> None:
         listing = client.get("/api/v1/user-genes", headers=_h(auth_token))
         assert listing.status_code == 200
-        assert listing.json()["total"] >= 4
+        assert listing.json()["total"] >= 5
         resp = client.get(
-            "/api/v1/user-genes/by-slug/operator-gene",
+            "/api/v1/user-genes/by-slug/identity-workspace",
             headers=_h(auth_token),
         )
         assert resp.status_code == 200
-        assert resp.json()["slug"] == "operator-gene"
+        assert resp.json()["slug"] == "identity-workspace"
 
     def test_create_attach_detach(self, client: TestClient, auth_token: str) -> None:
         from app.core.config import settings

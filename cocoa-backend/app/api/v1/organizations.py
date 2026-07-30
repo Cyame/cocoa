@@ -26,6 +26,8 @@ from app.models.base_class_provider_default import BaseClassProviderDefault
 from app.models.organization import Organization
 from app.models.organization_provider import OrganizationProvider
 from app.schemas.organization import (
+    CatalogModelOut,
+    CatalogModelsOut,
     CerebellumDefaultsOut,
     CerebellumDefaultsUpdate,
     OrganizationOut,
@@ -33,6 +35,7 @@ from app.schemas.organization import (
     OrganizationProviderOut,
     OrganizationProviderUpdate,
     OrganizationUpdate,
+    PreviewModelsRequest,
     ProviderOrigin,
     ProviderTestOut,
     SetDefaultOut,
@@ -45,6 +48,8 @@ from app.services.llm.llm_client import LLMError
 from app.services.llm.model_catalog import model_catalog
 from app.services.llm.org_provider import (
     build_llm_client_from_org_provider,
+    fetch_custom_models,
+    fetch_models_from_endpoint,
     slugify,
 )
 
@@ -173,6 +178,11 @@ async def create_provider(
         if not default_model:
             default_model = models[0].id if models else "gpt-4o-mini"
 
+        # Persist fetched model ids so later selectors don't re-hit the network.
+        allowlist = body.models_allowlist
+        if allowlist is None and models:
+            allowlist = [m.id for m in models]
+
         name = body.name or catalog_entry.name
         slug = body.slug or slugify(body.catalog_provider_id)
         request_format = (
@@ -192,7 +202,7 @@ async def create_provider(
             base_url=base_url,
             api_key_ref=body.api_key_ref,
             default_model=default_model,
-            models_allowlist=body.models_allowlist,
+            models_allowlist=allowlist,
             verify_ssl=body.verify_ssl,
             models_endpoint_mode=body.models_endpoint_mode.value,
             models_base_url=body.models_base_url,
@@ -292,6 +302,161 @@ async def delete_provider(
     row.soft_delete()
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/default/providers/preview-models",
+    response_model=CatalogModelsOut,
+)
+async def preview_provider_models(
+    body: PreviewModelsRequest,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> CatalogModelsOut:
+    """Call the provider /models endpoint (or models.dev for catalog) before save."""
+    require_super_admin(current_user)
+    await _get_default_org(db)
+
+    if body.catalog_provider_id and not body.base_url:
+        models, degraded = await model_catalog.list_models_for_catalog_provider(
+            body.catalog_provider_id
+        )
+        # Prefer live /models when api + key are available.
+        entry = await model_catalog.get_provider(body.catalog_provider_id)
+        live_base = entry.api if entry is not None else None
+        if live_base and body.api_key_ref:
+            live_items, live_err = await fetch_models_from_endpoint(
+                api_key_ref=body.api_key_ref,
+                base_url=live_base,
+                request_format=(
+                    body.request_format.value
+                    if body.request_format
+                    else (entry.inferred_request_format if entry else "completion")
+                ),
+                verify_ssl=body.verify_ssl,
+                models_endpoint_mode=body.models_endpoint_mode.value,
+                models_base_url=body.models_base_url,
+                provider_slug=body.catalog_provider_id,
+            )
+            if live_items and not live_err:
+                return CatalogModelsOut(
+                    items=[
+                        CatalogModelOut(
+                            id=i["id"],
+                            name=i["name"],
+                            provider=i["provider"],
+                            context_length=i.get("context_length"),
+                        )
+                        for i in live_items
+                    ],
+                    degraded=False,
+                )
+        return CatalogModelsOut(
+            items=[
+                CatalogModelOut(
+                    id=m.id,
+                    name=m.name,
+                    provider=m.provider,
+                    context_length=m.context_length,
+                )
+                for m in models
+            ],
+            degraded=degraded,
+        )
+
+    raw_items, error = await fetch_models_from_endpoint(
+        api_key_ref=body.api_key_ref,
+        base_url=body.base_url,
+        request_format=body.request_format.value,
+        verify_ssl=body.verify_ssl,
+        models_endpoint_mode=body.models_endpoint_mode.value,
+        models_base_url=body.models_base_url,
+    )
+    return CatalogModelsOut(
+        items=[
+            CatalogModelOut(
+                id=i["id"],
+                name=i["name"],
+                provider=i["provider"],
+                context_length=i.get("context_length"),
+            )
+            for i in raw_items
+        ],
+        error=error,
+    )
+
+
+@router.post(
+    "/default/providers/{provider_id}/refresh-models",
+    response_model=CatalogModelsOut,
+)
+async def refresh_provider_models(
+    provider_id: str,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> CatalogModelsOut:
+    """Re-fetch models and persist ids onto models_allowlist."""
+    require_super_admin(current_user)
+    org = await _get_default_org(db)
+    row = await _get_provider(db, org.id, provider_id)
+
+    error: str | None = None
+    degraded = False
+    items: list[CatalogModelOut] = []
+
+    if row.origin == "catalog" and row.catalog_provider_id:
+        # Prefer live /models when base_url + key work; else models.dev cache.
+        if row.base_url:
+            raw_items, error = await fetch_custom_models(row)
+            if raw_items and not error:
+                items = [
+                    CatalogModelOut(
+                        id=i["id"],
+                        name=i["name"],
+                        provider=i["provider"],
+                        context_length=i.get("context_length"),
+                    )
+                    for i in raw_items
+                ]
+        if not items:
+            models, degraded = await model_catalog.list_models_for_catalog_provider(
+                row.catalog_provider_id
+            )
+            items = [
+                CatalogModelOut(
+                    id=m.id,
+                    name=m.name,
+                    provider=m.provider,
+                    context_length=m.context_length,
+                )
+                for m in models
+            ]
+            error = None
+    else:
+        raw_items, error = await fetch_custom_models(row)
+        items = [
+            CatalogModelOut(
+                id=i["id"],
+                name=i["name"],
+                provider=i["provider"],
+                context_length=i.get("context_length"),
+            )
+            for i in raw_items
+        ]
+
+    if items:
+        row.models_allowlist = [i.id for i in items]
+        if row.default_model not in row.models_allowlist:
+            row.default_model = items[0].id
+        await db.commit()
+        await db.refresh(row)
+
+    return CatalogModelsOut(
+        items=items,
+        degraded=degraded,
+        default_model=row.default_model,
+        error=error,
+    )
 
 
 @router.post(

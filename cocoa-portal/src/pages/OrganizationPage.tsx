@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router';
 import { ApiError } from '@/lib/api';
 import { fetchBaseClassesPage } from '@/lib/api/baseClasses';
 import {
@@ -26,6 +27,8 @@ import {
   type Organization,
   type OrganizationProvider,
   type ProviderCatalogEntry,
+  previewProviderModels,
+  refreshProviderModels,
   type SetDefaultTarget,
   setProviderDefault,
   testOrganizationProvider,
@@ -35,11 +38,34 @@ import {
 } from '@/lib/api/providers';
 import type { BaseClass } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { ModelInputCombobox } from '@/components/ModelInputCombobox';
+import OrganizationUsersPanel from '@/pages/organization/OrganizationUsersPanel';
+import {
+  OrganizationNamespacesPanel,
+  OrganizationWorldPanel,
+} from '@/pages/organization/OrganizationWorldPanels';
 import { useSessionStore } from '@/stores/session';
+
+const ORG_TABS = ['world', 'namespaces', 'system', 'users'] as const;
+type OrgTab = (typeof ORG_TABS)[number];
 
 export default function OrganizationPage() {
   const { t } = useTranslation();
-  const isSuperAdmin = useSessionStore((state) => state.user?.is_super_admin ?? false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const rawTab = searchParams.get('tab') ?? 'world';
+  const activeTab: OrgTab = (ORG_TABS as readonly string[]).includes(rawTab)
+    ? (rawTab as OrgTab)
+    : 'system';
+  const user = useSessionStore((state) => state.user);
+  const isSuperAdmin = user?.is_super_admin ?? false;
+  const identity = user?.identity ?? null;
+  const canManageUsers = isSuperAdmin || identity === 'system';
+  const canManageWorld = isSuperAdmin || identity === 'system' || identity === 'org';
+  const canManageNamespaces =
+    isSuperAdmin ||
+    identity === 'system' ||
+    identity === 'org' ||
+    identity === 'namespace';
 
   const [org, setOrg] = useState<Organization | null>(null);
   const [providers, setProviders] = useState<readonly OrganizationProvider[]>([]);
@@ -175,7 +201,7 @@ export default function OrganizationPage() {
 
   return (
     <section className="mx-auto w-full max-w-5xl p-6 lg:p-8">
-      <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
+      <header className="mb-4 flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-center gap-3">
           <Settings className="size-6 text-slate-700" aria-hidden="true" />
           <div>
@@ -187,21 +213,45 @@ export default function OrganizationPage() {
             ) : null}
           </div>
         </div>
-        {!isSuperAdmin ? (
+        {!canManageUsers && activeTab === 'system' ? (
           <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
             {t('organization.readOnlyHint')}
           </p>
         ) : null}
       </header>
 
-      {isLoading ? (
+      <div className="mb-6 flex flex-wrap gap-1 border-b border-slate-200">
+        {ORG_TABS.map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            onClick={() => setSearchParams({ tab })}
+            className={cn(
+              'rounded-t-lg px-3 py-2 text-sm font-medium',
+              activeTab === tab
+                ? 'border-b-2 border-blue-600 bg-blue-50 text-blue-700'
+                : 'text-slate-500 hover:bg-slate-50',
+            )}
+          >
+            {t(`organization.tabs.${tab}`)}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'users' ? <OrganizationUsersPanel canWrite={canManageUsers} /> : null}
+      {activeTab === 'world' ? <OrganizationWorldPanel canWrite={canManageWorld} /> : null}
+      {activeTab === 'namespaces' ? (
+        <OrganizationNamespacesPanel canWrite={canManageNamespaces} />
+      ) : null}
+
+      {activeTab === 'system' && isLoading ? (
         <div className="flex items-center gap-3 text-sm text-slate-500">
           <LoaderCircle className="size-5 animate-spin" aria-hidden="true" />
           {t('common.loading')}
         </div>
       ) : null}
 
-      {errorMessage !== null ? (
+      {activeTab === 'system' && errorMessage !== null ? (
         <div
           role="alert"
           className="mb-6 flex gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
@@ -211,7 +261,7 @@ export default function OrganizationPage() {
         </div>
       ) : null}
 
-      {actionError !== null ? (
+      {activeTab === 'system' && actionError !== null ? (
         <div
           role="alert"
           className="mb-6 flex gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
@@ -221,7 +271,7 @@ export default function OrganizationPage() {
         </div>
       ) : null}
 
-      {!isLoading && org !== null ? (
+      {activeTab === 'system' && !isLoading && org !== null ? (
         <div className="space-y-8">
           <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
             <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
@@ -472,6 +522,19 @@ function HubSettingsPanel({
       setModels([]);
       return;
     }
+    const selected = providers.find((p) => p.id === providerId);
+    // Prefer models cached on the provider row at setup time.
+    if (selected?.models_allowlist && selected.models_allowlist.length > 0) {
+      setModels(
+        selected.models_allowlist.map((id) => ({
+          id,
+          name: id,
+          provider: selected.slug,
+          context_length: null,
+        })),
+      );
+      return;
+    }
     let active = true;
     setModelsLoading(true);
     fetchModelCatalog(providerId)
@@ -487,7 +550,7 @@ function HubSettingsPanel({
     return () => {
       active = false;
     };
-  }, [providerId]);
+  }, [providerId, providers]);
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -512,31 +575,14 @@ function HubSettingsPanel({
         </label>
         <div className="block text-xs font-semibold uppercase tracking-wide text-slate-600">
           {t('organization.fields.model')}
-          {models.length > 0 ? (
-            <select
-              aria-label={t('organization.fields.model')}
-              value={model}
-              disabled={!canEdit || providerId.length === 0}
-              onChange={(e) => onModelChange(e.target.value)}
-              className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-sm disabled:bg-slate-50"
-            >
-              <option value="">{t('organization.fields.selectModel')}</option>
-              {models.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <input
-              aria-label={t('organization.fields.model')}
-              type="text"
-              value={model}
-              disabled={!canEdit}
-              onChange={(e) => onModelChange(e.target.value)}
-              className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm disabled:bg-slate-50"
-            />
-          )}
+          <ModelInputCombobox
+            aria-label={t('organization.fields.model')}
+            value={model}
+            onChange={onModelChange}
+            options={models}
+            disabled={!canEdit || providerId.length === 0}
+            placeholder={t('organization.fields.selectModel')}
+          />
         </div>
         {modelsLoading ? (
           <p className="flex items-center gap-2 text-xs text-slate-500">
@@ -577,8 +623,14 @@ function EnableCatalogModal({
   const { t } = useTranslation();
   const [entries, setEntries] = useState<readonly ProviderCatalogEntry[]>([]);
   const [selectedId, setSelectedId] = useState('');
-  const [apiKeyRef, setApiKeyRef] = useState('');
+  const [apiKey, setApiKey] = useState('');
+  const [baseUrl, setBaseUrl] = useState('');
+  const [verifySsl, setVerifySsl] = useState(true);
+  const [defaultModel, setDefaultModel] = useState('');
+  const [models, setModels] = useState<readonly CatalogModel[]>([]);
+  const [degraded, setDegraded] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [fetchingModels, setFetchingModels] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -592,22 +644,60 @@ function EnableCatalogModal({
     [existing],
   );
 
+  const selectedEntry = entries.find((e) => e.id === selectedId) ?? null;
+
   useEffect(() => {
     fetchProviderCatalog()
-      .then((page) => setEntries(page.items))
+      .then((page) => {
+        setEntries(page.items);
+        setDegraded(page.degraded);
+      })
       .catch((err) => setError(err instanceof ApiError ? err.message : t('errors.network')))
       .finally(() => setLoading(false));
   }, [t]);
 
+  useEffect(() => {
+    if (!selectedEntry) return;
+    setBaseUrl(selectedEntry.api ?? '');
+    setModels([]);
+    setDefaultModel('');
+  }, [selectedEntry]);
+
+  async function handleFetchModels() {
+    if (!selectedId || !apiKey.trim()) return;
+    setFetchingModels(true);
+    setError(null);
+    try {
+      const page = await previewProviderModels({
+        catalog_provider_id: selectedId,
+        api_key_ref: apiKey.trim(),
+        base_url: baseUrl.trim() || null,
+        request_format: selectedEntry?.inferred_request_format ?? 'completion',
+        verify_ssl: verifySsl,
+      });
+      setModels(page.items);
+      if (page.error) setError(page.error);
+      if (!defaultModel && page.items[0]) setDefaultModel(page.items[0].id);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t('errors.network'));
+    } finally {
+      setFetchingModels(false);
+    }
+  }
+
   async function handleSubmit() {
-    if (!selectedId || !apiKeyRef.trim()) return;
+    if (!selectedId || !apiKey.trim() || !defaultModel.trim()) return;
     setSubmitting(true);
     setError(null);
     try {
       await createOrganizationProvider({
         origin: 'catalog',
         catalog_provider_id: selectedId,
-        api_key_ref: apiKeyRef.trim(),
+        api_key_ref: apiKey.trim(),
+        base_url: baseUrl.trim() || null,
+        default_model: defaultModel.trim(),
+        verify_ssl: verifySsl,
+        models_allowlist: models.length > 0 ? models.map((m) => m.id) : null,
       });
       onCreated();
     } catch (err) {
@@ -627,6 +717,11 @@ function EnableCatalogModal({
         <LoaderCircle className="size-5 animate-spin text-slate-400" aria-hidden="true" />
       ) : (
         <div className="space-y-3">
+          {degraded ? (
+            <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              {t('organization.catalogModal.degraded')}
+            </p>
+          ) : null}
           <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600">
             {t('organization.catalogModal.catalogProvider')}
             <select
@@ -645,16 +740,54 @@ function EnableCatalogModal({
               ))}
             </select>
           </label>
+          <Field
+            label={t('organization.fields.baseUrl')}
+            value={baseUrl}
+            onChange={setBaseUrl}
+          />
           <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600">
-            {t('organization.catalogModal.apiKeyRef')}
+            {t('organization.fields.apiKey')}
             <input
-              type="text"
-              value={apiKeyRef}
-              onChange={(e) => setApiKeyRef(e.target.value)}
-              placeholder="OPENAI_API_KEY"
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="sk-..."
+              autoComplete="off"
               className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm"
             />
           </label>
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={verifySsl}
+              onChange={(e) => setVerifySsl(e.target.checked)}
+              className="size-4 accent-blue-600"
+            />
+            {t('organization.fields.verifySsl')}
+          </label>
+          <div className="block text-xs font-semibold uppercase tracking-wide text-slate-600">
+            <div className="flex items-center justify-between gap-2">
+              <span>{t('organization.fields.model')}</span>
+              <button
+                type="button"
+                disabled={!selectedId || !apiKey.trim() || fetchingModels}
+                onClick={() => void handleFetchModels()}
+                className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-[11px] font-medium normal-case tracking-normal text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                {fetchingModels ? (
+                  <LoaderCircle className="size-3 animate-spin" aria-hidden="true" />
+                ) : null}
+                {t('organization.fields.fetchModels')}
+              </button>
+            </div>
+            <ModelInputCombobox
+              aria-label={t('organization.fields.model')}
+              value={defaultModel}
+              onChange={setDefaultModel}
+              options={models}
+              placeholder={t('organization.fields.modelPlaceholder')}
+            />
+          </div>
           {error !== null ? (
             <p role="alert" className="text-xs text-red-700">
               {error}
@@ -670,7 +803,7 @@ function EnableCatalogModal({
             </button>
             <button
               type="button"
-              disabled={submitting || !selectedId || !apiKeyRef.trim()}
+              disabled={submitting || !selectedId || !apiKey.trim() || !defaultModel.trim()}
               onClick={() => void handleSubmit()}
               className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-60"
             >
@@ -692,13 +825,36 @@ function CustomProviderModal({
 }) {
   const { t } = useTranslation();
   const [name, setName] = useState('');
-  const [slug, setSlug] = useState('');
   const [baseUrl, setBaseUrl] = useState('');
   const [requestFormat, setRequestFormat] = useState('completion');
   const [defaultModel, setDefaultModel] = useState('');
-  const [apiKeyRef, setApiKeyRef] = useState('');
+  const [apiKey, setApiKey] = useState('');
+  const [verifySsl, setVerifySsl] = useState(true);
+  const [models, setModels] = useState<readonly CatalogModel[]>([]);
+  const [fetchingModels, setFetchingModels] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  async function handleFetchModels() {
+    if (!baseUrl.trim() || !apiKey.trim()) return;
+    setFetchingModels(true);
+    setError(null);
+    try {
+      const page = await previewProviderModels({
+        api_key_ref: apiKey.trim(),
+        base_url: baseUrl.trim(),
+        request_format: requestFormat,
+        verify_ssl: verifySsl,
+      });
+      setModels(page.items);
+      if (page.error) setError(page.error);
+      if (!defaultModel && page.items[0]) setDefaultModel(page.items[0].id);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t('errors.network'));
+    } finally {
+      setFetchingModels(false);
+    }
+  }
 
   async function handleSubmit() {
     setSubmitting(true);
@@ -707,11 +863,12 @@ function CustomProviderModal({
       await createOrganizationProvider({
         origin: 'custom',
         name: name.trim(),
-        slug: slug.trim() || undefined,
         base_url: baseUrl.trim(),
         request_format: requestFormat,
         default_model: defaultModel.trim(),
-        api_key_ref: apiKeyRef.trim(),
+        api_key_ref: apiKey.trim(),
+        verify_ssl: verifySsl,
+        models_allowlist: models.length > 0 ? models.map((m) => m.id) : null,
       });
       onCreated();
     } catch (err) {
@@ -728,10 +885,14 @@ function CustomProviderModal({
       testId="custom-provider-modal"
     >
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label={t('organization.customModal.name')} value={name} onChange={setName} />
-        <Field label={t('organization.customModal.slug')} value={slug} onChange={setSlug} mono />
         <Field
-          label={t('organization.customModal.baseUrl')}
+          label={t('organization.customModal.name')}
+          value={name}
+          onChange={setName}
+          className="sm:col-span-2"
+        />
+        <Field
+          label={t('organization.fields.baseUrl')}
           value={baseUrl}
           onChange={setBaseUrl}
           className="sm:col-span-2"
@@ -743,24 +904,55 @@ function CustomProviderModal({
             onChange={(e) => setRequestFormat(e.target.value)}
             className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
           >
-            <option value="completion">completion</option>
-            <option value="response">response</option>
-            <option value="anthropic">anthropic</option>
-            <option value="gemini">gemini</option>
+            <option value="completion">OpenAI / compatible</option>
+            <option value="response">OpenAI Responses</option>
+            <option value="anthropic">Anthropic</option>
+            <option value="gemini">Gemini</option>
           </select>
         </label>
-        <Field
-          label={t('organization.customModal.defaultModel')}
-          value={defaultModel}
-          onChange={setDefaultModel}
-          mono
-        />
-        <Field
-          label={t('organization.customModal.apiKeyRef')}
-          value={apiKeyRef}
-          onChange={setApiKeyRef}
-          mono
-        />
+        <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 sm:col-span-2">
+          {t('organization.fields.apiKey')}
+          <input
+            type="password"
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            placeholder="sk-..."
+            autoComplete="off"
+            className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm"
+          />
+        </label>
+        <label className="flex items-center gap-2 text-sm text-slate-700 sm:col-span-2">
+          <input
+            type="checkbox"
+            checked={verifySsl}
+            onChange={(e) => setVerifySsl(e.target.checked)}
+            className="size-4 accent-blue-600"
+          />
+          {t('organization.fields.verifySsl')}
+        </label>
+        <div className="block text-xs font-semibold uppercase tracking-wide text-slate-600 sm:col-span-2">
+          <div className="flex items-center justify-between gap-2">
+            <span>{t('organization.fields.model')}</span>
+            <button
+              type="button"
+              disabled={!baseUrl.trim() || !apiKey.trim() || fetchingModels}
+              onClick={() => void handleFetchModels()}
+              className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-[11px] font-medium normal-case tracking-normal text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              {fetchingModels ? (
+                <LoaderCircle className="size-3 animate-spin" aria-hidden="true" />
+              ) : null}
+              {t('organization.fields.fetchModels')}
+            </button>
+          </div>
+          <ModelInputCombobox
+            aria-label={t('organization.fields.model')}
+            value={defaultModel}
+            onChange={setDefaultModel}
+            options={models}
+            placeholder={t('organization.fields.modelPlaceholder')}
+          />
+        </div>
       </div>
       {error !== null ? (
         <p role="alert" className="mt-3 text-xs text-red-700">
@@ -782,7 +974,7 @@ function CustomProviderModal({
             !name.trim() ||
             !baseUrl.trim() ||
             !defaultModel.trim() ||
-            !apiKeyRef.trim()
+            !apiKey.trim()
           }
           onClick={() => void handleSubmit()}
           className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-60"
@@ -810,11 +1002,24 @@ function SetDefaultModal({
   const [model, setModel] = useState(provider?.default_model ?? '');
   const [selectedBaseClassIds, setSelectedBaseClassIds] = useState<ReadonlySet<string>>(new Set());
   const [models, setModels] = useState<readonly CatalogModel[]>([]);
+  const [fetchingModels, setFetchingModels] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (provider === null) return;
+    setModel(provider.default_model);
+    if (provider.models_allowlist && provider.models_allowlist.length > 0) {
+      setModels(
+        provider.models_allowlist.map((id) => ({
+          id,
+          name: id,
+          provider: provider.slug,
+          context_length: null,
+        })),
+      );
+      return;
+    }
     fetchModelCatalog(provider.id)
       .then((page) => setModels(page.items))
       .catch(() => setModels([]));
@@ -827,6 +1032,22 @@ function SetDefaultModal({
       else next.add(id);
       return next;
     });
+  }
+
+  async function handleRefreshModels() {
+    if (provider === null) return;
+    setFetchingModels(true);
+    setError(null);
+    try {
+      const page = await refreshProviderModels(provider.id);
+      setModels(page.items);
+      if (page.error) setError(page.error);
+      if (page.default_model) setModel(page.default_model);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t('errors.network'));
+    } finally {
+      setFetchingModels(false);
+    }
   }
 
   async function handleSubmit() {
@@ -892,29 +1113,27 @@ function SetDefaultModal({
       ) : null}
 
       <div className="mt-3 block text-xs font-semibold uppercase tracking-wide text-slate-600">
-        {t('organization.fields.model')}
-        {models.length > 0 ? (
-          <select
-            aria-label={t('organization.fields.model')}
-            value={model}
-            onChange={(e) => setModel(e.target.value)}
-            className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm"
+        <div className="flex items-center justify-between gap-2">
+          <span>{t('organization.fields.model')}</span>
+          <button
+            type="button"
+            disabled={fetchingModels}
+            onClick={() => void handleRefreshModels()}
+            className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-[11px] font-medium normal-case tracking-normal text-slate-700 hover:bg-slate-50 disabled:opacity-50"
           >
-            {models.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <input
-            aria-label={t('organization.fields.model')}
-            type="text"
-            value={model}
-            onChange={(e) => setModel(e.target.value)}
-            className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm"
-          />
-        )}
+            {fetchingModels ? (
+              <LoaderCircle className="size-3 animate-spin" aria-hidden="true" />
+            ) : null}
+            {t('organization.fields.fetchModels')}
+          </button>
+        </div>
+        <ModelInputCombobox
+          aria-label={t('organization.fields.model')}
+          value={model}
+          onChange={setModel}
+          options={models}
+          placeholder={t('organization.fields.modelPlaceholder')}
+        />
       </div>
 
       {error !== null ? (
@@ -967,7 +1186,7 @@ function ModalShell({
       data-testid={testId}
       className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 p-0 sm:items-center sm:p-4"
     >
-      <div className="w-full max-w-lg rounded-t-xl border border-slate-200 bg-white p-5 shadow-2xl sm:rounded-xl">
+      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-t-xl border border-slate-200 bg-white p-5 shadow-2xl sm:rounded-xl">
         <div className="mb-4 flex items-start justify-between gap-3">
           <h2 className="text-base font-semibold text-slate-950">{title}</h2>
           <button

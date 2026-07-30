@@ -1,5 +1,6 @@
 import { createBrowserRouter, Navigate } from 'react-router';
 import AppShell from '@/components/AppShell';
+import AccountPage from '@/pages/AccountPage';
 import BaseClassDetailPage from '@/pages/BaseClassDetailPage';
 import ForbiddenPage from '@/pages/ForbiddenPage';
 import LoginPage from '@/pages/LoginPage';
@@ -44,6 +45,10 @@ const router = createBrowserRouter([
       {
         path: '/organization',
         Component: OrganizationPage,
+      },
+      {
+        path: '/account',
+        Component: AccountPage,
       },
     ],
   },

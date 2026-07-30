@@ -7,6 +7,8 @@
     "portalSubtitle": "Cocoa 门户",
     "save": "保存",
     "cancel": "取消",
+    "edit": "编辑",
+    "done": "完成",
     "delete": "删除",
     "confirm": "确认",
     "loading": "加载中",
@@ -15,11 +17,23 @@
     "logOut": "退出登录",
     "signOut": "退出登录",
     "authenticatedUser": "已登录用户",
-    "superAdmin": "超级管理员",
-    "operator": "操作员"
+    "superAdmin": "超管",
+    "operator": "操作员",
+    "member": "成员"
   },
   "nav": {
-    "organization": "世界设置"
+    "organization": "世界",
+    "world": "世界",
+    "namespace": "次元",
+    "workspace": "空间",
+    "baseClasses": "神职",
+    "contracts": "契印",
+    "entities": "眷族",
+    "instances": "化身",
+    "genes": "基因",
+    "capability": "能力",
+    "debug": "调试",
+    "account": "账户"
   },
   "login": {
     "signInHeading": "登录",
@@ -472,7 +486,6 @@
     "networkError": "网络错误，请重试。",
     "unexpectedError": "抱歉，召唤失败。已记录错误，后台处理中。",
     "loadBaseClassesFailed": "加载神职列表失败",
-
     "step1": {
       "title": "召唤你的第一位眷族",
       "subtitle": "从 11 神职中选 1 个。每个神职定义了一组能力与命令。",
@@ -487,7 +500,6 @@
       "commandsLabel": "命令",
       "fallbackDisclaimer": "API 暂未返回神职，下方列表为内置默认。"
     },
-
     "step2": {
       "title": "为眷族起名",
       "subtitle": "眷族会基于你选的神职被创建。命名后可以立即 spawn 一个化身。",
@@ -497,17 +509,14 @@
       "displayNameRequired": "显示名不能为空。",
       "displayNameTooLong": "显示名不能超过 32 字符。",
       "displayNameDuplicate": "该 Workspace 内已存在同名眷族。",
-
       "slugLabel": "Slug",
       "slugPlaceholder": "例如：nai-ya-tan-zi",
       "slugHelp": "自动从显示名生成，可编辑。kebab-case，小写字母开头。",
       "slugRequired": "Slug 不能为空。",
       "slugPattern": "Slug 必须以小写字母开头，后跟小写字母、数字或连字符。",
-
       "rankLabel": "AI 形态（rank）",
       "rankResearcher": "深潜者（researcher）— AI 持久化 + Memory 跨化身复用",
       "rankIntern": "浅识者（intern）— AI 无状态，每次重启",
-
       "providerLabel": "智能系统（Provider）",
       "providerPlaceholder": "选择世界 Provider",
       "providerInherit": "继承神职默认",
@@ -528,21 +537,17 @@
       "previewTag": "创建预览",
       "previewKnowledgeCount": "{{count}} 条",
       "unnamedEntity": "（未命名眷族）",
-
       "knowledgeHeading": "知识绑定",
       "knowledgeEnvLabel": "环境变量",
       "knowledgeEnvAdd": "+ 添加 env",
       "knowledgeFileLabel": "文件",
       "knowledgeFileAdd": "+ 上传 file",
       "knowledgeFileEmpty": "尚未选择文件",
-
       "freezeWarning": "上述属性创建后将冻结。如需改变，请新建 Entity。",
-
       "summon": "召唤眷族",
       "summoning": "召唤中...",
       "submitFailed": "召唤失败，请重试。"
     },
-
     "step3": {
       "title": "配置 AI 大脑与知识库",
       "subtitle": "为该眷族 spawn 的第一个化身设定 LLM 提供商 + 模型，可选注入知识。",
@@ -555,10 +560,8 @@
       "knowledgeScopeEntityHelp": "Entity 共享：其他 Instance 也会读取（需重启）。",
       "knowledgeScopeWorkspace": "该 Workspace 共享",
       "knowledgeScopeWorkspaceHelp": "高危：Workspace 内其他 AI 也能读取。",
-
       "skipNextTime": "跳过，下一步再配置",
       "spawnFailed": "Spawn 失败，请重试。",
-
       "successTitle": "召唤成功",
       "successDetail": "你的第一位眷族已就绪。"
     }
@@ -590,11 +593,32 @@
     "capabilityMarketDetail": "原子能力浏览器即将上线。",
     "tabs": {
       "workspace": "空间",
-      "baseClasses": "神职市场",
+      "baseClasses": "神职",
       "contracts": "契印",
       "entities": "眷族",
-      "capabilityMarket": "能力市场",
-      "debug": "调试"
+      "capabilityMarket": "能力",
+      "debug": "调试",
+      "instances": "化身",
+      "genes": "基因"
+    },
+    "instancesTitle": "化身",
+    "instancesDetail": "化身列表将在后续接入。请从空间或眷族进入具体化身。",
+    "instancesPromote": "晋升",
+    "genesTitle": "人类基因",
+    "genesDetail": "权限包（can_*）。身份基因锁定；其余可附加到用户。",
+    "genesPack": "打包",
+    "genesPermissions": "权限",
+    "genesEmpty": "暂无基因",
+    "genesSaved": "已保存",
+    "genesEdit": "编辑权限",
+    "capabilityCreate": "创建",
+    "capabilityDistill": "蒸馏",
+    "transmute": "炼化",
+    "tag": {
+      "planning": "策划",
+      "execution": "执行",
+      "review": "审视",
+      "internal": "内部"
     }
   },
   "workspace": {
@@ -663,7 +687,12 @@
       "provider": "Provider",
       "model": "Model",
       "none": "无（清空）",
-      "selectModel": "选择模型"
+      "selectModel": "选择模型",
+      "modelPlaceholder": "选择或输入 model id",
+      "apiKey": "API Key",
+      "baseUrl": "Base URL",
+      "verifySsl": "校验 SSL 证书",
+      "fetchModels": "获取模型列表"
     },
     "providers": {
       "title": "世界 Provider",
@@ -703,7 +732,8 @@
       "catalogProvider": "目录 Provider",
       "select": "选择 Provider",
       "alreadyEnabled": "已启用",
-      "apiKeyRef": "API Key 环境变量名",
+      "apiKeyRef": "API Key",
+      "degraded": "models.dev 不可达，当前为内置精简目录（可先用，稍后再试完整目录）。",
       "enable": "启用"
     },
     "customModal": {
@@ -713,7 +743,7 @@
       "baseUrl": "Base URL",
       "requestFormat": "请求格式",
       "defaultModel": "默认模型",
-      "apiKeyRef": "API Key 环境变量名",
+      "apiKeyRef": "API Key",
       "create": "创建 Provider"
     },
     "setDefaultModal": {
@@ -725,7 +755,43 @@
         "system_hub": "系统中枢",
         "cerebellum": "小脑世界默认"
       }
-    }
+    },
+    "tabs": {
+      "system": "智能系统",
+      "users": "用户",
+      "world": "世界",
+      "namespaces": "次元"
+    },
+    "users": {
+      "title": "用户管理",
+      "create": "创建用户",
+      "username": "用户名",
+      "email": "邮箱",
+      "identity": "身份",
+      "tempPassword": "临时密码（仅显示一次）",
+      "delete": "删除",
+      "empty": "暂无用户",
+      "created": "用户已创建",
+      "editExtraGenes": "编辑附加基因",
+      "noExtraGenes": "暂无可附加的基因（can_* 权限基因会自动填充）"
+    },
+    "world": {
+      "title": "世界",
+      "name": "名称",
+      "slug": "标识（只读）",
+      "description": "描述",
+      "saved": "世界已更新"
+    },
+    "namespacesAdmin": {
+      "title": "次元",
+      "create": "创建次元",
+      "name": "名称",
+      "slug": "标识",
+      "description": "描述",
+      "empty": "暂无次元",
+      "delete": "删除"
+    },
+    "generateDescription": "中枢生成"
   },
   "promoteModal": {
     "title": "晋升（回魂 / 派生）",
@@ -775,5 +841,28 @@
     "label": "语言",
     "switchTo": "EN",
     "current": "中文"
+  },
+  "identity": {
+    "system": "超管",
+    "org": "世界管",
+    "namespace": "次元管",
+    "workspace": "空间管",
+    "member": "成员"
+  },
+  "account": {
+    "title": "账户",
+    "subtitle": "查看身份与锁定基因，修改资料与密码",
+    "profile": "资料",
+    "username": "用户名",
+    "email": "邮箱",
+    "identity": "当前身份",
+    "lockedGenes": "锁定基因",
+    "extraGenes": "附加基因",
+    "noExtraGenes": "暂无附加基因",
+    "changePassword": "修改密码",
+    "currentPassword": "当前密码",
+    "newPassword": "新密码",
+    "saved": "已保存",
+    "passwordChanged": "密码已更新"
   }
 }

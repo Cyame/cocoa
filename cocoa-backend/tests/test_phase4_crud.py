@@ -37,17 +37,30 @@ class TestBaseClassCrud:
     """CRUD for /api/v1/base-classes."""
 
     def test_list_base_classes(self, client: TestClient, auth_token: str) -> None:
-        """GET /api/v1/base-classes returns the 6 built-in presets."""
+        """GET /api/v1/base-classes returns the 11 public 神职 (zong-jian hidden)."""
         response = client.get(
             "/api/v1/base-classes",
             headers=_auth_headers(auth_token),
         )
         assert response.status_code == 200
         body = response.json()
-        assert body["total"] >= 6
+        assert body["total"] >= 11
         slugs = {item["slug"] for item in body["items"]}
-        for expected in ("mi-shi", "zhu-jin", "ling-shi", "you-hun", "heng-pan", "zong-jian"):
+        for expected in (
+            "mi-shi",
+            "huan-ling",
+            "an-xing",
+            "an-ying",
+            "zhu-jin",
+            "ling-shi",
+            "heng-pan",
+            "you-hun",
+            "qian-zhi",
+            "bai-tong",
+            "jiu-ri",
+        ):
             assert expected in slugs, f"Built-in preset {expected} missing"
+        assert "zong-jian" not in slugs
 
     def test_create_base_class(self, client: TestClient, auth_token: str) -> None:
         """POST /api/v1/base-classes returns 201 with the new preset."""

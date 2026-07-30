@@ -2,6 +2,7 @@ import { ArrowLeft, ArrowRight, LoaderCircle, Sparkles, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '@/lib/api';
+import { fetchBaseClassesPage } from '@/lib/api/baseClasses';
 import { summonEntity } from '@/lib/api/onboarding';
 import type { Employee } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -9,6 +10,7 @@ import Step1DivinityCards from '@/pages/onboarding/Step1DivinityCards';
 import Step2EntityForm from '@/pages/onboarding/Step2EntityForm';
 import Step3KnowledgeConfirm from '@/pages/onboarding/Step3KnowledgeConfirm';
 import { isValidSlug, TOTAL_ONBOARDING_STEPS, useOnboardingStore } from '@/stores/onboardingStore';
+import { useOnboardingModalStore } from '@/stores/onboardingModalStore';
 
 type FirstRunOnboardingModalProps = {
   readonly existingDisplayNames?: readonly string[];
@@ -30,11 +32,14 @@ export default function FirstRunOnboardingModal({
   onClose,
 }: FirstRunOnboardingModalProps) {
   const { t } = useTranslation();
+  const presetSlug = useOnboardingModalStore((state) => state.baseClassSlug);
 
   const step = useOnboardingStore((state) => state.step);
   const selectedBaseClass = useOnboardingStore((state) => state.selectedBaseClass);
   const displayName = useOnboardingStore((state) => state.displayName);
   const slug = useOnboardingStore((state) => state.slug);
+  const setStep = useOnboardingStore((state) => state.setStep);
+  const setSelectedBaseClass = useOnboardingStore((state) => state.setSelectedBaseClass);
   const next = useOnboardingStore((state) => state.next);
   const back = useOnboardingStore((state) => state.back);
   const setSubmitError = useOnboardingStore((state) => state.setSubmitError);
@@ -44,12 +49,37 @@ export default function FirstRunOnboardingModal({
   const [submitStatus, setSubmitStatus] = useState<StepStatus>('idle');
   const [submitErrorMessage, setSubmitErrorMessage] = useState<string | null>(null);
   const [completedEmployee, setCompletedEmployee] = useState<Employee | null>(null);
+  const [presetReady, setPresetReady] = useState(presetSlug === null);
 
   useEffect(() => {
     return () => {
       reset();
     };
   }, [reset]);
+
+  useEffect(() => {
+    if (!presetSlug) {
+      setPresetReady(true);
+      return;
+    }
+    let cancelled = false;
+    void fetchBaseClassesPage({ limit: 100, offset: 0 })
+      .then((page) => {
+        if (cancelled) return;
+        const match = page.items.find((bc) => bc.slug === presetSlug) ?? null;
+        if (match) {
+          setSelectedBaseClass(match);
+          setStep(2);
+        }
+        setPresetReady(true);
+      })
+      .catch(() => {
+        if (!cancelled) setPresetReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [presetSlug, setSelectedBaseClass, setStep]);
 
   const trimmedDisplayName = displayName.trim();
   const trimmedSlug = slug.trim();
@@ -84,6 +114,17 @@ export default function FirstRunOnboardingModal({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose, submitStatus]);
+
+  if (!presetReady) {
+    return (
+      <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4">
+        <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-6 py-5 text-sm text-slate-600 shadow-2xl">
+          <LoaderCircle className="size-5 animate-spin" aria-hidden="true" />
+          {t('common.loading')}
+        </div>
+      </div>
+    );
+  }
 
   async function handleNext() {
     if (!canGoNext) return;

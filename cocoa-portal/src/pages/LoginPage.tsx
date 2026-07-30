@@ -9,6 +9,15 @@ import { useSessionStore } from '@/stores/session';
 type TokenResponse = {
   readonly access_token: string;
   readonly token_type: string;
+  readonly user?: {
+    readonly id: string;
+    readonly username: string;
+    readonly email: string;
+    readonly is_super_admin: boolean;
+    readonly identity?: string | null;
+    readonly locked_gene_slugs?: readonly string[];
+    readonly extra_gene_slugs?: readonly string[];
+  } | null;
 };
 
 type Mode = 'sign-in' | 'register';
@@ -49,7 +58,16 @@ export default function LoginPage() {
         method: 'POST',
         body: JSON.stringify(body),
       });
-      setToken(response.access_token);
+      setToken(response.access_token, {
+        user_id: response.user?.id ?? '',
+        username: response.user?.username,
+        email: response.user?.email,
+        is_super_admin: response.user?.is_super_admin ?? false,
+        identity: response.user?.identity ?? null,
+        locked_gene_slugs: response.user?.locked_gene_slugs ?? [],
+        extra_gene_slugs: response.user?.extra_gene_slugs ?? [],
+        token: response.access_token,
+      });
       navigate('/namespaces', { replace: true });
     } catch (error) {
       if (error instanceof ApiError) {

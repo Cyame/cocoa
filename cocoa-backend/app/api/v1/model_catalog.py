@@ -1,7 +1,7 @@
 """Model catalog for a world OrganizationProvider (PRD-v3).
 
-GET /model-catalog?provider_id=… — catalog → models.dev; custom → remote /models.
-Custom failures never fall back to models.dev.
+GET /model-catalog?provider_id=… — prefer persisted models_allowlist;
+otherwise catalog → models.dev / custom → remote /models.
 """
 
 from __future__ import annotations
@@ -28,6 +28,10 @@ async def get_model_catalog(
     current_user: CurrentUserDep,
     provider_id: str = Query(..., description="OrganizationProvider id"),
     q: str | None = Query(default=None),
+    refresh: bool = Query(
+        default=False,
+        description="Bypass cached allowlist and re-fetch remote /models.dev",
+    ),
 ) -> CatalogModelsOut:
     org = await _get_default_org(db)
     result = await db.execute(
@@ -46,12 +50,21 @@ async def get_model_catalog(
         )
 
     allowlist = provider.models_allowlist
-    if isinstance(allowlist, list) and allowlist:
-        allow = {str(x) for x in allowlist}
-    else:
-        allow = None
+    has_allowlist = isinstance(allowlist, list) and len(allowlist) > 0
 
-    if provider.origin == "catalog" and provider.catalog_provider_id:
+    # Persisted list from setup-time fetch is the selection source of truth.
+    if has_allowlist and not refresh:
+        items = [
+            CatalogModelOut(
+                id=str(mid),
+                name=str(mid),
+                provider=provider.slug,
+            )
+            for mid in allowlist
+        ]
+        error = None
+        degraded = False
+    elif provider.origin == "catalog" and provider.catalog_provider_id:
         models, degraded = await model_catalog.list_models_for_catalog_provider(
             provider.catalog_provider_id
         )
@@ -65,6 +78,9 @@ async def get_model_catalog(
             for m in models
         ]
         error = None
+        if has_allowlist:
+            allow = {str(x) for x in allowlist}
+            items = [i for i in items if i.id in allow]
     else:
         raw_items, error = await fetch_custom_models(provider)
         degraded = False
@@ -77,7 +93,6 @@ async def get_model_catalog(
             )
             for i in raw_items
         ]
-        # Always surface default_model even on failure
         if not any(i.id == provider.default_model for i in items):
             items.insert(
                 0,
@@ -88,8 +103,6 @@ async def get_model_catalog(
                 ),
             )
 
-    if allow is not None:
-        items = [i for i in items if i.id in allow]
     if q:
         ql = q.lower()
         items = [i for i in items if ql in i.id.lower() or ql in i.name.lower()]

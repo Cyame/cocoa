@@ -28,7 +28,7 @@ import pytest_asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.builtin_presets import BUILTIN_PRESETS
+from app.core.builtin_presets import ALL_BUILTIN_PRESETS, BUILTIN_PRESETS
 from app.core.event_types import (
     HARNESS_BREAKER_TRIPPED,
     HARNESS_CHECKPOINT,
@@ -78,11 +78,11 @@ def _patch_sdk_constructors():
 
 
 def _find_preset(slug: str) -> dict:
-    """Locate the builtin preset dict by its slug."""
-    for preset in BUILTIN_PRESETS:
+    """Locate the builtin preset dict by its slug (public + internal)."""
+    for preset in ALL_BUILTIN_PRESETS:
         if preset["slug"] == slug:
             return preset
-    raise AssertionError(f"preset {slug!r} not in BUILTIN_PRESETS")
+    raise AssertionError(f"preset {slug!r} not in ALL_BUILTIN_PRESETS")
 
 
 def test_mi_shi_manifest_is_openai_compatible_with_gpt4o_mini() -> None:

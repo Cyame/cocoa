@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from app.api.v1.ai_genes import router as ai_genes_router
+from app.api.v1.account import router as account_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.base_classes import router as base_classes_router
 from app.api.v1.central_hubs import router as central_hubs_router
@@ -21,10 +22,12 @@ from app.api.v1.provider_catalog import router as provider_catalog_router
 from app.api.v1.model_catalog import router as model_catalog_router
 from app.api.v1.system_hub import router as system_hub_router
 from app.api.v1.user_genes import router as user_genes_router
+from app.api.v1.users import router as users_router
 from app.api.v1.workspace_live_status import router as workspace_live_status_router
 from app.api.v1.workspaces import router as workspaces_router
 
 api_router = APIRouter(prefix="/api/v1")
+api_router.include_router(account_router)
 api_router.include_router(auth_router)
 api_router.include_router(ai_genes_router)
 api_router.include_router(base_classes_router)
@@ -44,5 +47,6 @@ api_router.include_router(organizations_router)
 api_router.include_router(provider_catalog_router)
 api_router.include_router(system_hub_router)
 api_router.include_router(user_genes_router)
+api_router.include_router(users_router)
 api_router.include_router(workspace_live_status_router)
 api_router.include_router(workspaces_router)

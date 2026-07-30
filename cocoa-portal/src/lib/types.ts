@@ -163,8 +163,23 @@ export type MemoryEntry = {
 
 export type CurrentUser = {
   readonly user_id: string;
+  readonly username?: string;
+  readonly email?: string;
   readonly is_super_admin: boolean;
+  readonly identity?: string | null;
+  readonly locked_gene_slugs?: readonly string[];
+  readonly extra_gene_slugs?: readonly string[];
   readonly token: string | null;
+};
+
+export type AuthUserPayload = {
+  readonly id: string;
+  readonly username: string;
+  readonly email: string;
+  readonly is_super_admin: boolean;
+  readonly identity?: string | null;
+  readonly locked_gene_slugs?: readonly string[];
+  readonly extra_gene_slugs?: readonly string[];
 };
 
 export type GlowIntensity = 'static' | 'weak' | 'low' | 'medium' | 'strong';

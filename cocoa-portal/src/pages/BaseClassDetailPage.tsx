@@ -12,6 +12,7 @@ import {
   updateBaseClassProviderDefault,
 } from '@/lib/api/providers';
 import type { BaseClass } from '@/lib/types';
+import { ModelInputCombobox } from '@/components/ModelInputCombobox';
 import { useOnboardingModalStore } from '@/stores/onboardingModalStore';
 import { useSessionStore } from '@/stores/session';
 
@@ -135,7 +136,7 @@ export default function BaseClassDetailPage() {
             </div>
             <button
               type="button"
-              onClick={openOnboarding}
+              onClick={() => openOnboarding({ baseClassSlug: baseClass.slug })}
               className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500"
             >
               {t('namespaces.summonFromBaseClass')}
@@ -170,19 +171,15 @@ export default function BaseClassDetailPage() {
               </label>
               <label className="block text-xs font-medium text-slate-600">
                 {t('organization.fields.model')}
-                <select
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                <ModelInputCombobox
+                  aria-label={t('organization.fields.model')}
                   value={model}
+                  onChange={setModel}
+                  options={models.map((id) => ({ id, name: id }))}
                   disabled={!isSuperAdmin || !providerId}
-                  onChange={(e) => setModel(e.target.value)}
-                >
-                  <option value="">{t('organization.fields.selectModel')}</option>
-                  {models.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
-                  ))}
-                </select>
+                  placeholder={t('organization.fields.modelPlaceholder')}
+                  className="mt-1"
+                />
               </label>
             </div>
             {isSuperAdmin ? (

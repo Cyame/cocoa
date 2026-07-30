@@ -7,6 +7,8 @@
     "portalSubtitle": "Cocoa portal",
     "save": "Save",
     "cancel": "Cancel",
+    "edit": "Edit",
+    "done": "Done",
     "delete": "Delete",
     "confirm": "Confirm",
     "loading": "Loading",
@@ -15,11 +17,23 @@
     "logOut": "Log out",
     "signOut": "Sign out",
     "authenticatedUser": "Authenticated user",
-    "superAdmin": "Super admin",
-    "operator": "Operator"
+    "superAdmin": "System admin",
+    "operator": "Operator",
+    "member": "Member"
   },
   "nav": {
-    "organization": "Organization settings"
+    "organization": "World",
+    "world": "World",
+    "namespace": "Namespace",
+    "workspace": "Workspace",
+    "baseClasses": "Base class",
+    "contracts": "Contract",
+    "entities": "Entity",
+    "instances": "Instance",
+    "genes": "Gene",
+    "capability": "Capability",
+    "debug": "Debug",
+    "account": "Account"
   },
   "login": {
     "signInHeading": "Sign in",
@@ -114,7 +128,12 @@
       "provider": "Provider",
       "model": "Model",
       "none": "None (clear)",
-      "selectModel": "Select model"
+      "selectModel": "Select model",
+      "modelPlaceholder": "Select or type a model id",
+      "apiKey": "API Key",
+      "baseUrl": "Base URL",
+      "verifySsl": "Verify SSL certificate",
+      "fetchModels": "Fetch model list"
     },
     "providers": {
       "title": "World providers",
@@ -154,7 +173,8 @@
       "catalogProvider": "Catalog provider",
       "select": "Select a provider",
       "alreadyEnabled": "enabled",
-      "apiKeyRef": "API key env ref",
+      "apiKeyRef": "API Key",
+      "degraded": "models.dev is unreachable; showing the built-in subset for now.",
       "enable": "Enable"
     },
     "customModal": {
@@ -164,7 +184,7 @@
       "baseUrl": "Base URL",
       "requestFormat": "Request format",
       "defaultModel": "Default model",
-      "apiKeyRef": "API key env ref",
+      "apiKeyRef": "API Key",
       "create": "Create provider"
     },
     "setDefaultModal": {
@@ -176,7 +196,43 @@
         "system_hub": "System hub",
         "cerebellum": "Cerebellum world default"
       }
-    }
+    },
+    "tabs": {
+      "system": "System hub",
+      "users": "Users",
+      "world": "World",
+      "namespaces": "Namespaces"
+    },
+    "users": {
+      "title": "Users",
+      "create": "Create user",
+      "username": "Username",
+      "email": "Email",
+      "identity": "Identity",
+      "tempPassword": "Temporary password (shown once)",
+      "delete": "Delete",
+      "empty": "No users yet",
+      "created": "User created",
+      "editExtraGenes": "Edit extra genes",
+      "noExtraGenes": "No attachable genes yet (can_* permission genes are seeded automatically)"
+    },
+    "world": {
+      "title": "World",
+      "name": "Name",
+      "slug": "Slug (read-only)",
+      "description": "Description",
+      "saved": "World updated"
+    },
+    "namespacesAdmin": {
+      "title": "Namespaces",
+      "create": "Create namespace",
+      "name": "Name",
+      "slug": "Slug",
+      "description": "Description",
+      "empty": "No namespaces yet",
+      "delete": "Delete"
+    },
+    "generateDescription": "Generate with hub"
   },
   "promoteModal": {
     "title": "Promote (Reincarnate / Fork)",
@@ -588,7 +644,6 @@
     "networkError": "Network error. Please retry.",
     "unexpectedError": "Summon failed. The error was logged and is being handled in the background.",
     "loadBaseClassesFailed": "Failed to load deity list",
-
     "step1": {
       "title": "Summon your first deity's servant",
       "subtitle": "Pick 1 of 11 deities. Each defines a set of capabilities and commands.",
@@ -603,7 +658,6 @@
       "commandsLabel": "Commands",
       "fallbackDisclaimer": "API returned no deities. Showing the built-in defaults below."
     },
-
     "step2": {
       "title": "Name your deity's servant",
       "subtitle": "The servant is created from your selected deity. You can spawn its first instance right away.",
@@ -613,17 +667,14 @@
       "displayNameRequired": "Display name is required.",
       "displayNameTooLong": "Display name must be 32 characters or fewer.",
       "displayNameDuplicate": "An employee with this display name already exists in this workspace.",
-
       "slugLabel": "Slug",
       "slugPlaceholder": "e.g. nyar-proutzi",
       "slugHelp": "Auto-generated from the display name, editable. Kebab-case, starting with a lowercase letter.",
       "slugRequired": "Slug is required.",
       "slugPattern": "Slug must start with a lowercase letter, then lowercase letters, digits, or hyphens.",
-
       "rankLabel": "AI form (rank)",
       "rankResearcher": "Researcher — persistent AI with memory across instances",
       "rankIntern": "Intern — stateless AI, reset on each restart",
-
       "providerLabel": "Provider",
       "providerPlaceholder": "Select a world provider",
       "providerInherit": "Inherit base-class default",
@@ -644,21 +695,17 @@
       "previewTag": "Onboarding preview",
       "previewKnowledgeCount": "{{count}} entries",
       "unnamedEntity": "Unnamed entity",
-
       "knowledgeHeading": "Knowledge binding",
       "knowledgeEnvLabel": "Environment variables",
       "knowledgeEnvAdd": "+ Add env",
       "knowledgeFileLabel": "Files",
       "knowledgeFileAdd": "+ Upload file",
       "knowledgeFileEmpty": "No files selected",
-
       "freezeWarning": "These properties are frozen after creation. To change them, create a new entity.",
-
       "summon": "Summon servant",
       "summoning": "Summoning...",
       "submitFailed": "Summon failed. Please retry."
     },
-
     "step3": {
       "title": "Configure AI brain and knowledge",
       "subtitle": "Set the LLM provider + model for the first instance and optionally inject knowledge.",
@@ -671,10 +718,8 @@
       "knowledgeScopeEntityHelp": "Entity-wide: other instances can also read it (requires restart).",
       "knowledgeScopeWorkspace": "Shared across this workspace",
       "knowledgeScopeWorkspaceHelp": "Warning: other AI in the workspace can also read it.",
-
       "skipNextTime": "Skip, configure later",
       "spawnFailed": "Spawn failed. Please retry.",
-
       "successTitle": "Summon successful",
       "successDetail": "Your first deity's servant is ready."
     }
@@ -709,8 +754,29 @@
       "baseClasses": "Base classes",
       "contracts": "Contracts",
       "entities": "Entities",
-      "capabilityMarket": "Capability market",
-      "debug": "Debug"
+      "capabilityMarket": "Capabilities",
+      "debug": "Debug",
+      "instances": "Instances",
+      "genes": "Genes"
+    },
+    "instancesTitle": "Instances",
+    "instancesDetail": "Instance list shell is ready. Open instances from a workspace or entity.",
+    "instancesPromote": "Promote",
+    "genesTitle": "Human genes",
+    "genesDetail": "Permission packs (can_*). Identity genes are locked packs; others can be attached to users.",
+    "genesPack": "Pack",
+    "genesPermissions": "Permissions",
+    "genesEmpty": "No genes yet",
+    "genesSaved": "Saved",
+    "genesEdit": "Edit permissions",
+    "capabilityCreate": "Create",
+    "capabilityDistill": "Distill",
+    "transmute": "Transmute",
+    "tag": {
+      "planning": "Planning",
+      "execution": "Execution",
+      "review": "Review",
+      "internal": "Internal"
     }
   },
   "workspace": {
@@ -775,5 +841,28 @@
     "label": "Language",
     "switchTo": "中文",
     "current": "EN"
+  },
+  "identity": {
+    "system": "System admin",
+    "org": "World admin",
+    "namespace": "Namespace admin",
+    "workspace": "Workspace admin",
+    "member": "Member"
+  },
+  "account": {
+    "title": "Account",
+    "subtitle": "View identity and locked genes; update profile and password",
+    "profile": "Profile",
+    "username": "Username",
+    "email": "Email",
+    "identity": "Identity",
+    "lockedGenes": "Locked genes",
+    "extraGenes": "Extra genes",
+    "noExtraGenes": "No extra genes",
+    "changePassword": "Change password",
+    "currentPassword": "Current password",
+    "newPassword": "New password",
+    "saved": "Saved",
+    "passwordChanged": "Password updated"
   }
 }

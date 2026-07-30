@@ -55,7 +55,7 @@ class OrganizationProvider(BaseModel, Base):
     slug: Mapped[str] = mapped_column(String(255), nullable=False)
     request_format: Mapped[str] = mapped_column(String(20), nullable=False)
     base_url: Mapped[str | None] = mapped_column(Text, nullable=True)
-    api_key_ref: Mapped[str] = mapped_column(String(100), nullable=False)
+    api_key_ref: Mapped[str] = mapped_column(Text, nullable=False)
     default_model: Mapped[str] = mapped_column(String(255), nullable=False)
     models_allowlist: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     verify_ssl: Mapped[bool] = mapped_column(

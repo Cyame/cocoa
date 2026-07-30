@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 import IdeShell from '@/components/IdeShell';
+import { ModelInputCombobox } from '@/components/ModelInputCombobox';
 import { ApiError, api } from '@/lib/api';
 import { fetchLiveStatus } from '@/lib/api/liveStatus';
 import {
@@ -410,31 +411,15 @@ function CerebellumPanel({
         </label>
         <div className="block text-xs font-semibold uppercase tracking-wide text-slate-600">
           {t('organization.fields.model')}
-          {models.length > 0 ? (
-            <select
-              aria-label={t('organization.fields.model')}
-              value={model}
-              disabled={providerId.length === 0}
-              onChange={(e) => setModel(e.target.value)}
-              className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm disabled:bg-slate-50"
-            >
-              <option value="">{t('workspace.brain.inheritWorld')}</option>
-              {models.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <input
-              aria-label={t('organization.fields.model')}
-              type="text"
-              value={model}
-              disabled={providerId.length === 0}
-              onChange={(e) => setModel(e.target.value)}
-              className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm disabled:bg-slate-50"
-            />
-          )}
+          <ModelInputCombobox
+            aria-label={t('organization.fields.model')}
+            value={model}
+            onChange={setModel}
+            options={models}
+            disabled={providerId.length === 0}
+            emptyOptionLabel={t('workspace.brain.inheritWorld')}
+            placeholder={t('organization.fields.modelPlaceholder')}
+          />
         </div>
         {error !== null ? (
           <p role="alert" className="text-xs text-red-700">

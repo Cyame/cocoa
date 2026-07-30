@@ -15,7 +15,8 @@ from app.services.llm.org_provider import infer_request_format
 logger = logging.getLogger(__name__)
 
 MODELS_DEV_URL = "https://models.dev/api.json"
-CACHE_TTL_SECONDS = 600
+# Long TTL: portal does not need a live-fresh catalog every open.
+CACHE_TTL_SECONDS = 7 * 24 * 3600
 
 
 @dataclass(frozen=True, slots=True)
@@ -267,7 +268,21 @@ class ModelCatalog:
                 providers = _providers_from_raw(raw)
                 self._degraded = False
                 self._raw_cache = raw
+                self._cache = models
+                self._provider_cache = providers
+                self._cache_time = time.monotonic()
+                return models
             except Exception as exc:  # noqa: BLE001
+                # Keep a previously successful cache indefinitely rather than
+                # collapsing to the 3-provider builtin fallback.
+                if self._cache is not None and self._provider_cache is not None:
+                    logger.warning(
+                        "models.dev fetch failed; keeping stale cache",
+                        extra={"error": str(exc)},
+                    )
+                    self._degraded = True
+                    self._cache_time = time.monotonic()
+                    return self._cache
                 logger.warning(
                     "models.dev fetch failed; using builtin fallback",
                     extra={"error": str(exc)},
@@ -276,10 +291,10 @@ class ModelCatalog:
                 providers = _builtin_provider_infos()
                 self._degraded = True
                 self._raw_cache = None
-            self._cache = models
-            self._provider_cache = providers
-            self._cache_time = time.monotonic()
-            return models
+                self._cache = models
+                self._provider_cache = providers
+                self._cache_time = time.monotonic()
+                return models
 
     async def _fetch_raw(self) -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=10.0) as client:

@@ -41,8 +41,21 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class AuthUserOut(BaseModel):
+    """Public user fields returned with auth responses /me."""
+
+    id: str
+    username: str
+    email: str
+    is_super_admin: bool
+    identity: str | None = None
+    locked_gene_slugs: list[str] = []
+    extra_gene_slugs: list[str] = []
+
+
 class TokenResponse(BaseModel):
     """JWT access token returned on successful register/login."""
 
     access_token: str
     token_type: str = "bearer"
+    user: AuthUserOut | None = None

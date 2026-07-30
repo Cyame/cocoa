@@ -18,6 +18,13 @@ from sqlalchemy import select
 
 from app.api.deps import DB, CurrentUserDep
 from app.core.errors import ConflictError, NotFoundError
+from app.core.identity import (
+    ALL_IDENTITY_SLUGS,
+    ALL_PERMISSION_KEYS,
+    LEGACY_GENE_MAP,
+    ensure_permission_genes,
+    identity_key_from_slug,
+)
 from app.core.openapi import add_error_responses
 from app.core.pagination import OffsetPage, paginate_offset
 from app.core.permissions import require_super_admin
@@ -45,6 +52,14 @@ async def _get_active_gene(db: DB, gene_id: str) -> UserGene:
     return gene
 
 
+@router.get("/permission-keys")
+async def list_permission_keys(
+    current_user: CurrentUserDep,
+) -> dict[str, list[str]]:
+    """Known can_* slugs for gene editor checkboxes."""
+    return {"items": list(ALL_PERMISSION_KEYS)}
+
+
 @router.get("", response_model=OffsetPage[UserGeneOut])
 async def list_user_genes(
     db: DB,
@@ -53,6 +68,9 @@ async def list_user_genes(
     offset: int = 0,
 ) -> OffsetPage:
     """Return all active user genes (any authenticated user may list)."""
+    # Ensure can_* attachable genes exist (idempotent).
+    await ensure_permission_genes(db)
+    await db.commit()
     stmt = (
         select(UserGene)
         .where(UserGene.deleted_at.is_(None))
@@ -173,6 +191,12 @@ async def attach_user_gene(
     """Attach a user gene to a user (super-admin). Idempotent."""
     require_super_admin(current_user)
     gene = await _get_active_gene(db, gene_id)
+    if gene.slug in ALL_IDENTITY_SLUGS or gene.slug in LEGACY_GENE_MAP:
+        raise ConflictError(
+            "user_gene.identity_locked",
+            "errors.user_gene.identity_locked",
+            f"Identity gene '{gene.slug}' must be set via POST /users/{{id}}/identity",
+        )
     user = await db.get(User, body.user_id)
     if user is None or user.deleted_at is not None:
         raise NotFoundError(
@@ -205,7 +229,17 @@ async def detach_user_gene(
 ) -> None:
     """Detach a user gene from a user (super-admin)."""
     require_super_admin(current_user)
-    await _get_active_gene(db, gene_id)
+    gene = await _get_active_gene(db, gene_id)
+    if (
+        gene.slug in ALL_IDENTITY_SLUGS
+        or gene.slug in LEGACY_GENE_MAP
+        or identity_key_from_slug(gene.slug) is not None
+    ):
+        raise ConflictError(
+            "user_gene.identity_locked",
+            "errors.user_gene.identity_locked",
+            f"Identity gene '{gene.slug}' must be changed via POST /users/{{id}}/identity",
+        )
     result = await db.execute(
         select(UserUserGene).where(
             UserUserGene.user_id == user_id,

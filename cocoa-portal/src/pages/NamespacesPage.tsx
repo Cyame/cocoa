@@ -17,11 +17,18 @@ import { ApiError, api } from '@/lib/api';
 import { fetchBaseClassesPage } from '@/lib/api/baseClasses';
 import type { NamespaceWithStats } from '@/lib/api/namespaces';
 import { fetchDefaultNamespace } from '@/lib/api/namespaces';
+import {
+  type CatalogUserGene,
+  listPermissionKeys,
+  listUserGenes,
+  updateUserGene,
+} from '@/lib/api/users';
 import { createWorkspace, fetchWorkspaces } from '@/lib/api/workspaces';
 import type { BaseClass, Entity, Workspace } from '@/lib/types';
 import DebugPage from '@/pages/DebugPage';
 import { useEntityModalStore } from '@/stores/entityModalStore';
 import { useOnboardingModalStore } from '@/stores/onboardingModalStore';
+import { useSessionStore } from '@/stores/session';
 
 type OffsetPage<T> = {
   readonly items: readonly T[];
@@ -46,6 +53,8 @@ const VALID_TABS = new Set([
   'base-classes',
   'contracts',
   'entities',
+  'instances',
+  'genes',
   'capability-market',
   'debug',
 ]);
@@ -68,6 +77,7 @@ export default function NamespacesPage() {
   const [createSlug, setCreateSlug] = useState('');
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [selectedEntityId, setSelectedEntityId] = useState<string | null>(null);
 
   const openOnboarding = useOnboardingModalStore((state) => state.open);
   const openEntityModal = useEntityModalStore((state) => state.open);
@@ -183,33 +193,89 @@ export default function NamespacesPage() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => void refresh()}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-          >
-            <RefreshCw className="size-4" aria-hidden="true" />
-            {t('common.retry')}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setCreateOpen(true);
-              setCreateError(null);
-            }}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50"
-          >
-            <Plus className="size-4" aria-hidden="true" />
-            {t('namespaces.createWorkspace')}
-          </button>
-          <button
-            type="button"
-            onClick={openOnboarding}
-            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-500"
-          >
-            <Sparkles className="size-4" aria-hidden="true" />
-            {t('namespaces.summonEntity')}
-          </button>
+          {activeTab === 'debug' ? (
+            <button
+              type="button"
+              onClick={() => void refresh()}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              <RefreshCw className="size-4" aria-hidden="true" />
+              {t('common.retry')}
+            </button>
+          ) : null}
+          {activeTab === 'workspace' ? (
+            <button
+              type="button"
+              onClick={() => {
+                setCreateOpen(true);
+                setCreateError(null);
+              }}
+              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-500"
+            >
+              <Plus className="size-4" aria-hidden="true" />
+              {t('namespaces.createWorkspace')}
+            </button>
+          ) : null}
+          {activeTab === 'base-classes' || activeTab === 'entities' ? (
+            <button
+              type="button"
+              onClick={() => openOnboarding()}
+              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-500"
+            >
+              <Sparkles className="size-4" aria-hidden="true" />
+              {t('namespaces.summonEntity')}
+            </button>
+          ) : null}
+          {activeTab === 'entities' ? (
+            <button
+              type="button"
+              disabled={selectedEntityId === null}
+              onClick={() => {
+                if (selectedEntityId) openEntityModal(selectedEntityId, 'distill');
+              }}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+            >
+              <FlaskConical className="size-4" aria-hidden="true" />
+              {t('namespaces.transmute')}
+            </button>
+          ) : null}
+          {activeTab === 'instances' ? (
+            <button
+              type="button"
+              disabled
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-400"
+              title={t('namespaces.instancesDetail')}
+            >
+              {t('namespaces.instancesPromote')}
+            </button>
+          ) : null}
+          {activeTab === 'genes' ? (
+            <button
+              type="button"
+              disabled
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-400"
+            >
+              {t('namespaces.genesPack')}
+            </button>
+          ) : null}
+          {activeTab === 'capability-market' ? (
+            <>
+              <button
+                type="button"
+                disabled
+                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white opacity-50"
+              >
+                {t('namespaces.capabilityCreate')}
+              </button>
+              <button
+                type="button"
+                disabled
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-400"
+              >
+                {t('namespaces.capabilityDistill')}
+              </button>
+            </>
+          ) : null}
         </div>
       </header>
 
@@ -326,7 +392,7 @@ export default function NamespacesPage() {
               bc.slug !== 'cerebellum-baseclass' &&
               !(bc.tags ?? []).some((tag) => tag === 'internal' || tag === 'system'),
           )}
-          onSummon={openOnboarding}
+          onSummon={(slug) => openOnboarding({ baseClassSlug: slug })}
           t={t}
         />
       ) : null}
@@ -336,11 +402,16 @@ export default function NamespacesPage() {
       {!isLoading && activeTab === 'entities' ? (
         <EntitiesTab
           entities={entities}
+          selectedId={selectedEntityId}
+          onSelect={setSelectedEntityId}
           onOpen={(id) => openEntityModal(id)}
           onOpenDistill={(id) => openEntityModal(id, 'distill')}
           t={t}
         />
       ) : null}
+
+      {!isLoading && activeTab === 'instances' ? <InstancesTab t={t} /> : null}
+      {!isLoading && activeTab === 'genes' ? <GenesTab t={t} /> : null}
 
       {!isLoading && activeTab === 'capability-market' ? <CapabilityMarketTab t={t} /> : null}
 
@@ -422,7 +493,7 @@ function BaseClassesTab({
   t,
 }: {
   readonly baseClasses: readonly BaseClass[];
-  readonly onSummon: () => void;
+  readonly onSummon: (slug: string) => void;
   readonly t: TFn;
 }) {
   return (
@@ -434,9 +505,19 @@ function BaseClassesTab({
             <p className="mt-1 font-mono text-xs text-slate-500">{bc.slug}</p>
             <p className="mt-3 line-clamp-3 text-sm text-slate-600">{bc.description}</p>
           </Link>
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {(bc.tags ?? []).map((tag) => (
+              <span
+                key={tag}
+                className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600"
+              >
+                {t(`namespaces.tag.${tag}`, { defaultValue: tag })}
+              </span>
+            ))}
+          </div>
           <button
             type="button"
-            onClick={onSummon}
+            onClick={() => onSummon(bc.slug)}
             className="mt-4 text-sm font-medium text-blue-600 hover:text-blue-700"
           >
             {t('namespaces.summonFromBaseClass')}
@@ -461,11 +542,15 @@ function ContractsTab({ t }: { readonly t: TFn }) {
 
 function EntitiesTab({
   entities,
+  selectedId,
+  onSelect,
   onOpen,
   onOpenDistill,
   t,
 }: {
   readonly entities: readonly Entity[];
+  readonly selectedId: string | null;
+  readonly onSelect: (id: string) => void;
   readonly onOpen: (id: string) => void;
   readonly onOpenDistill: (id: string) => void;
   readonly t: TFn;
@@ -491,7 +576,13 @@ function EntitiesTab({
         </thead>
         <tbody>
           {entities.map((entity) => (
-            <tr key={entity.id} className="border-b border-slate-100 last:border-0">
+            <tr
+              key={entity.id}
+              className={`border-b border-slate-100 last:border-0 ${
+                selectedId === entity.id ? 'bg-blue-50' : ''
+              }`}
+              onClick={() => onSelect(entity.id)}
+            >
               <td className="px-4 py-3 font-medium text-slate-900">
                 {entity.display_name ?? entity.name}
               </td>
@@ -501,14 +592,20 @@ function EntitiesTab({
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => onOpen(entity.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpen(entity.id);
+                    }}
                     className="text-blue-600 hover:text-blue-700"
                   >
                     {t('namespaces.viewDetail')}
                   </button>
                   <button
                     type="button"
-                    onClick={() => onOpenDistill(entity.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenDistill(entity.id);
+                    }}
                     className="inline-flex items-center gap-1 text-emerald-700 hover:text-emerald-800"
                     data-testid={`entity-promote-${entity.id}`}
                   >
@@ -517,7 +614,10 @@ function EntitiesTab({
                   </button>
                   <button
                     type="button"
-                    onClick={() => onOpenDistill(entity.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenDistill(entity.id);
+                    }}
                     className="inline-flex items-center gap-1 text-purple-700 hover:text-purple-800"
                     data-testid={`entity-transmute-${entity.id}`}
                   >
@@ -530,6 +630,192 @@ function EntitiesTab({
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function InstancesTab({ t }: { readonly t: TFn }) {
+  return (
+    <div className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center">
+      <Cpu className="mx-auto size-8 text-slate-400" aria-hidden="true" />
+      <h2 className="mt-4 text-base font-semibold text-slate-900">{t('namespaces.instancesTitle')}</h2>
+      <p className="mt-2 text-sm text-slate-500">{t('namespaces.instancesDetail')}</p>
+    </div>
+  );
+}
+
+function GenesTab({ t }: { readonly t: TFn }) {
+  const user = useSessionStore((state) => state.user);
+  const canWrite = user?.is_super_admin === true || user?.identity === 'system';
+  const [genes, setGenes] = useState<readonly CatalogUserGene[]>([]);
+  const [permissionKeys, setPermissionKeys] = useState<readonly string[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draftKeys, setDraftKeys] = useState<ReadonlySet<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setIsLoading(true);
+    setErrorMessage(null);
+    try {
+      const [genePage, keys] = await Promise.all([listUserGenes(), listPermissionKeys()]);
+      setGenes(genePage.items);
+      setPermissionKeys(keys);
+    } catch (error) {
+      setErrorMessage(error instanceof ApiError ? error.message : String(error));
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  function startEdit(gene: CatalogUserGene) {
+    setEditingId(gene.id);
+    setDraftKeys(new Set(gene.permission_keys ?? []));
+    setNotice(null);
+  }
+
+  async function saveEdit(geneId: string) {
+    setBusy(true);
+    setErrorMessage(null);
+    try {
+      await updateUserGene(geneId, { permission_keys: Array.from(draftKeys) });
+      setEditingId(null);
+      setNotice(t('namespaces.genesSaved'));
+      await load();
+    } catch (error) {
+      setErrorMessage(error instanceof ApiError ? error.message : String(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center gap-3 py-16 text-sm text-slate-500">
+        <LoaderCircle className="size-5 animate-spin" aria-hidden="true" />
+        {t('common.loading')}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-base font-semibold text-slate-900">{t('namespaces.genesTitle')}</h2>
+        <p className="mt-1 text-sm text-slate-500">{t('namespaces.genesDetail')}</p>
+      </div>
+      {errorMessage ? (
+        <p role="alert" className="text-sm text-red-600">
+          {errorMessage}
+        </p>
+      ) : null}
+      {notice ? (
+        <p role="status" className="text-sm text-emerald-700">
+          {notice}
+        </p>
+      ) : null}
+      {genes.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center text-sm text-slate-500">
+          {t('namespaces.genesEmpty')}
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {genes.map((gene) => {
+            const editing = editingId === gene.id;
+            const isIdentity = gene.slug.startsWith('identity-');
+            return (
+              <article
+                key={gene.id}
+                className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p className="font-medium text-slate-900">{gene.name}</p>
+                    <p className="font-mono text-xs text-slate-500">{gene.slug}</p>
+                    {gene.description ? (
+                      <p className="mt-1 text-xs text-slate-500">{gene.description}</p>
+                    ) : null}
+                  </div>
+                  {canWrite ? (
+                    editing ? (
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setEditingId(null)}
+                          className="rounded-md border border-slate-200 px-2 py-1 text-xs"
+                        >
+                          {t('common.cancel')}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void saveEdit(gene.id)}
+                          className="rounded-md bg-blue-600 px-2 py-1 text-xs font-semibold text-white disabled:opacity-60"
+                        >
+                          {t('common.save')}
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => startEdit(gene)}
+                        className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
+                      >
+                        {t('namespaces.genesEdit')}
+                      </button>
+                    )
+                  ) : null}
+                </div>
+                <div className="mt-3">
+                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    {t('namespaces.genesPermissions')}
+                    {isIdentity ? (
+                      <span className="ml-2 font-normal normal-case tracking-normal text-slate-400">
+                        (identity)
+                      </span>
+                    ) : null}
+                  </p>
+                  {editing ? (
+                    <div className="grid max-h-48 gap-1 overflow-y-auto rounded-lg border border-slate-200 p-2 sm:grid-cols-2">
+                      {permissionKeys.map((key) => (
+                        <label
+                          key={key}
+                          className="flex items-center gap-2 rounded-md px-2 py-1 font-mono text-xs hover:bg-slate-50"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={draftKeys.has(key)}
+                            onChange={(e) => {
+                              setDraftKeys((prev) => {
+                                const next = new Set(prev);
+                                if (e.target.checked) next.add(key);
+                                else next.delete(key);
+                                return next;
+                              });
+                            }}
+                            className="size-3.5 accent-blue-600"
+                          />
+                          {key}
+                        </label>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="font-mono text-xs text-slate-700">
+                      {(gene.permission_keys ?? []).join(', ') || '—'}
+                    </p>
+                  )}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

@@ -4,6 +4,7 @@ export type Organization = {
   readonly id: string;
   readonly slug: string;
   readonly name: string;
+  readonly description: string | null;
   readonly system_hub_provider_id: string | null;
   readonly system_hub_model: string | null;
   readonly cerebellum_default_provider_id: string | null;
@@ -102,6 +103,16 @@ export type CerebellumAgent = {
 
 export function fetchDefaultOrganization(): Promise<Organization> {
   return api<Organization>('/organizations/default');
+}
+
+export function updateDefaultOrganization(body: {
+  readonly name?: string;
+  readonly description?: string | null;
+}): Promise<Organization> {
+  return api<Organization>('/organizations/default', {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
 }
 
 export function listOrganizationProviders(
@@ -247,15 +258,43 @@ export function fetchCatalogProviderModels(
   );
 }
 
-export function fetchModelCatalog(providerId: string, q?: string): Promise<CatalogModelsPage> {
+export function fetchModelCatalog(
+  providerId: string,
+  q?: string,
+  refresh = false,
+): Promise<CatalogModelsPage> {
   const params = new URLSearchParams({ provider_id: providerId });
   if (q) params.set('q', q);
+  if (refresh) params.set('refresh', 'true');
   return api<CatalogModelsPage>(`/model-catalog?${params.toString()}`);
+}
+
+export function previewProviderModels(payload: {
+  readonly api_key_ref: string;
+  readonly base_url?: string | null;
+  readonly request_format?: string;
+  readonly verify_ssl?: boolean;
+  readonly models_endpoint_mode?: 'inherit' | 'separate';
+  readonly models_base_url?: string | null;
+  readonly catalog_provider_id?: string | null;
+}): Promise<CatalogModelsPage> {
+  return api<CatalogModelsPage>('/organizations/default/providers/preview-models', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function refreshProviderModels(providerId: string): Promise<CatalogModelsPage> {
+  return api<CatalogModelsPage>(
+    `/organizations/default/providers/${encodeURIComponent(providerId)}/refresh-models`,
+    { method: 'POST' },
+  );
 }
 
 export function generateDescription(payload: {
   readonly name: string;
   readonly description?: string | null;
+  readonly kind?: 'entity' | 'world' | 'namespace' | 'gene' | 'generic';
 }): Promise<{ readonly description: string }> {
   return api<{ readonly description: string }>('/system-hub/generate-description', {
     method: 'POST',

@@ -179,23 +179,35 @@ def upgrade() -> None:
         )
     )
 
-    # Seed six built-in 神职 templates (mi-shi … zong-jian)
-    from app.core.builtin_presets import BUILTIN_PRESETS
+    # Seed PRD 11 神职 + internal zong-jian (display/tags filled; v3-post migration upserts too)
+    from app.core.builtin_presets import ALL_BUILTIN_PRESETS
 
-    for preset in BUILTIN_PRESETS:
-        op.execute(
-            sa.text(
-                """
-                INSERT INTO base_classes (id, slug, name, manifest, version, created_at, updated_at)
-                VALUES (:id, :slug, :name, CAST(:manifest AS jsonb), :version, now(), now())
-                """
-            ).bindparams(
-                id=str(uuid.uuid4()),
-                slug=preset["slug"],
-                name=preset["name"],
-                version=preset.get("version") or "1.0.0",
-                manifest=json.dumps(preset.get("manifest") or {}),
-            )
+    conn = op.get_bind()
+    insert_bc = sa.text(
+        """
+        INSERT INTO base_classes
+            (id, slug, name, display_name, description, manifest, version, tags,
+             created_at, updated_at)
+        VALUES
+            (:id, :slug, :name, :display_name, :description,
+             CAST(:manifest AS jsonb), :version, :tags,
+             now(), now())
+        """
+    ).bindparams(sa.bindparam("tags", type_=sa.ARRAY(sa.String())))
+
+    for preset in ALL_BUILTIN_PRESETS:
+        conn.execute(
+            insert_bc,
+            {
+                "id": str(uuid.uuid4()),
+                "slug": preset["slug"],
+                "name": preset["name"],
+                "display_name": preset.get("display_name") or preset["name"],
+                "description": preset.get("description"),
+                "version": preset.get("version") or "1.0.0",
+                "manifest": json.dumps(preset.get("manifest") or {}),
+                "tags": list(preset.get("tags") or []),
+            },
         )
 
 
