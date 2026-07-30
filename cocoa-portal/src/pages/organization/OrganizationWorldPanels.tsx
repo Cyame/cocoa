@@ -15,6 +15,7 @@ import {
   type Organization,
   updateDefaultOrganization,
 } from '@/lib/api/providers';
+import { toSlug } from '@/lib/slug';
 
 type WorldProps = {
   readonly canWrite: boolean;
@@ -206,13 +207,7 @@ export function OrganizationNamespacesPanel({ canWrite }: NsProps) {
     void load();
   }, [load]);
 
-  const slugify = (value: string) =>
-    value
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, 48);
+  const slugify = (value: string) => toSlug(value, 48);
 
   function openCreate() {
     setDraft({ id: null, name: '', slug: '', description: '' });

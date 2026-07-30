@@ -1,11 +1,13 @@
-"""ModelCatalog — models.dev fetch with provider catalog + model list (PRD-v3)."""
+"""ModelCatalog — models.dev fetch with bundled offline snapshot (PRD-v3)."""
 
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -17,6 +19,10 @@ logger = logging.getLogger(__name__)
 MODELS_DEV_URL = "https://models.dev/api.json"
 # Long TTL: portal does not need a live-fresh catalog every open.
 CACHE_TTL_SECONDS = 7 * 24 * 3600
+# Bundled snapshot for demos / offline (committed under app/resources/).
+BUNDLED_MODELS_DEV_PATH = (
+    Path(__file__).resolve().parents[2] / "resources" / "models_dev_api.json"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -198,7 +204,7 @@ def _builtin_provider_infos() -> list[ProviderInfo]:
 
 
 class ModelCatalog:
-    """Fetches models.dev with 600s cache + builtin fallback."""
+    """Fetches models.dev with long TTL; falls back to bundled snapshot then builtin."""
 
     def __init__(self, ttl_seconds: int = CACHE_TTL_SECONDS) -> None:
         self._cache: list[ModelInfo] | None = None
@@ -206,12 +212,18 @@ class ModelCatalog:
         self._raw_cache: dict[str, Any] | None = None
         self._cache_time: float = 0.0
         self._degraded: bool = False
+        self._source: str = "empty"
         self._ttl = ttl_seconds
         self._lock = asyncio.Lock()
 
     @property
     def degraded(self) -> bool:
         return self._degraded
+
+    @property
+    def source(self) -> str:
+        """active | bundled | builtin | empty"""
+        return self._source
 
     async def list_models(self, provider: str | None = None) -> list[ModelInfo]:
         models = await self._get_fresh()
@@ -254,6 +266,33 @@ class ModelCatalog:
         q = query.lower()
         return [m for m in self._cache if q in m.name.lower() or q in m.id.lower()]
 
+    def _apply_raw(self, raw: dict[str, Any], *, source: str, degraded: bool) -> list[ModelInfo]:
+        models = self._parse_models(raw)
+        providers = _providers_from_raw(raw)
+        self._degraded = degraded
+        self._source = source
+        self._raw_cache = raw
+        self._cache = models
+        self._provider_cache = providers
+        self._cache_time = time.monotonic()
+        return models
+
+    def _load_bundled_raw(self) -> dict[str, Any] | None:
+        path = BUNDLED_MODELS_DEV_PATH
+        if not path.is_file():
+            return None
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "bundled models.dev snapshot unreadable",
+                extra={"path": str(path), "error": str(exc)},
+            )
+            return None
+        if not isinstance(data, dict) or not data:
+            return None
+        return data
+
     async def _get_fresh(self) -> list[ModelInfo]:
         now = time.monotonic()
         if self._cache is not None and (now - self._cache_time) < self._ttl:
@@ -264,25 +303,26 @@ class ModelCatalog:
                 return self._cache
             try:
                 raw = await self._fetch_raw()
-                models = self._parse_models(raw)
-                providers = _providers_from_raw(raw)
-                self._degraded = False
-                self._raw_cache = raw
-                self._cache = models
-                self._provider_cache = providers
-                self._cache_time = time.monotonic()
-                return models
+                return self._apply_raw(raw, source="live", degraded=False)
             except Exception as exc:  # noqa: BLE001
-                # Keep a previously successful cache indefinitely rather than
-                # collapsing to the 3-provider builtin fallback.
+                # Keep a previously successful in-memory cache if present.
                 if self._cache is not None and self._provider_cache is not None:
                     logger.warning(
                         "models.dev fetch failed; keeping stale cache",
-                        extra={"error": str(exc)},
+                        extra={"error": str(exc), "source": self._source},
                     )
                     self._degraded = True
                     self._cache_time = time.monotonic()
                     return self._cache
+
+                bundled = self._load_bundled_raw()
+                if bundled is not None:
+                    logger.warning(
+                        "models.dev fetch failed; using bundled snapshot",
+                        extra={"error": str(exc), "path": str(BUNDLED_MODELS_DEV_PATH)},
+                    )
+                    return self._apply_raw(bundled, source="bundled", degraded=True)
+
                 logger.warning(
                     "models.dev fetch failed; using builtin fallback",
                     extra={"error": str(exc)},
@@ -290,6 +330,7 @@ class ModelCatalog:
                 models = _build_builtin_fallback()
                 providers = _builtin_provider_infos()
                 self._degraded = True
+                self._source = "builtin"
                 self._raw_cache = None
                 self._cache = models
                 self._provider_cache = providers

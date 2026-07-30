@@ -126,6 +126,18 @@ bun run test         # 测试 (Vitest)
 ./dev.sh --fresh    # 强制重建 .venv 和 node_modules
 ```
 
+### 产品版本号（页脚 `vMAJOR.MINOR.PATCH`）
+
+侧栏页脚展示的版本与 `cocoa-portal/src/lib/version.ts`、`cocoa-portal/package.json`、`cocoa-backend/pyproject.toml` **三者同步**。
+
+| 位 | 何时 +1 |
+|---|---|
+| MAJOR | 产品世代（当前 `3`） |
+| MINOR | **每完成一个 PRD**（PRD-v1 → `.1`，PRD-v2 → `.2`，PRD-v3 → `.3`） |
+| PATCH | **每个小改动 / hotfix**（当前 PRD 周期内） |
+
+当前应为 `3.4.x`。PRD 落地时升 MINOR 并重置 PATCH 为 `0`；日常修 UI/bug 只升 PATCH（如 3.4.1 Composer 流式）。
+
 ## 编码风格
 
 ### 命名约定

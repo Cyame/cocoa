@@ -331,7 +331,13 @@ export default function OrganizationPage() {
                           <p className="font-medium text-slate-900">{provider.name}</p>
                           <p className="font-mono text-xs text-slate-500">{provider.slug}</p>
                         </td>
-                        <td className="px-4 py-3 capitalize text-slate-600">{provider.origin}</td>
+                        <td className="px-4 py-3 text-slate-600">
+                          {provider.origin === 'catalog'
+                            ? t('organization.providers.originCatalog')
+                            : provider.origin === 'custom'
+                              ? t('organization.providers.originCustom')
+                              : provider.origin}
+                        </td>
                         <td className="px-4 py-3 font-mono text-xs text-slate-700">
                           {provider.default_model}
                         </td>
