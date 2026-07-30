@@ -2,7 +2,9 @@
 
 > **Code rename pending (15d-rename wave)**: This doc describes target architecture (15d+). Current code uses old naming.
 
-The Instance runtime system is Cocoa's execution substrate. An Instance is the running embodiment of an Entity within a Workspace — it owns an isolated workspace, consumes configuration from the database, receives messages via the P5 messaging topology, and writes results to the P6 blackboard. P7 delivers the Instance CRUD API, lifecycle state machine, and K8s deployment scaffolding; the actual agent execution harness arrives in P8.
+The Instance runtime system is Cocoa's execution substrate. An Instance is the running embodiment of an Entity within a Workspace — it owns an isolated workspace, consumes configuration from the database, receives messages via the P5 messaging topology, and writes results to the P6 blackboard. P7 delivers the Instance CRUD API, lifecycle state machine, and K8s deployment scaffolding; the control-plane harness arrives in P8.
+
+**Driver lock (2026-07-30):** each 化身 is driven by a sandboxed **pi** agent runtime (React optional). The Workspace control plane (Supervisor / Boulder / Portal) is Cocoa's evolution of senpi · oh-my-openagent · oh-my-pi — it is **not** Senpi CLI acting as the Instance driver. Path prefix `.pi/workspace/...` names the Instance filesystem root under that pi-oriented layout; it does not mean "Senpi owns the Workspace product surface."
 
 ## 1. Instance Lifecycle Model
 

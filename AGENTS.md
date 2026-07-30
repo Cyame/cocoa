@@ -11,7 +11,18 @@ Cocoa v2 是 `nodeskclaw` 的 v2 重建（**轻量化 + 视觉优先**）。继�
 | 项目 | 路径 | 作用 | 为什么重要 |
 |---|---|---|---|
 | **nodeskclaw** | `/Users/xuwenrui/Documents/Codes/Researches/nodeskclaw/` | Cocoa v2 的 v1 生产系统 | K8s deploy / Tunnel / Gene / Knowledge / Voice / Multi-tenant 的设计源头。capability map 在 `.omo/evidence/nodeskclaw-capability-map.md`（896 行）。 |
-| **oh-my-openagent** | `/Users/xuwenrui/Documents/Codes/github/oh-my-openagent/` | Loop-engineering harness 来源 (Boulder / continuation / notepad) | P8 的 Boulder loop 设计来源。**Caveat**: dev 分支在主动重构中（its own AGENTS.md 说 "DO NOT TRUST THE STRUCTURE BELOW AS STABLE"），引用时 pin 到 tag（如 v4.19.2）。在 `phase-8-harness.md` 中引用。 |
+| **oh-my-openagent**（含 senpi / oh-my-pi 表面） | `/Users/xuwenrui/Documents/Codes/github/oh-my-openagent/` | **Workspace 层**参考：loop harness（Boulder / continuation / notepad）+ 多 harness 编排表面 | Cocoa **Workspace** 要对齐并超过的「更灵活、更可观测」目标面。P8 Boulder 设计来源。**Caveat**: `dev` 不稳定，引用 pin tag（如 v4.19.2）。**不是**化身底层 runtime。 |
+| **pi**（`@mariozechner/pi-coding-agent` 族） | npm / 上游 pi coding agent | **化身（Instance）底层 agent runtime**（优先沙箱式 pi；React runtime 可选项但稳定性次之） | 每个化身由 **pi** 驱动；Entity overlay 序列化为 AgentConfig 后交给 pi。**禁止**把 pi 写成「Senpi CLI」。Senpi 是挂在 Pi 上的 harness/adapter 表面，对应 Cocoa Workspace，不对应化身驱动。 |
+
+**Runtime spine（2026-07-30 锁定，两层勿混）**：
+
+```
+Cocoa Workspace（控制面 + Portal + Harness + 可观测）
+  ≈ 更灵活 / 更可观测的 senpi · oh-my-openagent · oh-my-pi
+
+Cocoa Instance / 化身（每个 pod 一个）
+  = pi 驱动的沙箱 agent loop（首选）；React runtime 备选
+```
 
 **Planners 必须在回答"Cocoa 是否支持 X"类问题前**：
 1. 读 `.omo/evidence/nodeskclaw-capability-map.md`（外部参考）
@@ -371,6 +382,12 @@ User maintains a live test environment on **orbstack** K8s cluster for real-time
 - When a real K8s test is needed (multi-pod networking, service discovery, K8s mounts), use the orbstack cluster.
 - When a single-process DB test is needed, use `local-pgvector` `cocoa_test_*` clones (per pytest convention).
 - The two environments are independent. Do not assume `local-pgvector`'s state matches orbstack's state or vice versa.
+
+### Rule 5 — kubectl context: only `orbstack` for Cocoa (2026-07-30)
+
+- **Before any Cocoa deploy / kubectl mutate**, `kubectl config current-context` MUST be `orbstack`. Refuse otherwise (see `scripts/deploy-to-orbstack.sh`).
+- Do **not** use `tmaas` / other company clusters for Cocoa. If Cocoa residue was created by mistake on another context, delete **only** that Cocoa residue — never touch unrelated services.
+- **Product PRDs do not track ops exposure** (NodePort / Ingress / port-forward). How the portal is reached on orbstack is an ops detail under this section + `orbstack-operations.md`, not a PRD-v3 feature.
 
 ### Deploy script
 

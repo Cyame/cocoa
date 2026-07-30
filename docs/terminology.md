@@ -32,6 +32,8 @@ One-line definitions for every Cocoa code-term (backend), display-name (frontend
 
 ### Runtime Concepts
 
+- **Workspace control plane** — Cocoa's operator + harness surface (Portal, Supervisor, Boulder, Passage, CentralHub, deploy, observability). Product peer: a more flexible / observable **senpi · oh-my-openagent · oh-my-pi**. Not the per-Instance agent binary.
+- **pi runtime** — Preferred sandboxed agent loop that drives each **Instance / 化身**. Entity `system_prompt` + `config_override` serialize to pi AgentConfig. React runtime is an optional alternative (less preferred for sandbox stability). **Not** Senpi CLI.
 - **LoopState** (心智状态) — Harness runtime state for an Instance: loop_status (6 states), continuation_count, breaker_config, last_checkpoint_at.
 - **DeployRecord** (降世记录) — K8s deployment lifecycle record: 9-step pipeline from build to pod-ready.
 - **InstanceProviderConfig** — LLM provider configuration for an Instance (openai-compatible, anthropic, etc.). Internal config, no UI equivalent.
