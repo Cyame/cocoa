@@ -18,7 +18,10 @@ One-line definitions for every Cocoa code-term (backend), display-name (frontend
 ### Entity Hierarchy (the "agent stack")
 
 - **BaseClass** (神职) — Preset template defining rules, prompt, commands, tools, and provider config. Created by humans or distilled from Entity experience. System-scoped. 11 built-in BaseClasses defined in §4 of the naming system.
-- **Instance** (空间产品名：**迷失者**；旧称/次元聚合 tab 仍可称 **化身**) — Running materialization of an Entity in one Workspace. One Instance per pod. Lifecycle ≤ Workspace. **Invariant (PRD-v3.4)**: at most one active Instance per `(workspace_id, entity_id)` because `@slug` addresses the Entity. Namespace-level Instances tab is a weakened read-only rollup and keeps the name 化身 — **do not** relabel that tab 迷失者.
+- **Instance** — Running materialization of an Entity in one Workspace. One Instance per pod. Lifecycle ≤ Workspace. **Invariant (PRD-v3.4)**: at most one active Instance per `(workspace_id, entity_id)` because `@slug` addresses the Entity. **Product display is scene-dependent (not「旧称→新称」)**:
+  - **眷族视角**（眷族详情、晋升/批量重启、次元「化身」只读聚合）：叫 **化身** — 相对眷族的运行体。
+  - **空间层与真人并列**（空间卡计数、空间 tab、拓扑座位）：叫 **迷失者**，对位 **觉醒者**。
+  - Do **not** force-rename 眷族侧「化身」为迷失者；do **not** call workspace human seats 契印.
 - **Entity** (眷族) — Instantiation of a BaseClass **per-Namespace**, with identity + accumulated Memory. Scenario-scoped so one Entity can spawn Instances across Workspaces in that Namespace. Can be promoted/transmuted via distillation actions.
 
 ### Structural Concepts

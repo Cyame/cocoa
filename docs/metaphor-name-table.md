@@ -22,7 +22,7 @@ Database columns use the backend names. UI labels use the frontend names. Backen
 | **Workspace** | 空间 | Office | 场景内具体工作流（平台 / 系统）。Current "Office" model until rename. |
 | **BaseClass** | 神职 | EmployeePreset | Preset template: prompt, commands, tools, provider config. 11 built-in. |
 | **Entity** | 眷族 | Employee | **per-Namespace** identity + Memory；跨该场景多个 Workspace 复用。 |
-| **Instance** | 空间：**迷失者**；次元聚合 tab：**化身**（弱化只读，不改称迷失者） | Instance (unchanged) | Running pod；生命周期 ≤ 空间；同空间同眷族最多 1 个。 |
+| **Instance** | **看场景**：眷族侧=**化身**；空间与人并列=**迷失者** | Instance (unchanged) | Running pod；生命周期 ≤ 空间；同空间同眷族最多 1 个。不是「化身已废弃」。 |
 | **Membership** | （见下行拆分） | Membership (unchanged) | **PRD-v3.4**：产品名不再统称「契印」。`user_id` 行 = 空间 **觉醒者**；`instance_id` 行 = **迷失者**拓扑位。 |
 | **NamespaceContract** | 契印 | （new in v3.4） | Namespace ↔ User。**契印只在次元层使用此名。** |
 | **Passage** | 通道 | Corridor | Edge between two endpoints in Workspace topology. CorridorNode dropped. |
