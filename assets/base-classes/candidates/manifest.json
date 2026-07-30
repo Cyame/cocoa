@@ -1,0 +1,304 @@
+{
+  "generated_at": "2026-07-29T11:57:14Z",
+  "width": 2048,
+  "height": 2048,
+  "variants_per_public": 5,
+  "counts": {
+    "total": 58,
+    "ok": 58,
+    "fail": 0
+  },
+  "files": [
+    {
+      "path": "base-classes/candidates/mi-shi/v2-02.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/mi-shi/v2-01.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/mi-shi/v2-03.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/mi-shi/v2-04.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/mi-shi/v2-05.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/huan-ling/v2-01.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/huan-ling/v2-02.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/huan-ling/v2-04.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/huan-ling/v2-03.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/huan-ling/v2-05.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/an-xing/v2-01.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/an-xing/v2-02.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/an-xing/v2-03.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/an-xing/v2-05.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/an-xing/v2-04.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/an-ying/v2-01.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/an-ying/v2-02.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/an-ying/v2-03.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/an-ying/v2-05.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/an-ying/v2-04.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/zhu-jin/v2-01.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/zhu-jin/v2-02.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/zhu-jin/v2-03.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/zhu-jin/v2-04.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/ling-shi/v2-02.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/zhu-jin/v2-05.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/ling-shi/v2-01.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/ling-shi/v2-04.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/ling-shi/v2-03.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/ling-shi/v2-05.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/heng-pan/v2-01.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/heng-pan/v2-02.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/heng-pan/v2-03.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/heng-pan/v2-04.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/you-hun/v2-01.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/heng-pan/v2-05.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/you-hun/v2-02.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/you-hun/v2-03.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/you-hun/v2-04.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/you-hun/v2-05.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/qian-zhi/v2-01.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/qian-zhi/v2-02.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/qian-zhi/v2-03.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/qian-zhi/v2-04.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/qian-zhi/v2-05.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/bai-tong/v2-01.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/bai-tong/v2-02.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/bai-tong/v2-03.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/bai-tong/v2-04.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/bai-tong/v2-05.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/jiu-ri/v2-01.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/jiu-ri/v2-02.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/jiu-ri/v2-03.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/jiu-ri/v2-04.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/_internal/cerebellum-baseclass/v2-01.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/jiu-ri/v2-05.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/_internal/cerebellum-baseclass/v2-02.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/candidates/_internal/cerebellum-baseclass/v2-03.jpg",
+      "ok": true,
+      "msg": "ok"
+    }
+  ],
+  "note": "Pick favorites later; copy chosen file to base-classes/{slug}.jpg"
+}

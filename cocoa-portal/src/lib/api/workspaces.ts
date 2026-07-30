@@ -27,3 +27,16 @@ export function fetchWorkspaces(
 export function fetchWorkspace(workspaceId: string): Promise<Workspace> {
   return api<Workspace>(`/workspaces/${encodeURIComponent(workspaceId)}`);
 }
+
+export type WorkspaceCreatePayload = {
+  readonly name: string;
+  readonly slug: string;
+  readonly namespace_id?: string | null;
+};
+
+export function createWorkspace(payload: WorkspaceCreatePayload): Promise<Workspace> {
+  return api<Workspace>('/workspaces', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}

@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "notes": "v0 switchable presets only. User upload / screenshot later. Do not wire upload UI yet.",
+  "user_avatars": {
+    "purpose": "Human User profile avatar; switch among presets for now",
+    "default": "preset-01",
+    "presets": [
+      { "id": "preset-01", "path": "user-avatars/preset-01.jpg" },
+      { "id": "preset-02", "path": "user-avatars/preset-02.jpg" },
+      { "id": "preset-03", "path": "user-avatars/preset-03.jpg" },
+      { "id": "preset-04", "path": "user-avatars/preset-04.jpg" },
+      { "id": "preset-05", "path": "user-avatars/preset-05.jpg" },
+      { "id": "preset-06", "path": "user-avatars/preset-06.jpg" },
+      { "id": "preset-07", "path": "user-avatars/preset-07.jpg" },
+      { "id": "preset-08", "path": "user-avatars/preset-08.jpg" }
+    ],
+    "pool": "user-avatars/pool-*.jpg",
+    "future": ["upload", "screenshot_crop"]
+  },
+  "entity_avatars": {
+    "purpose": "眷族 Entity avatar; switch among tint presets for now",
+    "default": "preset-01-teal",
+    "presets": [
+      { "id": "preset-01-teal", "path": "entity-avatars/preset-01-teal.jpg", "tint": "teal" },
+      { "id": "preset-02-copper", "path": "entity-avatars/preset-02-copper.jpg", "tint": "copper" },
+      { "id": "preset-03-amber", "path": "entity-avatars/preset-03-amber.jpg", "tint": "amber" },
+      { "id": "preset-04-crimson", "path": "entity-avatars/preset-04-crimson.jpg", "tint": "crimson" },
+      { "id": "preset-05-sage", "path": "entity-avatars/preset-05-sage.jpg", "tint": "sage" },
+      { "id": "preset-06-slate-blue", "path": "entity-avatars/preset-06-slate-blue.jpg", "tint": "slate-blue" },
+      { "id": "preset-07-rose", "path": "entity-avatars/preset-07-rose.jpg", "tint": "rose" },
+      { "id": "preset-08-gold", "path": "entity-avatars/preset-08-gold.jpg", "tint": "gold" }
+    ],
+    "pool": "entity-avatars/pool-*.jpg",
+    "future": ["upload", "per_entity_override"]
+  },
+  "base_classes": {
+    "purpose": "神职 BaseClass art (not user avatar); one primary + alt per slug",
+    "path_pattern": "base-classes/{slug}.jpg",
+    "alt_pattern": "base-classes/{slug}-alt.jpg"
+  }
+}

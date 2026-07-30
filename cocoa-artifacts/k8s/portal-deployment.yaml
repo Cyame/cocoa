@@ -2,8 +2,9 @@
 #
 # Wave 1 of P14b: nginx serving the React SPA built by Dockerfile.portal.
 # The container exposes /healthz for kubelet probes; SPA routes fall back to
-# /index.html. Service is ClusterIP for in-cluster access; expose via Ingress
-# or port-forward from the host as needed.
+# /index.html. Service is NodePort so the host browser can hit the SPA
+# directly (OrbStack: http://localhost:30173). /api/ is proxied to
+# cocoa-backend ClusterIP inside the cluster — no port-forward needed.
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -51,9 +52,10 @@ metadata:
   name: cocoa-portal
   namespace: cocoa
 spec:
-  type: ClusterIP
+  type: NodePort
   selector:
     app: cocoa-portal
   ports:
     - port: 5173
       targetPort: 5173
+      nodePort: 30173

@@ -3,9 +3,11 @@ import {
   Building2,
   Cpu,
   LoaderCircle,
+  Plus,
   RefreshCw,
   Sparkles,
   Users,
+  X,
 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,7 +16,7 @@ import { ApiError, api } from '@/lib/api';
 import { fetchBaseClassesPage } from '@/lib/api/baseClasses';
 import type { NamespaceWithStats } from '@/lib/api/namespaces';
 import { fetchDefaultNamespace } from '@/lib/api/namespaces';
-import { fetchWorkspaces } from '@/lib/api/workspaces';
+import { createWorkspace, fetchWorkspaces } from '@/lib/api/workspaces';
 import type { BaseClass, Entity, Workspace } from '@/lib/types';
 import DebugPage from '@/pages/DebugPage';
 import { useEntityModalStore } from '@/stores/entityModalStore';
@@ -60,6 +62,11 @@ export default function NamespacesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isUnauthorized, setIsUnauthorized] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createName, setCreateName] = useState('');
+  const [createSlug, setCreateSlug] = useState('');
+  const [createBusy, setCreateBusy] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   const openOnboarding = useOnboardingModalStore((state) => state.open);
   const openEntityModal = useEntityModalStore((state) => state.open);
@@ -117,6 +124,40 @@ export default function NamespacesPage() {
     void refresh();
   }, [refresh]);
 
+  const slugify = (value: string): string =>
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 48);
+
+  const handleCreateWorkspace = async () => {
+    const name = createName.trim();
+    const slug = (createSlug.trim() || slugify(name)).slice(0, 48);
+    if (!name || !slug) {
+      setCreateError(t('namespaces.workspaceName'));
+      return;
+    }
+    setCreateBusy(true);
+    setCreateError(null);
+    try {
+      await createWorkspace({
+        name,
+        slug,
+        namespace_id: namespace?.id ?? null,
+      });
+      setCreateOpen(false);
+      setCreateName('');
+      setCreateSlug('');
+      await loadWorkspaceTab();
+    } catch (error) {
+      setCreateError(error instanceof ApiError ? error.message : t('errors.network'));
+    } finally {
+      setCreateBusy(false);
+    }
+  };
+
   if (isUnauthorized) {
     return <Navigate to="/login" replace />;
   }
@@ -140,7 +181,7 @@ export default function NamespacesPage() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => void refresh()}
@@ -148,6 +189,17 @@ export default function NamespacesPage() {
           >
             <RefreshCw className="size-4" aria-hidden="true" />
             {t('common.retry')}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setCreateOpen(true);
+              setCreateError(null);
+            }}
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50"
+          >
+            <Plus className="size-4" aria-hidden="true" />
+            {t('namespaces.createWorkspace')}
           </button>
           <button
             type="button"
@@ -159,6 +211,84 @@ export default function NamespacesPage() {
           </button>
         </div>
       </header>
+
+      {createOpen ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="create-workspace-title"
+          className="mb-6 rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 id="create-workspace-title" className="text-base font-semibold text-slate-950">
+                {t('namespaces.createWorkspaceTitle')}
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">{t('namespaces.createWorkspaceHint')}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setCreateOpen(false)}
+              className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              aria-label={t('namespaces.cancel')}
+            >
+              <X className="size-4" aria-hidden="true" />
+            </button>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <label className="block text-sm">
+              <span className="mb-1 block font-medium text-slate-700">
+                {t('namespaces.workspaceName')}
+              </span>
+              <input
+                value={createName}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  setCreateName(next);
+                  if (!createSlug || createSlug === slugify(createName)) {
+                    setCreateSlug(slugify(next));
+                  }
+                }}
+                placeholder={t('namespaces.workspaceNamePlaceholder')}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+              />
+            </label>
+            <label className="block text-sm">
+              <span className="mb-1 block font-medium text-slate-700">
+                {t('namespaces.workspaceSlug')}
+              </span>
+              <input
+                value={createSlug}
+                onChange={(event) => setCreateSlug(slugify(event.target.value))}
+                placeholder={t('namespaces.workspaceSlugPlaceholder')}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 font-mono text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+              />
+            </label>
+          </div>
+          {createError !== null ? (
+            <p role="alert" className="mt-3 text-sm text-red-600">
+              {createError}
+            </p>
+          ) : null}
+          <div className="mt-4 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setCreateOpen(false)}
+              className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              {t('namespaces.cancel')}
+            </button>
+            <button
+              type="button"
+              disabled={createBusy}
+              onClick={() => void handleCreateWorkspace()}
+              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-60"
+            >
+              {createBusy ? t('namespaces.creatingWorkspace') : t('namespaces.confirmCreate')}
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {errorMessage !== null ? (
         <div
@@ -178,11 +308,26 @@ export default function NamespacesPage() {
       ) : null}
 
       {!isLoading && activeTab === 'workspace' ? (
-        <WorkspaceTab workspaces={workspaces} t={t} />
+        <WorkspaceTab
+          workspaces={workspaces}
+          onCreate={() => {
+            setCreateOpen(true);
+            setCreateError(null);
+          }}
+          t={t}
+        />
       ) : null}
 
       {!isLoading && activeTab === 'base-classes' ? (
-        <BaseClassesTab baseClasses={baseClasses} onSummon={openOnboarding} t={t} />
+        <BaseClassesTab
+          baseClasses={baseClasses.filter(
+            (bc) =>
+              bc.slug !== 'cerebellum-baseclass' &&
+              !(bc.tags ?? []).some((tag) => tag === 'internal' || tag === 'system'),
+          )}
+          onSummon={openOnboarding}
+          t={t}
+        />
       ) : null}
 
       {!isLoading && activeTab === 'contracts' ? <ContractsTab t={t} /> : null}
@@ -202,9 +347,11 @@ type TFn = ReturnType<typeof useTranslation>['t'];
 
 function WorkspaceTab({
   workspaces,
+  onCreate,
   t,
 }: {
   readonly workspaces: readonly WorkspaceSummary[];
+  readonly onCreate: () => void;
   readonly t: TFn;
 }) {
   if (workspaces.length === 0) {
@@ -215,6 +362,14 @@ function WorkspaceTab({
           {t('namespaces.noWorkspacesTitle')}
         </h2>
         <p className="mt-2 text-sm text-slate-500">{t('namespaces.noWorkspacesDetail')}</p>
+        <button
+          type="button"
+          onClick={onCreate}
+          className="mt-6 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500"
+        >
+          <Plus className="size-4" aria-hidden="true" />
+          {t('namespaces.createWorkspace')}
+        </button>
       </div>
     );
   }

@@ -5,6 +5,7 @@
 > **对比基线**: `docs/prd-v1.md` — PRD-v1 单租户 MVP（P15f 已落地）；PRD-v2 多租户架构
 > **命名权威**: `docs/terminology.md` + `docs/metaphor-name-table.md`
 > **Roadmap / blueprint**: `docs/roadmap.md` — 执行计划待 Plan 模式编写；完成后必须部署 orbstack 供人工测试
+> **Append（世界 Provider）**: [`docs/prd-v2-append-provider.md`](prd-v2-append-provider.md) — models.dev 全量预设 + 可持久化自定义端点 + 眷族下拉绑定；**覆盖并细化 §16 / §14 Provider 字段**
 
 ---
 
@@ -782,8 +783,10 @@ Entity 聚合卡片 grid。每张卡：display_name + slug + rank badge + BaseCl
 3 步召唤流，Workspace 空态自动触发。
 
 **Step 1 挑神职**：11 张神职卡片 grid（紧凑 180×240px），分组过滤（策划/执行/审视）。选中→蓝框+check→下一步。
-**Step 2 起名+spawn**：2 列布局（左表单 + 右预览）。字段：显示名（必填 1-32 字符）+ slug（自动生成 kebab-case）+ rank（radio: 深潜者推荐/浅识者）。Rank 创建后冻结。
-**Step 3 配置 Provider+Knowledge**：Provider 选择 + Model 选择 + System Prompt override + Max Tokens/Temperature + Knowledge env/file 注入。
+**Step 2 起名+绑定**：2 列布局（左表单 + 右预览）。字段：显示名（必填 1-32 字符）+ slug（自动生成 kebab-case）+ rank（radio: 深潜者推荐/浅识者）+ **智能系统 / 模型下拉**（见 Append §A5；禁止自由文本、禁止在此新建 Provider）。Rank 创建后冻结。Payload 写 `config_override.provider_id` + `model`。
+**Step 3 配置 Knowledge**：System Prompt override + Max Tokens/Temperature + Knowledge env/file 注入（Provider/Model 已在 Step 2 绑定则可在此只确认）。
+
+> Provider 数据源与世界注册表规格：[`prd-v2-append-provider.md`](prd-v2-append-provider.md)。
 
 ---
 
@@ -817,23 +820,32 @@ Sticky bar（`bg-gradient-to-t from-white`）：「基于此神职召唤眷族�
 
 ## §16 Organization 页 (`/organization`)
 
-智能系统配置——v1 范围仅 Provider 配置管理。AppShell 形态：Sidebar（有）+ Canvas（全宽，无 Composer）。
+智能系统配置——Provider 管理。AppShell 形态：Sidebar（有）+ Canvas（全宽，无 Composer）。
 
-**Page Header**：返回链接（→来源 namespace）+ 标题"智能系统" + 描述。Stats + CTA 行："共 N 个 provider · M 个眷族在使用" + 「+ 新建 provider」按钮（需 `can_manage_organization`）。
+> **字段 / 双源 / API / 眷族下拉的完整规格见 Append**：[`docs/prd-v2-append-provider.md`](prd-v2-append-provider.md)。本节保留页面骨架；**§16.1–§16.2 旧「5 字段 provider_type」表单已废止**，以 Append §A2–§A4 为准。
 
-### 16.1 Provider 配置表格
+**Page Header**：返回链接（→来源 namespace）+ 标题「智能系统」+ 描述。Stats：「已启用 N · Catalog 预设 M · 自定义 K」+ 「+ 自定义端点」（超管）。
 
-列：Provider type chip（openai-compatible 绿 / anthropic 橙 / custom 灰）+ base_url (font-mono truncate) + 模型列表（default_model bold + 其他 models）+ 使用中的眷族数 + 状态（✓正常 绿 / ⚠异常 琥珀 / -未测试 灰）+ 操作（测试/编辑/删除）。
+### 16.1 双区布局（摘要）
 
-「测试」→ POST 连通性测试，spinner + "测试中..."，成功 green toast（含响应时间），失败 red toast + 详情可展开。「编辑」→ modal 预填当前值。「删除」→ 二次确认 modal（显示绑定此 provider 的眷族数）。
+1. **Catalog 预设区** — `GET /provider-catalog`（models.dev 全量）；「启用」物化到 `organization_providers`（`origin=catalog`）。  
+2. **已保存 Provider 区** — 世界注册表（catalog 启用项 + custom）；列含 `request_format`、`verify_ssl`、models 模式、测试状态；操作：测试 / 编辑 / 停用或删除。
 
-### 16.2 新建/编辑 Provider Modal
+连通性测试：`POST /organizations/default/providers/{id}/test`。删除为软删除；停用设 `enabled=false`（眷族下拉不可见）。
 
-5 字段表单（max-w-lg 512px）：provider_type（select：openai-compatible/Anthropic/自定义）+ api_key_ref（text，placeholder "secret/my-key"，辅助文字 "密钥引用非原始密钥"）+ base_url（url，nullable）+ default_model（text，必填）+ models_allowlist（text，逗号分隔，可空）。「保存」/「取消」按钮。编辑模式标题变"编辑 Provider"，api_key_ref 默认显示 `••••••••`（掩码）可切换显示。
+### 16.2 新建 / 启用 Modal（摘要）
+
+- **启用 Catalog**：`api_key_ref` 必填；可选覆盖 `base_url` / `default_model` / `request_format` / `verify_ssl`。  
+- **自定义端点**：OpenAI / OpenAI-compatible / Anthropic / Gemini + `base_url` + `api_key_ref` + `default_model` + `verify_ssl` + `models_endpoint_mode`（`inherit` \| `separate`）+ 条件 `models_base_url`。  
+- 密钥仅存 **引用**（env/secret 名），不存明文。
 
 ### 16.3 空态与权限
 
-空态：居中 "暂无 provider 配置" + CTA。无 `can_manage_organization` 权限用户：CTA 替换为 "联系管理员添加 provider" 静态文字。表格操作按钮（新建/编辑/删除）无权限时隐藏。
+空态：引导启用 Catalog 或新建自定义。无超管：只读 + 「联系管理员启用 Provider」；写操作按钮隐藏。
+
+### 16.4 与眷族创建的关系
+
+Onboarding **不得**新建 Provider；Provider / Model 为下拉，数据来自世界 `enabled=true` 行与 `GET /model-catalog?provider_id=`。详见 Append §A5。
 
 ---
 

@@ -1,0 +1,354 @@
+{
+  "generated_at": "2026-07-29T11:47:18Z",
+  "style": "cinematic character concept art for a multi-agent control studio, deep charcoal and muted teal-copper palette, soft volumetric light, subtle occult laboratory atmosphere, no text, no watermark, no logo, no UI chrome, high detail, cohesive product art direction",
+  "base_classes": [
+    "mi-shi",
+    "huan-ling",
+    "an-xing",
+    "an-ying",
+    "zhu-jin",
+    "ling-shi",
+    "heng-pan",
+    "you-hun",
+    "qian-zhi",
+    "bai-tong",
+    "jiu-ri"
+  ],
+  "counts": {
+    "total": 66,
+    "ok": 66,
+    "fail": 0
+  },
+  "files": [
+    {
+      "path": "base-classes/huan-ling.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/mi-shi-alt.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/mi-shi.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/huan-ling-alt.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/an-xing.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/an-xing-alt.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/an-ying.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/an-ying-alt.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/zhu-jin.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/zhu-jin-alt.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/ling-shi.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/ling-shi-alt.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/heng-pan-alt.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/heng-pan.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/you-hun.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/you-hun-alt.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/qian-zhi.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/qian-zhi-alt.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/bai-tong.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/bai-tong-alt.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/jiu-ri.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "base-classes/jiu-ri-alt.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "avatars/default-01.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "avatars/default-02.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "avatars/default-03.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "avatars/default-04.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "avatars/default-05.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "avatars/default-06.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "avatars/default-07.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "avatars/default-08.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "avatars/default-09.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "avatars/default-10.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "avatars/default-11.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "avatars/default-12.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "avatars/default-13.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "avatars/default-14.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "avatars/default-15.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "avatars/default-16.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "entities/tint-copper.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "entities/tint-teal.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "entities/tint-amber.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "entities/tint-crimson.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "entities/tint-slate-blue.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "entities/tint-rose.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "entities/tint-sage.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "entities/tint-gold.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "entities/tint-cyan.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "entities/tint-charcoal.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "entities/tint-indigo.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "backgrounds/login-atmosphere-01.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "entities/tint-olive.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "backgrounds/login-atmosphere-02.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "backgrounds/namespace-hub-02.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "backgrounds/namespace-hub-01.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "backgrounds/ide-canvas-01.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "backgrounds/ide-canvas-02.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "backgrounds/onboarding-hero-01.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "backgrounds/card-surface-01.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "misc/empty-state-entities.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "misc/empty-state-workspace.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "misc/glow-node-teal.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "misc/glow-node-copper.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "misc/passage-flow.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "misc/memory-orb.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "misc/vault-seal.jpg",
+      "ok": true,
+      "msg": "ok"
+    },
+    {
+      "path": "misc/loading-spiral.jpg",
+      "ok": true,
+      "msg": "ok"
+    }
+  ]
+}

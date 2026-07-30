@@ -23,7 +23,10 @@ import type { BaseClass, JsonObject } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { useOnboardingStore } from '@/stores/onboardingStore';
 
-type GroupId = 'plan' | 'execute' | 'review';
+type GroupFilter = 'all' | string;
+
+const INTERNAL_SLUGS = new Set(['cerebellum-baseclass']);
+const INTERNAL_TAGS = new Set(['internal', 'system']);
 
 const FALLBACK_BASE_CLASSES: readonly BaseClass[] = [
   {
@@ -56,7 +59,7 @@ const FALLBACK_BASE_CLASSES: readonly BaseClass[] = [
     description: '单兵全栈：独立完成端到端任务。',
     manifest: { default_model: 'gpt-4o-mini', commands: ['/plan', '/execute', '/build'] },
     version: '1.0',
-    tags: ['execute'],
+    tags: ['ultraworker', 'execute'],
     created_at: '2026-07-01T00:00:00Z',
   },
   {
@@ -89,7 +92,7 @@ const FALLBACK_BASE_CLASSES: readonly BaseClass[] = [
     description: '只读架构 / 调试：分析与预测。',
     manifest: { default_model: 'gpt-4o-mini', commands: ['/analyze', '/predict', '/review'] },
     version: '1.0',
-    tags: ['review'],
+    tags: ['oracle', 'review'],
     created_at: '2026-07-01T00:00:00Z',
   },
   {
@@ -100,7 +103,7 @@ const FALLBACK_BASE_CLASSES: readonly BaseClass[] = [
     description: '质量门禁：审查、批准或驳回。',
     manifest: { default_model: 'gpt-4o-mini', commands: ['/review', '/approve', '/reject'] },
     version: '1.0',
-    tags: ['review'],
+    tags: ['gate', 'review'],
     created_at: '2026-07-01T00:00:00Z',
   },
   {
@@ -111,7 +114,7 @@ const FALLBACK_BASE_CLASSES: readonly BaseClass[] = [
     description: '代码库检索 / 探索。',
     manifest: { default_model: 'gpt-4o-mini', commands: ['/search', '/survey', '/report'] },
     version: '1.0',
-    tags: ['review'],
+    tags: ['scout'],
     created_at: '2026-07-01T00:00:00Z',
   },
   {
@@ -122,7 +125,7 @@ const FALLBACK_BASE_CLASSES: readonly BaseClass[] = [
     description: '外部参考 / 多仓库 / 文档研究。',
     manifest: { default_model: 'gpt-4o-mini', commands: ['/search', '/reference', '/survey'] },
     version: '1.0',
-    tags: ['review'],
+    tags: ['scout', 'oracle'],
     created_at: '2026-07-01T00:00:00Z',
   },
   {
@@ -133,7 +136,7 @@ const FALLBACK_BASE_CLASSES: readonly BaseClass[] = [
     description: '视觉 / 媒体 / 音频分析。',
     manifest: { default_model: 'gpt-4o-mini', commands: ['/look', '/analyze', '/describe'] },
     version: '1.0',
-    tags: ['review'],
+    tags: ['multimodal'],
     created_at: '2026-07-01T00:00:00Z',
   },
   {
@@ -144,7 +147,7 @@ const FALLBACK_BASE_CLASSES: readonly BaseClass[] = [
     description: '顶层调度 / 监督：委派与监控。',
     manifest: { default_model: 'gpt-4o-mini', commands: ['/delegate', '/monitor', '/approve'] },
     version: '1.0',
-    tags: ['plan'],
+    tags: ['delegate', 'plan'],
     created_at: '2026-07-01T00:00:00Z',
   },
 ];
@@ -163,46 +166,64 @@ const ICON_FOR_SLUG: Record<string, typeof Compass> = {
   'jiu-ri': Sparkles,
 };
 
-const GROUP_FOR_SLUG: Record<string, GroupId> = {
-  'mi-shi': 'plan',
-  'huan-ling': 'plan',
-  'jiu-ri': 'plan',
-  'an-xing': 'execute',
-  'an-ying': 'execute',
-  'zhu-jin': 'execute',
-  'ling-shi': 'review',
-  'heng-pan': 'review',
-  'you-hun': 'review',
-  'qian-zhi': 'review',
-  'bai-tong': 'review',
+/** Default tags when API omits them — free-form, not a closed enum. */
+const DEFAULT_TAGS_FOR_SLUG: Record<string, readonly string[]> = {
+  'mi-shi': ['plan'],
+  'huan-ling': ['plan'],
+  'jiu-ri': ['delegate', 'plan'],
+  'an-xing': ['ultraworker', 'execute'],
+  'an-ying': ['execute'],
+  'zhu-jin': ['execute'],
+  'ling-shi': ['oracle', 'review'],
+  'heng-pan': ['gate', 'review'],
+  'you-hun': ['scout'],
+  'qian-zhi': ['scout', 'oracle'],
+  'bai-tong': ['multimodal'],
 };
 
-const GROUP_CLASSES: Record<GroupId, string> = {
+const TAG_CLASSES: Record<string, string> = {
   plan: 'bg-blue-50 text-blue-700 border-blue-200',
   execute: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   review: 'bg-violet-50 text-violet-700 border-violet-200',
+  ultraworker: 'bg-orange-50 text-orange-800 border-orange-200',
+  scout: 'bg-cyan-50 text-cyan-800 border-cyan-200',
+  oracle: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+  gate: 'bg-amber-50 text-amber-800 border-amber-200',
+  multimodal: 'bg-fuchsia-50 text-fuchsia-800 border-fuchsia-200',
+  delegate: 'bg-slate-100 text-slate-700 border-slate-300',
 };
 
-const GROUP_ICONS: Record<GroupId, typeof Compass> = {
-  plan: Compass,
-  execute: Flame,
-  review: Eye,
-};
-
-type GroupFilter = 'all' | GroupId;
+const DEFAULT_TAG_CLASS = 'bg-slate-50 text-slate-700 border-slate-200';
 
 function normalizeTags(tags: readonly string[] | null): readonly string[] {
   if (tags === null) return [];
-  return tags.map((tag) => tag.toLowerCase());
+  return tags.map((tag) => tag.toLowerCase().trim()).filter(Boolean);
 }
 
-function classifyGroup(baseClass: BaseClass): GroupId {
-  const slugGroup = GROUP_FOR_SLUG[baseClass.slug];
-  if (slugGroup !== undefined) return slugGroup;
-  const tags = normalizeTags(baseClass.tags);
-  if (tags.includes('plan')) return 'plan';
-  if (tags.includes('execute')) return 'execute';
-  return 'review';
+function resolveTags(baseClass: BaseClass): readonly string[] {
+  const fromApi = normalizeTags(baseClass.tags);
+  if (fromApi.length > 0) return fromApi;
+  return DEFAULT_TAGS_FOR_SLUG[baseClass.slug] ?? [];
+}
+
+function isInternalBaseClass(baseClass: BaseClass): boolean {
+  if (INTERNAL_SLUGS.has(baseClass.slug)) return true;
+  return resolveTags(baseClass).some((tag) => INTERNAL_TAGS.has(tag));
+}
+
+function primaryTag(baseClass: BaseClass): string {
+  return resolveTags(baseClass)[0] ?? 'untagged';
+}
+
+function tagLabel(tag: string, t: (key: string) => string): string {
+  const keyMap: Record<string, string> = {
+    plan: 'onboarding.step1.groupPlan',
+    execute: 'onboarding.step1.groupExecute',
+    review: 'onboarding.step1.groupReview',
+    ultraworker: 'onboarding.step1.groupUltraworker',
+  };
+  const key = keyMap[tag];
+  return key !== undefined ? t(key) : tag;
 }
 
 function extractCommands(manifest: JsonObject | null): readonly string[] {
@@ -276,22 +297,31 @@ export default function Step1DivinityCards({ onLoadingChange, onErrorChange }: S
   }, [onErrorChange, onLoadingChange, t]);
 
   const dataSource: readonly BaseClass[] = useMemo(() => {
-    if (classes !== null && classes.length > 0) return classes;
-    return FALLBACK_BASE_CLASSES;
+    const source =
+      classes !== null && classes.length > 0 ? classes : FALLBACK_BASE_CLASSES;
+    return source.filter((entry) => !isInternalBaseClass(entry));
   }, [classes]);
+
+  const availableTags = useMemo(() => {
+    const set = new Set<string>();
+    for (const entry of dataSource) {
+      for (const tag of resolveTags(entry)) {
+        if (!INTERNAL_TAGS.has(tag)) set.add(tag);
+      }
+    }
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [dataSource]);
 
   const filtered: readonly BaseClass[] = useMemo(() => {
     if (groupFilter === 'all') return dataSource;
-    return dataSource.filter((entry) => classifyGroup(entry) === groupFilter);
+    return dataSource.filter((entry) => resolveTags(entry).includes(groupFilter));
   }, [dataSource, groupFilter]);
 
   const selectedId = selectedBaseClass?.id ?? null;
 
   const groups: ReadonlyArray<{ readonly id: GroupFilter; readonly label: string }> = [
-    { id: 'all', label: t('onboarding.step1.groupAll') },
-    { id: 'plan', label: t('onboarding.step1.groupPlan') },
-    { id: 'execute', label: t('onboarding.step1.groupExecute') },
-    { id: 'review', label: t('onboarding.step1.groupReview') },
+    { id: 'all', label: t('onboarding.step1.tagFilterAll') },
+    ...availableTags.map((tag) => ({ id: tag, label: tagLabel(tag, t) })),
   ];
 
   return (
@@ -301,9 +331,8 @@ export default function Step1DivinityCards({ onLoadingChange, onErrorChange }: S
         <p className="text-sm text-slate-500">{t('onboarding.step1.subtitle')}</p>
       </div>
 
-      <div className="flex flex-wrap gap-2" role="tablist" aria-label="Group filter">
+      <div className="flex flex-wrap gap-2" role="tablist" aria-label="Tag filter">
         {groups.map((group) => {
-          const Icon = group.id === 'all' ? Filter : GROUP_ICONS[group.id];
           const isActive = groupFilter === group.id;
           return (
             <button
@@ -319,7 +348,7 @@ export default function Step1DivinityCards({ onLoadingChange, onErrorChange }: S
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200',
               )}
             >
-              <Icon className="size-3.5" aria-hidden="true" />
+              {group.id === 'all' ? <Filter className="size-3.5" aria-hidden="true" /> : null}
               {group.label}
             </button>
           );
@@ -375,8 +404,8 @@ export default function Step1DivinityCards({ onLoadingChange, onErrorChange }: S
             {filtered.map((entry) => {
               const isSelected = entry.id === selectedId;
               const Icon = ICON_FOR_SLUG[entry.slug] ?? Compass;
-              const groupId = classifyGroup(entry);
-              const GroupIcon = GROUP_ICONS[groupId];
+              const tags = resolveTags(entry);
+              const lead = primaryTag(entry);
               const commands = extractCommands(entry.manifest);
               const providerInfo = extractProvider(entry.manifest);
               const displayName = entry.display_name ?? entry.name;
@@ -438,19 +467,22 @@ export default function Step1DivinityCards({ onLoadingChange, onErrorChange }: S
                     </div>
                   ) : null}
 
-                  <div className="flex w-full items-center justify-between gap-2 pt-1">
-                    <span
-                      className={cn(
-                        'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium',
-                        GROUP_CLASSES[groupId],
-                      )}
-                    >
-                      <GroupIcon className="size-3" aria-hidden="true" />
-                      {groupId}
-                    </span>
+                  <div className="flex w-full flex-wrap items-center gap-1.5 pt-1">
+                    {tags.slice(0, 3).map((tag) => (
+                      <span
+                        key={tag}
+                        className={cn(
+                          'inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium',
+                          TAG_CLASSES[tag] ?? DEFAULT_TAG_CLASS,
+                          tag === lead ? 'ring-1 ring-offset-1 ring-slate-300' : '',
+                        )}
+                      >
+                        {tagLabel(tag, t)}
+                      </span>
+                    ))}
                     {providerInfo !== null ? (
                       <span
-                        className="truncate font-mono text-[11px] text-slate-500"
+                        className="ml-auto truncate font-mono text-[11px] text-slate-500"
                         title={providerInfo}
                       >
                         {t('onboarding.step1.providerLabel')}: {providerInfo}
