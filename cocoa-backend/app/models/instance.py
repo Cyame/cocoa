@@ -32,6 +32,13 @@ class Instance(BaseModel, Base):
                 "deleted_at IS NULL AND workspace_path IS NOT NULL"
             ),
         ),
+        Index(
+            "uq_instances_workspace_entity",
+            "workspace_id",
+            "entity_id",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
     )
 
     entity_id: Mapped[str] = mapped_column(

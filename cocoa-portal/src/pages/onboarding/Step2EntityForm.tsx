@@ -152,7 +152,9 @@ export default function Step2EntityForm({
     return () => {
       active = false;
     };
-  }, [providerId, model, setModel]);
+    // Intentionally omit `model` — only seed default once when provider changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- model seed is one-shot
+  }, [providerId, setModel]);
 
   const displayNameError = useMemo<string | null>(() => {
     if (trimmedDisplayName.length === 0) return null;

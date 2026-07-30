@@ -26,17 +26,22 @@ add_error_responses(router)
 @router.get("/memberships", response_model=OffsetPage[MembershipOut])
 async def list_memberships(
     workspace_id: str = Query(...),
+    kind: str | None = Query(None, pattern="^(user|instance)$"),
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: DB = None,
     _current_user: CurrentUserDep = None,
 ) -> OffsetPage:
-    """List active (non-deleted) memberships in an workspace with offset pagination."""
+    """List active memberships. ``kind=user`` = 觉醒者; ``kind=instance`` = 迷失者 seats."""
     query = (
         select(Membership)
         .where(Membership.deleted_at.is_(None), Membership.workspace_id == workspace_id)
         .order_by(Membership.created_at)
     )
+    if kind == "user":
+        query = query.where(Membership.user_id.is_not(None))
+    elif kind == "instance":
+        query = query.where(Membership.instance_id.is_not(None))
     return await paginate_offset(db, query, offset, limit)
 
 
@@ -107,9 +112,28 @@ async def create_membership(
         existing.role = body.role
         existing.posx = body.posx
         existing.posy = body.posy
+        if body.user_id is not None:
+            from app.core.namespace_contract import ensure_namespace_contract
+
+            await ensure_namespace_contract(
+                db,
+                namespace_id=workspace.namespace_id,
+                user_id=body.user_id,
+                role=body.role,
+            )
         await db.commit()
         await db.refresh(existing)
         return existing
+
+    if body.user_id is not None:
+        from app.core.namespace_contract import ensure_namespace_contract
+
+        await ensure_namespace_contract(
+            db,
+            namespace_id=workspace.namespace_id,
+            user_id=body.user_id,
+            role=body.role,
+        )
 
     membership = Membership(
         workspace_id=body.workspace_id,

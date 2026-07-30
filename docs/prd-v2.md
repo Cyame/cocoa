@@ -230,7 +230,8 @@ Cocoa 刻意丢弃 nodeskclaw 的 4 类基因形态。原则：**基因回答"�
 | `BaseClass` | 神职 | 预设模板（System 控制，跨 Org 共享） |
 | `Entity` | 眷族 | per-Namespace AI 身份 |
 | `Instance` | 化身 | 运行时 pod |
-| `Membership` | 契印 | Workspace 成员关系 |
+| `Membership` | 觉醒者 / 迷失者拓扑位（v3.4；旧称契印） | Workspace 在场关系 |
+| `NamespaceContract` | 契印（v3.4） | Namespace ↔ User |
 | `Passage` | 通道 | 拓扑边（CorridorNode 已 drop） |
 | `CentralHub` | 主脑 | 协作中枢（4 脑区合成） |
 | `Vault` | 冰封库 | 冷存储档案 |
@@ -421,7 +422,8 @@ Workspace 是协作面。6 个设施提供交互底质：
 |---|---|---|---|---|
 | **CentralHub（主脑）** | per-Workspace | Yes | 1:1 | 4 脑区子表，系统生成 content + 人工 manual_notes |
 | **Vault（冰封库）** | per-Workspace | Yes | 1:1 + 1:N VaultEntry | /archive 命令写入，冷存储不可变 |
-| **Membership（契印）** | per-Workspace | Yes | N | exclusive-FK（user XOR instance），posx/posy 视觉坐标 |
+| **Membership（觉醒者 / 迷失者拓扑位；v3.4）** | per-Workspace | Yes | N | exclusive-FK（user XOR instance），posx/posy；契印见 NamespaceContract |
+| **NamespaceContract（契印；v3.4）** | per-Namespace | Yes | N | Namespace ↔ User |
 | **Passage（通道）** | per-Workspace | Yes | N | 有向边，任意两点直连，CorridorNode 已 drop |
 | **Memory（记忆沉淀）** | per-Entity | Yes | N | append-only，无 updated_at，source_instance_id 非 FK |
 | **Knowledge（知识）** | per-Instance | **No** — 概念设施 | 1:1 | env+file in Instance.runtime_config，与 Instance 同生共死 |
@@ -472,9 +474,11 @@ Workspace 的冷存储档案。与 CentralHub（活跃协作状态）互补—�
 
 > **PRD-v2 不展开** MinIO/S3 适配器、bucket 策略、预签名 URL——记入 roadmap 远期（原 P16l 一类）。实现 wave 以 DB KV 可跑通归档闭环即可。
 
-### 8.4 Membership — 契印
+### 8.4 Membership — 空间在场（觉醒者 / 迷失者拓扑位）
 
-**Exclusive-FK 设计**：一个契印代表**要么一个真人用户，要么一个 AI 实例**——永不两者皆非。CHECK 约束：
+> **PRD-v3.4 supersedes** the product name「契印」for this table. **契印** now means `NamespaceContract` (Namespace ↔ User) only — see [`prd-v3.4.md`](prd-v3.4.md).
+
+**Exclusive-FK 设计**：一个 Membership 代表**要么一个真人用户（空间 UI：觉醒者），要么一个 AI 实例（空间 UI：迷失者拓扑位）**——永不两者皆非。CHECK 约束：
 ```sql
 CHECK ((user_id IS NOT NULL AND instance_id IS NULL)
     OR (user_id IS NULL AND instance_id IS NOT NULL))

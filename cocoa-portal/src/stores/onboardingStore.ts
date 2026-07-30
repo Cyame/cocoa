@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { isValidSlug, SLUG_PATTERN, toSlug } from '@/lib/slug';
 import type {
   BaseClass,
   EmployeeRank,
@@ -9,6 +10,8 @@ import type {
   KnowledgeScope,
   OnboardingPayload,
 } from '@/lib/types';
+
+export { isValidSlug, SLUG_PATTERN, toSlug };
 
 const TOTAL_STEPS = 3;
 
@@ -211,20 +214,5 @@ export const useOnboardingStore = create<OnboardingState>()((set, get) => ({
   },
   reset: () => set({ ...INITIAL_STATE }),
 }));
-
-export function toSlug(input: string): string {
-  return input
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .replace(/-{2,}/g, '-');
-}
-
-export const SLUG_PATTERN = /^[a-z][a-z0-9-]*$/;
-
-export function isValidSlug(value: string): boolean {
-  return SLUG_PATTERN.test(value);
-}
 
 export const TOTAL_ONBOARDING_STEPS = TOTAL_STEPS;

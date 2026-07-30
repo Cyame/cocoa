@@ -68,7 +68,12 @@ describe('NamespacesPage', () => {
           total: 1,
         });
       }
-      if (path === '/messaging/memberships?workspace_id=ws-1') {
+      if (
+        typeof path === 'string' &&
+        path.startsWith('/messaging/memberships?') &&
+        path.includes('workspace_id=ws-1') &&
+        path.includes('kind=user')
+      ) {
         return Promise.resolve({ items: [{ id: 'member-1' }, { id: 'member-2' }], total: 2 });
       }
       return Promise.resolve({ items: [{ id: 'instance-1' }], total: 1 });
@@ -78,8 +83,8 @@ describe('NamespacesPage', () => {
 
     expect(await screen.findByRole('heading', { name: 'Research Lab' })).toBeInTheDocument();
     expect(screen.getByText('research-lab')).toBeInTheDocument();
-    expect(screen.getByText('2 members')).toBeInTheDocument();
-    expect(screen.getByText('1 instances')).toBeInTheDocument();
+    expect(screen.getByText('2 Directors')).toBeInTheDocument();
+    expect(screen.getByText('1 Lost Ones')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('link', { name: /Research Lab/ }));
     expect(await screen.findByText('Workspace IDE destination')).toBeInTheDocument();

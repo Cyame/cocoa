@@ -1,4 +1,13 @@
-import { AlertCircle, ExternalLink, LoaderCircle, Recycle, Search, Trash2 } from 'lucide-react';
+import {
+  AlertCircle,
+  ExternalLink,
+  LoaderCircle,
+  Plus,
+  Recycle,
+  Search,
+  Sparkles,
+  Trash2,
+} from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { EntityInstanceStatus } from '@/lib/types';
@@ -28,6 +37,8 @@ type InstancesTabProps = {
   readonly instances: readonly EntityInstanceStatus[];
   readonly isLoading: boolean;
   readonly errorMessage: string | null;
+  readonly onSpawn: () => void;
+  readonly onPromote: (instance: EntityInstanceStatus) => void;
   readonly onReap: (instance: EntityInstanceStatus) => void;
   readonly onDelete: (instance: EntityInstanceStatus) => void;
 };
@@ -36,6 +47,8 @@ export default function InstancesTab({
   instances,
   isLoading,
   errorMessage,
+  onSpawn,
+  onPromote,
   onReap,
   onDelete,
 }: InstancesTabProps) {
@@ -87,21 +100,32 @@ export default function InstancesTab({
         <h2 id="instances-tab-heading" className="text-sm font-semibold text-slate-900">
           {t('entityModal.tabs.instances')}
         </h2>
-        <span
-          className={cn(
-            'inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold',
-            healthKind === 'healthy'
-              ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-              : 'border-red-200 bg-red-50 text-red-800',
-          )}
-          data-testid="instances-health"
-        >
-          {t(
-            healthKind === 'healthy'
-              ? 'entityModal.instancesTab.healthHealthy'
-              : 'entityModal.instancesTab.healthDegraded',
-          )}
-        </span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            className={cn(
+              'inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold',
+              healthKind === 'healthy'
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                : 'border-red-200 bg-red-50 text-red-800',
+            )}
+            data-testid="instances-health"
+          >
+            {t(
+              healthKind === 'healthy'
+                ? 'entityModal.instancesTab.healthHealthy'
+                : 'entityModal.instancesTab.healthDegraded',
+            )}
+          </span>
+          <button
+            type="button"
+            onClick={onSpawn}
+            data-testid="instances-spawn-header"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-800 transition-colors hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          >
+            <Plus className="size-3.5" aria-hidden="true" />
+            {t('entityModal.instancesTab.spawnCta')}
+          </button>
+        </div>
       </header>
 
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -188,9 +212,11 @@ export default function InstancesTab({
           <p className="mt-2 text-xs text-slate-500">{t('entityModal.instancesTab.emptyDetail')}</p>
           <button
             type="button"
+            onClick={onSpawn}
             className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-800 transition-colors hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             data-testid="instances-spawn-cta"
           >
+            <Plus className="size-3.5" aria-hidden="true" />
             {t('entityModal.instancesTab.spawnCta')}
           </button>
         </div>
@@ -215,7 +241,13 @@ export default function InstancesTab({
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtered.map((inst) => (
-                <InstanceRow key={inst.id} instance={inst} onReap={onReap} onDelete={onDelete} />
+                <InstanceRow
+                  key={inst.id}
+                  instance={inst}
+                  onPromote={onPromote}
+                  onReap={onReap}
+                  onDelete={onDelete}
+                />
               ))}
             </tbody>
           </table>
@@ -236,10 +268,12 @@ function CounterCard({ label, value }: { readonly label: string; readonly value:
 
 function InstanceRow({
   instance,
+  onPromote,
   onReap,
   onDelete,
 }: {
   readonly instance: EntityInstanceStatus;
+  readonly onPromote: (inst: EntityInstanceStatus) => void;
   readonly onReap: (inst: EntityInstanceStatus) => void;
   readonly onDelete: (inst: EntityInstanceStatus) => void;
 }) {
@@ -273,6 +307,15 @@ function InstanceRow({
       </td>
       <td className="px-3 py-2">
         <div className="flex items-center justify-end gap-1.5">
+          <button
+            type="button"
+            onClick={() => onPromote(instance)}
+            className="inline-flex items-center gap-1 rounded-md border border-transparent px-2 py-1 text-xs font-medium text-emerald-700 transition-colors hover:border-emerald-200 hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+            title={t('promoteModal.open')}
+            data-testid="instance-promote"
+          >
+            <Sparkles className="size-3.5" aria-hidden="true" />
+          </button>
           <button
             type="button"
             className="inline-flex items-center gap-1 rounded-md border border-transparent px-2 py-1 text-xs font-medium text-blue-700 transition-colors hover:border-blue-200 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"

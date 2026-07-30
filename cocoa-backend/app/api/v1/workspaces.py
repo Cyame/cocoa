@@ -15,14 +15,17 @@ Routes (all require authentication):
 from __future__ import annotations
 
 from fastapi import APIRouter, Query, status
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 
 from app.api.deps import DB, CurrentUserDep
 from app.core.errors import ConflictError, NotFoundError
+from app.core.namespace_contract import ensure_namespace_contract
 from app.core.openapi import add_error_responses
 from app.core.pagination import OffsetPage, paginate_offset
 from app.core.tenant import resolve_namespace_id
 from app.models.workspace import Membership, MembershipRole, Workspace
+from app.schemas.introduce import IntroduceEntityRequest
+from app.schemas.instance import InstanceOutWithToken
 from app.schemas.workspace import WorkspaceCreate, WorkspaceOut, WorkspaceUpdate
 
 router = APIRouter(prefix="/workspaces", tags=["Workspaces"])
@@ -122,6 +125,13 @@ async def create_workspace(
     )
     db.add(Vault(workspace_id=workspace.id))
 
+    await ensure_namespace_contract(
+        db,
+        namespace_id=namespace_id,
+        user_id=current_user.user_id,
+        role="owner",
+    )
+
     # P14b-onboard2: auto-create the creator as owner so the workspace is
     # immediately navigable. (0, 0) is fine because the owner is the first
     # membership in a fresh workspace.
@@ -192,11 +202,19 @@ async def delete_workspace(
     db: DB,
     current_user: CurrentUserDep,
 ) -> None:
-    """Soft-delete an workspace.
+    """Soft-delete a workspace and cascade to instances / memberships / hub.
 
-    The record is marked as deleted (``deleted_at`` is set) but not physically
-    removed from the database.  Raises 404 if the workspace does not exist.
+    PRD-v3.4: 迷失者 lifecycle ≤ workspace. Does not touch Entity or 契印.
     """
+    from app.models.central_hub import (
+        CentralHub,
+        CerebellumAgent,
+        Vault,
+        VaultEntry,
+    )
+    from app.models.instance import Instance
+    from app.models.workspace import Passage
+
     workspace = await db.get(Workspace, workspace_id)
     if workspace is None or workspace.deleted_at is not None:
         raise NotFoundError(
@@ -205,5 +223,201 @@ async def delete_workspace(
             f"Workspace '{workspace_id}' not found",
         )
 
+    # Soft-delete instances (K8s teardown best-effort left to instance delete path).
+    inst_rows = (
+        await db.execute(
+            select(Instance).where(
+                Instance.workspace_id == workspace_id,
+                Instance.deleted_at.is_(None),
+            )
+        )
+    ).scalars().all()
+    for inst in inst_rows:
+        inst.soft_delete()
+
+    await db.execute(
+        update(Membership)
+        .where(
+            Membership.workspace_id == workspace_id,
+            Membership.deleted_at.is_(None),
+        )
+        .values(deleted_at=func.now())
+    )
+    await db.execute(
+        update(Passage)
+        .where(
+            Passage.workspace_id == workspace_id,
+            Passage.deleted_at.is_(None),
+        )
+        .values(deleted_at=func.now())
+    )
+
+    hubs = (
+        await db.execute(
+            select(CentralHub).where(
+                CentralHub.workspace_id == workspace_id,
+                CentralHub.deleted_at.is_(None),
+            )
+        )
+    ).scalars().all()
+    for hub in hubs:
+        agents = (
+            await db.execute(
+                select(CerebellumAgent).where(
+                    CerebellumAgent.central_hub_id == hub.id,
+                    CerebellumAgent.deleted_at.is_(None),
+                )
+            )
+        ).scalars().all()
+        for agent in agents:
+            agent.soft_delete()
+        hub.soft_delete()
+
+    vaults = (
+        await db.execute(
+            select(Vault).where(
+                Vault.workspace_id == workspace_id,
+                Vault.deleted_at.is_(None),
+            )
+        )
+    ).scalars().all()
+    for vault in vaults:
+        entries = (
+            await db.execute(
+                select(VaultEntry).where(
+                    VaultEntry.vault_id == vault.id,
+                    VaultEntry.deleted_at.is_(None),
+                )
+            )
+        ).scalars().all()
+        for entry in entries:
+            entry.soft_delete()
+        vault.soft_delete()
+
     workspace.soft_delete()
     await db.commit()
+
+
+@router.post(
+    "/{workspace_id}/introduce-entity",
+    response_model=InstanceOutWithToken,
+    status_code=status.HTTP_201_CREATED,
+)
+async def introduce_entity(
+    workspace_id: str,
+    body: IntroduceEntityRequest,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> InstanceOutWithToken:
+    """Introduce a 眷族 into this workspace → create 迷失者 (Instance).
+
+    At most one active instance per (workspace, entity). Portal primary path.
+    """
+    from uuid import uuid4
+
+    from app.core.event_types import INSTANCE_CREATED
+    from app.core.events import emit
+    from app.core.migration_hash import compute_entity_migration_hash
+    from app.core.overlay import resolve_instance_agent_config
+    from app.core.permissions import require_workspace_role
+    from app.core.workspace import generate_workspace_path
+    from app.models.entity import Entity
+    from app.models.instance import Instance, InstanceStatus
+
+    await require_workspace_role(db, current_user.user_id, workspace_id, "editor")
+
+    workspace = await db.get(Workspace, workspace_id)
+    if workspace is None or workspace.deleted_at is not None:
+        raise NotFoundError(
+            "workspace.not_found",
+            "errors.workspace.not_found",
+            f"Workspace '{workspace_id}' not found",
+        )
+
+    entity = await db.get(Entity, body.entity_id)
+    if entity is None or entity.deleted_at is not None:
+        raise NotFoundError(
+            "entity.not_found",
+            "errors.entity.not_found",
+            f"Entity '{body.entity_id}' not found",
+        )
+    if entity.namespace_id != workspace.namespace_id:
+        raise ConflictError(
+            "entity.namespace_mismatch",
+            "errors.entity.namespace_mismatch",
+            "Entity does not belong to this workspace's namespace",
+        )
+
+    existing = await db.execute(
+        select(Instance).where(
+            Instance.workspace_id == workspace_id,
+            Instance.entity_id == body.entity_id,
+            Instance.deleted_at.is_(None),
+        )
+    )
+    if existing.scalar_one_or_none() is not None:
+        raise ConflictError(
+            "instance.entity_already_introduced",
+            "errors.instance.entity_already_introduced",
+            "This entity already has a lost one in this workspace",
+        )
+
+    workspace_path = generate_workspace_path(entity.slug, str(uuid4()))
+    agent_config = await resolve_instance_agent_config(db, entity)
+    runtime_config = {"agent_config": agent_config}
+    instance = Instance(
+        entity_id=body.entity_id,
+        workspace_id=workspace_id,
+        workspace_path=workspace_path,
+        status=InstanceStatus.creating.value,
+        runtime_config=runtime_config,
+        proxy_token=str(uuid4()),
+        active_hash=compute_entity_migration_hash(entity),
+    )
+    db.add(instance)
+    await db.flush()
+
+    occupied = {
+        (row.posx, row.posy)
+        for row in (
+            await db.execute(
+                select(Membership.posx, Membership.posy).where(
+                    Membership.workspace_id == workspace_id,
+                    Membership.deleted_at.is_(None),
+                )
+            )
+        ).all()
+    }
+    posx, posy = 0, 0
+    found = False
+    for row in range(40):
+        for col in range(40):
+            candidate = (col * 120, row * 120)
+            if candidate not in occupied:
+                posx, posy = candidate
+                found = True
+                break
+        if found:
+            break
+    db.add(
+        Membership(
+            workspace_id=workspace_id,
+            instance_id=instance.id,
+            user_id=None,
+            posx=posx,
+            posy=posy,
+            role=MembershipRole.viewer.value,
+        )
+    )
+    await emit(
+        INSTANCE_CREATED,
+        actor_type="user",
+        actor_id=current_user.user_id,
+        resource_type="instance",
+        resource_id=instance.id,
+        payload={"workspace_path": workspace_path, "workspace_id": workspace_id},
+        session=db,
+    )
+    await db.commit()
+    await db.refresh(instance)
+    return InstanceOutWithToken.model_validate(instance)

@@ -77,7 +77,7 @@ export default function IdeShell({
             >
               {t('ide.backToNamespaces')}
             </Link>
-            <LanguageSwitcher />
+            <LanguageSwitcher variant="surface" placement="down" />
           </div>
 
           <div className="flex min-h-0 flex-1">

@@ -29,8 +29,12 @@ export default function CapabilitiesTab({ entity, onGoToGenes, onRemove }: Capab
     });
   };
 
-  const byType = useMemo(() => groupByType(entity.capabilities), [entity.capabilities]);
-  const bySource = useMemo(() => groupBySource(entity.capabilities), [entity.capabilities]);
+  const capabilities = useMemo(
+    () => (Array.isArray(entity.capabilities) ? entity.capabilities : []),
+    [entity.capabilities],
+  );
+  const byType = useMemo(() => groupByType(capabilities), [capabilities]);
+  const bySource = useMemo(() => groupBySource(capabilities), [capabilities]);
 
   return (
     <section aria-labelledby="capabilities-tab-heading" className="space-y-5">
@@ -89,7 +93,7 @@ export default function CapabilitiesTab({ entity, onGoToGenes, onRemove }: Capab
         })}
       </div>
 
-      {entity.capabilities.length === 0 ? (
+      {capabilities.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center">
           <p className="text-sm font-semibold text-slate-900">
             {t('entityModal.capabilitiesTab.emptyTitle')}
@@ -113,7 +117,7 @@ export default function CapabilitiesTab({ entity, onGoToGenes, onRemove }: Capab
           onRemove={onRemove}
         />
       ) : (
-        <CapabilityFlatList capabilities={entity.capabilities} onRemove={onRemove} />
+        <CapabilityFlatList capabilities={capabilities} onRemove={onRemove} />
       )}
     </section>
   );

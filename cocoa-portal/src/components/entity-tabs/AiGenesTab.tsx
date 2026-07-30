@@ -36,8 +36,11 @@ export default function AiGenesTab({ entity, onAdd, onRemove }: AiGenesTabProps)
     );
   }, [geneLookup, query]);
 
-  const fromBase = filtered.filter((g) => g.source === 'from_base_class');
-  const extras = filtered.filter((g) => g.source === 'extra_added');
+  const fromBase = useMemo(
+    () => filtered.filter((g) => g.source === 'from_base_class'),
+    [filtered],
+  );
+  const extras = useMemo(() => filtered.filter((g) => g.source === 'extra_added'), [filtered]);
 
   return (
     <section aria-labelledby="genes-tab-heading" className="space-y-5">
@@ -77,8 +80,29 @@ export default function AiGenesTab({ entity, onAdd, onRemove }: AiGenesTabProps)
         </p>
       ) : (
         <div className="space-y-4">
-          <GeneGroup headingKey="fromBaseClass" genes={fromBase} locked onRemove={onRemove} />
-          <GeneGroup headingKey="extraAdded" genes={extras} onRemove={onRemove} />
+          {fromBase.length > 0 ? (
+            <GeneGroup
+              heading={t('entityModal.aiGenesTab.fromBaseClass')}
+              headingKey="fromBaseClass"
+              genes={fromBase}
+              locked
+              lockedHint={t('entityModal.aiGenesTab.lockedHint')}
+              moveLabel={t('entityModal.aiGenesTab.moveToBaseClass')}
+              removeLabel={t('entityModal.aiGenesTab.remove')}
+              onRemove={onRemove}
+            />
+          ) : null}
+          {extras.length > 0 ? (
+            <GeneGroup
+              heading={t('entityModal.aiGenesTab.extraAdded')}
+              headingKey="extraAdded"
+              genes={extras}
+              lockedHint={t('entityModal.aiGenesTab.lockedHint')}
+              moveLabel={t('entityModal.aiGenesTab.moveToBaseClass')}
+              removeLabel={t('entityModal.aiGenesTab.remove')}
+              onRemove={onRemove}
+            />
+          ) : null}
         </div>
       )}
 
@@ -92,11 +116,14 @@ export default function AiGenesTab({ entity, onAdd, onRemove }: AiGenesTabProps)
 }
 
 function buildGeneLookup(entity: EntityDetail): { readonly all: readonly AiGene[] } {
+  const capabilities = Array.isArray(entity.capabilities) ? entity.capabilities : [];
+  const aiGenes = Array.isArray(entity.ai_genes) ? entity.ai_genes : [];
   const capTagsByName = new Map<string, readonly string[]>();
-  for (const cap of entity.capabilities) {
-    if (cap.tags.length > 0) capTagsByName.set(cap.name, cap.tags);
+  for (const cap of capabilities) {
+    const tags = Array.isArray(cap.tags) ? cap.tags : [];
+    if (tags.length > 0) capTagsByName.set(cap.name, tags);
   }
-  const derived: AiGene[] = entity.ai_genes.map((g) => ({
+  const derived: AiGene[] = aiGenes.map((g) => ({
     slug: g.slug,
     name: g.slug,
     kind: 'tool-gene',
@@ -107,18 +134,24 @@ function buildGeneLookup(entity: EntityDetail): { readonly all: readonly AiGene[
 }
 
 function GeneGroup({
+  heading,
   headingKey,
   genes,
   locked,
+  lockedHint,
+  moveLabel,
+  removeLabel,
   onRemove,
 }: {
+  readonly heading: string;
   readonly headingKey: 'fromBaseClass' | 'extraAdded';
   readonly genes: readonly AiGene[];
   readonly locked?: boolean;
+  readonly lockedHint: string;
+  readonly moveLabel: string;
+  readonly removeLabel: string;
   readonly onRemove: (gene: AiGene) => void;
 }) {
-  const { t } = useTranslation();
-  if (genes.length === 0) return null;
   return (
     <section
       aria-labelledby={`genes-${headingKey}`}
@@ -126,7 +159,7 @@ function GeneGroup({
       className="overflow-hidden rounded-lg border border-slate-200 bg-white"
     >
       <header className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-        <span id={`genes-${headingKey}`}>{t(`entityModal.aiGenesTab.${headingKey}`)}</span>
+        <span id={`genes-${headingKey}`}>{heading}</span>
         <span className="tabular-nums">{genes.length}</span>
       </header>
       <ul className="divide-y divide-slate-100">
@@ -169,9 +202,9 @@ function GeneGroup({
                   'inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-500',
                   'cursor-not-allowed',
                 )}
-                title={t('entityModal.aiGenesTab.lockedHint')}
+                title={lockedHint}
               >
-                {t('entityModal.aiGenesTab.moveToBaseClass')}
+                {moveLabel}
               </button>
             ) : (
               <button
@@ -181,7 +214,7 @@ function GeneGroup({
                 className="inline-flex items-center gap-1 rounded-md border border-transparent px-2 py-1 text-xs font-medium text-red-700 transition-colors hover:border-red-200 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
               >
                 <Trash2 className="size-3.5" aria-hidden="true" />
-                {t('entityModal.aiGenesTab.remove')}
+                {removeLabel}
               </button>
             )}
           </li>

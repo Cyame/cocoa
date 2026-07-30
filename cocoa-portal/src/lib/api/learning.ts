@@ -48,24 +48,26 @@ export function deleteInstance(instanceId: string): Promise<void> {
 
 export type InstanceStatusPayload = {
   readonly id: string;
-  readonly employee_id: string;
-  readonly office_id: string;
+  readonly entity_id: string;
+  readonly workspace_id: string;
   readonly status: string;
   readonly created_at: string;
   readonly updated_at: string;
 };
 
-export type CursorPage<T> = {
+export type OffsetPage<T> = {
   readonly items: readonly T[];
-  readonly next_cursor: string | null;
+  readonly offset?: number;
+  readonly limit?: number;
   readonly total: number | null;
+  readonly next_cursor?: string | null;
 };
 
 export function listInstancesForEntity(
   entityId: string,
   limit = 200,
-): Promise<CursorPage<InstanceStatusPayload>> {
-  return api<CursorPage<InstanceStatusPayload>>(
-    `/instances?employee_id=${encodeURIComponent(entityId)}&limit=${limit}`,
+): Promise<OffsetPage<InstanceStatusPayload>> {
+  return api<OffsetPage<InstanceStatusPayload>>(
+    `/instances?entity_id=${encodeURIComponent(entityId)}&limit=${limit}`,
   );
 }

@@ -17,6 +17,7 @@ from app.api.v1.learning import router as learning_router
 from app.api.v1.memory import router as memory_router
 from app.api.v1.messaging import router as messaging_router
 from app.api.v1.namespaces import router as namespaces_router
+from app.api.v1.namespace_contracts import router as namespace_contracts_router
 from app.api.v1.organizations import router as organizations_router
 from app.api.v1.provider_catalog import router as provider_catalog_router
 from app.api.v1.model_catalog import router as model_catalog_router
@@ -43,6 +44,7 @@ api_router.include_router(memory_router)
 api_router.include_router(messaging_router)
 api_router.include_router(model_catalog_router)
 api_router.include_router(namespaces_router)
+api_router.include_router(namespace_contracts_router)
 api_router.include_router(organizations_router)
 api_router.include_router(provider_catalog_router)
 api_router.include_router(system_hub_router)

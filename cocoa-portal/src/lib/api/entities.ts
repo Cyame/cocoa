@@ -11,6 +11,7 @@ export type { TransmuteResult };
 
 export type EntityDetail = {
   readonly id: string;
+  readonly namespace_id?: string;
   readonly name: string;
   readonly slug: string;
   readonly rank: 'intern' | 'researcher' | 'director';
@@ -30,8 +31,38 @@ export type EntityDetail = {
   readonly updated_at: string;
 };
 
+type EntityDetailRaw = Omit<EntityDetail, 'capabilities' | 'ai_genes' | 'description'> & {
+  readonly capabilities?: readonly Capability[] | null;
+  readonly ai_genes?: EntityDetail['ai_genes'] | null;
+  readonly description?: string | null;
+};
+
+function normalizeEntityDetail(raw: EntityDetailRaw): EntityDetail {
+  const capabilities = Array.isArray(raw.capabilities) ? raw.capabilities : [];
+  const aiGenes = Array.isArray(raw.ai_genes)
+    ? raw.ai_genes
+    : capabilities.map((cap) => ({
+        slug: cap.name,
+        source: cap.source === 'extra_added' ? ('extra_added' as const) : ('from_base_class' as const),
+      }));
+  return {
+    ...raw,
+    description: raw.description ?? null,
+    base_class_slug: raw.base_class_slug ?? raw.preset_slug ?? null,
+    creator_email: raw.creator_email ?? null,
+    workspace_id: raw.workspace_id ?? null,
+    capabilities: capabilities.map((cap) => ({
+      ...cap,
+      tags: Array.isArray(cap.tags) ? cap.tags : [],
+    })),
+    ai_genes: aiGenes,
+  };
+}
+
 export function fetchEntity(entityId: string): Promise<EntityDetail> {
-  return api<EntityDetail>(`/entities/${encodeURIComponent(entityId)}`);
+  return api<EntityDetailRaw>(`/entities/${encodeURIComponent(entityId)}`).then(
+    normalizeEntityDetail,
+  );
 }
 
 export function patchEntity(

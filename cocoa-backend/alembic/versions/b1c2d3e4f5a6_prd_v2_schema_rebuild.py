@@ -26,6 +26,7 @@ _DROP_TABLES = [
     "corridors",
     "passages",
     "memberships",
+    "namespace_contracts",
     "vault_entries",
     "vaults",
     "fornix_files",

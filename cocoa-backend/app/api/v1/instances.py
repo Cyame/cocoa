@@ -43,7 +43,7 @@ from app.core.permissions import require_workspace_role
 from app.core.workspace import generate_workspace_path
 from app.models.entity import Entity
 from app.models.instance import Instance, InstanceStatus
-from app.models.workspace import Membership, Workspace
+from app.models.workspace import Membership, MembershipRole, Workspace
 from app.schemas.instance import (
     InstanceCreate,
     InstanceOut,
@@ -242,6 +242,42 @@ async def create_instance(
         active_hash=compute_entity_migration_hash(entity),
     )
     db.add(instance)
+    await db.flush()
+
+    # Place the new instance on the workspace topology canvas.
+    occupied = {
+        (row.posx, row.posy)
+        for row in (
+            await db.execute(
+                select(Membership.posx, Membership.posy).where(
+                    Membership.workspace_id == body.workspace_id,
+                    Membership.deleted_at.is_(None),
+                )
+            )
+        ).all()
+    }
+    posx, posy = 0, 0
+    found = False
+    for row in range(40):
+        for col in range(40):
+            candidate = (col * 120, row * 120)
+            if candidate not in occupied:
+                posx, posy = candidate
+                found = True
+                break
+        if found:
+            break
+    db.add(
+        Membership(
+            workspace_id=body.workspace_id,
+            instance_id=instance.id,
+            user_id=None,
+            posx=posx,
+            posy=posy,
+            role=MembershipRole.viewer.value,
+        )
+    )
+
     await emit(
         INSTANCE_CREATED,
         actor_type="user",
@@ -256,9 +292,9 @@ async def create_instance(
     except IntegrityError:
         await db.rollback()
         raise ConflictError(
-            "instance.workspace_path_taken",
-            "errors.instance.workspace_path_taken",
-            f"workspace_path '{workspace_path}' is already used by another instance",
+            "instance.already_exists",
+            "errors.instance.already_exists",
+            "Instance path taken or entity already introduced in this workspace",
         )
     await db.refresh(instance)
     return instance

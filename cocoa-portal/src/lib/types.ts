@@ -306,6 +306,8 @@ export type BaseClass = {
 
 export type EntityInstanceStatus = {
   readonly id: string;
+  readonly entity_id: string;
+  readonly workspace_id: string;
   readonly loop_status: LoopStatus;
   readonly continuation_count: number;
   readonly last_checkpoint_at: string | null;

@@ -1,8 +1,9 @@
-import { AlertCircle, Brain, Cpu, LoaderCircle, Notebook, UserRound, Users } from 'lucide-react';
+import { AlertCircle, Brain, Cpu, LoaderCircle, Notebook, Plus, UserRound, Users } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 import IdeShell from '@/components/IdeShell';
+import IntroduceInstanceModal from '@/components/IntroduceInstanceModal';
 import { ModelInputCombobox } from '@/components/ModelInputCombobox';
 import { ApiError, api } from '@/lib/api';
 import { fetchLiveStatus } from '@/lib/api/liveStatus';
@@ -85,6 +86,7 @@ export default function WorkspaceIdePage() {
   const [liveStatus, setLiveStatus] = useState<readonly LiveStatusItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [introduceOpen, setIntroduceOpen] = useState(false);
 
   useEffect(() => {
     if (id === undefined) return;
@@ -101,7 +103,7 @@ export default function WorkspaceIdePage() {
         await Promise.all([
           fetchWorkspace(id),
           api<OffsetPage<Membership>>(
-            `/messaging/memberships?workspace_id=${encodeURIComponent(id)}`,
+            `/messaging/memberships?workspace_id=${encodeURIComponent(id)}&kind=user`,
           ),
           api<OffsetPage<Instance>>(`/instances?workspace_id=${encodeURIComponent(id)}`),
           api<OffsetPage<Entity>>('/entities?limit=200'),
@@ -220,8 +222,21 @@ export default function WorkspaceIdePage() {
           ) : null}
 
           {activeTab === 'topology' ? (
-            <div className="h-full">
-              <TopologyPage embedded workspaceId={id} />
+            <div className="flex h-full flex-col">
+              <div className="flex shrink-0 justify-end border-b border-slate-200 bg-white px-3 py-2">
+                <button
+                  type="button"
+                  onClick={() => setIntroduceOpen(true)}
+                  data-testid="workspace-introduce-topology"
+                  className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-500"
+                >
+                  <Plus className="size-3.5" aria-hidden="true" />
+                  {t('workspace.introduceInstance')}
+                </button>
+              </div>
+              <div className="min-h-0 flex-1">
+                <TopologyPage embedded workspaceId={id} />
+              </div>
             </div>
           ) : null}
 
@@ -234,6 +249,8 @@ export default function WorkspaceIdePage() {
                 title: m.user_id ?? m.instance_id ?? m.id,
                 subtitle: m.role,
               }))}
+              actionLabel={t('workspace.introduceInstance')}
+              onAction={() => setIntroduceOpen(true)}
             />
           ) : null}
 
@@ -249,6 +266,8 @@ export default function WorkspaceIdePage() {
                   subtitle: inst.status,
                 };
               })}
+              actionLabel={t('workspace.introduceInstance')}
+              onAction={() => setIntroduceOpen(true)}
             />
           ) : null}
 
@@ -315,6 +334,16 @@ export default function WorkspaceIdePage() {
           ) : null}
         </div>
       </div>
+
+      {introduceOpen ? (
+        <IntroduceInstanceModal
+          workspaceId={id}
+          onClose={() => setIntroduceOpen(false)}
+          onIntroduced={() => {
+            void loadData();
+          }}
+        />
+      ) : null}
     </IdeShell>
   );
 }
@@ -444,10 +473,14 @@ function PanelList({
   items,
   emptyTitle,
   emptyDetail,
+  actionLabel,
+  onAction,
 }: {
   readonly items: readonly { id: string; title: string; subtitle: string }[];
   readonly emptyTitle: string;
   readonly emptyDetail: string;
+  readonly actionLabel?: string;
+  readonly onAction?: () => void;
 }) {
   if (items.length === 0) {
     return (
@@ -456,27 +489,53 @@ function PanelList({
           <UserRound className="mx-auto size-8 text-slate-400" aria-hidden="true" />
           <h2 className="mt-4 text-sm font-semibold text-slate-900">{emptyTitle}</h2>
           <p className="mt-2 text-sm text-slate-500">{emptyDetail}</p>
+          {actionLabel && onAction ? (
+            <button
+              type="button"
+              onClick={onAction}
+              data-testid="workspace-introduce-cta"
+              className="mt-4 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-500"
+            >
+              <Plus className="size-4" aria-hidden="true" />
+              {actionLabel}
+            </button>
+          ) : null}
         </div>
       </div>
     );
   }
 
   return (
-    <ul className="space-y-3 p-6">
-      {items.map((item) => (
-        <li
-          key={item.id}
-          className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-4"
-        >
-          <span className="grid size-9 place-items-center rounded-full bg-slate-100 text-slate-600">
-            <UserRound className="size-4" aria-hidden="true" />
-          </span>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-slate-900">{item.title}</p>
-            <p className="mt-1 text-xs capitalize text-slate-500">{item.subtitle}</p>
-          </div>
-        </li>
-      ))}
-    </ul>
+    <div className="flex h-full flex-col">
+      {actionLabel && onAction ? (
+        <div className="flex shrink-0 justify-end border-b border-slate-200 bg-white px-4 py-2">
+          <button
+            type="button"
+            onClick={onAction}
+            data-testid="workspace-introduce-cta"
+            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-500"
+          >
+            <Plus className="size-3.5" aria-hidden="true" />
+            {actionLabel}
+          </button>
+        </div>
+      ) : null}
+      <ul className="space-y-3 overflow-y-auto p-6">
+        {items.map((item) => (
+          <li
+            key={item.id}
+            className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-4"
+          >
+            <span className="grid size-9 place-items-center rounded-full bg-slate-100 text-slate-600">
+              <UserRound className="size-4" aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-slate-900">{item.title}</p>
+              <p className="mt-1 text-xs capitalize text-slate-500">{item.subtitle}</p>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

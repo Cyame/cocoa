@@ -115,18 +115,16 @@ export default function FirstRunOnboardingModal({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose, submitStatus]);
 
-  if (!presetReady) {
-    return (
-      <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4">
-        <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-6 py-5 text-sm text-slate-600 shadow-2xl">
-          <LoaderCircle className="size-5 animate-spin" aria-hidden="true" />
-          {t('common.loading')}
-        </div>
-      </div>
-    );
-  }
+  const stepTitle = useMemo(() => {
+    if (step === 1) return t('onboarding.step1.title');
+    if (step === 2) return t('onboarding.step2.title');
+    return t('onboarding.step3.title');
+  }, [step, t]);
 
-  async function handleNext() {
+  const isFinalStep = step === TOTAL_ONBOARDING_STEPS;
+  const isSubmitting = submitStatus === 'submitting';
+
+  const handleNext = useCallback(async () => {
     if (!canGoNext) return;
     setSubmitErrorMessage(null);
     setSubmitError(null);
@@ -152,10 +150,6 @@ export default function FirstRunOnboardingModal({
       next();
       return;
     }
-    await handleSubmit();
-  }
-
-  async function handleSubmit() {
     setSubmitStatus('submitting');
     setSubmitErrorMessage(null);
     setSubmitError(null);
@@ -180,26 +174,38 @@ export default function FirstRunOnboardingModal({
       }
       setSubmitStatus('error');
     }
-  }
+  }, [
+    buildPayload,
+    canGoNext,
+    existingDisplayNames,
+    next,
+    setSubmitError,
+    step,
+    t,
+    trimmedDisplayName,
+    trimmedSlug,
+  ]);
 
-  function handleSkip() {
+  const handleSkip = useCallback(() => {
     if (submitStatus === 'submitting') return;
     onClose('skipped');
-  }
+  }, [onClose, submitStatus]);
 
-  function handleClose() {
+  const handleClose = useCallback(() => {
     if (submitStatus === 'submitting') return;
     onClose('dismissed');
+  }, [onClose, submitStatus]);
+
+  if (!presetReady) {
+    return (
+      <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4">
+        <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-6 py-5 text-sm text-slate-600 shadow-2xl">
+          <LoaderCircle className="size-5 animate-spin" aria-hidden="true" />
+          {t('common.loading')}
+        </div>
+      </div>
+    );
   }
-
-  const stepTitle = useMemo(() => {
-    if (step === 1) return t('onboarding.step1.title');
-    if (step === 2) return t('onboarding.step2.title');
-    return t('onboarding.step3.title');
-  }, [step, t]);
-
-  const isFinalStep = step === TOTAL_ONBOARDING_STEPS;
-  const isSubmitting = submitStatus === 'submitting';
 
   if (submitStatus === 'success' && completedEmployee !== null) {
     return (

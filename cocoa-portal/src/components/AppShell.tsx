@@ -19,10 +19,9 @@ import GlobalModals from '@/components/GlobalModals';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { api } from '@/lib/api';
 import type { AuthUserPayload } from '@/lib/types';
+import { APP_VERSION } from '@/lib/version';
 import { cn } from '@/lib/utils';
 import { useSessionStore } from '@/stores/session';
-
-const APP_VERSION = '0.0.0';
 
 const TAB_IDS = [
   'workspace',
@@ -177,7 +176,7 @@ export default function AppShell() {
 
         <div className="border-t border-slate-800 p-3">
           <div className="mb-3 flex items-center justify-between gap-2 px-1">
-            <LanguageSwitcher />
+            <LanguageSwitcher variant="sidebar" placement="up" />
             <span className="font-mono text-[11px] text-slate-500">v{APP_VERSION}</span>
           </div>
         </div>

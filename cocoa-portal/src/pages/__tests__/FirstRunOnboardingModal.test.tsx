@@ -250,6 +250,9 @@ describe('FirstRunOnboardingModal', () => {
     fireEvent.change(displayInput, { target: { value: 'Nyar Proutzi Aide' } });
     expect((slugInput as HTMLInputElement).value).toBe('nyar-proutzi-aide');
 
+    fireEvent.change(displayInput, { target: { value: '奈亚探子' } });
+    expect((slugInput as HTMLInputElement).value).toBe('nai-ya-tan-zi');
+
     fireEvent.change(slugInput, { target: { value: 'custom-slug' } });
     fireEvent.change(displayInput, { target: { value: 'cthulhu-aide' } });
     expect((slugInput as HTMLInputElement).value).toBe('custom-slug');

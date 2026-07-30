@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 type PromoteModalProps = {
   readonly entity: EntityDetail;
   readonly instanceCount?: number;
+  readonly fromInstanceId?: string | null;
   readonly onClose: () => void;
   readonly onSubmit: (payload: PromotePayload) => Promise<void>;
 };
@@ -14,6 +15,7 @@ type PromoteModalProps = {
 export default function PromoteModal({
   entity,
   instanceCount = 0,
+  fromInstanceId = null,
   onClose,
   onSubmit,
 }: PromoteModalProps) {
@@ -44,10 +46,11 @@ export default function PromoteModal({
         mode === 'fork'
           ? {
               mode: 'fork',
+              from_instance_id: fromInstanceId,
               new_entity_name: forkName.trim(),
               new_entity_slug: forkSlug.trim(),
             }
-          : { mode: 'update' };
+          : { mode: 'update', from_instance_id: fromInstanceId };
       await onSubmit(payload);
       onClose();
     } catch (error) {

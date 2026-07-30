@@ -19,6 +19,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '@/lib/api';
 import { fetchBaseClasses } from '@/lib/api/onboarding';
+import { normalizeBaseClassTags, translateBaseClassTag } from '@/lib/baseClassTags';
 import type { BaseClass, JsonObject } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { useOnboardingStore } from '@/stores/onboardingStore';
@@ -37,7 +38,7 @@ const FALLBACK_BASE_CLASSES: readonly BaseClass[] = [
     description: '战略规划师：拆解目标、规划路径。',
     manifest: { default_model: 'gpt-4o-mini', commands: ['/plan', '/decompose', '/prioritize'] },
     version: '1.0',
-    tags: ['plan'],
+    tags: ['planning'],
     created_at: '2026-07-01T00:00:00Z',
   },
   {
@@ -48,7 +49,7 @@ const FALLBACK_BASE_CLASSES: readonly BaseClass[] = [
     description: '意图分析师：澄清诉求、提出方案。',
     manifest: { default_model: 'gpt-4o-mini', commands: ['/analyze', '/clarify', '/propose'] },
     version: '1.0',
-    tags: ['plan'],
+    tags: ['planning'],
     created_at: '2026-07-01T00:00:00Z',
   },
   {
@@ -59,7 +60,7 @@ const FALLBACK_BASE_CLASSES: readonly BaseClass[] = [
     description: '单兵全栈：独立完成端到端任务。',
     manifest: { default_model: 'gpt-4o-mini', commands: ['/plan', '/execute', '/build'] },
     version: '1.0',
-    tags: ['ultraworker', 'execute'],
+    tags: ['ultraworker', 'execution'],
     created_at: '2026-07-01T00:00:00Z',
   },
   {
@@ -70,7 +71,7 @@ const FALLBACK_BASE_CLASSES: readonly BaseClass[] = [
     description: '初级执行：快速、低成本完成任务。',
     manifest: { default_model: 'gpt-4o-mini', commands: ['/execute', '/build', '/test'] },
     version: '1.0',
-    tags: ['execute'],
+    tags: ['execution'],
     created_at: '2026-07-01T00:00:00Z',
   },
   {
@@ -81,7 +82,7 @@ const FALLBACK_BASE_CLASSES: readonly BaseClass[] = [
     description: '自主深度工作者：以目标为驱动持续推进。',
     manifest: { default_model: 'gpt-4o-mini', commands: ['/execute', '/build', '/test'] },
     version: '1.0',
-    tags: ['execute'],
+    tags: ['execution'],
     created_at: '2026-07-01T00:00:00Z',
   },
   {
@@ -147,7 +148,7 @@ const FALLBACK_BASE_CLASSES: readonly BaseClass[] = [
     description: '顶层调度 / 监督：委派与监控。',
     manifest: { default_model: 'gpt-4o-mini', commands: ['/delegate', '/monitor', '/approve'] },
     version: '1.0',
-    tags: ['delegate', 'plan'],
+    tags: ['delegate', 'planning'],
     created_at: '2026-07-01T00:00:00Z',
   },
 ];
@@ -168,12 +169,12 @@ const ICON_FOR_SLUG: Record<string, typeof Compass> = {
 
 /** Default tags when API omits them — free-form, not a closed enum. */
 const DEFAULT_TAGS_FOR_SLUG: Record<string, readonly string[]> = {
-  'mi-shi': ['plan'],
-  'huan-ling': ['plan'],
-  'jiu-ri': ['delegate', 'plan'],
-  'an-xing': ['ultraworker', 'execute'],
-  'an-ying': ['execute'],
-  'zhu-jin': ['execute'],
+  'mi-shi': ['planning'],
+  'huan-ling': ['planning'],
+  'jiu-ri': ['delegate', 'planning'],
+  'an-xing': ['ultraworker', 'execution'],
+  'an-ying': ['execution'],
+  'zhu-jin': ['execution'],
   'ling-shi': ['oracle', 'review'],
   'heng-pan': ['gate', 'review'],
   'you-hun': ['scout'],
@@ -182,8 +183,8 @@ const DEFAULT_TAGS_FOR_SLUG: Record<string, readonly string[]> = {
 };
 
 const TAG_CLASSES: Record<string, string> = {
-  plan: 'bg-blue-50 text-blue-700 border-blue-200',
-  execute: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  planning: 'bg-blue-50 text-blue-700 border-blue-200',
+  execution: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   review: 'bg-violet-50 text-violet-700 border-violet-200',
   ultraworker: 'bg-orange-50 text-orange-800 border-orange-200',
   scout: 'bg-cyan-50 text-cyan-800 border-cyan-200',
@@ -195,13 +196,8 @@ const TAG_CLASSES: Record<string, string> = {
 
 const DEFAULT_TAG_CLASS = 'bg-slate-50 text-slate-700 border-slate-200';
 
-function normalizeTags(tags: readonly string[] | null): readonly string[] {
-  if (tags === null) return [];
-  return tags.map((tag) => tag.toLowerCase().trim()).filter(Boolean);
-}
-
 function resolveTags(baseClass: BaseClass): readonly string[] {
-  const fromApi = normalizeTags(baseClass.tags);
+  const fromApi = normalizeBaseClassTags(baseClass.tags);
   if (fromApi.length > 0) return fromApi;
   return DEFAULT_TAGS_FOR_SLUG[baseClass.slug] ?? [];
 }
@@ -213,17 +209,6 @@ function isInternalBaseClass(baseClass: BaseClass): boolean {
 
 function primaryTag(baseClass: BaseClass): string {
   return resolveTags(baseClass)[0] ?? 'untagged';
-}
-
-function tagLabel(tag: string, t: (key: string) => string): string {
-  const keyMap: Record<string, string> = {
-    plan: 'onboarding.step1.groupPlan',
-    execute: 'onboarding.step1.groupExecute',
-    review: 'onboarding.step1.groupReview',
-    ultraworker: 'onboarding.step1.groupUltraworker',
-  };
-  const key = keyMap[tag];
-  return key !== undefined ? t(key) : tag;
 }
 
 function extractCommands(manifest: JsonObject | null): readonly string[] {
@@ -320,7 +305,7 @@ export default function Step1DivinityCards({ onLoadingChange, onErrorChange }: S
 
   const groups: ReadonlyArray<{ readonly id: GroupFilter; readonly label: string }> = [
     { id: 'all', label: t('onboarding.step1.tagFilterAll') },
-    ...availableTags.map((tag) => ({ id: tag, label: tagLabel(tag, t) })),
+    ...availableTags.map((tag) => ({ id: tag, label: translateBaseClassTag(tag, t) })),
   ];
 
   return (
@@ -476,7 +461,7 @@ export default function Step1DivinityCards({ onLoadingChange, onErrorChange }: S
                           tag === lead ? 'ring-1 ring-offset-1 ring-slate-300' : '',
                         )}
                       >
-                        {tagLabel(tag, t)}
+                        {translateBaseClassTag(tag, t)}
                       </span>
                     ))}
                     {providerInfo !== null ? (

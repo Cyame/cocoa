@@ -22,8 +22,9 @@ Database columns use the backend names. UI labels use the frontend names. Backen
 | **Workspace** | 空间 | Office | 场景内具体工作流（平台 / 系统）。Current "Office" model until rename. |
 | **BaseClass** | 神职 | EmployeePreset | Preset template: prompt, commands, tools, provider config. 11 built-in. |
 | **Entity** | 眷族 | Employee | **per-Namespace** identity + Memory；跨该场景多个 Workspace 复用。 |
-| **Instance** | 化身 | Instance (unchanged) | Running pod materialization of an Entity. Ephemeral. |
-| **Membership** | 契印 | Membership (unchanged) | User/Instance membership seal in a Workspace, with posx/posy + role. |
+| **Instance** | 空间：**迷失者**；次元聚合 tab：**化身**（弱化只读，不改称迷失者） | Instance (unchanged) | Running pod；生命周期 ≤ 空间；同空间同眷族最多 1 个。 |
+| **Membership** | （见下行拆分） | Membership (unchanged) | **PRD-v3.4**：产品名不再统称「契印」。`user_id` 行 = 空间 **觉醒者**；`instance_id` 行 = **迷失者**拓扑位。 |
+| **NamespaceContract** | 契印 | （new in v3.4） | Namespace ↔ User。**契印只在次元层使用此名。** |
 | **Passage** | 通道 | Corridor | Edge between two endpoints in Workspace topology. CorridorNode dropped. |
 | **CentralHub** | 主脑 | CentralHub (was Blackboard; semantics: 4 脑区合成容器) | Per-Workspace shared state；含 **CerebellumAgent 1:1**。 |
 | **CerebellumAgent** | 小脑 / 中央智能体 | (new / emerging) | 主脑内置系统 agent；不可软删；不进拓扑。 |
@@ -71,7 +72,8 @@ Progression from shallow perception → deep knowledge → awakened mastery.
 | User | User (unchanged) | Human auth identity |
 | BaseClass | EmployeePreset | Persisted preset: slug, manifest JSONB, version |
 | Entity | Employee | Per-Workspace identity with BaseClass ref + memory |
-| Membership | Membership (unchanged) | Workspace membership with posx/posy + role |
+| Membership | Membership (unchanged) | Workspace presence: user=觉醒者, instance=迷失者拓扑位 (PRD-v3.4) |
+| NamespaceContract | （new） | Namespace ↔ User 契印 |
 | BlackboardFile | BlackboardFile (unchanged) | File on a Blackboard |
 | VaultEntry | VaultEntry (unchanged) | Archived entry in Vault |
 | Memory | MemoryEntry | Append-only memory log per Entity |

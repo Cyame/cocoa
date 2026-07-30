@@ -1,7 +1,7 @@
 {
   "name": "cocoa-portal",
   "private": true,
-  "version": "0.0.0",
+  "version": "3.4.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -17,6 +17,7 @@
     "clsx": "^2.1.1",
     "i18next": "^26.3.6",
     "lucide-react": "^1.26.0",
+    "pinyin-pro": "^3.28.2",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-i18next": "^17.0.11",

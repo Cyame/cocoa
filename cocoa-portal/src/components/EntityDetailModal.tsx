@@ -17,6 +17,7 @@ import BasicTab from '@/components/entity-tabs/BasicTab';
 import CapabilitiesTab from '@/components/entity-tabs/CapabilitiesTab';
 import DistillTab from '@/components/entity-tabs/DistillTab';
 import InstancesTab from '@/components/entity-tabs/InstancesTab';
+import PromoteModal from '@/components/PromoteModal';
 import { ApiError } from '@/lib/api';
 import { type EntityDetail, fetchEntity, promoteEntity, transmuteEntity } from '@/lib/api/entities';
 import { deleteInstance, listInstancesForEntity } from '@/lib/api/learning';
@@ -48,6 +49,7 @@ export default function EntityDetailModal({ onClose }: EntityDetailModalProps) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ kind: 'success' | 'error'; message: string } | null>(null);
   const [transmuteResult, setTransmuteResult] = useState<TransmuteResult | null>(null);
+  const [promoteInstance, setPromoteInstance] = useState<EntityInstanceStatus | null>(null);
   const tabListRef = useRef<HTMLDivElement | null>(null);
 
   const loadEntity = useCallback(
@@ -75,6 +77,8 @@ export default function EntityDetailModal({ onClose }: EntityDetailModalProps) {
         const page = await listInstancesForEntity(id);
         const items: EntityInstanceStatus[] = page.items.map((it) => ({
           id: it.id,
+          entity_id: it.entity_id,
+          workspace_id: it.workspace_id,
           loop_status: mapStatusToLoop(it.status),
           continuation_count: 0,
           last_checkpoint_at: null,
@@ -153,14 +157,18 @@ export default function EntityDetailModal({ onClose }: EntityDetailModalProps) {
   const handlePromote = useCallback(
     async (payload: import('@/lib/api/entities').PromotePayload) => {
       if (entityId === null) return;
-      const result = await promoteEntity(entityId, payload);
+      const result = await promoteEntity(entityId, {
+        ...payload,
+        from_instance_id: payload.from_instance_id ?? promoteInstance?.id ?? null,
+      });
       const message =
         result.mode === 'fork'
           ? t('promoteModal.successFork')
           : t('promoteModal.successUpdate', { count: result.outdated_instances_count });
       setToast({ kind: 'success', message });
+      setPromoteInstance(null);
     },
-    [entityId, t],
+    [entityId, promoteInstance, t],
   );
 
   const handleTransmute = useCallback(
@@ -188,7 +196,6 @@ export default function EntityDetailModal({ onClose }: EntityDetailModalProps) {
 
   const handleRemoveCapability = useCallback(
     (cap: { name: string }) => {
-      setInstances((prev) => prev);
       setToast({ kind: 'success', message: t('entityModal.capabilitiesTab.removeSuccess') });
       void cap;
     },
@@ -213,6 +220,10 @@ export default function EntityDetailModal({ onClose }: EntityDetailModalProps) {
 
   const handleAddGene = useCallback(() => {
     setToast({ kind: 'success', message: t('entityModal.aiGenesTab.addExtraHint') });
+  }, [t]);
+
+  const handleGoIntroduce = useCallback(() => {
+    setToast({ kind: 'success', message: t('entityModal.instancesTab.goIntroduceHint') });
   }, [t]);
 
   const headerTitle = useMemo(() => {
@@ -358,17 +369,13 @@ export default function EntityDetailModal({ onClose }: EntityDetailModalProps) {
               instances={instances}
               isLoading={instancesLoading}
               errorMessage={instancesError}
+              onSpawn={handleGoIntroduce}
+              onPromote={(inst) => setPromoteInstance(inst)}
               onReap={handleReap}
               onDelete={handleReap}
             />
           ) : (
-            <DistillTab
-              entity={entity}
-              instanceCount={instances.length}
-              canTransmute={canTransmute}
-              onPromote={handlePromote}
-              onTransmute={handleTransmute}
-            />
+            <DistillTab entity={entity} canTransmute={canTransmute} onTransmute={handleTransmute} />
           )}
         </div>
 
@@ -402,6 +409,16 @@ export default function EntityDetailModal({ onClose }: EntityDetailModalProps) {
       </div>
 
       <DistillResultModal result={transmuteResult} onClose={() => setTransmuteResult(null)} />
+
+      {promoteInstance !== null && entity !== null ? (
+        <PromoteModal
+          entity={entity}
+          instanceCount={instances.length}
+          fromInstanceId={promoteInstance.id}
+          onClose={() => setPromoteInstance(null)}
+          onSubmit={handlePromote}
+        />
+      ) : null}
     </div>
   );
 }

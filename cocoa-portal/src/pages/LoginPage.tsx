@@ -107,7 +107,7 @@ export default function LoginPage() {
               <p className="text-xs text-slate-400">{t('common.appTagline')}</p>
             </div>
           </div>
-          <LanguageSwitcher />
+          <LanguageSwitcher variant="sidebar" placement="down" />
         </div>
 
         <div className="mb-6" role="tablist" aria-label="Authentication mode">

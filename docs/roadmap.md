@@ -2,7 +2,7 @@
 
 > **Status**: Living document. Canonical project roadmap + system goal blueprint.
 > **Authority**: Supersedes `.omo/plans/archive/cocoa-v2-roadmap.md` and `.omo/plans/archive/phase-15-foundation-roadmap.md` (archived 2026-07-29).
-> **Product specs**: `docs/prd-v1.md` (single-tenant MVP UX, P15f) · `docs/prd-v2.md` (multi-tenant + agent stack — **implemented 2026-07-29**) · `docs/prd-v3.md` (**next** — Provider defaults, system hub, promote/transmute UX).
+> **Product specs**: `docs/prd-v1.md` · `docs/prd-v2.md` · `docs/prd-v3.md` · **`docs/prd-v3.4.md` (active)** · Later/v4+ deferred.
 > **Naming**: `docs/terminology.md` + `docs/metaphor-name-table.md` (15d locked).
 > **Last revision**: 2026-07-30.
 
@@ -257,23 +257,25 @@ Full history: `.omo/plans/archive/` + `.omo/plans/archive/cocoa-v2-roadmap.md` (
 
 | Slot | Title | Spec | Plan | Notes |
 |---|---|---|---|---|
-| **PRD-v3** | Provider 默认 / System 中枢 description / 回魂·派生与炼化 / 空空间 | `docs/prd-v3.md` | 实现 plan 待开 | MVP = §1.1；Later-A/B/C/D 不进本刀 |
+| **PRD-v3.4** | 次元契印真表 + 引入眷族→迷失者 + 觉醒者/迷失者命名 + 删空间级联 | `docs/prd-v3.4.md` | feat/prd-v3-4-contracts-introduce | Product **3.4.0**；硬切无回填 |
 
-### 5.3 Near backlog (after PRD-v3 MVP)
+PRD-v3 / v3-post MVP 已落地；本波纠偏成员与实例生命周期语义。
+
+### 5.3 Near backlog (after PRD-v3.4)
 
 | Slot | Theme | Source |
 |---|---|---|
-| Avatar presets UI | 用户/眷族预设头像切换 | PRD-v3 Later-A |
-| Visual + 神职图 | 主视觉换皮、候选图挂卡片 | Later-B |
-| Empty IDE polish | 空空间 IDE 深打磨、神职预选 | Later-C |
-| Capability hub assist | skill/capability 中枢撰写 | Later-D |
+| Avatar presets UI | 用户/眷族预设头像切换 | PRD-v3 Later-A（**后移**） |
+| Visual + 神职图 | 主视觉换皮、候选图挂卡片 | Later-B（**后移**） |
+| Empty IDE polish | 空空间 IDE 深打磨、神职预选 | Later-C（**后移**） |
+| Capability hub assist | skill/capability 中枢撰写 | Later-D（**后移**） |
 | Polish | Empty states, error UX, audit filters, i18n sticky | Former P15c leftovers |
-| Tunnel / streaming | Token stream Composer | Former P16b |
-| Session engine v2 | Multimodal day-1 protocol | `.omo/drafts/session-engine-v2.md` |
+| Tunnel / streaming | Token stream Composer | Former P16b（**后移**） |
+| Session engine v2 | Multimodal day-1 protocol | `.omo/drafts/session-engine-v2.md`（原 v4+ **后移**） |
 | Gene LLM real | Richer distill than heuristics | Former P16c |
 | Voice / channels / multi-runtime / multi-compute / DLP / OTel / backup / S3 | nodeskclaw parity candidates | Former P16e–m |
 
-Priority among near-backlog items is **re-decided after PRD-v3 human QA on orbstack**, not copied blindly from the archived P16 queue.
+Priority among near-backlog items is **re-decided after PRD-v3.4 human QA on orbstack**, not copied blindly from the archived P16 queue.
 
 ---
 
