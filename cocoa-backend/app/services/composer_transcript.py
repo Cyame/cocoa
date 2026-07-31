@@ -79,13 +79,35 @@ async def list_composer_messages(
     *,
     limit: int = 200,
     instance_id: str | None = None,
+    role: str | None = None,
+    target_entity: str | None = None,
+    author_username: str | None = None,
 ) -> list[ComposerMessage]:
+    from app.models.user import User
+
     clauses = [
         ComposerMessage.workspace_id == workspace_id,
         ComposerMessage.deleted_at.is_(None),
     ]
     if instance_id:
         clauses.append(ComposerMessage.instance_id == instance_id)
+    if role:
+        clauses.append(ComposerMessage.role == role)
+    if target_entity:
+        clauses.append(ComposerMessage.target_entity == target_entity)
+    if author_username:
+        user_ids = (
+            await session.execute(
+                select(User.id).where(
+                    User.username == author_username,
+                    User.deleted_at.is_(None),
+                )
+            )
+        ).scalars().all()
+        if not user_ids:
+            return []
+        clauses.append(ComposerMessage.author_user_id.in_(list(user_ids)))
+
     rows = (
         await session.execute(
             select(ComposerMessage)

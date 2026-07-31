@@ -527,6 +527,8 @@ async def send_message(
         workspace_id=body.workspace_id,
         from_user_id=current_user.user_id,
     )
+    # Persist composer_messages (+ related emits) — get_db does not auto-commit.
+    await db.commit()
     return MessageSendResult(
         directives=[d.cmd for d in turn.directives],
         general_text=turn.general_text,

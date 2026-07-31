@@ -97,23 +97,35 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
 
   async function fetchTranscript(): Promise<TranscriptMessage[]> {
     try {
-      const res = await api<{ items: TranscriptMessage[] }>(
-        `/workspaces/${encodeURIComponent(workspaceId)}/composer/messages`,
-      );
+      const params = new URLSearchParams();
+      if (filterSpeaker === '__user__') params.set('role', 'user');
+      else if (filterSpeaker === '__assistant__') params.set('role', 'assistant');
+      else if (filterSpeaker === '__system__') params.set('role', 'system');
+      else if (filterSpeaker) params.set('author_username', filterSpeaker);
+      if (filterRecipient) params.set('target_entity', filterRecipient);
+      const qs = params.toString();
+      const path = `/workspaces/${encodeURIComponent(workspaceId)}/composer/messages${
+        qs ? `?${qs}` : ''
+      }`;
+      const res = await api<{ items: TranscriptMessage[] }>(path);
       return res.items;
     } catch {
       return [];
     }
   }
 
-  async function reloadTranscript() {
+  async function reloadTranscript(mode: 'merge' | 'replace' = 'merge') {
     const items = await fetchTranscript();
+    if (mode === 'replace') {
+      setTranscript(items);
+      return;
+    }
     setTranscript((prev) => reconcileTranscript(items, prev));
   }
 
   useEffect(() => {
-    void reloadTranscript();
-  }, [workspaceId]);
+    void reloadTranscript('replace');
+  }, [workspaceId, filterSpeaker, filterRecipient]);
 
   useEffect(() => {
     transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -214,24 +226,17 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
   }, [transcript, lanes]);
 
   const filteredTranscript = useMemo(() => {
+    // Speaker/recipient filters are applied server-side on reload.
+    // Only hide in-flight assistant rows that are mirrored by live lanes.
     return transcript.filter((msg) => {
       if (msg.role === 'assistant' && msg.turn_id) {
         if (lanes.some((lane) => lane.turnId === msg.turn_id && lane.status === 'responding')) {
           return false;
         }
       }
-      if (filterRecipient && msg.target_entity !== filterRecipient) return false;
-      if (filterSpeaker) {
-        if (filterSpeaker === '__user__') return msg.role === 'user';
-        if (filterSpeaker === '__assistant__') return msg.role === 'assistant';
-        if (filterSpeaker === '__system__') return msg.role === 'system';
-        if (msg.role === 'user') return msg.author_username === filterSpeaker;
-        if (msg.role === 'assistant') return msg.target_entity === filterSpeaker;
-        return false;
-      }
       return true;
     });
-  }, [transcript, lanes, filterSpeaker, filterRecipient]);
+  }, [transcript, lanes]);
 
   const bareEmployeeCmdHint = useMemo(() => {
     if (turn === null) return false;

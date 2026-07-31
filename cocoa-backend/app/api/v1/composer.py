@@ -106,11 +106,24 @@ async def list_composer_transcript(
         None,
         description="When set, only messages for this Instance (Lost One scope).",
     ),
+    role: str | None = Query(
+        None,
+        description="Filter by role: user | assistant | system",
+    ),
+    target_entity: str | None = Query(
+        None,
+        description="Filter by recipient entity slug",
+    ),
+    author_username: str | None = Query(
+        None,
+        description="Filter by speaker username (user messages)",
+    ),
 ) -> dict:
     """Server-persisted Composer transcript (inbound + outbound).
 
     Composer UI omits ``instance_id`` for the global workspace view.
     Instance Host / Lost One scoped readers should pass ``instance_id``.
+    Speaker/recipient filters are applied in the DB query (not client-only).
     """
     _ = current_user
     workspace = await db.get(Workspace, workspace_id)
@@ -121,7 +134,13 @@ async def list_composer_transcript(
             f"Workspace '{workspace_id}' not found",
         )
     rows = await list_composer_messages(
-        db, workspace_id, limit=limit, instance_id=instance_id
+        db,
+        workspace_id,
+        limit=limit,
+        instance_id=instance_id,
+        role=role,
+        target_entity=target_entity,
+        author_username=author_username,
     )
     items = await enrich_composer_message_items(db, rows)
     return {"items": items, "total": len(items)}
