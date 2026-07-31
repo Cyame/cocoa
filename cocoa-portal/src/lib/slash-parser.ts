@@ -66,6 +66,47 @@ const RE_CMD = /\/([a-z][a-z0-9-]*)/;
  */
 const RE_CONTENT_REF = /@(workspace|fornix|vault|memory)(?::(\S+))?/g;
 
+/** Inline @slug tokens for same-line multi-mention chat expansion. */
+const RE_AT_TOKEN = /@([a-zA-Z0-9_-]+)/g;
+const CONTENT_REF_SCOPES = new Set(['workspace', 'fornix', 'vault', 'memory']);
+
+/**
+ * Expand ``@a hi @b bye`` (no slash cmds) into one {@link Directive} per @slug.
+ * Returns ``null`` when the line should stay a single parse_directive result.
+ */
+export function expandInlineChatMentions(raw: string): Directive[] | null {
+  if (/\/([a-z][a-z0-9-]*)/.test(raw)) {
+    return null;
+  }
+  const matches: RegExpExecArray[] = [];
+  RE_AT_TOKEN.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = RE_AT_TOKEN.exec(raw)) !== null) {
+    const slug = m[1];
+    if (CONTENT_REF_SCOPES.has(slug)) continue;
+    if (m.index > 0 && !/\s/.test(raw[m.index - 1] ?? '')) continue;
+    matches.push(m);
+  }
+  if (matches.length <= 1) return null;
+  const out: Directive[] = [];
+  for (let i = 0; i < matches.length; i++) {
+    const cur = matches[i];
+    const start = cur.index + cur[0].length;
+    const end = i + 1 < matches.length ? matches[i + 1].index : raw.length;
+    const body = raw.slice(start, end).trim();
+    const args = body.split(/\s+/).filter((a) => a.length > 0);
+    const segment = raw.slice(cur.index, end).trim();
+    out.push({
+      target_entity: cur[1],
+      cmd: '',
+      args,
+      content_ref: null,
+      raw_text: segment,
+    });
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // Parser error
 // ---------------------------------------------------------------------------
@@ -175,6 +216,11 @@ export function parse_turn(rawText: string): Turn {
   for (const line of lines) {
     const stripped = line.trim();
     if (stripped.length === 0) {
+      continue;
+    }
+    const expanded = expandInlineChatMentions(stripped);
+    if (expanded !== null) {
+      directives.push(...expanded);
       continue;
     }
     const result = parse_directive(stripped);

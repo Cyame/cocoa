@@ -17,7 +17,10 @@ from app.core.passages import neighbor_membership_ids
 from app.models.entity import Entity
 from app.models.instance import Instance
 from app.models.workspace import Membership, Workspace
-from app.services.composer_transcript import list_composer_messages
+from app.services.composer_transcript import (
+    enrich_composer_message_items,
+    list_composer_messages,
+)
 
 router = APIRouter(tags=["Composer"])
 add_error_responses(router)
@@ -110,20 +113,7 @@ async def list_composer_transcript(
             f"Workspace '{workspace_id}' not found",
         )
     rows = await list_composer_messages(db, workspace_id, limit=limit)
-    items = [
-        {
-            "id": row.id,
-            "role": row.role,
-            "content": row.content,
-            "target_entity": row.target_entity,
-            "instance_id": row.instance_id,
-            "turn_id": row.turn_id,
-            "status": row.status,
-            "author_user_id": row.author_user_id,
-            "created_at": row.created_at.isoformat() if row.created_at else None,
-        }
-        for row in rows
-    ]
+    items = await enrich_composer_message_items(db, rows)
     return {"items": items, "total": len(items)}
 
 

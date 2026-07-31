@@ -91,3 +91,39 @@ async def list_composer_messages(
         )
     ).scalars().all()
     return list(rows)
+
+
+async def enrich_composer_message_items(
+    session: AsyncSession,
+    rows: list[ComposerMessage],
+) -> list[dict]:
+    """Serialize transcript rows with speaker username when available."""
+    from app.models.user import User
+
+    user_ids = [r.author_user_id for r in rows if r.author_user_id]
+    user_map: dict[str, str] = {}
+    if user_ids:
+        users = (
+            await session.execute(
+                select(User).where(User.id.in_(user_ids), User.deleted_at.is_(None))
+            )
+        ).scalars().all()
+        user_map = {u.id: u.username for u in users}
+
+    items: list[dict] = []
+    for row in rows:
+        items.append(
+            {
+                "id": row.id,
+                "role": row.role,
+                "content": row.content,
+                "target_entity": row.target_entity,
+                "instance_id": row.instance_id,
+                "turn_id": row.turn_id,
+                "status": row.status,
+                "author_user_id": row.author_user_id,
+                "author_username": user_map.get(row.author_user_id) if row.author_user_id else None,
+                "created_at": row.created_at.isoformat() if row.created_at else None,
+            }
+        )
+    return items

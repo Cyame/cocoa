@@ -370,7 +370,10 @@
     "settingsTitle": "Composer settings",
     "settingShowThinking": "Show thinking chain",
     "settingRenderMarkdown": "Render Markdown",
-    "thinkingLabel": "Thinking"
+    "thinkingLabel": "Thinking",
+    "filterSpeaker": "Speaker",
+    "filterRecipient": "Recipient",
+    "filterAll": "All"
   },
   "debug": {
     "title": "Debug",

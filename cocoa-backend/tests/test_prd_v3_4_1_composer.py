@@ -32,6 +32,25 @@ def test_parse_turn_multi_mention_chat() -> None:
     assert turn.directives[1].args == ["hello"]
 
 
+def test_parse_turn_same_line_multi_mention_chat() -> None:
+    """PRD-v3.4.1 / 14b: same-line @a … @b … expands to N chat directives."""
+    turn = parse_turn("@a 你好 @b hello")
+    assert len(turn.directives) == 2
+    assert turn.directives[0].target_entity == "a"
+    assert turn.directives[0].cmd == ""
+    assert turn.directives[0].args == ["你好"]
+    assert turn.directives[1].target_entity == "b"
+    assert turn.directives[1].args == ["hello"]
+
+
+def test_parse_turn_same_line_with_cmd_stays_single() -> None:
+    """Slash commands keep single-directive semantics (no inline @ expand)."""
+    turn = parse_turn("@a /status @b hello")
+    assert len(turn.directives) == 1
+    assert turn.directives[0].target_entity == "a"
+    assert turn.directives[0].cmd == "/status"
+
+
 @pytest.mark.asyncio
 async def test_schedule_user_turn_registers_state(session) -> None:
     """schedule_user_turn creates in-memory turn + emits without requiring LLM key."""

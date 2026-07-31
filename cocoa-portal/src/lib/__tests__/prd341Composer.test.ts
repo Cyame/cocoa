@@ -18,6 +18,15 @@ describe('slash-parser mention chat', () => {
     expect(turn.directives[0]?.target_entity).toBe('a');
     expect(turn.directives[1]?.target_entity).toBe('b');
   });
+
+  it('expands same-line multi mentions into directives', () => {
+    const turn = parse_turn('@a 你好 @b hello');
+    expect(turn.directives).toHaveLength(2);
+    expect(turn.directives[0]?.target_entity).toBe('a');
+    expect(turn.directives[0]?.args).toEqual(['你好']);
+    expect(turn.directives[1]?.target_entity).toBe('b');
+    expect(turn.directives[1]?.args).toEqual(['hello']);
+  });
 });
 
 describe('topologyFit', () => {

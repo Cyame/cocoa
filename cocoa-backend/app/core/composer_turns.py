@@ -98,7 +98,8 @@ async def ingest_tunnel_chat_frame(turn_id: str, frame: dict[str, Any]) -> None:
         frame.setdefault("status", "completed")
         frame.setdefault("finish_reason", "stop")
         done_text = frame.get("text")
-        if isinstance(done_text, str) and done_text and not state.reply_text:
+        # Done payload is authoritative when present; otherwise keep chunks.
+        if isinstance(done_text, str) and done_text.strip():
             state.reply_text = done_text
         if "text" not in frame or not frame.get("text"):
             frame["text"] = state.reply_text
@@ -320,6 +321,8 @@ async def _finalize_assistant_message(
     from app.services.composer_transcript import update_composer_message_by_turn
 
     body = content if content is not None else state.reply_text
+    if not (body or "").strip() and (state.reply_text or "").strip():
+        body = state.reply_text
     try:
         async with get_session_factory()() as session:
             await update_composer_message_by_turn(

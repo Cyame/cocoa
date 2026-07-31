@@ -39,6 +39,47 @@ _RE_CONTENT_REF = re.compile(
 # Regex: /command (lowercase-start, alphanumeric + hyphens)
 _RE_CMD = re.compile(r"/(?P<cmd>[a-z][a-z0-9-]*)")
 
+# Inline @slug tokens (for same-line multi-mention chat expansion).
+_RE_AT_TOKEN = re.compile(r"@([a-zA-Z0-9_-]+)")
+_CONTENT_REF_SCOPES = frozenset({"workspace", "fornix", "vault", "memory"})
+
+
+def expand_inline_chat_mentions(raw: str) -> list[Directive] | None:
+    """Expand ``@a hi @b bye`` (no slash cmds) into one Directive per @slug.
+
+    Returns ``None`` when the line should stay a single parse_directive result
+    (zero/one mention, or any ``/cmd`` present).
+    """
+    if _RE_CMD.search(raw):
+        return None
+    matches: list[re.Match[str]] = []
+    for m in _RE_AT_TOKEN.finditer(raw):
+        slug = m.group(1)
+        if slug in _CONTENT_REF_SCOPES:
+            continue
+        if m.start() > 0 and not raw[m.start() - 1].isspace():
+            continue
+        matches.append(m)
+    if len(matches) <= 1:
+        return None
+    out: list[Directive] = []
+    for i, m in enumerate(matches):
+        start = m.end()
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(raw)
+        body = raw[start:end].strip()
+        args = [a for a in body.split() if a]
+        segment = raw[m.start() : end].strip()
+        out.append(
+            Directive(
+                target_entity=m.group(1),
+                cmd="",
+                args=args,
+                content_ref=None,
+                raw_text=segment,
+            )
+        )
+    return out
+
 
 def parse_directive(line: str) -> Directive | str:
     """Parse a single line into a ``Directive``, or return the raw line.
@@ -125,6 +166,10 @@ def parse_turn(raw_text: str) -> Turn:
     for line in lines:
         stripped = line.strip()
         if not stripped:
+            continue
+        expanded = expand_inline_chat_mentions(stripped)
+        if expanded is not None:
+            directives.extend(expanded)
             continue
         result = parse_directive(stripped)
         if isinstance(result, Directive):

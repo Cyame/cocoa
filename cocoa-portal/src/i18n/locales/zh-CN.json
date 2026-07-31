@@ -210,7 +210,10 @@
     "settingsTitle": "编辑器设置",
     "settingShowThinking": "显示思考链",
     "settingRenderMarkdown": "渲染 Markdown",
-    "thinkingLabel": "思考过程"
+    "thinkingLabel": "思考过程",
+    "filterSpeaker": "发言人",
+    "filterRecipient": "接收人",
+    "filterAll": "全部"
   },
   "debug": {
     "title": "调试",
