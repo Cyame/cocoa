@@ -1,4 +1,4 @@
-import { AlertCircle, Brain, Cpu, LoaderCircle, Plus, UserRound, Users } from 'lucide-react';
+import { AlertCircle, Brain, Cpu, LoaderCircle, Plus, Trash, UserRound, Users } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
@@ -6,6 +6,7 @@ import IdeShell from '@/components/IdeShell';
 import IntroduceInstanceModal from '@/components/IntroduceInstanceModal';
 import { ModelInputCombobox } from '@/components/ModelInputCombobox';
 import { ApiError, api } from '@/lib/api';
+import { deleteInstanceById, deleteMembership } from '@/lib/api/instances';
 import { fetchLiveStatus } from '@/lib/api/liveStatus';
 import {
   type CatalogModel,
@@ -161,6 +162,57 @@ export default function WorkspaceIdePage() {
     };
   }, [id, activeTab]);
 
+  const resolveActionError = useCallback(
+    (error: unknown, fallbackKey: string) => {
+      if (error instanceof ApiError) {
+        const payload = error.payload;
+        if (
+          typeof payload === 'object' &&
+          payload !== null &&
+          'message_key' in payload &&
+          typeof (payload as { message_key: unknown }).message_key === 'string'
+        ) {
+          const key = (payload as { message_key: string }).message_key;
+          const translated = t(key, { defaultValue: '' });
+          if (translated.length > 0) return translated;
+        }
+        return error.message;
+      }
+      return t(fallbackKey);
+    },
+    [t],
+  );
+
+  const handleRemoveMembership = useCallback(
+    async (membershipId: string, label: string) => {
+      const ok = window.confirm(t('workspace.removeAwakenedConfirm', { name: label }));
+      if (!ok) return;
+      try {
+        await deleteMembership(membershipId);
+        setTopologyRefreshKey((k) => k + 1);
+        await loadData();
+      } catch (error) {
+        setErrorMessage(resolveActionError(error, 'workspace.removeFailed'));
+      }
+    },
+    [loadData, resolveActionError, t],
+  );
+
+  const handleRemoveInstance = useCallback(
+    async (instanceId: string, label: string) => {
+      const ok = window.confirm(t('workspace.removeLostOneConfirm', { name: label }));
+      if (!ok) return;
+      try {
+        await deleteInstanceById(instanceId);
+        setTopologyRefreshKey((k) => k + 1);
+        await loadData();
+      } catch (error) {
+        setErrorMessage(resolveActionError(error, 'workspace.removeFailed'));
+      }
+    },
+    [loadData, resolveActionError, t],
+  );
+
   const healthKey = useMemo(() => deriveHealth(liveStatus), [liveStatus]);
   const healthLabel = t(
     `workspaceHeader.health.${healthKey === 'warning' ? 'warning' : healthKey === 'failed' ? 'failed' : 'healthy'}`,
@@ -259,6 +311,10 @@ export default function WorkspaceIdePage() {
                 id: m.id,
                 title: m.user_id ?? m.instance_id ?? m.id,
                 subtitle: m.role,
+                removeLabel: t('workspace.removeAwakened'),
+                onRemove: () => {
+                  void handleRemoveMembership(m.id, m.user_id ?? m.id);
+                },
               }))}
               actionLabel={t('workspace.introduceInstance')}
               onAction={() => setIntroduceOpen(true)}
@@ -271,10 +327,15 @@ export default function WorkspaceIdePage() {
               emptyDetail={t('workspace.emptyInstancesDetail')}
               items={instances.map((inst) => {
                 const entity = entities.find((e) => e.id === inst.entity_id);
+                const title = entity?.display_name ?? entity?.name ?? inst.entity_id;
                 return {
                   id: inst.id,
-                  title: entity?.display_name ?? entity?.name ?? inst.entity_id,
+                  title,
                   subtitle: inst.status,
+                  removeLabel: t('workspace.removeLostOne'),
+                  onRemove: () => {
+                    void handleRemoveInstance(inst.id, title);
+                  },
                 };
               })}
               actionLabel={t('workspace.introduceInstance')}
@@ -586,7 +647,13 @@ function PanelList({
   actionLabel,
   onAction,
 }: {
-  readonly items: readonly { id: string; title: string; subtitle: string }[];
+  readonly items: readonly {
+    id: string;
+    title: string;
+    subtitle: string;
+    removeLabel?: string;
+    onRemove?: () => void;
+  }[];
   readonly emptyTitle: string;
   readonly emptyDetail: string;
   readonly actionLabel?: string;
@@ -639,10 +706,21 @@ function PanelList({
             <span className="grid size-9 place-items-center rounded-full bg-slate-100 text-slate-600">
               <UserRound className="size-4" aria-hidden="true" />
             </span>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-semibold text-slate-900">{item.title}</p>
               <p className="mt-1 text-xs capitalize text-slate-500">{item.subtitle}</p>
             </div>
+            {item.onRemove !== undefined && item.removeLabel !== undefined ? (
+              <button
+                type="button"
+                onClick={item.onRemove}
+                data-testid={`workspace-remove-${item.id}`}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50"
+              >
+                <Trash className="size-3.5" aria-hidden="true" />
+                {item.removeLabel}
+              </button>
+            ) : null}
           </li>
         ))}
       </ul>

@@ -1,16 +1,20 @@
-import { Bot, Cpu, X } from 'lucide-react';
-import { type ReactElement, useEffect, useRef } from 'react';
+import { Bot, Cpu, LoaderCircle, Trash, X } from 'lucide-react';
+import { type ReactElement, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TopologyNode } from '@/lib/types';
 
 type NodeModalProps = {
   readonly node: TopologyNode;
   readonly onClose: () => void;
+  readonly onRemove?: (node: TopologyNode) => Promise<void>;
 };
 
-export function NodeModal({ node, onClose }: NodeModalProps): ReactElement {
+export function NodeModal({ node, onClose, onRemove }: NodeModalProps): ReactElement {
   const { t } = useTranslation();
   const dialogRef = useRef<HTMLDivElement | null>(null);
+  const [removing, setRemoving] = useState(false);
+  const canRemove = onRemove !== undefined && node.kind !== 'hub';
+  const isLostOne = node.instanceId !== null;
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -36,6 +40,22 @@ export function NodeModal({ node, onClose }: NodeModalProps): ReactElement {
   }, [onClose]);
 
   const Icon = node.instanceId === null ? Bot : Cpu;
+
+  async function handleRemove() {
+    if (!canRemove || onRemove === undefined || removing) return;
+    const confirmKey = isLostOne
+      ? 'topology.removeLostOneConfirm'
+      : 'topology.removeAwakenedConfirm';
+    const ok = window.confirm(t(confirmKey, { name: node.label }));
+    if (!ok) return;
+    setRemoving(true);
+    try {
+      await onRemove(node);
+    } finally {
+      setRemoving(false);
+    }
+  }
+
   return (
     /* biome-ignore lint/a11y/noStaticElementInteractions: backdrop click dismisses the modal; dialog remains keyboard accessible */
     <div
@@ -99,6 +119,29 @@ export function NodeModal({ node, onClose }: NodeModalProps): ReactElement {
               <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
                 {t('topology.outdatedNotice')}
               </p>
+            ) : null}
+            {canRemove ? (
+              <button
+                type="button"
+                disabled={removing}
+                onClick={() => {
+                  void handleRemove();
+                }}
+                data-testid={`topology-node-remove-${node.id}`}
+                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-50 disabled:opacity-60"
+              >
+                {removing ? (
+                  <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Trash className="size-4" aria-hidden="true" />
+                )}
+                <span>
+                  {isLostOne ? t('topology.removeLostOne') : t('topology.removeAwakened')}
+                </span>
+              </button>
+            ) : null}
+            {canRemove ? (
+              <p className="mt-2 text-xs text-slate-500">{t('topology.removeHint')}</p>
             ) : null}
           </aside>
         </div>

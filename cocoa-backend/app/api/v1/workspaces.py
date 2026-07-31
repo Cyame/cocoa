@@ -249,7 +249,7 @@ async def delete_workspace(
             Passage.workspace_id == workspace_id,
             Passage.deleted_at.is_(None),
         )
-        .values(deleted_at=func.now())
+        .values(deleted_at=func.now(), is_active=False)
     )
 
     hubs = (

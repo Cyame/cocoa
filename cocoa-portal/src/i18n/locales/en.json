@@ -326,7 +326,13 @@
     "viewDetails": "Details",
     "continuationCount": "Continuations",
     "lastCheckpoint": "Last checkpoint",
-    "restartToUpdate": "Restart to update"
+    "restartToUpdate": "Restart to update",
+    "removeNode": "Remove node",
+    "removeAwakened": "Remove Awakened",
+    "removeLostOne": "Remove Lost One",
+    "removeAwakenedConfirm": "Remove Awakened \"{{name}}\" from the topology? Incident passages will be cleaned up.",
+    "removeLostOneConfirm": "Exit and remove Lost One \"{{name}}\"? Its seat and incident passages will be cleaned up.",
+    "removeHint": "Removing a node soft-deletes the seat and incident passages; Lost Ones exit the instance first."
   },
   "composer": {
     "title": "Composer",
@@ -459,7 +465,10 @@
       "viewWorkspaceMemory": "View workspace memory",
       "findInTopology": "Locate in topology",
       "findInTopologyPending": "Topology focus lands in a follow-up wave.",
-      "findInTopologyEmpty": "This entity has no instances yet. Introduce it into a workspace first."
+      "findInTopologyEmpty": "This entity has no instances yet. Introduce it into a workspace first.",
+      "deleteEntity": "Delete entity",
+      "deleteConfirmBody": "Delete entity \"{{name}}\"? Exit all Lost Ones first. This cannot be undone.",
+      "deleteSuccess": "Entity deleted."
     },
     "basicTab": {
       "displayName": "Display name",
@@ -631,7 +640,8 @@
       "permission": "You need the {{cap}} capability.",
       "network": "Network error. Please retry.",
       "conflict": "The entity was changed by another operator.",
-      "notFound": "Entity not found."
+      "notFound": "Entity not found.",
+      "delete": "Failed to delete entity."
     }
   },
   "workspaceHeader": {
@@ -693,7 +703,15 @@
     "network": "Network error. Please check your connection.",
     "unknown": "Something went wrong. Please try again.",
     "validation": "Some input is invalid. Please review the form.",
-    "requestFailed": "API request failed with status {{status}}"
+    "requestFailed": "API request failed with status {{status}}",
+    "entity": {
+      "has_active_instances": "This entity still has active Lost Ones. Exit them all before deleting.",
+      "not_found": "Entity not found."
+    },
+    "membership": {
+      "last_owner": "Cannot remove the last owner of a workspace.",
+      "not_found": "Membership not found."
+    }
   },
   "onboarding": {
     "stepIndicator": "Step {{current}}/{{total}}",
@@ -907,6 +925,11 @@
     "introduceEntityPlaceholder": "Select an entity",
     "introduceSubmit": "Introduce and create Lost One",
     "introduceFailed": "Failed to introduce entity. Please retry.",
+    "removeAwakened": "Remove",
+    "removeLostOne": "Exit and remove",
+    "removeAwakenedConfirm": "Remove Awakened \"{{name}}\" from this workspace? Incident passages will be cleaned up.",
+    "removeLostOneConfirm": "Exit and remove Lost One \"{{name}}\"? Its seat and incident passages will be cleaned up.",
+    "removeFailed": "Remove failed. Please retry.",
     "sharedContext": "Shared context",
     "noSharedContext": "No shared context recorded.",
     "manualNotes": "Manual notes",

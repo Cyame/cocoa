@@ -6,6 +6,7 @@ import {
   LoaderCircle,
   MapPin,
   Network,
+  Trash,
   Wand2,
   X,
 } from 'lucide-react';
@@ -20,7 +21,13 @@ import DistillTab from '@/components/entity-tabs/DistillTab';
 import InstancesTab from '@/components/entity-tabs/InstancesTab';
 import PromoteModal from '@/components/PromoteModal';
 import { ApiError } from '@/lib/api';
-import { type EntityDetail, fetchEntity, promoteEntity, transmuteEntity } from '@/lib/api/entities';
+import {
+  deleteEntity,
+  type EntityDetail,
+  fetchEntity,
+  promoteEntity,
+  transmuteEntity,
+} from '@/lib/api/entities';
 import { listInstancesForEntity } from '@/lib/api/learning';
 import {
   deleteInstanceById,
@@ -74,6 +81,7 @@ export default function EntityDetailModal({ onClose }: EntityDetailModalProps) {
   const navigate = useNavigate();
   const entityId = useEntityModalStore((state) => state.entityId);
   const initialTab = useEntityModalStore((state) => state.initialTab);
+  const closeModal = useEntityModalStore((state) => state.close);
   const [tab, setTab] = useState<EntityModalTabId>('basic');
   const [entity, setEntity] = useState<EntityDetail | null>(null);
   const [instances, setInstances] = useState<readonly EntityInstanceStatus[]>([]);
@@ -83,6 +91,7 @@ export default function EntityDetailModal({ onClose }: EntityDetailModalProps) {
   const [toast, setToast] = useState<{ kind: 'success' | 'error'; message: string } | null>(null);
   const [transmuteResult, setTransmuteResult] = useState<TransmuteResult | null>(null);
   const [promoteInstance, setPromoteInstance] = useState<EntityInstanceStatus | null>(null);
+  const [deletingEntity, setDeletingEntity] = useState(false);
   const tabListRef = useRef<HTMLDivElement | null>(null);
 
   const loadEntity = useCallback(
@@ -192,6 +201,42 @@ export default function EntityDetailModal({ onClose }: EntityDetailModalProps) {
 
   const canEdit = true;
   const canTransmute = true;
+
+  const handleDeleteEntity = useCallback(async () => {
+    if (entityId === null || entity === null || deletingEntity) return;
+    const ok = window.confirm(
+      t('entityModal.footer.deleteConfirmBody', {
+        name: entity.display_name ?? entity.name,
+      }),
+    );
+    if (!ok) return;
+    setDeletingEntity(true);
+    try {
+      await deleteEntity(entityId);
+      closeModal();
+      onClose();
+    } catch (error) {
+      let message = t('entityModal.errors.delete');
+      if (error instanceof ApiError) {
+        const payload = error.payload;
+        if (
+          typeof payload === 'object' &&
+          payload !== null &&
+          'message_key' in payload &&
+          typeof (payload as { message_key: unknown }).message_key === 'string'
+        ) {
+          const key = (payload as { message_key: string }).message_key;
+          const translated = t(key, { defaultValue: '' });
+          message = translated.length > 0 ? translated : error.message;
+        } else {
+          message = error.message;
+        }
+      }
+      setToast({ kind: 'error', message });
+    } finally {
+      setDeletingEntity(false);
+    }
+  }, [closeModal, deletingEntity, entity, entityId, onClose, t]);
 
   const handlePromote = useCallback(
     async (payload: import('@/lib/api/entities').PromotePayload) => {
@@ -525,10 +570,30 @@ export default function EntityDetailModal({ onClose }: EntityDetailModalProps) {
               {t('entityModal.footer.findInTopology')}
             </button>
           </div>
-          <div className="flex items-center gap-1.5 text-xs text-slate-400">
-            <Network className="size-3.5" aria-hidden="true" />
-            <ArrowUp className="size-3.5" aria-hidden="true" />
-            <Wand2 className="size-3.5" aria-hidden="true" />
+          <div className="flex items-center gap-2">
+            {canEdit && entity !== null ? (
+              <button
+                type="button"
+                disabled={deletingEntity}
+                onClick={() => {
+                  void handleDeleteEntity();
+                }}
+                data-testid="entity-footer-delete"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-700 transition-colors hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 disabled:opacity-60"
+              >
+                {deletingEntity ? (
+                  <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Trash className="size-3.5" aria-hidden="true" />
+                )}
+                {t('entityModal.footer.deleteEntity')}
+              </button>
+            ) : null}
+            <div className="flex items-center gap-1.5 text-xs text-slate-400">
+              <Network className="size-3.5" aria-hidden="true" />
+              <ArrowUp className="size-3.5" aria-hidden="true" />
+              <Wand2 className="size-3.5" aria-hidden="true" />
+            </div>
           </div>
         </footer>
       </div>

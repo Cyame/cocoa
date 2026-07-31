@@ -19,6 +19,7 @@ import TopologyGlowDefs, {
   OutdatedOverlay,
 } from '@/components/TopologyGlow';
 import { ApiError, api } from '@/lib/api';
+import { deleteInstanceById, deleteMembership } from '@/lib/api/instances';
 import { fetchTopologyLiveStatus } from '@/lib/api/topology';
 import { fitNodes } from '@/lib/topologyFit';
 import type {
@@ -689,6 +690,44 @@ export default function TopologyPage({
     };
   }, [pendingConnectionCompletion, workspaceId, t]);
 
+  const handleRemoveNode = useCallback(
+    async (node: NodeSummary) => {
+      if (workspaceId === null || node.kind === 'hub') return;
+      try {
+        if (node.instanceId !== null) {
+          await deleteInstanceById(node.instanceId);
+        } else {
+          await deleteMembership(node.id);
+        }
+        const fresh = await fetchStaticData(workspaceId);
+        setStaticData(fresh);
+        setSelectedNode(null);
+        setActionError(null);
+      } catch (error) {
+        const message =
+          error instanceof ApiError
+            ? (() => {
+                const payload = error.payload;
+                if (
+                  typeof payload === 'object' &&
+                  payload !== null &&
+                  'message_key' in payload &&
+                  typeof (payload as { message_key: unknown }).message_key === 'string'
+                ) {
+                  const key = (payload as { message_key: string }).message_key;
+                  const translated = t(key, { defaultValue: '' });
+                  if (translated.length > 0) return translated;
+                }
+                return error.message;
+              })()
+            : t('topology.failedDelete');
+        setActionError(message);
+        throw error;
+      }
+    },
+    [workspaceId, t],
+  );
+
   // ---- Move mode: drag handlers ----
 
   const handleNodeMouseDown = useCallback(
@@ -1012,7 +1051,11 @@ export default function TopologyPage({
         </div>
 
         {selectedNode !== null ? (
-          <NodeModal node={selectedNode} onClose={() => setSelectedNode(null)} />
+          <NodeModal
+            node={selectedNode}
+            onClose={() => setSelectedNode(null)}
+            onRemove={handleRemoveNode}
+          />
         ) : null}
       </div>
     </section>
@@ -1256,7 +1299,7 @@ export function NodeDrawer({ node, isEditor, onClose, onDelete }: NodeDrawerProp
             data-testid={`topology-node-delete-${node.id}`}
           >
             <Trash className="size-4" aria-hidden="true" />
-            <span>Delete</span>
+            <span>{t('topology.removeNode')}</span>
           </button>
         </div>
       ) : null}

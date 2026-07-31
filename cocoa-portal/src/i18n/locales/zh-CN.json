@@ -166,7 +166,13 @@
     "viewDetails": "详情",
     "continuationCount": "续写次数",
     "lastCheckpoint": "最近检查点",
-    "restartToUpdate": "重启以更新"
+    "restartToUpdate": "重启以更新",
+    "removeNode": "移除节点",
+    "removeAwakened": "移除觉醒者",
+    "removeLostOne": "移除迷失者",
+    "removeAwakenedConfirm": "从拓扑移除觉醒者「{{name}}」？相关通道也会一并清理。",
+    "removeLostOneConfirm": "退出并移除迷失者「{{name}}」？其成员席位与相关通道会一并清理。",
+    "removeHint": "移除节点会软删除席位与周围通道；迷失者会先退出化身。"
   },
   "composer": {
     "title": "编辑器",
@@ -299,7 +305,10 @@
       "viewWorkspaceMemory": "查看所绑 Workspace 记忆",
       "findInTopology": "在拓扑中找到此 Node",
       "findInTopologyPending": "拓扑聚焦功能将在后续 wave 中提供。",
-      "findInTopologyEmpty": "该眷族尚无化身，请先引入到空间。"
+      "findInTopologyEmpty": "该眷族尚无化身，请先引入到空间。",
+      "deleteEntity": "删除眷族",
+      "deleteConfirmBody": "确认删除眷族「{{name}}」？须先退出全部化身。此操作不可恢复。",
+      "deleteSuccess": "眷族已删除。"
     },
     "basicTab": {
       "displayName": "显示名称",
@@ -471,7 +480,8 @@
       "permission": "需要 {{cap}} 能力位。",
       "network": "网络错误，请重试。",
       "conflict": "该眷族已被其他操作者修改。",
-      "notFound": "未找到眷族。"
+      "notFound": "未找到眷族。",
+      "delete": "删除眷族失败。"
     }
   },
   "workspaceHeader": {
@@ -533,7 +543,15 @@
     "network": "网络错误，请检查你的连接。",
     "unknown": "发生未知错误，请稍后重试。",
     "validation": "部分输入不合法，请检查表单。",
-    "requestFailed": "API 请求失败，状态码 {{status}}"
+    "requestFailed": "API 请求失败，状态码 {{status}}",
+    "entity": {
+      "has_active_instances": "该眷族仍有活跃化身，请先退出全部化身后再删除。",
+      "not_found": "未找到眷族。"
+    },
+    "membership": {
+      "last_owner": "不能移除空间的最后一位所有者。",
+      "not_found": "未找到成员关系。"
+    }
   },
   "onboarding": {
     "stepIndicator": "步骤 {{current}}/{{total}}",
@@ -747,6 +765,11 @@
     "introduceEntityPlaceholder": "选择眷族",
     "introduceSubmit": "引入并生成迷失者",
     "introduceFailed": "引入眷族失败，请重试。",
+    "removeAwakened": "移除",
+    "removeLostOne": "退出并移除",
+    "removeAwakenedConfirm": "从本空间移除觉醒者「{{name}}」？相关通道也会一并清理。",
+    "removeLostOneConfirm": "退出并移除迷失者「{{name}}」？其席位与相关通道会一并清理。",
+    "removeFailed": "移除失败，请重试。",
     "sharedContext": "共享上下文",
     "noSharedContext": "暂无共享上下文。",
     "manualNotes": "手动备注",

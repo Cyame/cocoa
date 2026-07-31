@@ -65,6 +65,12 @@ export function fetchEntity(entityId: string): Promise<EntityDetail> {
   );
 }
 
+export function deleteEntity(entityId: string): Promise<void> {
+  return api<void>(`/entities/${encodeURIComponent(entityId)}`, {
+    method: 'DELETE',
+  });
+}
+
 export function patchEntity(
   entityId: string,
   payload: EntityPatchPayload,

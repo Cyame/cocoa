@@ -42,6 +42,7 @@ from app.core.openapi import add_error_responses
 from app.core.overlay import resolve_instance_agent_config
 from app.core.pagination import OffsetPage, paginate_offset
 from app.core.permissions import require_workspace_role
+from app.core.topology_cleanup import soft_delete_passages_touching
 from app.core.workspace import generate_workspace_path
 from app.models.entity import Entity
 from app.models.instance import Instance, InstanceStatus
@@ -412,6 +413,14 @@ async def delete_instance(
         payload={"previous_status": previous_status},
         session=db,
     )
+    mem_ids = (
+        await db.execute(
+            select(Membership.id).where(
+                Membership.instance_id == instance.id,
+                Membership.deleted_at.is_(None),
+            )
+        )
+    ).scalars().all()
     await db.execute(
         update(Membership)
         .where(
@@ -420,6 +429,7 @@ async def delete_instance(
         )
         .values(deleted_at=func.now())
     )
+    await soft_delete_passages_touching(db, list(mem_ids))
     instance.soft_delete()
     await db.commit()
 

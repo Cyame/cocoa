@@ -118,6 +118,12 @@ export function deleteInstanceById(instanceId: string): Promise<void> {
   });
 }
 
+export function deleteMembership(membershipId: string): Promise<void> {
+  return api<void>(`/messaging/memberships/${encodeURIComponent(membershipId)}`, {
+    method: 'DELETE',
+  });
+}
+
 export type MembershipCreatePayload = {
   readonly workspace_id: string;
   readonly user_id?: string | null;

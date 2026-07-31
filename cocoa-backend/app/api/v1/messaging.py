@@ -4,13 +4,14 @@ P5 implements messaging endpoints.
 """
 
 from fastapi import APIRouter, Query, Response, status
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import DB, CurrentUserDep
 from app.core.errors import ConflictError, ForbiddenError, NotFoundError
 from app.core.openapi import add_error_responses
 from app.core.pagination import OffsetPage, paginate_offset
+from app.core.topology_cleanup import soft_delete_passages_touching
 from app.models.workspace import Membership, MembershipRole, Passage, Workspace
 from app.schemas.membership import MembershipCreate, MembershipOut, MembershipUpdate
 
@@ -229,13 +230,18 @@ async def delete_membership(
     db: DB = None,
     _current_user: CurrentUserDep = None,
 ) -> None:
-    """Soft-delete a membership.
+    """Soft-delete a membership and clear incident Passage edges.
 
-    The record is marked as deleted but not physically removed.
-    The last owner of an workspace cannot be deleted to prevent orphan workspaces.
-    Raises 404 if the membership does not exist.
-    Raises 409 if the membership is the last owner.
+    The last owner of a workspace cannot be deleted to prevent orphan workspaces.
+    If the seat belongs to a Lost One (``instance_id`` set), the linked Instance
+    is soft-deleted as well so topology removal cannot leave an orphan avatar.
     """
+    from app.models.instance import Instance, InstanceStatus
+    from app.services.deploy_service import (
+        scale_instance_runtime,
+        teardown_instance_namespace,
+    )
+
     membership = await db.get(Membership, membership_id)
     if membership is None or membership.deleted_at is not None:
         raise NotFoundError(
@@ -263,19 +269,39 @@ async def delete_membership(
                 "Cannot remove the last owner of an workspace",
             )
 
+    linked_instance_id = membership.instance_id
+    if linked_instance_id is not None:
+        instance = await db.get(Instance, linked_instance_id)
+        if instance is not None and instance.deleted_at is None:
+            if instance.status == InstanceStatus.running.value:
+                instance.status = InstanceStatus.pending.value
+                await scale_instance_runtime(linked_instance_id, 0)
+            instance.status = InstanceStatus.deleting.value
+            instance.soft_delete()
+            # Soft-delete any sibling seats for the same instance.
+            sibling_ids = (
+                await db.execute(
+                    select(Membership.id).where(
+                        Membership.instance_id == linked_instance_id,
+                        Membership.deleted_at.is_(None),
+                    )
+                )
+            ).scalars().all()
+            await db.execute(
+                update(Membership)
+                .where(
+                    Membership.instance_id == linked_instance_id,
+                    Membership.deleted_at.is_(None),
+                )
+                .values(deleted_at=func.now())
+            )
+            await soft_delete_passages_touching(db, list(sibling_ids))
+            await db.commit()
+            await teardown_instance_namespace(linked_instance_id)
+            return Response(status_code=status.HTTP_204_NO_CONTENT)
+
     membership.soft_delete()
-    # Soft-delete passages that touch this seat so dead edges cannot block Composer.
-    await db.execute(
-        update(Passage)
-        .where(
-            Passage.deleted_at.is_(None),
-            or_(
-                Passage.from_membership_id == membership_id,
-                Passage.to_membership_id == membership_id,
-            ),
-        )
-        .values(deleted_at=func.now(), is_active=False)
-    )
+    await soft_delete_passages_touching(db, [membership_id])
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

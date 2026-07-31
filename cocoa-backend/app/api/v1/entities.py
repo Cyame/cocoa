@@ -178,14 +178,13 @@ async def delete_entity(
     db: DB,
     current_user: CurrentUserDep,
 ) -> None:
-    """Soft-delete an entity and cascade soft-delete its instances + memberships.
+    """Soft-delete a 眷族 (Entity).
 
-    The record is marked as deleted (``deleted_at`` is set) but not physically
-    removed from the database.  Refreshes the registry cache after deletion.
-    Raises 404 if the entity does not exist.
+    Refuses while any active 化身 (Instance) still exists for this entity —
+    operators must exit / delete those Lost Ones first. Does **not** cascade
+    wipe instances.
     """
     from app.models.instance import Instance
-    from app.models.workspace import Membership
 
     entity = await db.get(Entity, entity_id)
     if entity is None or entity.deleted_at is not None:
@@ -195,8 +194,7 @@ async def delete_entity(
             f"Entity '{entity_id}' not found",
         )
 
-    entity.soft_delete()
-    instances = (
+    active_instances = (
         await db.execute(
             select(Instance).where(
                 Instance.entity_id == entity_id,
@@ -204,19 +202,19 @@ async def delete_entity(
             )
         )
     ).scalars().all()
-    for inst in instances:
-        inst.soft_delete()
-        mems = (
-            await db.execute(
-                select(Membership).where(
-                    Membership.instance_id == inst.id,
-                    Membership.deleted_at.is_(None),
-                )
-            )
-        ).scalars().all()
-        for mem in mems:
-            mem.soft_delete()
+    if active_instances:
+        ids = [inst.id for inst in active_instances]
+        raise ConflictError(
+            "entity.has_active_instances",
+            "errors.entity.has_active_instances",
+            (
+                f"Cannot delete entity '{entity.slug}': "
+                f"{len(ids)} active lost one(s) must be exited first"
+            ),
+            details={"instance_ids": ids, "count": len(ids)},
+        )
 
+    entity.soft_delete()
     await db.commit()
 
     await registry.reload(db)
