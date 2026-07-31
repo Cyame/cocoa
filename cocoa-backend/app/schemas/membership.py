@@ -77,5 +77,6 @@ class MembershipOut(BaseModel):
     # Populated for instance seats (迷失者) when listing topology data.
     entity_slug: str | None = None
     entity_name: str | None = None
-    # Populated for user seats (觉醒者).
+    # Populated for user seats (觉醒者). username ≈ slug; nickname ≈ display_name.
     username: str | None = None
+    nickname: str | None = None

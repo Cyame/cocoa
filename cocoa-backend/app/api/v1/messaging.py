@@ -558,7 +558,7 @@ async def _enrich_memberships(db: DB, memberships: list) -> list[MembershipOut]:
     """Attach display fields for topology / workspace lists.
 
     Instance seats get ``entity_slug`` / ``entity_name``; user seats get
-    ``username``.
+    ``username`` / ``nickname``.
     """
     from app.models.entity import Entity
     from app.models.instance import Instance
@@ -612,7 +612,9 @@ async def _enrich_memberships(db: DB, memberships: list) -> list[MembershipOut]:
                 updates["entity_slug"] = ent.slug
                 updates["entity_name"] = ent.display_name or ent.name
         if m.user_id and m.user_id in user_map:
-            updates["username"] = user_map[m.user_id].username
+            u = user_map[m.user_id]
+            updates["username"] = u.username
+            updates["nickname"] = u.nickname
         if updates:
             base = base.model_copy(update=updates)
         out.append(base)

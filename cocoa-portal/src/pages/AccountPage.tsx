@@ -21,6 +21,7 @@ export default function AccountPage() {
   const { t } = useTranslation();
   const [profile, setProfile] = useState<AccountProfile | null>(null);
   const [email, setEmail] = useState('');
+  const [nickname, setNickname] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -36,6 +37,7 @@ export default function AccountPage() {
       const data = await fetchAccount();
       setProfile(data);
       setEmail(data.email);
+      setNickname(data.nickname ?? '');
     } catch (error) {
       setErrorMessage(error instanceof ApiError ? error.message : t('errors.network'));
     } finally {
@@ -53,8 +55,12 @@ export default function AccountPage() {
     setNotice(null);
     setErrorMessage(null);
     try {
-      const next = await updateAccount({ email });
+      const next = await updateAccount({
+        email,
+        nickname: nickname.trim() || null,
+      });
       setProfile(next);
+      setNickname(next.nickname ?? '');
       setNotice(t('account.saved'));
     } catch (error) {
       setErrorMessage(error instanceof ApiError ? error.message : t('errors.network'));
@@ -136,8 +142,18 @@ export default function AccountPage() {
               disabled
               className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500"
             />
+            <span className="mt-1 block text-xs text-slate-400">{t('account.usernameHint')}</span>
           </label>
           <label className="block text-sm">
+            <span className="mb-1 block font-medium text-slate-700">{t('account.nickname')}</span>
+            <input
+              value={nickname}
+              onChange={(e) => setNickname(e.target.value)}
+              placeholder={t('account.nicknameHint')}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+            />
+          </label>
+          <label className="block text-sm sm:col-span-2">
             <span className="mb-1 block font-medium text-slate-700">{t('account.email')}</span>
             <input
               value={email}

@@ -54,6 +54,7 @@ export type WorkspaceMembership = WorkspaceMember & {
   readonly entity_slug?: string | null;
   readonly entity_name?: string | null;
   readonly username?: string | null;
+  readonly nickname?: string | null;
 };
 
 export type Membership = WorkspaceMembership;
@@ -179,6 +180,7 @@ export type MemoryEntry = {
 export type CurrentUser = {
   readonly user_id: string;
   readonly username?: string;
+  readonly nickname?: string | null;
   readonly email?: string;
   readonly is_super_admin: boolean;
   readonly identity?: string | null;
@@ -190,6 +192,7 @@ export type CurrentUser = {
 export type AuthUserPayload = {
   readonly id: string;
   readonly username: string;
+  readonly nickname?: string | null;
   readonly email: string;
   readonly is_super_admin: boolean;
   readonly identity?: string | null;

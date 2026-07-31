@@ -16,6 +16,7 @@ import {
   type StreamLane,
   type TranscriptMessage,
   upsertAssistantBubble,
+  userDisplayLabel,
 } from '@/lib/composerTranscript';
 import { renderMarkdown } from '@/lib/markdown';
 import {
@@ -69,6 +70,10 @@ function directiveDisplayText(
 export default function ComposerPanel({ workspaceId, compact = false }: ComposerPanelProps) {
   const { t } = useTranslation();
   const token = useSessionStore((s) => s.token);
+  const currentUsername = useSessionStore((s) => s.user?.username ?? null);
+  const currentNickname = useSessionStore((s) => s.user?.nickname ?? null);
+  // Human label: nickname → username (aligned with Lost One display_name → slug).
+  const currentDisplayName = userDisplayLabel(currentNickname, currentUsername) || null;
   const draft = useComposerDraftStore((s) => s.draft);
   const consumeDraft = useComposerDraftStore((s) => s.consumeDraft);
   const showThinkingChain = useComposerSettingsStore((s) => s.showThinkingChain);
@@ -87,6 +92,7 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
   const [cmdMenuOpen, setCmdMenuOpen] = useState(false);
   const [filterSpeaker, setFilterSpeaker] = useState('');
   const [filterRecipient, setFilterRecipient] = useState('');
+  const [entityNameBySlug, setEntityNameBySlug] = useState<Readonly<Record<string, string>>>({});
   const [presetByEntitySlug, setPresetByEntitySlug] = useState<
     Readonly<Record<string, string | null>>
   >({});
@@ -95,14 +101,19 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
   const transcriptEndRef = useRef<HTMLDivElement>(null);
   const streamFiltersRef = useRef<Map<string, AgentThinkingStreamFilter>>(new Map());
 
+  function entityLabel(slug: string | null | undefined, fallbackName?: string | null): string {
+    if (!slug) return fallbackName?.trim() || '';
+    const fromMap = entityNameBySlug[slug];
+    if (fromMap?.trim()) return fromMap.trim();
+    if (fallbackName?.trim()) return fallbackName.trim();
+    return slug;
+  }
+
   async function fetchTranscript(): Promise<TranscriptMessage[]> {
     try {
       const params = new URLSearchParams();
-      if (filterSpeaker === '__user__') params.set('role', 'user');
-      else if (filterSpeaker === '__assistant__') params.set('role', 'assistant');
-      else if (filterSpeaker === '__system__') params.set('role', 'system');
-      else if (filterSpeaker) params.set('author_username', filterSpeaker);
-      if (filterRecipient) params.set('target_entity', filterRecipient);
+      if (filterSpeaker) params.set('speaker', filterSpeaker);
+      if (filterRecipient) params.set('recipient', filterRecipient);
       const qs = params.toString();
       const path = `/workspaces/${encodeURIComponent(workspaceId)}/composer/messages${
         qs ? `?${qs}` : ''
@@ -128,6 +139,17 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
   }, [workspaceId, filterSpeaker, filterRecipient]);
 
   useEffect(() => {
+    const names: Record<string, string> = {};
+    for (const msg of transcript) {
+      if (msg.target_entity && msg.target_entity_name?.trim()) {
+        names[msg.target_entity] = msg.target_entity_name.trim();
+      }
+    }
+    if (Object.keys(names).length === 0) return;
+    setEntityNameBySlug((prev) => ({ ...prev, ...names }));
+  }, [transcript]);
+
+  useEffect(() => {
     transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [transcript, lanes]);
 
@@ -148,18 +170,25 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
 
   useEffect(() => {
     let cancelled = false;
-    void api<{ items: { slug: string; preset_slug: string | null }[] }>(
+    void api<{ items: { slug: string; name: string; preset_slug: string | null }[] }>(
       `/workspaces/${encodeURIComponent(workspaceId)}/mention-candidates`,
     )
       .then((res) => {
         if (cancelled) return;
-        const map: Record<string, string | null> = {};
+        const presets: Record<string, string | null> = {};
+        const names: Record<string, string> = {};
         for (const item of res.items) {
-          map[item.slug] = item.preset_slug;
+          presets[item.slug] = item.preset_slug;
+          if (item.name?.trim()) names[item.slug] = item.name.trim();
         }
-        setPresetByEntitySlug(map);
+        setPresetByEntitySlug(presets);
+        setEntityNameBySlug((prev) => ({ ...prev, ...names }));
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (!cancelled) {
+          setPresetByEntitySlug({});
+        }
+      });
     return () => {
       cancelled = true;
     };
@@ -197,33 +226,82 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
   }, [turn]);
 
   const speakerOptions = useMemo(() => {
-    const users = new Set<string>();
-    let hasUser = false;
-    let hasAssistant = false;
+    const users = new Map<string, string>(); // username -> display label
+    const entities = new Map<string, string>(); // slug -> label
     let hasSystem = false;
     for (const msg of transcript) {
-      if (msg.role === 'user') {
-        hasUser = true;
-        if (msg.author_username) users.add(msg.author_username);
-      } else if (msg.role === 'assistant') {
-        hasAssistant = true;
+      if (msg.role === 'user' && msg.author_username) {
+        users.set(
+          msg.author_username,
+          userDisplayLabel(msg.author_nickname, msg.author_username) ||
+            msg.author_display_name?.trim() ||
+            msg.author_username,
+        );
+      } else if (msg.role === 'assistant' && msg.target_entity) {
+        entities.set(
+          msg.target_entity,
+          msg.target_entity_name?.trim() || entityLabel(msg.target_entity),
+        );
       } else if (msg.role === 'system') {
         hasSystem = true;
       }
     }
-    return { users: [...users].sort(), hasUser, hasAssistant, hasSystem };
-  }, [transcript]);
+    for (const lane of lanes) {
+      if (lane.target) {
+        entities.set(lane.target, entityLabel(lane.target, lane.targetName));
+      }
+    }
+    return {
+      users: [...users.entries()].sort((a, b) => a[1].localeCompare(b[1])),
+      entities: [...entities.entries()].sort((a, b) => a[1].localeCompare(b[1])),
+      hasSystem,
+    };
+  }, [transcript, lanes, entityNameBySlug]);
 
   const recipientOptions = useMemo(() => {
-    const set = new Set<string>();
+    const users = new Map<string, string>();
+    const entities = new Map<string, string>();
     for (const msg of transcript) {
-      if (msg.target_entity) set.add(msg.target_entity);
+      if (msg.role === 'user' && msg.target_entity) {
+        entities.set(
+          msg.target_entity,
+          msg.target_entity_name?.trim() || entityLabel(msg.target_entity),
+        );
+      } else if (msg.role === 'assistant') {
+        const username = msg.recipient_username;
+        if (username) {
+          users.set(
+            username,
+            userDisplayLabel(msg.recipient_nickname, username) ||
+              msg.recipient_display_name?.trim() ||
+              username,
+          );
+        }
+      }
     }
     for (const lane of lanes) {
-      if (lane.target) set.add(lane.target);
+      if (lane.target) {
+        entities.set(lane.target, entityLabel(lane.target, lane.targetName));
+      }
+      if (lane.recipientUsername) {
+        users.set(
+          lane.recipientUsername,
+          lane.recipientDisplayName ||
+            (lane.recipientUsername === currentUsername
+              ? currentDisplayName
+              : null) ||
+            lane.recipientUsername,
+        );
+      }
     }
-    return [...set].sort();
-  }, [transcript, lanes]);
+    if (currentUsername) {
+      users.set(currentUsername, currentDisplayName || currentUsername);
+    }
+    return {
+      users: [...users.entries()].sort((a, b) => a[1].localeCompare(b[1])),
+      entities: [...entities.entries()].sort((a, b) => a[1].localeCompare(b[1])),
+    };
+  }, [transcript, lanes, entityNameBySlug, currentUsername, currentDisplayName]);
 
   const filteredTranscript = useMemo(() => {
     // Speaker/recipient filters are applied server-side on reload.
@@ -277,7 +355,12 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
       setDeliveryRows(result.results);
       setText('');
 
-      const turnIds: { turnId: string; target: string; content: string }[] = [];
+      const turnIds: {
+        turnId: string;
+        target: string;
+        targetName: string;
+        content: string;
+      }[] = [];
       for (const row of result.results) {
         for (const d of row.delivery) {
           if (d.delivered && d.turn_id) {
@@ -285,6 +368,7 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
             turnIds.push({
               turnId: d.turn_id,
               target,
+              targetName: entityLabel(target),
               content: directiveDisplayText(row.target_entity, outgoingTurn, outgoing),
             });
           }
@@ -299,7 +383,10 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
             turnIds.map((item) => ({
               turnId: item.turnId,
               target: item.target,
+              targetName: item.targetName,
               content: item.content,
+              authorUsername: currentUsername,
+              authorNickname: currentNickname,
             })),
           ),
         ]);
@@ -312,6 +399,9 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
           turnIds.map((item) => ({
             turnId: item.turnId,
             target: item.target,
+            targetName: item.targetName,
+            recipientUsername: currentUsername,
+            recipientDisplayName: currentDisplayName,
             status: 'responding',
             text: '',
             thinking: '',
@@ -510,19 +600,19 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
             className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-slate-800"
           >
             <option value="">{t('composer.filterAll')}</option>
-            {speakerOptions.hasUser ? (
-              <option value="__user__">{t('composer.roleUser')}</option>
-            ) : null}
-            {speakerOptions.users.map((name) => (
-              <option key={name} value={name}>
-                {name}
+            {speakerOptions.users.map(([username, label]) => (
+              <option key={`user:${username}`} value={`user:${username}`}>
+                {label}
+                {currentUsername === username ? ` ${t('composer.youSuffix')}` : ''}
               </option>
             ))}
-            {speakerOptions.hasAssistant ? (
-              <option value="__assistant__">{t('composer.roleAssistant')}</option>
-            ) : null}
+            {speakerOptions.entities.map(([slug, label]) => (
+              <option key={`entity:${slug}`} value={`entity:${slug}`}>
+                {label}
+              </option>
+            ))}
             {speakerOptions.hasSystem ? (
-              <option value="__system__">{t('composer.roleSystem')}</option>
+              <option value="system">{t('composer.roleSystem')}</option>
             ) : null}
           </select>
         </label>
@@ -534,9 +624,15 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
             className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-slate-800"
           >
             <option value="">{t('composer.filterAll')}</option>
-            {recipientOptions.map((slug) => (
-              <option key={slug} value={slug}>
-                @{slug}
+            {recipientOptions.users.map(([username, label]) => (
+              <option key={`user:${username}`} value={`user:${username}`}>
+                {label}
+                {currentUsername === username ? ` ${t('composer.youSuffix')}` : ''}
+              </option>
+            ))}
+            {recipientOptions.entities.map(([slug, label]) => (
+              <option key={`entity:${slug}`} value={`entity:${slug}`}>
+                {label}
               </option>
             ))}
           </select>
@@ -552,19 +648,42 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
             key={msg.id}
             role={msg.role}
             target={msg.target_entity}
+            targetName={msg.target_entity_name ?? entityLabel(msg.target_entity)}
             content={msg.content}
             status={msg.status}
             authorUsername={msg.author_username ?? null}
+            authorDisplayName={
+              msg.author_display_name ||
+              userDisplayLabel(msg.author_nickname, msg.author_username) ||
+              null
+            }
+            recipientUsername={msg.recipient_username ?? currentUsername}
+            recipientDisplayName={
+              msg.recipient_display_name ||
+              userDisplayLabel(msg.recipient_nickname, msg.recipient_username) ||
+              currentDisplayName
+            }
+            currentUsername={currentUsername}
             showThinking={showThinkingChain}
             renderMd={renderMd}
           />
         ))}
         {lanes
           .filter((lane) => {
-            if (filterRecipient && lane.target !== filterRecipient) return false;
-            if (filterSpeaker && filterSpeaker !== '__assistant__') {
-              if (filterSpeaker === '__user__' || filterSpeaker === '__system__') return false;
-              if (filterSpeaker !== lane.target) return false;
+            if (filterRecipient) {
+              // Live lanes are always Lost One → human replies.
+              if (filterRecipient.startsWith('entity:')) return false;
+              if (filterRecipient.startsWith('user:')) {
+                const want = filterRecipient.slice('user:'.length);
+                if ((lane.recipientUsername || currentUsername) !== want) return false;
+              }
+            }
+            if (filterSpeaker) {
+              if (filterSpeaker === 'system') return false;
+              if (filterSpeaker.startsWith('user:')) return false;
+              if (filterSpeaker.startsWith('entity:')) {
+                if (lane.target !== filterSpeaker.slice('entity:'.length)) return false;
+              }
             }
             return true;
           })
@@ -574,10 +693,22 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
               className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-2 py-1.5 text-xs"
             >
               <div className="mb-1 flex items-center justify-between gap-2">
-                <span className="text-[10px] text-slate-500">
-                  {t('composer.roleAssistant')}
-                  <code className="ml-1 font-mono text-slate-700">@{lane.target}</code>
-                </span>
+                <PartyArrow
+                  speaker={entityLabel(lane.target, lane.targetName)}
+                  recipient={
+                    lane.recipientDisplayName ||
+                    (lane.recipientUsername === currentUsername
+                      ? currentDisplayName
+                      : null) ||
+                    lane.recipientUsername ||
+                    currentDisplayName ||
+                    t('composer.roleUser')
+                  }
+                  recipientIsYou={
+                    Boolean(currentUsername) &&
+                    (lane.recipientUsername || currentUsername) === currentUsername
+                  }
+                />
                 <StatusBadge status={lane.status} />
               </div>
               {showThinkingChain && lane.thinking ? (
@@ -703,6 +834,37 @@ function ThinkingBlock({ text }: { readonly text: string }) {
   );
 }
 
+function PartyArrow({
+  speaker,
+  recipient,
+  speakerIsYou = false,
+  recipientIsYou = false,
+}: {
+  readonly speaker: string;
+  readonly recipient: string | null;
+  readonly speakerIsYou?: boolean;
+  readonly recipientIsYou?: boolean;
+}) {
+  const { t } = useTranslation();
+  return (
+    <span className="text-[10px] text-slate-500">
+      <span className="font-medium text-slate-700">{speaker}</span>
+      {speakerIsYou ? (
+        <span className="ml-0.5 text-slate-400">{t('composer.youSuffix')}</span>
+      ) : null}
+      {recipient ? (
+        <>
+          <span className="mx-1 text-slate-400">→</span>
+          <span className="font-medium text-slate-700">{recipient}</span>
+          {recipientIsYou ? (
+            <span className="ml-0.5 text-slate-400">{t('composer.youSuffix')}</span>
+          ) : null}
+        </>
+      ) : null}
+    </span>
+  );
+}
+
 function MessageBody({ text, renderMd }: { readonly text: string; readonly renderMd: boolean }) {
   if (!text) return null;
   if (renderMd) {
@@ -720,17 +882,27 @@ function MessageBody({ text, renderMd }: { readonly text: string; readonly rende
 function MessageBubble({
   role,
   target,
+  targetName,
   content,
   status,
   authorUsername,
+  authorDisplayName,
+  recipientUsername,
+  recipientDisplayName,
+  currentUsername,
   showThinking,
   renderMd,
 }: {
   readonly role: string;
   readonly target: string | null;
+  readonly targetName: string;
   readonly content: string;
   readonly status: string;
   readonly authorUsername: string | null;
+  readonly authorDisplayName: string | null;
+  readonly recipientUsername: string | null;
+  readonly recipientDisplayName: string | null;
+  readonly currentUsername: string | null;
   readonly showThinking: boolean;
   readonly renderMd: boolean;
 }) {
@@ -743,24 +915,34 @@ function MessageBubble({
       : role === 'assistant'
         ? 'bg-slate-50 text-slate-800'
         : 'bg-amber-50 text-amber-900';
-  const speaker =
-    role === 'user'
-      ? authorUsername || t('composer.roleUser')
-      : role === 'assistant'
-        ? t('composer.roleAssistant')
-        : t('composer.roleSystem');
+
+  const entityLabel = targetName.trim() || target || '';
+  let speaker = t('composer.roleSystem');
+  let recipient: string | null = null;
+  let speakerIsYou = false;
+  let recipientIsYou = false;
+
+  if (role === 'user') {
+    speaker = authorDisplayName || authorUsername || t('composer.roleUser');
+    speakerIsYou = Boolean(currentUsername) && authorUsername === currentUsername;
+    recipient = entityLabel || null;
+  } else if (role === 'assistant') {
+    speaker = entityLabel || t('composer.roleAssistant');
+    recipient = recipientDisplayName || recipientUsername || t('composer.roleUser');
+    recipientIsYou =
+      Boolean(currentUsername) &&
+      (recipientUsername === currentUsername || recipient === currentUsername);
+  }
+
   return (
     <div className={`rounded-lg px-2 py-1.5 text-xs ${tone}`}>
       <div className="mb-0.5 flex items-center justify-between gap-2 text-[10px] text-slate-500">
-        <span>
-          <span className="font-medium text-slate-700">{speaker}</span>
-          {target ? (
-            <>
-              <span className="mx-1 text-slate-400">→</span>
-              <code className="font-mono text-slate-700">@{target}</code>
-            </>
-          ) : null}
-        </span>
+        <PartyArrow
+          speaker={speaker}
+          recipient={recipient}
+          speakerIsYou={speakerIsYou}
+          recipientIsYou={recipientIsYou}
+        />
         {status === 'responding' ? (
           <span className="text-amber-700">{t('composer.statusResponding')}</span>
         ) : null}

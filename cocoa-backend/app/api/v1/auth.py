@@ -30,6 +30,7 @@ async def _user_out(db: DB, user: User) -> AuthUserOut:
     return AuthUserOut(
         id=user.id,
         username=user.username,
+        nickname=user.nickname,
         email=user.email,
         is_super_admin=bool(user.is_super_admin),
         identity=identity,
@@ -77,6 +78,7 @@ async def register(body: RegisterRequest, db: DB) -> TokenResponse:
 
     user = User(
         username=body.username,
+        nickname=body.nickname,
         email=body.email,
         password_hash=hash_password(body.password),
         is_super_admin=is_first_user,

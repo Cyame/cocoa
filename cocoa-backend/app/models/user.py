@@ -21,6 +21,8 @@ class User(BaseModel, Base):
     )
 
     username: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Display name (大名), aligned with Entity.display_name; username ≈ Entity.slug.
+    nickname: Mapped[str | None] = mapped_column(String(255), nullable=True)
     email: Mapped[str] = mapped_column(String(255), nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     is_super_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

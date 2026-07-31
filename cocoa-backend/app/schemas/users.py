@@ -10,8 +10,16 @@ from pydantic import BaseModel, Field, field_validator
 IdentityKey = Literal["system", "org", "namespace", "workspace", "member"]
 
 
+def _optional_nickname(v: str | None) -> str | None:
+    if v is None:
+        return None
+    stripped = v.strip()
+    return stripped or None
+
+
 class UserCreate(BaseModel):
     username: str = Field(min_length=1, max_length=255)
+    nickname: str | None = Field(default=None, max_length=255)
     email: str = Field(min_length=3, max_length=255)
     identity: IdentityKey = "member"
 
@@ -23,10 +31,21 @@ class UserCreate(BaseModel):
             raise ValueError("Username must not be empty")
         return v
 
+    @field_validator("nickname")
+    @classmethod
+    def nickname_strip(cls, v: str | None) -> str | None:
+        return _optional_nickname(v)
+
 
 class UserUpdate(BaseModel):
     email: str | None = None
+    nickname: str | None = None
     identity: IdentityKey | None = None
+
+    @field_validator("nickname")
+    @classmethod
+    def nickname_strip(cls, v: str | None) -> str | None:
+        return _optional_nickname(v)
 
 
 class UserIdentitySet(BaseModel):
@@ -49,6 +68,7 @@ class UserGeneRef(BaseModel):
 class UserOut(BaseModel):
     id: str
     username: str
+    nickname: str | None = None
     email: str
     is_super_admin: bool
     identity: IdentityKey | None
@@ -69,6 +89,7 @@ class UserCreateOut(UserOut):
 class AccountOut(BaseModel):
     id: str
     username: str
+    nickname: str | None = None
     email: str
     is_super_admin: bool
     identity: IdentityKey | None
@@ -78,6 +99,12 @@ class AccountOut(BaseModel):
 
 class AccountUpdate(BaseModel):
     email: str | None = None
+    nickname: str | None = None
+
+    @field_validator("nickname")
+    @classmethod
+    def nickname_strip(cls, v: str | None) -> str | None:
+        return _optional_nickname(v)
 
 
 class AccountPasswordChange(BaseModel):

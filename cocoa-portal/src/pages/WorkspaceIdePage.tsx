@@ -311,7 +311,8 @@ export default function WorkspaceIdePage() {
               emptyDetail={t('workspace.emptyMembershipsDetail')}
               items={memberships.map((m) => {
                 const isMe = currentUserId !== null && m.user_id === currentUserId;
-                const name = m.username?.trim() || t('topology.userLabel');
+                const name =
+                  m.nickname?.trim() || m.username?.trim() || t('topology.userLabel');
                 const title = isMe ? t('topology.meLabel', { name }) : name;
                 return {
                   id: m.id,

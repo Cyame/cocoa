@@ -12,6 +12,7 @@ import {
   listUsers,
   setUserExtraGenes,
   setUserIdentity,
+  updateUser,
 } from '@/lib/api/users';
 
 const IDENTITIES: IdentityKey[] = ['system', 'org', 'namespace', 'workspace', 'member'];
@@ -29,6 +30,7 @@ export default function OrganizationUsersPanel({ canWrite }: Props) {
   const [createOpen, setCreateOpen] = useState(false);
   const [editingExtrasFor, setEditingExtrasFor] = useState<string | null>(null);
   const [username, setUsername] = useState('');
+  const [nickname, setNickname] = useState('');
   const [email, setEmail] = useState('');
   const [identity, setIdentity] = useState<IdentityKey>('member');
   const [busy, setBusy] = useState(false);
@@ -63,9 +65,15 @@ export default function OrganizationUsersPanel({ canWrite }: Props) {
     setErrorMessage(null);
     setTempPassword(null);
     try {
-      const created = await createUser({ username, email, identity });
+      const created = await createUser({
+        username,
+        nickname: nickname.trim() || null,
+        email,
+        identity,
+      });
       setTempPassword(created.temporary_password);
       setUsername('');
+      setNickname('');
       setEmail('');
       setIdentity('member');
       setCreateOpen(false);
@@ -136,7 +144,7 @@ export default function OrganizationUsersPanel({ canWrite }: Props) {
 
       {createOpen ? (
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <label className="block text-sm">
               <span className="mb-1 block font-medium text-slate-700">
                 {t('organization.users.username')}
@@ -144,6 +152,18 @@ export default function OrganizationUsersPanel({ canWrite }: Props) {
               <input
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
+                placeholder={t('organization.users.usernameHint')}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="block text-sm">
+              <span className="mb-1 block font-medium text-slate-700">
+                {t('organization.users.nickname')}
+              </span>
+              <input
+                value={nickname}
+                onChange={(e) => setNickname(e.target.value)}
+                placeholder={t('organization.users.nicknameHint')}
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
               />
             </label>
@@ -209,7 +229,10 @@ export default function OrganizationUsersPanel({ canWrite }: Props) {
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <p className="font-medium text-slate-900">{user.username}</p>
+                    <p className="font-medium text-slate-900">
+                      {user.nickname?.trim() || user.username}
+                    </p>
+                    <p className="font-mono text-xs text-slate-500">{user.username}</p>
                     <p className="text-sm text-slate-500">{user.email}</p>
                   </div>
                   {canWrite ? (
@@ -227,6 +250,26 @@ export default function OrganizationUsersPanel({ canWrite }: Props) {
                 </div>
 
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <label className="block text-sm">
+                    <span className="mb-1 block font-medium text-slate-700">
+                      {t('organization.users.nickname')}
+                    </span>
+                    {canWrite ? (
+                      <input
+                        defaultValue={user.nickname ?? ''}
+                        key={`${user.id}:${user.nickname ?? ''}`}
+                        onBlur={(e) => {
+                          const next = e.target.value.trim() || null;
+                          if (next === (user.nickname ?? null)) return;
+                          void updateUser(user.id, { nickname: next }).then(load);
+                        }}
+                        placeholder={t('organization.users.nicknameHint')}
+                        className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-sm"
+                      />
+                    ) : (
+                      <p className="text-sm text-slate-700">{user.nickname?.trim() || '—'}</p>
+                    )}
+                  </label>
                   <label className="block text-sm">
                     <span className="mb-1 block font-medium text-slate-700">
                       {t('organization.users.identity')}

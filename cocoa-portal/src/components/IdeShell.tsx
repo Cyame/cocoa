@@ -99,7 +99,10 @@ export default function IdeShell({
         </span>
         <span className="flex items-center gap-2 truncate">
           <User className="size-3" aria-hidden="true" />
-          {user?.user_id ?? t('common.authenticatedUser')}
+          {user?.nickname?.trim() ||
+            user?.username ||
+            user?.user_id ||
+            t('common.authenticatedUser')}
           <button
             type="button"
             onClick={clearToken}

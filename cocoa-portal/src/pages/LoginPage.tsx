@@ -12,6 +12,7 @@ type TokenResponse = {
   readonly user?: {
     readonly id: string;
     readonly username: string;
+    readonly nickname?: string | null;
     readonly email: string;
     readonly is_super_admin: boolean;
     readonly identity?: string | null;
@@ -61,6 +62,7 @@ export default function LoginPage() {
       setToken(response.access_token, {
         user_id: response.user?.id ?? '',
         username: response.user?.username,
+        nickname: response.user?.nickname ?? null,
         email: response.user?.email,
         is_super_admin: response.user?.is_super_admin ?? false,
         identity: response.user?.identity ?? null,

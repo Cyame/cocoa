@@ -97,6 +97,7 @@ export default function AppShell() {
         setToken(token, {
           user_id: me.id,
           username: me.username,
+          nickname: me.nickname ?? null,
           email: me.email,
           is_super_admin: me.is_super_admin,
           identity: me.identity ?? null,
@@ -199,7 +200,10 @@ export default function AppShell() {
               </span>
               <div className="hidden min-w-0 sm:block">
                 <p className="max-w-48 truncate text-sm font-medium text-slate-800">
-                  {user?.username ?? user?.user_id ?? t('common.authenticatedUser')}
+                  {user?.nickname?.trim() ||
+                    user?.username ||
+                    user?.user_id ||
+                    t('common.authenticatedUser')}
                 </p>
                 <p className="text-xs text-slate-500">{t(identityLabelKey)}</p>
               </div>

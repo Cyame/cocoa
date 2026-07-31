@@ -115,6 +115,7 @@ async def _to_out(db: DB, user: User) -> UserOut:
     return UserOut(
         id=user.id,
         username=user.username,
+        nickname=user.nickname,
         email=user.email,
         is_super_admin=bool(user.is_super_admin),
         identity=identity,
@@ -167,6 +168,7 @@ async def create_user(
     temporary = _random_password()
     user = User(
         username=body.username,
+        nickname=body.nickname,
         email=body.email,
         password_hash=hash_password(temporary),
         is_super_admin=False,
@@ -202,6 +204,8 @@ async def update_user(
     user = await _get_active_user(db, user_id)
     if body.email is not None:
         user.email = body.email
+    if "nickname" in body.model_fields_set:
+        user.nickname = body.nickname
     if body.identity is not None:
         await sync_identity_pack(db, user, body.identity)
     await db.commit()

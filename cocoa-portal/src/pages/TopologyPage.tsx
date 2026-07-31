@@ -384,10 +384,11 @@ export default function TopologyPage({
       const effective = status ?? fallbackStatus;
       const isCurrentUser = isUser && currentUserId !== null && m.user_id === currentUserId;
       const username = m.username?.trim() || null;
+      const displayName = m.nickname?.trim() || username;
       const label = isUser
         ? isCurrentUser
-          ? t('topology.meLabel', { name: username ?? t('topology.userLabel') })
-          : (username ?? t('topology.userLabel'))
+          ? t('topology.meLabel', { name: displayName ?? t('topology.userLabel') })
+          : (displayName ?? t('topology.userLabel'))
         : (m.entity_name ?? m.entity_slug ?? m.instance_id ?? t('topology.instanceLabel'));
       return {
         kind: 'membership' as const,

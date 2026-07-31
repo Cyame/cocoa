@@ -112,11 +112,19 @@ async def list_composer_transcript(
     ),
     target_entity: str | None = Query(
         None,
-        description="Filter by recipient entity slug",
+        description="Legacy: filter by target_entity slug (any role)",
     ),
     author_username: str | None = Query(
         None,
-        description="Filter by speaker username (user messages)",
+        description="Legacy: filter by speaker username (user messages)",
+    ),
+    speaker: str | None = Query(
+        None,
+        description="Speaker party: user:<username> | entity:<slug> | system",
+    ),
+    recipient: str | None = Query(
+        None,
+        description="Recipient party: user:<username> | entity:<slug>",
     ),
 ) -> dict:
     """Server-persisted Composer transcript (inbound + outbound).
@@ -141,10 +149,11 @@ async def list_composer_transcript(
         role=role,
         target_entity=target_entity,
         author_username=author_username,
+        speaker=speaker,
+        recipient=recipient,
     )
     items = await enrich_composer_message_items(db, rows)
     return {"items": items, "total": len(items)}
-
 
 @router.get("/workspaces/{workspace_id}/composer/stream")
 async def composer_stream(

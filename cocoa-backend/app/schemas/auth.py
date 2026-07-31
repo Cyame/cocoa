@@ -23,6 +23,7 @@ class RegisterRequest(BaseModel):
     """Payload for ``POST /api/v1/auth/register``."""
 
     username: str
+    nickname: str | None = None
     email: str
     password: str
 
@@ -32,6 +33,14 @@ class RegisterRequest(BaseModel):
         if len(v) < 8:
             raise ValueError("Password must be at least 8 characters")
         return v
+
+    @field_validator("nickname")
+    @classmethod
+    def nickname_strip(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        stripped = v.strip()
+        return stripped or None
 
 
 class LoginRequest(BaseModel):
@@ -46,6 +55,7 @@ class AuthUserOut(BaseModel):
 
     id: str
     username: str
+    nickname: str | None = None
     email: str
     is_super_admin: bool
     identity: str | None = None

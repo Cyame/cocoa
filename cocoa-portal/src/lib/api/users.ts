@@ -12,6 +12,7 @@ export type UserGeneRef = {
 export type AdminUser = {
   readonly id: string;
   readonly username: string;
+  readonly nickname: string | null;
   readonly email: string;
   readonly is_super_admin: boolean;
   readonly identity: IdentityKey | null;
@@ -35,6 +36,7 @@ export type OffsetPage<T> = {
 export type AccountProfile = {
   readonly id: string;
   readonly username: string;
+  readonly nickname: string | null;
   readonly email: string;
   readonly is_super_admin: boolean;
   readonly identity: IdentityKey | null;
@@ -48,11 +50,26 @@ export async function listUsers(limit = 100, offset = 0): Promise<OffsetPage<Adm
 
 export async function createUser(body: {
   readonly username: string;
+  readonly nickname?: string | null;
   readonly email: string;
   readonly identity?: IdentityKey;
 }): Promise<AdminUserCreateOut> {
   return api<AdminUserCreateOut>('/users', {
     method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function updateUser(
+  userId: string,
+  body: {
+    readonly email?: string;
+    readonly nickname?: string | null;
+    readonly identity?: IdentityKey;
+  },
+): Promise<AdminUser> {
+  return api<AdminUser>(`/users/${userId}`, {
+    method: 'PATCH',
     body: JSON.stringify(body),
   });
 }
@@ -85,7 +102,10 @@ export async function fetchAccount(): Promise<AccountProfile> {
   return api<AccountProfile>('/account');
 }
 
-export async function updateAccount(body: { readonly email?: string }): Promise<AccountProfile> {
+export async function updateAccount(body: {
+  readonly email?: string;
+  readonly nickname?: string | null;
+}): Promise<AccountProfile> {
   return api<AccountProfile>('/account', {
     method: 'PATCH',
     body: JSON.stringify(body),

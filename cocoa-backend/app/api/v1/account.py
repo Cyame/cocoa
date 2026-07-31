@@ -75,6 +75,7 @@ async def _to_account(db: DB, user: User) -> AccountOut:
     return AccountOut(
         id=user.id,
         username=user.username,
+        nickname=user.nickname,
         email=user.email,
         is_super_admin=bool(user.is_super_admin),
         identity=identity,
@@ -98,6 +99,8 @@ async def update_account(
     user = await _current_db_user(db, current_user)
     if body.email is not None:
         user.email = body.email
+    if "nickname" in body.model_fields_set:
+        user.nickname = body.nickname
     await db.commit()
     await db.refresh(user)
     return await _to_account(db, user)
