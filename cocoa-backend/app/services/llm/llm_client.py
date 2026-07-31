@@ -66,6 +66,18 @@ _LEGACY_TO_FORMAT: dict[str, str] = {
 }
 
 
+from dataclasses import dataclass
+from typing import Any, AsyncIterator
+
+
+@dataclass(frozen=True, slots=True)
+class TokenChunk:
+    """One streamed token (P14b / PRD-v3.4.1)."""
+
+    token: str
+    finish_reason: str | None = None
+
+
 class LLMClient:
     """Wraps openai + anthropic + gemini. Dispatched by request_format / provider_type."""
 
@@ -149,6 +161,66 @@ class LLMClient:
                 extra={"provider": self.provider_type, "model": model},
             )
             raise LLMError("errors.llm.call_failed", str(e)) from e
+
+    async def stream(
+        self,
+        messages: list[dict],
+        *,
+        max_tokens: int = 1024,
+        temperature: float = 0.7,
+        model: str | None = None,
+    ) -> AsyncIterator[TokenChunk]:
+        """Yield token chunks. Providers without native stream fall back to complete()."""
+        model = model or self.default_model
+        try:
+            if self.request_format == "completion" and self._openai is not None:
+                async for chunk in self._stream_openai_chat(
+                    messages, max_tokens, temperature, model
+                ):
+                    yield chunk
+                return
+            # Fallback: single-shot complete → one chunk
+            resp = await self.complete(
+                messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                model=model,
+            )
+            if resp.content:
+                yield TokenChunk(token=resp.content, finish_reason=resp.stop_reason)
+            else:
+                yield TokenChunk(token="", finish_reason=resp.stop_reason or "stop")
+        except LLMError:
+            raise
+        except Exception as e:
+            logger.exception(
+                "LLM stream failed",
+                extra={"provider": self.provider_type, "model": model},
+            )
+            raise LLMError("errors.llm.call_failed", str(e)) from e
+
+    async def _stream_openai_chat(
+        self, messages, max_tokens, temperature, model
+    ) -> AsyncIterator[TokenChunk]:
+        assert self._openai is not None
+        stream = await self._openai.chat.completions.create(
+            model=model,
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            stream=True,
+        )
+        finish: str | None = None
+        async for event in stream:
+            choice = event.choices[0] if event.choices else None
+            if choice is None:
+                continue
+            if choice.finish_reason:
+                finish = choice.finish_reason
+            delta = choice.delta.content if choice.delta else None
+            if delta:
+                yield TokenChunk(token=delta, finish_reason=None)
+        yield TokenChunk(token="", finish_reason=finish or "stop")
 
     async def _complete_openai_chat(self, messages, max_tokens, temperature, model):
         assert self._openai is not None

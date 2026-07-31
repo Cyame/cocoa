@@ -62,11 +62,13 @@ async def test_deploy_instance_creates_record(
 
     assert record_id is not None
     assert ctx.instance_id is not None
-    assert ctx.name == "test-deploy-2"
-    assert ctx.namespace == "cocoa-default-test-deploy-2"
+    assert ctx.name.startswith("inst-")
+    assert ctx.namespace == f"cocoa-inst-{ctx.instance_id.replace('-', '').lower()[:20]}"
     assert ctx.cluster_id == "_gateway"
     assert ctx.image_version == "v1.0"
     assert ctx.env_vars["COCOA_INSTANCE_ID"] == ctx.instance_id
+    assert ctx.env_vars["COCOA_POD_MODE"] == "true"
+    assert "COCOA_API_URL" in ctx.env_vars
 
     record = await session.get(DeployRecord, record_id)
     assert record is not None
@@ -126,6 +128,8 @@ async def test_execute_pipeline_runs_9_steps_mocked(
     fake_client = MagicMock(name="K8sClient")
     fake_client.ensure_namespace = AsyncMock(return_value=None)
     fake_client.create_or_skip = AsyncMock(return_value=None)
+    fake_client.apply = AsyncMock(return_value=None)
+    fake_client.scale_deployment = AsyncMock(return_value=None)
     fake_client.get_deployment_status = AsyncMock(
         return_value={"ready_replicas": 1},
     )
@@ -171,7 +175,10 @@ async def test_execute_pipeline_runs_9_steps_mocked(
 
     # K8s API surface was actually invoked for each step
     assert fake_client.ensure_namespace.await_count == 1
-    assert fake_client.create_or_skip.await_count == 6  # cm, secret, pvc, dep, svc, np
+    # cm + pvc + svc + np (secret + deployment use apply)
+    assert fake_client.create_or_skip.await_count == 4
+    assert fake_client.apply.await_count == 2  # secret + deployment
+    assert fake_client.scale_deployment.await_count == 1
     assert fake_client.get_deployment_status.await_count == 1
 
     # Final DB state — DeployRecord transitioned to success

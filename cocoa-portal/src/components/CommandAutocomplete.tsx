@@ -31,7 +31,8 @@ function findActiveToken(text: string, cursor: number): ActiveToken | null {
     const ch = text[i];
     if (ch === '/') {
       const prev = i === 0 ? '' : text[i - 1];
-      if (i === 0 || /\s/.test(prev)) {
+      // Allow after whitespace OR any non-word char (Chinese, punctuation).
+      if (i === 0 || !/[A-Za-z0-9_]/.test(prev)) {
         const filter = text.slice(i + 1, cursor);
         if (/^[A-Za-z-]*$/.test(filter)) {
           return { start: i, filter };
@@ -50,6 +51,9 @@ export type CommandAutocompleteProps = {
   readonly text: string;
   readonly onTextChange: (newText: string) => void;
   readonly targetSlugs: readonly string[];
+  /** entity slug → base-class / preset slug for per-preset commands */
+  readonly presetByEntitySlug?: Readonly<Record<string, string | null | undefined>>;
+  readonly onOpenChange?: (open: boolean) => void;
 };
 
 export function CommandAutocomplete({
@@ -57,6 +61,8 @@ export function CommandAutocomplete({
   text,
   onTextChange,
   targetSlugs,
+  presetByEntitySlug = {},
+  onOpenChange,
 }: CommandAutocompleteProps) {
   const { t } = useTranslation();
   const [cursor, setCursor] = useState(0);
@@ -68,14 +74,22 @@ export function CommandAutocomplete({
   const cacheRef = useRef<Map<string, readonly string[]>>(new Map());
 
   useEffect(() => {
-    const missing = targetSlugs.filter((s) => !cacheRef.current.has(s));
+    const lookupKeys = [
+      ...new Set(
+        targetSlugs
+          .map((s) => presetByEntitySlug[s])
+          .filter((s): s is string => typeof s === 'string' && s.length > 0),
+      ),
+    ];
+    const missing = lookupKeys.filter((s) => !cacheRef.current.has(s));
     if (missing.length === 0) return;
     let cancelled = false;
     void Promise.all(
       missing.map(async (slug) => {
         try {
-          const preset = await api<EmployeePreset>(`/employee-presets/${encodeURIComponent(slug)}`);
-          cacheRef.current.set(slug, preset.manifest.commands);
+          const preset = await api<EmployeePreset>(`/base-classes/${encodeURIComponent(slug)}`);
+          const cmds = preset.manifest?.commands ?? [];
+          cacheRef.current.set(slug, cmds);
         } catch {
           cacheRef.current.set(slug, []);
         }
@@ -88,7 +102,7 @@ export function CommandAutocomplete({
     return () => {
       cancelled = true;
     };
-  }, [targetSlugs]);
+  }, [targetSlugs, presetByEntitySlug]);
 
   const groups = useMemo<readonly CommandGroup[]>(() => {
     const base: CommandGroup[] = [
@@ -99,13 +113,14 @@ export function CommandAutocomplete({
     if (targetSlugs.length === 0) return base;
     const perPreset: CommandGroup[] = [];
     for (const slug of targetSlugs) {
-      const cmds = presetCommands[slug];
+      const presetKey = presetByEntitySlug[slug] || slug;
+      const cmds = presetCommands[presetKey];
       if (cmds !== undefined && cmds.length > 0) {
         perPreset.push({ label: slug, commands: cmds });
       }
     }
     return [...base, ...perPreset];
-  }, [targetSlugs, presetCommands, t]);
+  }, [targetSlugs, presetCommands, presetByEntitySlug, t]);
 
   const activeToken = useMemo(() => findActiveToken(text, cursor), [text, cursor]);
 
@@ -138,6 +153,10 @@ export function CommandAutocomplete({
     activeToken !== null && dismissedStart !== activeToken.start && flatCommands.length > 0;
 
   useEffect(() => {
+    onOpenChange?.(visible);
+  }, [visible, onOpenChange]);
+
+  useEffect(() => {
     const textarea = textareaRef.current;
     if (textarea === null) return;
     const update = () => setCursor(textarea.selectionStart);
@@ -164,11 +183,9 @@ export function CommandAutocomplete({
   }, [text, textareaRef]);
 
   const activeFilter = activeToken?.filter ?? null;
-  const prevFilterRef = useRef<string | null>(null);
-  if (prevFilterRef.current !== activeFilter) {
-    prevFilterRef.current = activeFilter;
+  useEffect(() => {
     setHighlighted(0);
-  }
+  }, [activeFilter]);
 
   const handleSelect = useCallback(
     (cmd: string) => {
@@ -201,13 +218,19 @@ export function CommandAutocomplete({
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
         setHighlighted((h) => (h - 1 + flatCommands.length) % flatCommands.length);
-      } else if (e.key === 'Enter') {
+      } else if (e.key === 'Enter' || e.key === 'Tab') {
+        // Only auto-complete when the user has typed a filter; bare "/" must stay
+        // editable (Backspace / continue typing) without forcing a pick.
+        if (activeToken === null || activeToken.filter.length === 0) return;
         e.preventDefault();
         const chosen = flatCommands[highlighted];
         if (chosen !== undefined) handleSelect(chosen);
       } else if (e.key === 'Escape') {
         e.preventDefault();
         if (activeToken !== null) setDismissedStart(activeToken.start);
+      } else if (e.key === 'Backspace' && activeToken !== null && activeToken.filter.length === 0) {
+        // Deleting the bare "/" — dismiss menu; let the default delete happen.
+        setDismissedStart(activeToken.start);
       }
     };
     textarea.addEventListener('keydown', onKeyDown);
@@ -220,7 +243,7 @@ export function CommandAutocomplete({
     <div
       role="listbox"
       aria-label="Command suggestions"
-      className="absolute left-0 right-0 top-full z-10 mt-1 max-h-48 overflow-y-auto rounded-lg border border-slate-300 bg-white shadow-lg"
+      className="absolute bottom-full left-0 right-0 z-20 mb-1 max-h-48 overflow-y-auto rounded-lg border border-slate-300 bg-white shadow-lg"
     >
       {groupedFlat.map((group) => (
         <div key={group.label}>

@@ -2,97 +2,114 @@ import {
   AlertCircle,
   ExternalLink,
   LoaderCircle,
-  Plus,
+  Power,
   Recycle,
+  RefreshCw,
   Search,
   Sparkles,
   Trash2,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { EntityInstanceStatus } from '@/lib/types';
+import type { AvatarDisplayStatus, EntityInstanceStatus } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
-type StatusFilter = 'all' | EntityInstanceStatus['loop_status'];
+type StatusFilter = 'all' | AvatarDisplayStatus;
 
-const STATUS_PRIORITY: Readonly<Record<EntityInstanceStatus['loop_status'], number>> = {
-  failed: 0,
-  interrupted: 1,
-  paused: 2,
-  running: 3,
-  idle: 4,
-  completed: 5,
+const STATUS_PRIORITY: Readonly<Record<AvatarDisplayStatus, number>> = {
+  start_failed: 0,
+  deleting: 1,
+  restarting: 2,
+  starting: 3,
+  busy: 4,
+  idle: 5,
+  stopped: 6,
 };
 
-const STATUS_BADGE_CLASS: Readonly<Record<EntityInstanceStatus['loop_status'], string>> = {
-  running: 'border-emerald-200 bg-emerald-50 text-emerald-800',
-  idle: 'border-yellow-200 bg-yellow-50 text-yellow-800',
-  paused: 'border-slate-200 bg-slate-100 text-slate-700',
-  interrupted: 'border-orange-200 bg-orange-50 text-orange-800',
-  completed: 'border-blue-200 bg-blue-50 text-blue-800',
-  failed: 'border-red-200 bg-red-50 text-red-800',
+const STATUS_BADGE_CLASS: Readonly<Record<AvatarDisplayStatus, string>> = {
+  busy: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+  idle: 'border-amber-200 bg-amber-50 text-amber-800',
+  stopped: 'border-slate-200 bg-slate-100 text-slate-700',
+  starting: 'border-blue-200 bg-blue-50 text-blue-800',
+  restarting: 'border-orange-200 bg-orange-50 text-orange-800',
+  deleting: 'border-slate-200 bg-slate-100 text-slate-600',
+  start_failed: 'border-red-200 bg-red-50 text-red-800',
 };
+
+const FILTER_OPTIONS: readonly AvatarDisplayStatus[] = [
+  'busy',
+  'idle',
+  'stopped',
+  'starting',
+  'restarting',
+  'deleting',
+];
 
 type InstancesTabProps = {
   readonly instances: readonly EntityInstanceStatus[];
   readonly isLoading: boolean;
   readonly errorMessage: string | null;
-  readonly onSpawn: () => void;
   readonly onPromote: (instance: EntityInstanceStatus) => void;
   readonly onReap: (instance: EntityInstanceStatus) => void;
   readonly onDelete: (instance: EntityInstanceStatus) => void;
+  readonly onStop: (instance: EntityInstanceStatus) => void;
+  readonly onRestart: (instance: EntityInstanceStatus) => void;
+  readonly onGoWorkspace: (instance: EntityInstanceStatus) => void;
 };
 
 export default function InstancesTab({
   instances,
   isLoading,
   errorMessage,
-  onSpawn,
   onPromote,
   onReap,
   onDelete,
+  onStop,
+  onRestart,
+  onGoWorkspace,
 }: InstancesTabProps) {
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
-  const [onlyFailed, setOnlyFailed] = useState(false);
-  const [onlyRunning, setOnlyRunning] = useState(false);
+  const [onlyBusy, setOnlyBusy] = useState(false);
+  const [onlyIdle, setOnlyIdle] = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return instances
       .filter((inst) => {
-        if (onlyFailed && inst.loop_status !== 'failed') return false;
-        if (onlyRunning && inst.loop_status !== 'running') return false;
-        if (statusFilter !== 'all' && inst.loop_status !== statusFilter) return false;
+        if (onlyBusy && inst.display_status !== 'busy') return false;
+        if (onlyIdle && inst.display_status !== 'idle') return false;
+        if (statusFilter !== 'all' && inst.display_status !== statusFilter) return false;
         if (q === '') return true;
         return (
           inst.id.toLowerCase().includes(q) ||
-          (inst.pod_name ?? '').toLowerCase().includes(q) ||
-          inst.loop_status.includes(q)
+          inst.display_status.includes(q) ||
+          inst.status.toLowerCase().includes(q)
         );
       })
       .slice()
       .sort((a, b) => {
-        const pa = STATUS_PRIORITY[a.loop_status] ?? 99;
-        const pb = STATUS_PRIORITY[b.loop_status] ?? 99;
+        const pa = STATUS_PRIORITY[a.display_status] ?? 99;
+        const pb = STATUS_PRIORITY[b.display_status] ?? 99;
         if (pa !== pb) return pa - pb;
         return b.spawn_time.localeCompare(a.spawn_time);
       });
-  }, [instances, query, onlyFailed, onlyRunning, statusFilter]);
+  }, [instances, query, onlyBusy, onlyIdle, statusFilter]);
 
   const counters = useMemo(() => {
-    const counts = { running: 0, idle: 0, failed: 0 };
+    const counts = { busy: 0, idle: 0, stopped: 0 };
     for (const inst of instances) {
-      if (inst.loop_status === 'running') counts.running += 1;
-      else if (inst.loop_status === 'idle') counts.idle += 1;
-      else if (inst.loop_status === 'failed') counts.failed += 1;
+      if (inst.display_status === 'busy') counts.busy += 1;
+      else if (inst.display_status === 'idle') counts.idle += 1;
+      else if (inst.display_status === 'stopped') counts.stopped += 1;
     }
     return counts;
   }, [instances]);
 
   const totalInstances = instances.length;
-  const healthKind: 'healthy' | 'degraded' = counters.failed > 0 ? 'degraded' : 'healthy';
+  const unhealthyCount = instances.filter((inst) => inst.status !== 'running').length;
+  const healthKind: 'healthy' | 'degraded' = unhealthyCount > 0 ? 'degraded' : 'healthy';
 
   return (
     <section aria-labelledby="instances-tab-heading" className="space-y-5">
@@ -100,39 +117,28 @@ export default function InstancesTab({
         <h2 id="instances-tab-heading" className="text-sm font-semibold text-slate-900">
           {t('entityModal.tabs.instances')}
         </h2>
-        <div className="flex flex-wrap items-center gap-2">
-          <span
-            className={cn(
-              'inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold',
-              healthKind === 'healthy'
-                ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                : 'border-red-200 bg-red-50 text-red-800',
-            )}
-            data-testid="instances-health"
-          >
-            {t(
-              healthKind === 'healthy'
-                ? 'entityModal.instancesTab.healthHealthy'
-                : 'entityModal.instancesTab.healthDegraded',
-            )}
-          </span>
-          <button
-            type="button"
-            onClick={onSpawn}
-            data-testid="instances-spawn-header"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-800 transition-colors hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-          >
-            <Plus className="size-3.5" aria-hidden="true" />
-            {t('entityModal.instancesTab.spawnCta')}
-          </button>
-        </div>
+        <span
+          className={cn(
+            'inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold',
+            healthKind === 'healthy'
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+              : 'border-amber-200 bg-amber-50 text-amber-800',
+          )}
+          data-testid="instances-health"
+        >
+          {t(
+            healthKind === 'healthy'
+              ? 'entityModal.instancesTab.healthHealthy'
+              : 'entityModal.instancesTab.healthDegraded',
+          )}
+        </span>
       </header>
 
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <CounterCard label={t('entityModal.instancesTab.total')} value={totalInstances} />
-        <CounterCard label={t('entityModal.instancesTab.running')} value={counters.running} />
+        <CounterCard label={t('entityModal.instancesTab.busy')} value={counters.busy} />
         <CounterCard label={t('entityModal.instancesTab.idle')} value={counters.idle} />
-        <CounterCard label={t('entityModal.instancesTab.failed')} value={counters.failed} />
+        <CounterCard label={t('entityModal.instancesTab.stopped')} value={counters.stopped} />
       </dl>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -150,22 +156,22 @@ export default function InstancesTab({
         <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-slate-700">
           <input
             type="checkbox"
-            checked={onlyFailed}
-            onChange={(e) => setOnlyFailed(e.target.checked)}
-            data-testid="instances-only-failed"
-            className="size-4 accent-red-600"
+            checked={onlyBusy}
+            onChange={(e) => setOnlyBusy(e.target.checked)}
+            data-testid="instances-only-busy"
+            className="size-4 accent-emerald-600"
           />
-          {t('entityModal.instancesTab.onlyFailed')}
+          {t('entityModal.instancesTab.onlyBusy')}
         </label>
         <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-slate-700">
           <input
             type="checkbox"
-            checked={onlyRunning}
-            onChange={(e) => setOnlyRunning(e.target.checked)}
-            data-testid="instances-only-running"
-            className="size-4 accent-emerald-600"
+            checked={onlyIdle}
+            onChange={(e) => setOnlyIdle(e.target.checked)}
+            data-testid="instances-only-idle"
+            className="size-4 accent-amber-600"
           />
-          {t('entityModal.instancesTab.onlyRunning')}
+          {t('entityModal.instancesTab.onlyIdle')}
         </label>
         <label className="inline-flex items-center gap-2 text-xs text-slate-700">
           <span className="font-semibold uppercase tracking-wide text-slate-500">
@@ -178,13 +184,11 @@ export default function InstancesTab({
             className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
             <option value="all">{t('entityModal.instancesTab.allStatuses')}</option>
-            {(['running', 'idle', 'paused', 'interrupted', 'completed', 'failed'] as const).map(
-              (s) => (
-                <option key={s} value={s}>
-                  {t(`instance.loopStatus.${s}`)}
-                </option>
-              ),
-            )}
+            {FILTER_OPTIONS.map((s) => (
+              <option key={s} value={s}>
+                {t(`instance.displayStatus.${s}`)}
+              </option>
+            ))}
           </select>
         </label>
       </div>
@@ -210,15 +214,6 @@ export default function InstancesTab({
             {t('entityModal.instancesTab.emptyTitle')}
           </p>
           <p className="mt-2 text-xs text-slate-500">{t('entityModal.instancesTab.emptyDetail')}</p>
-          <button
-            type="button"
-            onClick={onSpawn}
-            className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-800 transition-colors hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-            data-testid="instances-spawn-cta"
-          >
-            <Plus className="size-3.5" aria-hidden="true" />
-            {t('entityModal.instancesTab.spawnCta')}
-          </button>
         </div>
       ) : (
         <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
@@ -230,8 +225,7 @@ export default function InstancesTab({
               <tr>
                 <th className="px-3 py-2">{t('entityModal.instancesTab.columnId')}</th>
                 <th className="px-3 py-2">{t('entityModal.instancesTab.columnStatus')}</th>
-                <th className="px-3 py-2">{t('entityModal.instancesTab.columnContinuations')}</th>
-                <th className="px-3 py-2">{t('entityModal.instancesTab.columnPod')}</th>
+                <th className="px-3 py-2">{t('entityModal.instancesTab.columnHealth')}</th>
                 <th className="px-3 py-2">{t('entityModal.instancesTab.columnSpawn')}</th>
                 <th className="px-3 py-2">{t('entityModal.instancesTab.columnActive')}</th>
                 <th className="px-3 py-2 text-right">
@@ -247,6 +241,9 @@ export default function InstancesTab({
                   onPromote={onPromote}
                   onReap={onReap}
                   onDelete={onDelete}
+                  onStop={onStop}
+                  onRestart={onRestart}
+                  onGoWorkspace={onGoWorkspace}
                 />
               ))}
             </tbody>
@@ -271,15 +268,24 @@ function InstanceRow({
   onPromote,
   onReap,
   onDelete,
+  onStop,
+  onRestart,
+  onGoWorkspace,
 }: {
   readonly instance: EntityInstanceStatus;
   readonly onPromote: (inst: EntityInstanceStatus) => void;
   readonly onReap: (inst: EntityInstanceStatus) => void;
   readonly onDelete: (inst: EntityInstanceStatus) => void;
+  readonly onStop: (inst: EntityInstanceStatus) => void;
+  readonly onRestart: (inst: EntityInstanceStatus) => void;
+  readonly onGoWorkspace: (inst: EntityInstanceStatus) => void;
 }) {
   const { t } = useTranslation();
   const shortId = instance.id.slice(0, 8);
-  const podShort = instance.pod_name ? instance.pod_name.slice(0, 32) : '—';
+  const isRunning = instance.status === 'running';
+  const isHealthy = isRunning;
+  const canGoWorkspace = Boolean(instance.workspace_id);
+  const canStop = isRunning;
   return (
     <tr data-testid={`instance-row-${instance.id}`}>
       <td className="px-3 py-2 font-mono text-xs text-slate-900" title={instance.id}>
@@ -289,17 +295,26 @@ function InstanceRow({
         <span
           className={cn(
             'inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold',
-            STATUS_BADGE_CLASS[instance.loop_status],
+            STATUS_BADGE_CLASS[instance.display_status],
           )}
         >
-          {t(`instance.loopStatus.${instance.loop_status}`)}
+          {t(`instance.displayStatus.${instance.display_status}`)}
         </span>
       </td>
-      <td className="px-3 py-2 font-mono text-xs tabular-nums text-slate-700">
-        {instance.continuation_count}
-      </td>
-      <td className="px-3 py-2 font-mono text-xs text-slate-700" title={instance.pod_name ?? ''}>
-        {podShort}
+      <td className="px-3 py-2">
+        <span
+          className={cn(
+            'inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold',
+            isHealthy
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+              : 'border-slate-200 bg-slate-100 text-slate-600',
+          )}
+          title={t('entityModal.instancesTab.healthHint')}
+        >
+          {isHealthy
+            ? t('entityModal.instancesTab.healthOk')
+            : t('entityModal.instancesTab.healthDown')}
+        </span>
       </td>
       <td className="px-3 py-2 font-mono text-xs text-slate-700">{instance.spawn_time}</td>
       <td className="px-3 py-2 font-mono text-xs text-slate-700">
@@ -318,11 +333,36 @@ function InstanceRow({
           </button>
           <button
             type="button"
-            className="inline-flex items-center gap-1 rounded-md border border-transparent px-2 py-1 text-xs font-medium text-blue-700 transition-colors hover:border-blue-200 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-            title={t('entityModal.instancesTab.goToWorkspace')}
+            onClick={() => onGoWorkspace(instance)}
+            disabled={!canGoWorkspace}
+            className="inline-flex items-center gap-1 rounded-md border border-transparent px-2 py-1 text-xs font-medium text-blue-700 transition-colors hover:border-blue-200 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
+            title={
+              canGoWorkspace
+                ? t('entityModal.instancesTab.goToWorkspace')
+                : t('entityModal.instancesTab.goToWorkspaceMissing')
+            }
             data-testid="instance-go-workspace"
           >
             <ExternalLink className="size-3.5" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={() => onStop(instance)}
+            disabled={!canStop}
+            data-testid="instance-stop"
+            className="inline-flex items-center gap-1 rounded-md border border-transparent px-2 py-1 text-xs font-medium text-slate-700 transition-colors hover:border-slate-200 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 disabled:cursor-not-allowed disabled:opacity-40"
+            title={t('entityModal.instancesTab.stop')}
+          >
+            <Power className="size-3.5" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={() => onRestart(instance)}
+            data-testid="instance-restart"
+            className="inline-flex items-center gap-1 rounded-md border border-transparent px-2 py-1 text-xs font-medium text-amber-700 transition-colors hover:border-amber-200 hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+            title={t('entityModal.instancesTab.restart')}
+          >
+            <RefreshCw className="size-3.5" aria-hidden="true" />
           </button>
           <button
             type="button"

@@ -88,6 +88,7 @@ async def test_live_status_aggregates_user_and_instance_memberships(
     user_id = phase9_auth_user_id
     workspace = await workspace_factory()
     instance = await instance_factory(workspace_id=workspace.id)
+    instance.status = "running"
     await _create_membership(
         session,
         workspace_id=workspace.id,
@@ -114,8 +115,13 @@ async def test_live_status_aggregates_user_and_instance_memberships(
     items = {item["node_type"]: item for item in response.json()}
     assert items["user"]["glow"] == {"color": "#4f46e5", "intensity": "medium"}
     assert items["user"]["posx"] == 10
-    assert items["instance"]["glow"] == {"color": "#10b981", "intensity": "strong"}
+    assert items["user"]["mentionable"] is False
+    # running + no active conversation → idle (yellow), not harness "running"
+    assert items["instance"]["glow"] == {"color": "#eab308", "intensity": "medium"}
     assert items["instance"]["posy"] == 40
+    assert items["instance"]["instance_status"] == "running"
+    assert items["instance"]["display_status"] == "idle"
+    assert items["instance"]["mentionable"] is True
 
 
 @pytest.mark.asyncio
@@ -163,7 +169,7 @@ async def test_live_status_returns_empty_for_empty_workspace(
 
 
 @pytest.mark.asyncio
-async def test_live_status_uses_static_glow_without_loop_state(
+async def test_live_status_uses_avatar_display_glow(
     client: TestClient,
     phase9_auth_token: str,
     phase9_auth_user_id: str,
@@ -171,7 +177,7 @@ async def test_live_status_uses_static_glow_without_loop_state(
     workspace_factory,
     entity_factory,
 ) -> None:
-    """An instance membership without loop state uses static glow."""
+    """Canvas glow follows product display status, not harness loop_status."""
     user_id = phase9_auth_user_id
     workspace = await workspace_factory()
     await _create_membership(
@@ -190,6 +196,7 @@ async def test_live_status_uses_static_glow_without_loop_state(
         entity_id=entity.id,
         workspace_id=workspace.id,
         proxy_token="unused",
+        status="pending",
     )
     session.add(instance)
     await session.flush()
@@ -209,7 +216,8 @@ async def test_live_status_uses_static_glow_without_loop_state(
 
     assert response.status_code == 200
     instance_item = next(item for item in response.json() if item["membership_id"] == membership.id)
-    assert instance_item["glow"] == {"color": "#94a3b8", "intensity": "static"}
+    assert instance_item["display_status"] == "stopped"
+    assert instance_item["glow"] == {"color": "#94a3b8", "intensity": "weak"}
 
 
 # ---------------------------------------------------------------------------

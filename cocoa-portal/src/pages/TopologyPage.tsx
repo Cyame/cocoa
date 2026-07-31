@@ -1,4 +1,4 @@
-import { AlertCircle, Bot, Cpu, Link, LoaderCircle, Network, Trash, User, X } from 'lucide-react';
+import { AlertCircle, Bot, Brain, Cpu, Link, LoaderCircle, Network, Trash, User, X } from 'lucide-react';
 import {
   type ReactElement,
   type MouseEvent as ReactMouseEvent,
@@ -20,6 +20,7 @@ import TopologyGlowDefs, {
 } from '@/components/TopologyGlow';
 import { ApiError, api } from '@/lib/api';
 import { fetchTopologyLiveStatus } from '@/lib/api/topology';
+import { fitNodes } from '@/lib/topologyFit';
 import type {
   Event,
   GlowIntensity,
@@ -28,6 +29,7 @@ import type {
   Passage,
   TopologyNode,
 } from '@/lib/types';
+import { useComposerDraftStore } from '@/stores/composerDraftStore';
 import { useSelectedStore } from '@/stores/selected';
 import { useTabStore } from '@/stores/tabStore';
 
@@ -88,6 +90,8 @@ type PassageCreateBody = {
 type TopologyPageProps = {
   readonly embedded?: boolean;
   readonly workspaceId?: string;
+  /** Open the workspace 主脑 tab (hub node click). */
+  readonly onOpenBrain?: () => void;
 };
 
 // ---------------------------------------------------------------------------
@@ -106,10 +110,14 @@ const ACTIVE_STROKE = '#10b981';
 const ACTIVE_STROKE_WIDTH = 3;
 const DEFAULT_STROKE = '#94a3b8';
 const DEFAULT_STROKE_WIDTH = 2;
-const LIVE_STATUS_INTERVAL_MS = 2000;
-const EVENT_POLL_INTERVAL_MS = 2000;
+const LIVE_STATUS_INTERVAL_MS = 5000;
+const EVENT_POLL_INTERVAL_MS = 5000;
 const EVENT_LOOKBACK_MS = 5000;
 const PARTICLE_TICK_MS = 200;
+const HUB_NODE_ID = '__central_hub__';
+const HUB_FILL = '#0f766e';
+const HUB_GLOW = '#14b8a6';
+const HUB_SPOKE_STROKE = '#0d9488';
 
 const DEFAULT_USER_FILL = '#e2e8f0';
 const DEFAULT_INSTANCE_FILL = '#3b82f6';
@@ -163,11 +171,13 @@ async function fetchStaticData(workspaceId: string): Promise<TopologyStaticData>
 export default function TopologyPage({
   embedded = false,
   workspaceId: workspaceIdProp,
+  onOpenBrain,
 }: TopologyPageProps = {}) {
   const { id: routeWorkspaceId } = useParams<{ id: string }>();
   const setWorkspaceId = useSelectedStore((state) => state.setWorkspaceId);
   const interactionMode = useSelectedStore((state) => state.interactionMode);
   const addTab = useTabStore((state) => state.addTab);
+  const setComposerDraft = useComposerDraftStore((state) => state.setDraft);
   const [staticData, setStaticData] = useState<TopologyStaticData | null>(null);
   const [liveStatus, setLiveStatus] = useState<readonly LiveStatusItem[]>([]);
   const [activePassages, setActivePassages] = useState<ReadonlyMap<string, number>>(
@@ -361,31 +371,141 @@ export default function TopologyPage({
         glow: { color: '#94a3b8', intensity: 'static' },
         outdated: false,
         active_hash: null,
+        instance_status: null,
+        mentionable: false,
+        display_status: null,
       };
       const effective = status ?? fallbackStatus;
       const label = isUser
         ? (m.user_id ?? t('topology.userLabel'))
-        : (m.instance_id ?? t('topology.instanceLabel'));
+        : (m.entity_name ?? m.entity_slug ?? m.instance_id ?? t('topology.instanceLabel'));
       return {
-        kind: 'membership',
+        kind: 'membership' as const,
         id: m.id,
         instanceId: m.instance_id,
         x: m.posx,
         y: m.posy,
         label,
-        slug: label,
+        slug: isUser ? (m.user_id ?? '') : (m.entity_slug ?? ''),
         role,
-        status: effective.glow.intensity,
+        status: effective.display_status ?? effective.instance_status ?? effective.glow.intensity,
         fillColor: isUser ? userFillColor() : instanceFillColor(),
         glowColor: effective.glow.color,
         glowIntensity: effective.glow.intensity,
         outdated: effective.outdated,
         activeHash: effective.active_hash,
+        instanceStatus: effective.instance_status ?? null,
+        mentionable: effective.mentionable === true,
+        displayStatus: effective.display_status ?? null,
       };
     });
 
-    return membershipNodes;
+    // Visual 主脑 hub: spokes to every membership; not an editable passage endpoint.
+    let hubX = 0;
+    let hubY = 0;
+    if (membershipNodes.length > 0) {
+      hubX = membershipNodes.reduce((sum, n) => sum + n.x, 0) / membershipNodes.length;
+      hubY = membershipNodes.reduce((sum, n) => sum + n.y, 0) / membershipNodes.length;
+    }
+    const hubNode: NodeSummary = {
+      kind: 'hub',
+      id: HUB_NODE_ID,
+      instanceId: null,
+      x: hubX,
+      y: hubY,
+      label: t('topology.hubLabel'),
+      slug: 'hub',
+      role: 'hub',
+      status: 'static',
+      fillColor: HUB_FILL,
+      glowColor: HUB_GLOW,
+      glowIntensity: 'medium',
+      outdated: false,
+      activeHash: null,
+      instanceStatus: null,
+      mentionable: false,
+      displayStatus: null,
+    };
+
+    return [hubNode, ...membershipNodes];
   }, [staticData, liveStatus, t]);
+
+  const applyFit = useCallback(() => {
+    const vp = fitNodes(nodes, {
+      viewSize: 2000,
+      padding: 0.15,
+      minZoom: MIN_ZOOM,
+      maxZoom: MAX_ZOOM,
+    });
+    setPanX(vp.panX);
+    setPanY(vp.panY);
+    setZoom(vp.zoom);
+    panXRef.current = vp.panX;
+    panYRef.current = vp.panY;
+    zoomRef.current = vp.zoom;
+  }, [nodes]);
+
+  const didFitRef = useRef(false);
+  useEffect(() => {
+    if (nodes.length === 0 || didFitRef.current) return;
+    didFitRef.current = true;
+    applyFit();
+  }, [nodes, applyFit]);
+
+  useEffect(() => {
+    didFitRef.current = false;
+  }, [workspaceId]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.target instanceof HTMLInputElement ||
+        event.target instanceof HTMLTextAreaElement ||
+        event.target instanceof HTMLSelectElement ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey
+      ) {
+        return;
+      }
+      if (event.key === 'f' || event.key === 'F' || event.key === '0') {
+        event.preventDefault();
+        applyFit();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [applyFit]);
+
+  const handleChatInComposer = useCallback(
+    (node: NodeSummary) => {
+      if (!node.slug || node.instanceId === null || !node.mentionable) return;
+      setComposerDraft(`@${node.slug} `);
+    },
+    [setComposerDraft],
+  );
+
+  const handleRestartInstance = useCallback(
+    async (node: NodeSummary) => {
+      if (node.instanceId === null || workspaceId === null) return;
+      try {
+        const record = await api<{ id: string; instance_id: string }>(
+          `/instances/${encodeURIComponent(node.instanceId)}/deploy`,
+          { method: 'POST' },
+        );
+        const { useDeployProgressStore } = await import('@/stores/deployProgressStore');
+        useDeployProgressStore.getState().start({
+          recordId: record.id,
+          instanceId: record.instance_id,
+          workspaceId,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : t('topology.failedCreate');
+        setActionError(message);
+      }
+    },
+    [workspaceId, t],
+  );
 
   const resolvedPassages = useMemo<readonly ResolvedPassage[]>(() => {
     if (staticData === null) return [];
@@ -487,12 +607,19 @@ export default function TopologyPage({
 
   const handleNodeClick = useCallback(
     (node: NodeSummary) => {
+      if (node.kind === 'hub') {
+        onOpenBrain?.();
+        setSelectedNode(null);
+        setPendingConnection(null);
+        return;
+      }
       if (interactionMode === 'select') {
         setSelectedNode(node);
         setPendingConnection(null);
         return;
       }
       if (interactionMode === 'connect') {
+        // Hub is visual-only — never participate in solid Passage edges.
         if (pendingConnection === null) {
           setPendingConnection({ id: node.id });
           setActionError(null);
@@ -500,6 +627,11 @@ export default function TopologyPage({
         }
         if (pendingConnection.id === node.id) {
           setPendingConnection(null);
+          return;
+        }
+        if (pendingConnection.id === HUB_NODE_ID) {
+          setPendingConnection(null);
+          setActionError(t('topology.hubNoConnect'));
           return;
         }
         setPendingConnectionCompletion({
@@ -510,7 +642,7 @@ export default function TopologyPage({
         return;
       }
     },
-    [interactionMode, pendingConnection],
+    [interactionMode, pendingConnection, onOpenBrain, t],
   );
 
   const [pendingConnectionCompletion, setPendingConnectionCompletion] = useState<{
@@ -558,6 +690,7 @@ export default function TopologyPage({
 
   const handleNodeMouseDown = useCallback(
     (node: NodeSummary, event: ReactMouseEvent<SVGGElement>) => {
+      if (node.kind === 'hub') return;
       if (interactionMode !== 'move') return;
       if (event.button !== 0) return;
       event.stopPropagation();
@@ -752,7 +885,7 @@ export default function TopologyPage({
           className="relative flex min-w-0 flex-1 items-center justify-center overflow-hidden bg-slate-50"
           data-testid="topology-canvas-container"
         >
-          <ModeToolbar />
+          <ModeToolbar onFit={applyFit} />
           {isStaticLoading ? (
             <div className="flex items-center justify-center gap-3 text-sm text-slate-500">
               <LoaderCircle className="size-5 animate-spin" aria-hidden="true" />
@@ -801,6 +934,28 @@ export default function TopologyPage({
               </g>
 
               <g data-testid="topology-canvas-content" transform={transform}>
+                {(() => {
+                  const hub = nodes.find((n) => n.kind === 'hub');
+                  if (hub === undefined) return null;
+                  return nodes
+                    .filter((n) => n.kind === 'membership')
+                    .map((n) => (
+                      <line
+                        key={`hub-spoke-${n.id}`}
+                        x1={hub.x}
+                        y1={hub.y}
+                        x2={n.x}
+                        y2={n.y}
+                        stroke={HUB_SPOKE_STROKE}
+                        strokeWidth={1.5}
+                        strokeDasharray="6 4"
+                        strokeOpacity={0.55}
+                        pointerEvents="none"
+                        data-testid={`topology-hub-spoke-${n.id}`}
+                      />
+                    ));
+                })()}
+
                 {resolvedPassages.map((entry) => (
                   <PassageView
                     key={entry.passage.id}
@@ -824,6 +979,10 @@ export default function TopologyPage({
                       node={node}
                       onClick={handleNodeClick}
                       onDoubleClick={(clickedNode) => {
+                        if (clickedNode.kind === 'hub') {
+                          onOpenBrain?.();
+                          return;
+                        }
                         if (clickedNode.instanceId === null) return;
                         addTab({
                           id: `instance-${clickedNode.instanceId}`,
@@ -833,10 +992,14 @@ export default function TopologyPage({
                         setSelectedNode(null);
                       }}
                       onMouseDown={handleNodeMouseDown}
+                      onChat={handleChatInComposer}
+                      onRestart={(n) => {
+                        void handleRestartInstance(n);
+                      }}
                       isHighlighted={isPendingSource || isSelected}
                       highlightKind={isPendingSource ? 'pending' : isSelected ? 'selected' : null}
                       dragOverride={dragOverride}
-                      isMoveCursor={interactionMode === 'move'}
+                      isMoveCursor={interactionMode === 'move' && node.kind !== 'hub'}
                     />
                   );
                 })}
@@ -862,6 +1025,8 @@ type NodeViewProps = {
   readonly onClick: (node: NodeSummary) => void;
   readonly onDoubleClick: (node: NodeSummary) => void;
   readonly onMouseDown: (node: NodeSummary, event: ReactMouseEvent<SVGGElement>) => void;
+  readonly onChat: (node: NodeSummary) => void;
+  readonly onRestart: (node: NodeSummary) => void;
   readonly isHighlighted: boolean;
   readonly highlightKind: 'pending' | 'selected' | null;
   readonly dragOverride: { readonly x: number; readonly y: number } | null;
@@ -873,6 +1038,8 @@ function NodeView({
   onClick,
   onDoubleClick,
   onMouseDown,
+  onChat,
+  onRestart,
   isHighlighted,
   highlightKind,
   dragOverride,
@@ -882,17 +1049,36 @@ function NodeView({
   const coreStrokeOpacity = intensityStrokeOpacity(node.glowIntensity);
   const isUser = node.fillColor === DEFAULT_USER_FILL;
   const tooltip = `${node.label} | ${node.role} | ${node.status}`;
-  const Icon = isUser ? User : node.instanceId !== null ? Cpu : Bot;
+  const Icon = node.kind === 'hub' ? Brain : isUser ? User : node.instanceId !== null ? Cpu : Bot;
   const renderX = dragOverride !== null ? dragOverride.x : node.x;
   const renderY = dragOverride !== null ? dragOverride.y : node.y;
   const highlightStroke =
     highlightKind === 'pending' ? '#f59e0b' : highlightKind === 'selected' ? '#2563eb' : null;
   const [isTooltipVisible, setIsTooltipVisible] = useState(false);
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showTooltip = () => {
+    if (hideTimerRef.current !== null) clearTimeout(hideTimerRef.current);
+    if (hoverTimerRef.current !== null) clearTimeout(hoverTimerRef.current);
+    hoverTimerRef.current = setTimeout(() => setIsTooltipVisible(true), 350);
+  };
+
+  const scheduleHideTooltip = () => {
+    if (hoverTimerRef.current !== null) clearTimeout(hoverTimerRef.current);
+    if (hideTimerRef.current !== null) clearTimeout(hideTimerRef.current);
+    // Longer grace + invisible bridge rect below closes the SVG hit-test gap.
+    hideTimerRef.current = setTimeout(() => setIsTooltipVisible(false), 450);
+  };
+
+  const cancelHideTooltip = () => {
+    if (hideTimerRef.current !== null) clearTimeout(hideTimerRef.current);
+  };
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
     () => () => {
       if (hoverTimerRef.current !== null) clearTimeout(hoverTimerRef.current);
+      if (hideTimerRef.current !== null) clearTimeout(hideTimerRef.current);
       if (clickTimerRef.current !== null) clearTimeout(clickTimerRef.current);
     },
     [],
@@ -918,13 +1104,8 @@ function NodeView({
         clickTimerRef.current = null;
         onDoubleClick(node);
       }}
-      onMouseEnter={() => {
-        hoverTimerRef.current = setTimeout(() => setIsTooltipVisible(true), 500);
-      }}
-      onMouseLeave={() => {
-        if (hoverTimerRef.current !== null) clearTimeout(hoverTimerRef.current);
-        setIsTooltipVisible(false);
-      }}
+      onMouseEnter={showTooltip}
+      onMouseLeave={scheduleHideTooltip}
       onMouseDown={(event) => {
         onMouseDown(node, event);
       }}
@@ -967,7 +1148,31 @@ function NodeView({
           <Icon size={20} strokeWidth={2} />
         </div>
       </foreignObject>
-      {isTooltipVisible ? <NodeTooltip node={node} onOpen={() => onClick(node)} /> : null}
+      {isTooltipVisible ? (
+        <g
+          data-testid={`topology-tooltip-group-${node.id}`}
+          onMouseEnter={cancelHideTooltip}
+          onMouseLeave={scheduleHideTooltip}
+        >
+          {/* Invisible hit bridge: fills the gap between node core and tooltip panel */}
+          <rect
+            x={-40}
+            y={-220}
+            width={80}
+            height={220}
+            fill="transparent"
+            pointerEvents="all"
+          />
+          <NodeTooltip
+            node={node}
+            onOpen={() => onClick(node)}
+            onChat={() => onChat(node)}
+            onRestart={() => onRestart(node)}
+            onPointerEnter={cancelHideTooltip}
+            onPointerLeave={scheduleHideTooltip}
+          />
+        </g>
+      ) : null}
       <title>{tooltip}</title>
     </g>
   );

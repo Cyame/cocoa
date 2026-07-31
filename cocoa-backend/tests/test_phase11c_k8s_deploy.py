@@ -62,6 +62,8 @@ def _install_k8s_mocks(
     client = MagicMock(name="k8s_client")
     client.ensure_namespace = AsyncMock()
     client.create_or_skip = AsyncMock()
+    client.apply = AsyncMock()
+    client.scale_deployment = AsyncMock()
     client.get_deployment_status = AsyncMock(return_value={"ready_replicas": 1})
     client.core = MagicMock()
     client.core.delete_namespace = AsyncMock()
@@ -110,7 +112,7 @@ async def test_deploy_instance_creates_record(session: AsyncSession, deploy_fact
     assert record is not None
     assert record.status == DeployStatus.running.value
     assert record.instance_id == ctx.instance_id
-    assert ctx.namespace == "cocoa-default-integration-deploy"
+    assert ctx.namespace == f"cocoa-inst-{ctx.instance_id.replace('-', '').lower()[:20]}"
 
 
 @pytest.mark.asyncio
@@ -124,7 +126,9 @@ async def test_execute_pipeline_runs_9_steps_mocked(
     assert len(progress) == 18
     assert {data["step"] for data in progress} == set(range(1, 10))
     assert client.ensure_namespace.await_count == 1
-    assert client.create_or_skip.await_count == 6
+    assert client.create_or_skip.await_count == 4
+    assert client.apply.await_count == 2
+    assert client.scale_deployment.await_count == 1
     assert client.get_deployment_status.await_count == 1
     record = await session.get(DeployRecord, record_id)
     assert record is not None
@@ -135,10 +139,10 @@ async def test_execute_pipeline_runs_9_steps_mocked(
 async def test_cancel_deploy_cleans_namespace(
     session: AsyncSession, deploy_factory, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    record_id, _ = await deploy_factory("cancel-integration")
+    record_id, ctx = await deploy_factory("cancel-integration")
     client, _ = _install_k8s_mocks(monkeypatch, session)
     namespace = await deploy_service.cancel_deploy(record_id)
-    assert namespace == "cocoa-default-cancel-integration"
+    assert namespace == f"cocoa-inst-{ctx.instance_id.replace('-', '').lower()[:20]}"
     client.core.delete_namespace.assert_awaited_once_with(namespace)
     record = await session.get(DeployRecord, record_id)
     assert record is not None
@@ -218,11 +222,12 @@ async def test_proxy_token_env_injection(deploy_factory) -> None:
     _, ctx = await deploy_factory(
         "proxy-integration", proxy_token="secret-proxy", env_vars={"CUSTOM": "value"}
     )
-    assert ctx.env_vars == {
-        "CUSTOM": "value",
-        "COCOA_PROXY_TOKEN": "secret-proxy",
-        "COCOA_INSTANCE_ID": ctx.instance_id,
-    }
+    assert ctx.env_vars["CUSTOM"] == "value"
+    assert ctx.env_vars["COCOA_PROXY_TOKEN"] == "secret-proxy"
+    assert ctx.env_vars["COCOA_INSTANCE_ID"] == ctx.instance_id
+    assert ctx.env_vars["COCOA_POD_MODE"] == "true"
+    assert ctx.env_vars["COCOA_API_URL"]
+    assert ctx.env_vars["COCOA_WORKSPACE_PATH"] == "/data"
 
 
 @pytest.mark.asyncio

@@ -404,7 +404,10 @@ export default function Step2EntityForm({
                   id="onboarding-provider"
                   name="provider_id"
                   value={providerId}
-                  onChange={(event) => setProviderId(event.currentTarget.value)}
+                  onChange={(event) => {
+                    setProviderId(event.currentTarget.value);
+                    setModel('');
+                  }}
                   className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                 >
                   <option value="">{t('onboarding.step2.providerInherit')}</option>
@@ -431,7 +434,9 @@ export default function Step2EntityForm({
                   options={models}
                   disabled={providerId.length === 0}
                   placeholder={t('onboarding.step2.modelPlaceholder')}
-                  emptyOptionLabel={t('onboarding.step2.modelInherit')}
+                  emptyOptionLabel={
+                    providerId.length === 0 ? t('onboarding.step2.modelInherit') : undefined
+                  }
                   className="mt-2"
                 />
                 {modelsLoading ? (

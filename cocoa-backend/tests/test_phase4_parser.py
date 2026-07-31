@@ -58,10 +58,25 @@ class TestParseDirective:
         assert result.content_ref.path == "lesson:intro"
 
     def test_parse_invalid_line_to_general_text(self) -> None:
-        """A line without /cmd returns the original string, not a Directive."""
+        """A line without /cmd or @target returns the original string, not a Directive."""
         result = parse_directive("hello world")
         assert isinstance(result, str)
         assert result == "hello world"
+
+    def test_parse_mention_chat_without_cmd(self) -> None:
+        """@slug message (no /cmd) is a chat mention directive with empty cmd."""
+        result = parse_directive("@alice hello there")
+        assert isinstance(result, Directive)
+        assert result.target_entity == "alice"
+        assert result.cmd == ""
+        assert result.args == ["hello", "there"]
+
+    def test_parse_bare_mention(self) -> None:
+        result = parse_directive("@alice")
+        assert isinstance(result, Directive)
+        assert result.target_entity == "alice"
+        assert result.cmd == ""
+        assert result.args == []
 
 
 class TestParseTurn:

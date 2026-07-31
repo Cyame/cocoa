@@ -74,9 +74,10 @@ def _build_llm_client() -> tuple[Any, dict[str, Any]]:
                 await asyncio.sleep(_ITERATION_SLEEP)
                 return _StubResponse()
 
-        # Cap stub loops so unit tests without credentials cannot hang forever.
+        # Cap stub loops only for local/unit tests. K8s pods must stay alive
+        # (Deployment would otherwise flap Completed ↔ Running).
         global _ITERATIONS
-        if _ITERATIONS > 20:
+        if not is_k8s_pod_mode() and _ITERATIONS > 20:
             _ITERATIONS = 3
         return _StubClient(), manifest
 
@@ -140,13 +141,21 @@ async def _resolve_workspace_path(instance_id: str) -> str | None:
 async def run_agent_loop(instance_id: str) -> None:
     """Run the LLM-powered agent loop for one Instance."""
     k8s_mode = is_k8s_pod_mode()
-    workspace_path = await _resolve_workspace_path(instance_id)
-    if workspace_path is None:
-        workspace_path = tempfile.mkdtemp(prefix=f"cocoa-agent-{instance_id}-")
-        logger.warning(
-            "Instance has no workspace_path; using tempfile fallback",
-            instance_id=instance_id, fallback=workspace_path,
+    # Pods talk to the backend over HTTP and do not mount DATABASE_URL.
+    # Never open a DB session in K8s mode (SQLAlchemy URL would be empty).
+    if k8s_mode:
+        workspace_path = (
+            os.environ.get("COCOA_WORKSPACE_PATH")
+            or tempfile.mkdtemp(prefix=f"cocoa-agent-{instance_id}-")
         )
+    else:
+        workspace_path = await _resolve_workspace_path(instance_id)
+        if workspace_path is None:
+            workspace_path = tempfile.mkdtemp(prefix=f"cocoa-agent-{instance_id}-")
+            logger.warning(
+                "Instance has no workspace_path; using tempfile fallback",
+                instance_id=instance_id, fallback=workspace_path,
+            )
 
     preset_manifest: dict[str, Any] = {}
     try:
@@ -276,6 +285,9 @@ async def run_agent_loop(instance_id: str) -> None:
                 "snapshot": {"iteration": i, "content_preview": response.content[:100]},
             })
             i += 1
+            # K8s stub/idle pacing — avoid tight checkpoint spam without a real LLM.
+            if k8s_mode:
+                await asyncio.sleep(max(_POLL_INTERVAL, 5.0))
 
         await _emit(
             HARNESS_LOOP_STOPPED,

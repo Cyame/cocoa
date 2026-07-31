@@ -26,8 +26,9 @@ from app.schemas.slash import ContentRef, Directive, Turn
 
 Scope = Literal["workspace", "fornix", "vault", "memory"]
 
-# Regex: @entity-name (alphanumeric + hyphens/underscores) at line start
-_RE_TARGET = re.compile(r"^@([a-zA-Z0-9_-]+)\s+")
+# Regex: @entity-name (alphanumeric + hyphens/underscores) at line start.
+# Trailing whitespace OR end-of-line (bare ``@slug`` chat mention).
+_RE_TARGET = re.compile(r"^@([a-zA-Z0-9_-]+)(?:\s+|$)")
 
 # Regex: @scope:path where scope is one of the 4 keywords
 _RE_CONTENT_REF = re.compile(
@@ -59,10 +60,19 @@ def parse_directive(line: str) -> Directive | str:
         target = m.group(1)
         remaining = remaining[m.end() :]
 
-    # 2. Extract /cmd.
+    # 2. Extract /cmd.  PRD-v3.4.1: bare ``@slug message`` (no /cmd) is a
+    #    chat mention directive with empty cmd — Composer multi-target chat.
     m = _RE_CMD.search(remaining)
     if not m:
-        # No command found — this line is general text.
+        if target is not None:
+            args = [a for a in remaining.split() if a]
+            return Directive(
+                target_entity=target,
+                cmd="",
+                args=args,
+                content_ref=None,
+                raw_text=original,
+            )
         return original
     cmd = m.group("cmd")
     remaining = remaining[: m.start()] + remaining[m.end() :]

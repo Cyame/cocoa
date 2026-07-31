@@ -1,4 +1,4 @@
-import { AlertCircle, Brain, Cpu, LoaderCircle, Notebook, Plus, UserRound, Users } from 'lucide-react';
+import { AlertCircle, Brain, Cpu, LoaderCircle, Plus, UserRound, Users } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
@@ -31,7 +31,7 @@ import TopologyPage from '@/pages/TopologyPage';
 import { useSelectedStore } from '@/stores/selected';
 
 type CanvasTab = 'topology' | 'memberships' | 'instances' | 'brain';
-type BrainSubTab = 'memory' | 'cerebellum';
+type BrainSubTab = 'fornix' | 'frontal' | 'brainstem' | 'cerebellum';
 
 type OffsetPage<T> = {
   readonly items: readonly T[];
@@ -45,7 +45,7 @@ type CentralHub = {
   readonly manual_notes: string | null;
 };
 
-const LIVE_STATUS_INTERVAL_MS = 2000;
+const LIVE_STATUS_INTERVAL_MS = 5000;
 
 const GLOW_TO_STATUS: Readonly<Record<string, LoopStatus | 'unknown'>> = {
   '#10b981': 'running',
@@ -74,7 +74,7 @@ export default function WorkspaceIdePage() {
 
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [activeTab, setActiveTab] = useState<CanvasTab>('topology');
-  const [brainSubTab, setBrainSubTab] = useState<BrainSubTab>('memory');
+  const [brainSubTab, setBrainSubTab] = useState<BrainSubTab>('fornix');
   const [memberships, setMemberships] = useState<readonly Membership[]>([]);
   const [instances, setInstances] = useState<readonly Instance[]>([]);
   const [entities, setEntities] = useState<readonly Entity[]>([]);
@@ -107,7 +107,7 @@ export default function WorkspaceIdePage() {
           ),
           api<OffsetPage<Instance>>(`/instances?workspace_id=${encodeURIComponent(id)}`),
           api<OffsetPage<Entity>>('/entities?limit=200'),
-          api<CentralHub>(`/central-hubs?workspace_id=${encodeURIComponent(id)}`).catch(() => null),
+          api<CentralHub>(`/central-hubs/${encodeURIComponent(id)}`).catch(() => null),
           fetchWorkspaceCerebellum(id).catch(() => null),
           fetchCerebellumDefaults().catch(() => null),
         ]);
@@ -135,6 +135,8 @@ export default function WorkspaceIdePage() {
 
   useEffect(() => {
     if (id === undefined) return;
+    // Topology tab already polls live-status; avoid doubling and hitting 429.
+    if (activeTab === 'topology') return;
     const workspaceId = id;
     let cancelled = false;
     let timerId: ReturnType<typeof setTimeout> | null = null;
@@ -156,7 +158,7 @@ export default function WorkspaceIdePage() {
       cancelled = true;
       if (timerId !== null) clearTimeout(timerId);
     };
-  }, [id]);
+  }, [id, activeTab]);
 
   const healthKey = useMemo(() => deriveHealth(liveStatus), [liveStatus]);
   const healthLabel = t(
@@ -235,7 +237,14 @@ export default function WorkspaceIdePage() {
                 </button>
               </div>
               <div className="min-h-0 flex-1">
-                <TopologyPage embedded workspaceId={id} />
+                <TopologyPage
+                  embedded
+                  workspaceId={id}
+                  onOpenBrain={() => {
+                    setActiveTab('brain');
+                    setBrainSubTab('fornix');
+                  }}
+                />
               </div>
             </div>
           ) : null}
@@ -273,8 +282,8 @@ export default function WorkspaceIdePage() {
 
           {!isLoading && activeTab === 'brain' ? (
             <div className="flex h-full flex-col">
-              <div className="flex shrink-0 gap-1 border-b border-slate-200 bg-slate-50 px-4 py-2">
-                {(['memory', 'cerebellum'] as const).map((subTab) => (
+              <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-200 bg-slate-50 px-4 py-2">
+                {(['fornix', 'frontal', 'brainstem', 'cerebellum'] as const).map((subTab) => (
                   <button
                     key={subTab}
                     type="button"
@@ -287,46 +296,41 @@ export default function WorkspaceIdePage() {
                         : 'text-slate-600 hover:bg-white'
                     }`}
                   >
-                    {subTab === 'memory' ? (
-                      <span className="inline-flex items-center gap-1.5">
-                        <Notebook className="size-3.5" aria-hidden="true" />
-                        {t('workspace.brain.memory')}
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5">
-                        <Brain className="size-3.5" aria-hidden="true" />
-                        {t('workspace.brain.cerebellum')}
-                      </span>
-                    )}
+                    {t(`workspace.brain.${subTab}`)}
                   </button>
                 ))}
               </div>
               <div className="min-h-0 flex-1 overflow-y-auto p-6">
-                {brainSubTab === 'memory' ? (
-                  centralHub === null ? (
-                    <p className="text-sm text-slate-500">{t('workspace.emptyMemoryDetail')}</p>
-                  ) : (
-                    <div className="grid gap-4 lg:grid-cols-2">
-                      <article className="rounded-lg border border-slate-200 bg-white p-4">
-                        <h2 className="text-sm font-semibold">{t('workspace.sharedContext')}</h2>
-                        <p className="mt-3 whitespace-pre-wrap text-sm text-slate-600">
-                          {centralHub.content ?? t('workspace.noSharedContext')}
-                        </p>
-                      </article>
-                      <article className="rounded-lg border border-slate-200 bg-white p-4">
-                        <h2 className="text-sm font-semibold">{t('workspace.manualNotes')}</h2>
-                        <p className="mt-3 whitespace-pre-wrap text-sm text-slate-600">
-                          {centralHub.manual_notes ?? t('workspace.noManualNotes')}
-                        </p>
-                      </article>
-                    </div>
-                  )
-                ) : (
+                {brainSubTab === 'cerebellum' ? (
                   <CerebellumPanel
                     workspaceId={id}
                     cerebellum={cerebellum}
                     worldDefaults={worldCerebellumDefaults}
                     onUpdated={(next) => setCerebellum(next)}
+                  />
+                ) : brainSubTab === 'fornix' ? (
+                  <BrainRegionPanel
+                    workspaceId={id}
+                    title={t('workspace.brain.fornix')}
+                    empty={t('workspace.brain.fornixEmpty')}
+                    hub={centralHub}
+                    kind="fornix"
+                  />
+                ) : brainSubTab === 'frontal' ? (
+                  <BrainRegionPanel
+                    workspaceId={id}
+                    title={t('workspace.brain.frontal')}
+                    empty={t('workspace.brain.frontalEmpty')}
+                    hub={centralHub}
+                    kind="frontal"
+                  />
+                ) : (
+                  <BrainRegionPanel
+                    workspaceId={id}
+                    title={t('workspace.brain.brainstem')}
+                    empty={t('workspace.brain.brainstemEmpty')}
+                    hub={centralHub}
+                    kind="brainstem"
                   />
                 )}
               </div>
@@ -345,6 +349,104 @@ export default function WorkspaceIdePage() {
         />
       ) : null}
     </IdeShell>
+  );
+}
+
+function BrainRegionPanel({
+  workspaceId,
+  title,
+  empty,
+  hub,
+  kind,
+}: {
+  readonly workspaceId: string;
+  readonly title: string;
+  readonly empty: string;
+  readonly hub: CentralHub | null;
+  readonly kind: 'fornix' | 'frontal' | 'brainstem';
+}) {
+  const { t } = useTranslation();
+  const [items, setItems] = useState<readonly { id: string; label: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    const path =
+      kind === 'fornix'
+        ? `/central-hubs/${encodeURIComponent(workspaceId)}/fornix/files`
+        : kind === 'frontal'
+          ? `/central-hubs/${encodeURIComponent(workspaceId)}/frontal-lobe/kanbans`
+          : `/central-hubs/${encodeURIComponent(workspaceId)}/brainstem/schedules`;
+    void api<unknown>(path)
+      .then((res) => {
+        if (cancelled) return;
+        const raw: readonly Record<string, unknown>[] = Array.isArray(res)
+          ? (res as readonly Record<string, unknown>[])
+          : Array.isArray((res as { items?: unknown }).items)
+            ? ((res as { items: readonly Record<string, unknown>[] }).items)
+            : [];
+        setItems(
+          raw.map((row: Record<string, unknown>, index: number) => ({
+            id: String(row.id ?? index),
+            label: String(
+              row.name ?? row.title ?? row.cron_expr ?? row.path ?? row.id ?? `#${index + 1}`,
+            ),
+          })),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setItems([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceId, kind]);
+
+  return (
+    <div className="space-y-4">
+      {kind === 'fornix' && hub !== null ? (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <article className="rounded-lg border border-slate-200 bg-white p-4">
+            <h2 className="text-sm font-semibold">{t('workspace.sharedContext')}</h2>
+            <p className="mt-3 whitespace-pre-wrap text-sm text-slate-600">
+              {hub.content ?? t('workspace.noSharedContext')}
+            </p>
+          </article>
+          <article className="rounded-lg border border-slate-200 bg-white p-4">
+            <h2 className="text-sm font-semibold">{t('workspace.manualNotes')}</h2>
+            <p className="mt-3 whitespace-pre-wrap text-sm text-slate-600">
+              {hub.manual_notes ?? t('workspace.noManualNotes')}
+            </p>
+          </article>
+        </div>
+      ) : null}
+      <article className="rounded-lg border border-slate-200 bg-white p-4">
+        <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
+        {loading ? (
+          <p className="mt-3 flex items-center gap-2 text-sm text-slate-500">
+            <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+            {t('common.loading')}
+          </p>
+        ) : items.length === 0 ? (
+          <p className="mt-3 text-sm text-slate-500">{empty}</p>
+        ) : (
+          <ul className="mt-3 space-y-2">
+            {items.map((item) => (
+              <li
+                key={item.id}
+                className="rounded-md border border-slate-100 bg-slate-50 px-3 py-2 font-mono text-xs text-slate-700"
+              >
+                {item.label}
+              </li>
+            ))}
+          </ul>
+        )}
+      </article>
+    </div>
   );
 }
 
@@ -427,7 +529,10 @@ function CerebellumPanel({
           {t('organization.fields.provider')}
           <select
             value={providerId}
-            onChange={(e) => setProviderId(e.target.value)}
+            onChange={(e) => {
+              setProviderId(e.target.value);
+              setModel('');
+            }}
             className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
           >
             <option value="">{t('workspace.brain.inheritWorld')}</option>
@@ -446,7 +551,9 @@ function CerebellumPanel({
             onChange={setModel}
             options={models}
             disabled={providerId.length === 0}
-            emptyOptionLabel={t('workspace.brain.inheritWorld')}
+            emptyOptionLabel={
+              providerId.length === 0 ? t('workspace.brain.inheritWorld') : undefined
+            }
             placeholder={t('organization.fields.modelPlaceholder')}
           />
         </div>

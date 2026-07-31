@@ -190,16 +190,32 @@ Langfuse is the planned observability backend for agent tracing in Cocoa. P8's h
 - **No initialization code** — the fields above are documentation-only placeholders in the Instance model's `runtime_config` docstring.
 - **P8 responsibility** — the harness reads `runtime_config.langfuse_*` on Instance startup, initializes `Langfuse(trace_context=...)`, and wraps agent execution steps in Langfuse spans.
 
-### Integration Point (P8)
+### Integration Point (P8 / superseded for chat path)
 
 ```
-app.agent_runtime (P8)
+app.agent_runtime (legacy checkpoint loop; optional)
   └── reads Instance.runtime_config
        └── if langfuse_enabled:
             └── import langfuse
             └── Langfuse(public_key=..., secret_key=..., host=...)
             └── trace all LLM calls, tool invocations, and blackboard writes
 ```
+
+## Tunnel + pi Host (PRD-v3.5)
+
+Instance pods run **`cocoa-instance-host`** (Node) as the main process:
+
+1. Outbound WebSocket to Backend `WS /api/v1/tunnel/connect`
+2. First frame `auth` with `instance_id` + `proxy_token` → `auth.ok`
+3. Backend Composer `schedule_user_turn` sends `chat.request` when Host is connected
+4. Host drives `pi --mode rpc` (JSONL stdin/stdout); maps `text_delta` → `chat.response.chunk`
+5. Portal Composer continues to consume existing SSE (`/composer/.../stream`)
+
+When Tunnel is offline, Backend keeps the in-process stub/LLM fallback (`tunnel.offline_fallback`).
+
+`GET /api/v1/instances/{id}/tunnel-status` reports `{connected: bool}`.
+
+Python `app.agent_runtime` is no longer the default container CMD.
 
 ### Schema Note
 

@@ -312,7 +312,7 @@ class TestInstanceStateMachine:
         auth_token: str,
         auth_user_id: str,
     ) -> None:
-        """create → deploy → start → stop → delete; running→delete blocked."""
+        """create → deploy → start → stop → delete; running delete auto-stops."""
         h = _auth(auth_token)
         workspace_id = _setup_workspace_and_membership(
             client, auth_token, auth_user_id,
@@ -340,19 +340,29 @@ class TestInstanceStateMachine:
         assert resp.status_code == 200
         assert resp.json()["status"] == "running"
 
-        # Delete while running must be blocked
-        del_resp = client.delete(f"/api/v1/instances/{inst_id}", headers=h)
-        assert del_resp.status_code == 409
-        assert del_resp.json()["error_code"] == "instance.still_running"
-
         # stop
         resp = client.post(f"/api/v1/instances/{inst_id}/stop", headers=h)
         assert resp.status_code == 200
         assert resp.json()["status"] == "pending"
 
-        # delete (now allowed)
+        # delete after stop
         del_resp = client.delete(f"/api/v1/instances/{inst_id}", headers=h)
         assert del_resp.status_code == 204
+
+        # Delete while running (auto-stop) on a fresh entity to avoid unique constraint
+        entity2 = _create_entity(
+            client, auth_token, "lifecycle-emp-2", "Lifecycle Entity 2",
+        )
+        resp = client.post("/api/v1/instances", headers=h, json={
+            "entity_id": entity2,
+            "workspace_id": workspace_id,
+        })
+        assert resp.status_code == 201
+        inst2 = resp.json()["id"]
+        assert client.post(f"/api/v1/instances/{inst2}/deploy", headers=h).status_code == 200
+        assert client.post(f"/api/v1/instances/{inst2}/start", headers=h).status_code == 200
+        assert client.delete(f"/api/v1/instances/{inst2}", headers=h).status_code == 204
+        assert client.get(f"/api/v1/instances/{inst2}", headers=h).status_code == 404
 
     @pytest.mark.asyncio
     async def test_fail_transition(

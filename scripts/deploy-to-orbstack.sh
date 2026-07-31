@@ -109,7 +109,15 @@ POSTGRES_DB="${POSTGRES_DB:-cocoa_dev}"
 DATABASE_URL="${DATABASE_URL:-postgresql+asyncpg://postgres:devpassword@cocoa-postgres:5432/cocoa_dev}"
 JWT_SECRET="${JWT_SECRET:-dev-secret-not-for-production-32-chars-min-OK}"
 ENCRYPTION_KEY="${ENCRYPTION_KEY:-dev-encrypt-key-32-bytes-long-AAA}"
-COCOA_K8S_DISABLED="${COCOA_K8S_DISABLED:-true}"
+COCOA_K8S_DISABLED="${COCOA_K8S_DISABLED:-false}"
+COCOA_INSTANCE_IMAGE_PULL_POLICY="${COCOA_INSTANCE_IMAGE_PULL_POLICY:-Never}"
+# Stable internal token for instance pods ↔ backend /api/v1/internal/*.
+# Reuse the live secret value when present so redeploys do not rotate it.
+EXISTING_API_TOKEN="$(
+  kubectl get secret cocoa-backend-secrets -n "$NS" \
+    -o jsonpath='{.data.COCOA_API_TOKEN}' 2>/dev/null | base64 -d 2>/dev/null || true
+)"
+COCOA_API_TOKEN="${COCOA_API_TOKEN:-${EXISTING_API_TOKEN:-$(openssl rand -base64 32)}}"
 
 apply_secret() {
   local name="$1"; shift
@@ -140,9 +148,12 @@ apply_secret cocoa-backend-secrets \
   --from-literal=DATABASE_URL="$DATABASE_URL" \
   --from-literal=JWT_SECRET="$JWT_SECRET" \
   --from-literal=ENCRYPTION_KEY="$ENCRYPTION_KEY" \
-  --from-literal=COCOA_K8S_DISABLED="$COCOA_K8S_DISABLED"
+  --from-literal=COCOA_K8S_DISABLED="$COCOA_K8S_DISABLED" \
+  --from-literal=COCOA_INSTANCE_IMAGE_PULL_POLICY="$COCOA_INSTANCE_IMAGE_PULL_POLICY" \
+  --from-literal=COCOA_API_TOKEN="$COCOA_API_TOKEN"
 
-log "Applying backend and portal manifests"
+log "Applying backend RBAC + backend and portal manifests"
+kubectl apply -f "$MANIFEST_DIR/backend-rbac.yaml"
 kubectl apply -f "$MANIFEST_DIR/backend-deployment.yaml"
 kubectl apply -f "$MANIFEST_DIR/portal-deployment.yaml"
 

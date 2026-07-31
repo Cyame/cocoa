@@ -10,6 +10,8 @@ workload-style resources + ``build_service``). Higher-level ingress /
 proxy builders are deferred to P12.
 """
 
+import os
+
 from kubernetes_asyncio.client import (
     V1ConfigMap,
     V1ConfigMapVolumeSource,
@@ -188,8 +190,9 @@ def build_deployment(
     """
     selector_labels = labels or {}
     container = V1Container(
-        name=name,
+        name=name[:63],
         image=image,
+        image_pull_policy=os.environ.get("COCOA_INSTANCE_IMAGE_PULL_POLICY", "IfNotPresent"),
         ports=[V1ContainerPort(container_port=port)],
         resources=V1ResourceRequirements(
             requests={"cpu": cpu_request, "memory": mem_request},

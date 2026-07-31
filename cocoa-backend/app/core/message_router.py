@@ -41,12 +41,14 @@ class MessageDeliveryResult:
         instance_id: UUID of the target :class:`~app.models.instance.Instance`
             (populated for gating-attempt results, ``None`` for early-out
             rejections like ``entity_not_found``).
+        turn_id: Composer turn id when a user_turn stream was scheduled.
     """
 
     target_entity: str
     delivered: bool
     reason: str | None = None
     instance_id: str | None = None
+    turn_id: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -115,7 +117,14 @@ async def route_message(
         select(Instance).where(
             Instance.entity_id == entity.id,
             Instance.workspace_id == workspace_id,
-            Instance.status.in_([InstanceStatus.running, InstanceStatus.pending]),
+            Instance.status.in_(
+                [
+                    InstanceStatus.running,
+                    InstanceStatus.pending,
+                    InstanceStatus.creating,
+                    InstanceStatus.deploying,
+                ]
+            ),
             Instance.deleted_at.is_(None),
         )
     )
@@ -226,11 +235,35 @@ async def route_message(
                 },
                 session=session,
             )
+            # Chat mention: args hold the utterance after @slug.
+            # Slash directive: prefer general_text, else args joined.
+            if directive.cmd:
+                turn_text = (general_text or "").strip()
+                if not turn_text:
+                    turn_text = " ".join(directive.args).strip()
+                if not turn_text:
+                    turn_text = directive.cmd
+            else:
+                turn_text = " ".join(directive.args).strip()
+                if not turn_text:
+                    turn_text = (general_text or "").strip()
+            from app.core.composer_turns import schedule_user_turn
+
+            turn_id = await schedule_user_turn(
+                session=session,
+                workspace_id=workspace_id,
+                instance_id=instance.id,
+                target_entity=directive.target_entity,
+                text=turn_text,
+                cmd=directive.cmd or None,
+                from_membership_id=from_membership_id,
+            )
             results.append(
                 MessageDeliveryResult(
                     target_entity=directive.target_entity,
                     delivered=True,
                     instance_id=instance.id,
+                    turn_id=turn_id,
                 )
             )
 

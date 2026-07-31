@@ -42,7 +42,9 @@ async def list_memberships(
         query = query.where(Membership.user_id.is_not(None))
     elif kind == "instance":
         query = query.where(Membership.instance_id.is_not(None))
-    return await paginate_offset(db, query, offset, limit)
+    page = await paginate_offset(db, query, offset, limit)
+    items = await _enrich_memberships(db, page.items)
+    return OffsetPage(items=items, total=page.total, limit=page.limit, offset=page.offset)
 
 
 @router.get("/memberships/{membership_id}", response_model=MembershipOut)
@@ -482,7 +484,12 @@ async def send_message(
                 "target_entity": r.target_entity,
                 "cmd": r.cmd,
                 "delivery": [
-                    {"delivered": d.delivered, "reason": d.reason, "instance_id": d.instance_id}
+                    {
+                        "delivered": d.delivered,
+                        "reason": d.reason,
+                        "instance_id": d.instance_id,
+                        "turn_id": d.turn_id,
+                    }
                     for d in r.results
                 ],
             }
@@ -492,6 +499,52 @@ async def send_message(
 
 
 # ---------- Meeting / Scheduled-task scaffold ----------
+
+
+async def _enrich_memberships(db: DB, memberships: list) -> list[MembershipOut]:
+    """Attach entity_slug/name for instance seats (topology @slug)."""
+    from app.models.entity import Entity
+    from app.models.instance import Instance
+
+    instance_ids = [m.instance_id for m in memberships if m.instance_id]
+    inst_map: dict[str, Instance] = {}
+    if instance_ids:
+        rows = (
+            await db.execute(
+                select(Instance).where(
+                    Instance.id.in_(instance_ids),
+                    Instance.deleted_at.is_(None),
+                )
+            )
+        ).scalars().all()
+        inst_map = {i.id: i for i in rows}
+    entity_ids = [i.entity_id for i in inst_map.values()]
+    ent_map: dict[str, Entity] = {}
+    if entity_ids:
+        rows = (
+            await db.execute(
+                select(Entity).where(
+                    Entity.id.in_(entity_ids),
+                    Entity.deleted_at.is_(None),
+                )
+            )
+        ).scalars().all()
+        ent_map = {e.id: e for e in rows}
+
+    out: list[MembershipOut] = []
+    for m in memberships:
+        base = MembershipOut.model_validate(m)
+        if m.instance_id and m.instance_id in inst_map:
+            ent = ent_map.get(inst_map[m.instance_id].entity_id)
+            if ent is not None:
+                base = base.model_copy(
+                    update={
+                        "entity_slug": ent.slug,
+                        "entity_name": ent.display_name or ent.name,
+                    }
+                )
+        out.append(base)
+    return out
 
 
 @router.post("/meetings", status_code=501)

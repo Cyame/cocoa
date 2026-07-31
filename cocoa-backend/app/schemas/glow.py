@@ -50,3 +50,9 @@ class LiveStatusItemOut(BaseModel):
     # always have ``outdated=False`` and ``active_hash=None``.
     outdated: bool = False
     active_hash: str | None = None
+    # Lifecycle of the bound Instance (running/pending/deploying/…).
+    # ``null`` for user nodes. Portal uses this to gate @ / Composer chat.
+    instance_status: str | None = None
+    mentionable: bool = False
+    # Product-facing avatar status (busy/idle/stopped/…); preferred for badges.
+    display_status: str | None = None

@@ -14,7 +14,8 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 WINDOW_SECONDS = 60
-MAX_REQUESTS_PER_WINDOW = 100
+# SPA polls live-status + events; 100/min is too tight for IDE usage.
+MAX_REQUESTS_PER_WINDOW = 600
 # Entries idle for longer than this are purged lazily on each counted request.
 CLEANUP_AGE_SECONDS = 120
 # Only API traffic is rate-limited; /health, /docs, /redoc, /openapi.json stay exempt.

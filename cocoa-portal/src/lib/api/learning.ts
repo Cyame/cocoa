@@ -51,6 +51,8 @@ export type InstanceStatusPayload = {
   readonly entity_id: string;
   readonly workspace_id: string;
   readonly status: string;
+  readonly display_status?: string | null;
+  readonly in_conversation?: boolean;
   readonly created_at: string;
   readonly updated_at: string;
 };

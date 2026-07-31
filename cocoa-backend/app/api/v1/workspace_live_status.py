@@ -4,17 +4,19 @@ from fastapi import APIRouter
 from sqlalchemy import select
 
 from app.api.deps import DB, CurrentUserDep
+from app.core.avatar_status import compute_avatar_display_status
+from app.core.composer_turns import instance_has_active_turn
 from app.core.glow import (
     GlowColor,
     GlowIntensity,
-    loop_status_to_glow,
+    avatar_display_status_to_glow,
     user_membership_glow,
 )
+from app.core.migration_hash import compute_entity_migration_hash
 from app.core.openapi import add_error_responses
 from app.core.permissions import require_workspace_role
 from app.models.entity import Entity
 from app.models.instance import Instance
-from app.models.loop_state import InstanceLoopState
 from app.models.workspace import Membership
 from app.schemas.glow import GlowColorOut, LiveStatusItemOut
 
@@ -56,23 +58,11 @@ async def get_workspace_live_status(
         )
     ).scalars().all()
 
-    loop_states_by_instance: dict[str, InstanceLoopState] = {}
     instance_ids = [m.instance_id for m in memberships if m.instance_id]
-    if instance_ids:
-        loop_state_rows = (
-            await db.execute(
-                select(InstanceLoopState).where(
-                    InstanceLoopState.instance_id.in_(instance_ids),
-                    InstanceLoopState.deleted_at.is_(None),
-                )
-            )
-        ).scalars().all()
-        loop_states_by_instance = {row.instance_id: row for row in loop_state_rows}
-
     # Phase-15f: join instances with their entities to expose
-    # active_hash + deprecated-by-promote flag.
+    # active_hash + outdated (compare to migration_hash or computed hash).
     instance_by_id: dict[str, Instance] = {}
-    entity_migration_hash: dict[str, str | None] = {}
+    entity_by_id: dict[str, Entity] = {}
     if instance_ids:
         inst_rows = (
             await db.execute(
@@ -84,17 +74,18 @@ async def get_workspace_live_status(
         ).scalars().all()
         instance_by_id = {row.id: row for row in inst_rows}
 
-        emp_rows = (
-            await db.execute(
-                select(Entity.id, Entity.migration_hash).where(
-                    Entity.id.in_(
-                        inst.entity_id for inst in instance_by_id.values()
-                    ),
-                    Entity.deleted_at.is_(None),
+        if instance_by_id:
+            emp_rows = (
+                await db.execute(
+                    select(Entity).where(
+                        Entity.id.in_(
+                            inst.entity_id for inst in instance_by_id.values()
+                        ),
+                        Entity.deleted_at.is_(None),
+                    )
                 )
-            )
-        ).all()
-        entity_migration_hash = {row[0]: row[1] for row in emp_rows}
+            ).scalars().all()
+            entity_by_id = {e.id: e for e in emp_rows}
 
     items: list[LiveStatusItemOut] = []
     for membership in memberships:
@@ -103,26 +94,40 @@ async def get_workspace_live_status(
             node_type: str = "user"
             outdated = False
             active_hash: str | None = None
+            instance_status: str | None = None
+            mentionable = False
+            display_status: str | None = None
         else:
             instance_id = membership.instance_id or ""
-            state = loop_states_by_instance.get(instance_id)
-            glow = (
-                _glow_to_out(loop_status_to_glow(state.loop_status))
-                if state is not None
-                else _glow_to_out(_STATIC_FALLBACK)
-            )
-            node_type = "instance"
             instance = instance_by_id.get(instance_id)
-            active_hash = instance.active_hash if instance is not None else None
-            expected_hash = (
-                entity_migration_hash.get(instance.entity_id)
-                if instance is not None
+            instance_status = instance.status if instance is not None else None
+            in_conversation = (
+                instance_has_active_turn(instance_id) if instance_id else False
+            )
+            display_status = (
+                compute_avatar_display_status(
+                    instance_status or "", in_conversation=in_conversation
+                )
+                if instance_status is not None
                 else None
             )
-            outdated = (
-                active_hash is None
-                or active_hash != expected_hash
+            # @ only when avatar is up (running) — busy or idle both OK.
+            mentionable = instance_status == "running"
+            glow = _glow_to_out(
+                avatar_display_status_to_glow(display_status or "stopped")
             )
+            node_type = "instance"
+            active_hash = instance.active_hash if instance is not None else None
+            entity = (
+                entity_by_id.get(instance.entity_id) if instance is not None else None
+            )
+            if entity is None:
+                outdated = True
+            else:
+                expected_hash = entity.migration_hash or compute_entity_migration_hash(
+                    entity
+                )
+                outdated = active_hash is None or active_hash != expected_hash
 
         items.append(
             LiveStatusItemOut(
@@ -133,6 +138,9 @@ async def get_workspace_live_status(
                 glow=glow,
                 outdated=outdated,
                 active_hash=active_hash,
+                instance_status=instance_status,
+                mentionable=mentionable,
+                display_status=display_status,
             )
         )
 

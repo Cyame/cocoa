@@ -45,7 +45,7 @@ class Directive(BaseModel):
     """
 
     target_entity: str | None = None
-    cmd: str
+    cmd: str = ""  # empty = chat mention (@slug text) without a slash command
     args: list[str] = Field(default_factory=list)
     content_ref: ContentRef | None = None
     raw_text: str = ""

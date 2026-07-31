@@ -109,6 +109,7 @@ async def route_turn(
             from_membership_id=sender_membership.id,
             workspace_id=workspace_id,
             directive=directive,
+            general_text=turn.general_text,
         )
 
         # Trigger on_mention for successful deliveries

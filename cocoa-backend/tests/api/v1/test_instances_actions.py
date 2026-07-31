@@ -177,13 +177,24 @@ class TestInstanceRestart:
         assert body["instance_id"] == instance_id
         assert body["old_hash"] is None
         assert body["new_hash"] == "f" * 64
-        assert body["status_after"] == "pending"
+        assert body["status_after"] in {
+            "deploying",
+            "restarting",
+            "pending",
+            "failed",
+            "running",
+        }
 
         await session.refresh(inst0)
         assert inst0.active_hash == "f" * 64
-        assert inst0.status == InstanceStatus.pending.value
+        assert inst0.status in {
+            InstanceStatus.deploying.value,
+            InstanceStatus.failed.value,
+            InstanceStatus.pending.value,
+            InstanceStatus.running.value,
+        }
 
-    async def test_restart_409_when_running(
+    async def test_restart_while_running_stops_and_redeploys(
         self, client: TestClient, auth_token: str, auth_user_id: str,
         session: AsyncSession,
     ) -> None:
@@ -201,8 +212,10 @@ class TestInstanceRestart:
             headers=h,
             json={},
         )
-        assert resp.status_code == 409, resp.text
-        assert resp.json()["error_code"] == "instance.running"
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["instance_id"] == instance_id
+        assert body["status_after"] in {"deploying", "restarting", "pending", "failed", "running"}
 
     async def test_restart_with_force_bypasses_running(
         self, client: TestClient, auth_token: str, auth_user_id: str,

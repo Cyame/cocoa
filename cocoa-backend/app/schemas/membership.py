@@ -74,3 +74,6 @@ class MembershipOut(BaseModel):
     permissions: dict | None
     created_at: datetime
     updated_at: datetime
+    # Populated for instance seats (迷失者) when listing topology data.
+    entity_slug: str | None = None
+    entity_name: str | None = None

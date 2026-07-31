@@ -42,6 +42,11 @@ MESSAGING_MESSAGE_SENT = "messaging.message_sent"
 MESSAGING_DELIVERY_BLOCKED = "messaging.delivery_blocked"
 MESSAGING_ACTIVATION_TRIGGERED = "messaging.activation_triggered"
 
+# Composer / Tunnel-shaped chat stream (PRD-v3.4.1)
+CHAT_RESPONSE_CHUNK = "chat.response.chunk"
+CHAT_RESPONSE_DONE = "chat.response.done"
+CHAT_RESPONSE_ERROR = "chat.response.error"
+
 # ---------------------------------------------------------------------------
 # CentralHub (emit points in P6)
 # ---------------------------------------------------------------------------

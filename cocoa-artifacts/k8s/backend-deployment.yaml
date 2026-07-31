@@ -22,6 +22,7 @@ spec:
       labels:
         app: cocoa-backend
     spec:
+      serviceAccountName: cocoa-backend
       containers:
         - name: backend
           image: cocoa-backend:latest
@@ -49,6 +50,18 @@ spec:
                 secretKeyRef:
                   name: cocoa-backend-secrets
                   key: COCOA_K8S_DISABLED
+            - name: COCOA_INSTANCE_IMAGE_PULL_POLICY
+              valueFrom:
+                secretKeyRef:
+                  name: cocoa-backend-secrets
+                  key: COCOA_INSTANCE_IMAGE_PULL_POLICY
+                  optional: true
+            - name: COCOA_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: cocoa-backend-secrets
+                  key: COCOA_API_TOKEN
+                  optional: true
           readinessProbe:
             httpGet:
               path: /health

@@ -64,7 +64,9 @@ class K8sClient(K8sClientWatchMixin):
         return await self.apps.read_namespaced_deployment(name, ns)
 
     async def get_deployment_status(self, ns: str, name: str) -> dict:
-        dep = await self.apps.read_namespaced_deployment_status(name, ns)
+        # Prefer full Deployment GET (covered by deployments get RBAC) over the
+        # deployments/status subresource, which needs an explicit rule.
+        dep = await self.apps.read_namespaced_deployment(name, ns)
         status = dep.status
         return {
             "replicas": status.replicas or 0,

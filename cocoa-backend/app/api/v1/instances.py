@@ -23,6 +23,8 @@ from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import DB, CurrentUserDep
+from app.core.avatar_status import compute_avatar_display_status
+from app.core.composer_turns import instance_has_active_turn
 from app.core.errors import ConflictError, NotFoundError
 from app.core.event_types import (
     INSTANCE_BATCH_RESTARTED,
@@ -57,18 +59,41 @@ from app.schemas.instance_actions import (
     RestartResultOut,
 )
 from app.services.deploy_service import (
-    deploy_instance as svc_deploy_instance,
+    deploy_existing_instance as svc_deploy_existing_instance,
 )
 from app.services.deploy_service import (
     execute_deploy_pipeline as svc_execute_deploy_pipeline,
 )
-from app.services.k8s.client_manager import k8s_manager
-from app.services.k8s.k8s_client import K8sClient
+from app.services.deploy_service import (
+    scale_instance_runtime as svc_scale_instance_runtime,
+)
+from app.services.deploy_service import (
+    teardown_instance_namespace as svc_teardown_instance_namespace,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/instances", tags=["Instances"])
 add_error_responses(router)
+
+
+def _instance_out(instance: Instance) -> InstanceOut:
+    """Serialize Instance with product-facing display_status."""
+    in_conversation = instance_has_active_turn(instance.id)
+    return InstanceOut(
+        id=instance.id,
+        entity_id=instance.entity_id,
+        workspace_id=instance.workspace_id,
+        workspace_path=instance.workspace_path,
+        status=instance.status,
+        runtime_config=instance.runtime_config,
+        created_at=instance.created_at,
+        updated_at=instance.updated_at,
+        display_status=compute_avatar_display_status(
+            instance.status, in_conversation=in_conversation
+        ),
+        in_conversation=in_conversation,
+    )
 
 
 async def _refresh_instance_agent_config(db: DB, instance: Instance) -> None:
@@ -136,7 +161,7 @@ async def list_instances(
     entity_id: str | None = None,
     workspace_id: str | None = None,
     status: str | None = None,
-) -> OffsetPage:
+) -> OffsetPage[InstanceOut]:
     """Return a paginated list of active (non-deleted) instances.
 
     Optional filters: ``entity_id``, ``workspace_id``, ``status``.
@@ -161,7 +186,13 @@ async def list_instances(
         stmt = stmt.where(Instance.status == status)
 
     stmt = stmt.order_by(Instance.created_at)
-    return await paginate_offset(db, stmt, offset, min(limit, 200))
+    page = await paginate_offset(db, stmt, offset, min(limit, 200))
+    return OffsetPage(
+        items=[_instance_out(inst) for inst in page.items],
+        offset=page.offset,
+        limit=page.limit,
+        total=page.total,
+    )
 
 
 @router.get("/{instance_id}", response_model=InstanceOut)
@@ -169,7 +200,7 @@ async def get_instance(
     instance_id: str,
     db: DB,
     current_user: CurrentUserDep,
-) -> Instance:
+) -> InstanceOut:
     """Return a single instance by ID.
 
     Raises 404 if the instance does not exist or has been soft-deleted.
@@ -182,7 +213,7 @@ async def get_instance(
             f"Instance '{instance_id}' not found",
         )
     await require_workspace_role(db, current_user.user_id, instance.workspace_id, "editor")
-    return instance
+    return _instance_out(instance)
 
 
 # ---------------------------------------------------------------------------
@@ -349,10 +380,9 @@ async def delete_instance(
 ) -> None:
     """Soft-delete an instance.
 
-    The instance must not be ``running`` — stop it first via
-    ``POST /instances/{instance_id}/stop``. If the instance is already
-    ``deleting`` the call is idempotent and returns 204.
-    Raises 404 if the instance does not exist.
+    If the instance is ``running``, it is stopped first (DB + best-effort K8s
+    scale-down). Portal should confirm before calling. Idempotent when already
+    ``deleting``.
     """
     instance = await db.get(Instance, instance_id)
     if instance is None or instance.deleted_at is not None:
@@ -368,11 +398,8 @@ async def delete_instance(
         return
 
     if instance.status == InstanceStatus.running.value:
-        raise ConflictError(
-            "instance.still_running",
-            "errors.instance.still_running",
-            f"Instance '{instance_id}' is still running — stop it first",
-        )
+        instance.status = InstanceStatus.pending.value
+        await svc_scale_instance_runtime(instance_id, 0)
 
     previous_status = instance.status
     instance.status = InstanceStatus.deleting.value
@@ -396,19 +423,7 @@ async def delete_instance(
     instance.soft_delete()
     await db.commit()
 
-    # P11c: best-effort K8s namespace teardown. The DB soft-delete is the
-    # authoritative source of truth — a missing or unreachable cluster
-    # must never block the API call, so any error is logged and swallowed.
-    namespace = f"cocoa-default-{instance.workspace_path or instance.id}"
-    try:
-        api_client = await k8s_manager.get_gateway_client()
-        client = K8sClient(api_client)
-        await client.core.delete_namespace(namespace)
-    except Exception as exc:  # noqa: BLE001 — best-effort teardown
-        logger.warning(
-            "K8s namespace delete failed (continuing)",
-            extra={"namespace": namespace, "error": str(exc)},
-        )
+    await svc_teardown_instance_namespace(instance_id)
 
 
 # ---------------------------------------------------------------------------
@@ -531,12 +546,9 @@ async def deploy_instance(
 
     await _refresh_instance_agent_config(db, instance)
 
-    record_id, ctx = await svc_deploy_instance(
-        name=instance.workspace_path or str(instance.id),
+    record_id, ctx = await svc_deploy_existing_instance(
+        instance_id,
         image_version="latest",
-        workspace_id=instance.workspace_id,
-        entity_id=instance.entity_id,
-        proxy_token=instance.proxy_token or "",
         triggered_by=current_user.user_id,
         db=db,
     )
@@ -582,15 +594,11 @@ async def restart_instance(
     db: DB,
     current_user: CurrentUserDep,
 ) -> RestartResultOut:
-    """Re-sync an outdated instance to the current Entity.migration_hash.
+    """Re-sync / recycle an instance (stop → re-deploy).
 
-    Per PRD §13.6.7: this is the operator flow that runs after a
-    promote (when the live-status shows the instance is outdated). The
-    instance is moved ``restarting`` → ``pending`` and its
-    ``active_hash`` is reset to the current Entity.migration_hash.
-
-    Refuses with 409 if ``status == "running"`` and ``force=false``.
-    The K8s pickup hook is out of scope for this wave (P11c).
+    Confirmed by Portal. Running instances are stopped (scaled to 0), hash
+    refreshed, then a new deploy pipeline is started. ``force`` is accepted
+    for backward compatibility but no longer required.
     """
     instance = await db.get(Instance, instance_id)
     if instance is None or instance.deleted_at is not None:
@@ -610,23 +618,16 @@ async def restart_instance(
 
     await require_workspace_role(db, current_user.user_id, instance.workspace_id, "operator")
 
-    if instance.status == InstanceStatus.running.value and not body.force:
-        raise ConflictError(
-            "instance.running",
-            "errors.instance.running",
-            f"Instance '{instance_id}' is running; pass force=true to override",
-            details={
-                "running_instance_id": instance_id,
-                "current_status": instance.status,
-            },
-        )
+    was_running = instance.status == InstanceStatus.running.value
+    if was_running:
+        await svc_scale_instance_runtime(instance_id, 0)
 
     old_hash = instance.active_hash
     instance.status = InstanceStatus.restarting.value
     await db.flush()
 
     instance.active_hash = entity.migration_hash
-    instance.status = InstanceStatus.pending.value
+    instance.status = InstanceStatus.deploying.value
 
     await emit(
         INSTANCE_RESTARTED,
@@ -638,18 +639,41 @@ async def restart_instance(
             "old_hash": old_hash,
             "new_hash": instance.active_hash,
             "reason": body.reason,
-            "force": body.force,
+            "force": body.force or was_running,
         },
         session=db,
     )
     await db.commit()
 
+    try:
+        record_id, ctx = await svc_deploy_existing_instance(
+            instance_id,
+            triggered_by=current_user.user_id,
+            db=db,
+        )
+        asyncio.create_task(
+            svc_execute_deploy_pipeline(ctx),
+            name=f"restart-deploy-{instance_id[:8]}",
+        )
+        logger.info(
+            "restart triggered deploy record_id=%s instance_id=%s",
+            record_id,
+            instance_id,
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("restart deploy failed instance_id=%s", instance_id)
+        instance = await db.get(Instance, instance_id)
+        if instance is not None:
+            instance.status = InstanceStatus.failed.value
+            await db.commit()
+
+    instance = await db.get(Instance, instance_id)
     return RestartResultOut(
         restarted_at=datetime.now(timezone.utc).isoformat(),
         instance_id=instance_id,
         old_hash=old_hash,
-        new_hash=instance.active_hash,
-        status_after=instance.status,
+        new_hash=instance.active_hash if instance else None,
+        status_after=instance.status if instance else InstanceStatus.failed.value,
     )
 
 
@@ -743,17 +767,41 @@ async def batch_restart_instances(
     )
 
 
+@router.get("/{instance_id}/tunnel-status")
+async def instance_tunnel_status(
+    instance_id: str,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> dict[str, object]:
+    """Report whether the Instance Host is connected on the Tunnel hub."""
+    result = await db.execute(
+        select(Instance).where(Instance.id == instance_id, Instance.deleted_at.is_(None))
+    )
+    inst = result.scalar_one_or_none()
+    if inst is None:
+        raise NotFoundError(
+            "instance.not_found",
+            "errors.instance.not_found",
+            f"Instance '{instance_id}' not found",
+        )
+    await require_workspace_role(db, current_user.user_id, inst.workspace_id, "viewer")
+    from app.services.tunnel.tunnel_hub import tunnel_hub
+
+    connected = tunnel_hub.is_connected(instance_id)
+    return {"instance_id": instance_id, "connected": connected}
+
+
 @router.post("/{instance_id}/stop", response_model=InstanceOut)
 async def stop_instance(
     instance_id: str,
     db: DB,
     current_user: CurrentUserDep,
 ) -> Instance:
-    """Transition instance to ``pending`` (graceful shutdown).
+    """Stop the Instance runtime (scale to 0) and mark ``pending``.
 
-    Allowed from: ``running``. Emits an ``instance.stopped`` lifecycle event.
+    Allowed from: ``running``. Emits ``instance.stopped``.
     """
-    return await _transition(
+    inst = await _transition(
         instance_id,
         allowed=[InstanceStatus.running.value],
         new_status=InstanceStatus.pending.value,
@@ -761,6 +809,8 @@ async def stop_instance(
         db=db,
         current_user=current_user,
     )
+    await svc_scale_instance_runtime(instance_id, 0)
+    return inst
 
 
 @router.post("/{instance_id}/fail", response_model=InstanceOut)
@@ -769,13 +819,13 @@ async def fail_instance(
     body: FailBody,
     db: DB,
     current_user: CurrentUserDep,
-) -> Instance:
-    """Transition instance to ``failed``.
+) -> InstanceOut:
+    """Mark start/runtime failure, then soft-delete the avatar (no lingering node).
 
-    Allowed from any current status. The ``reason`` is recorded in the
-    emitted event payload.
+    Allowed from any non-deleted status. Topology membership is removed with the
+    instance so failed avatars do not remain on the canvas.
     """
-    return await _transition(
+    inst = await _transition(
         instance_id,
         allowed=[
             InstanceStatus.creating.value,
@@ -792,3 +842,21 @@ async def fail_instance(
         current_user=current_user,
         payload={"reason": body.reason},
     )
+    out = _instance_out(inst)
+    mem_rows = (
+        await db.execute(
+            select(Membership).where(
+                Membership.instance_id == instance_id,
+                Membership.deleted_at.is_(None),
+            )
+        )
+    ).scalars().all()
+    for mem in mem_rows:
+        mem.soft_delete()
+    inst.soft_delete()
+    await db.commit()
+    try:
+        await svc_teardown_instance_namespace(instance_id)
+    except Exception:  # noqa: BLE001
+        logger.exception("teardown after fail ignored instance_id=%s", instance_id)
+    return out

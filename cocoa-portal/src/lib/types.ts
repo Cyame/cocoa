@@ -51,6 +51,8 @@ export type WorkspaceMembership = WorkspaceMember & {
   readonly permissions: JsonObject | null;
   readonly created_at: string;
   readonly updated_at: string;
+  readonly entity_slug?: string | null;
+  readonly entity_name?: string | null;
 };
 
 export type Membership = WorkspaceMembership;
@@ -109,6 +111,16 @@ export type InstanceStatus =
   | 'failed'
   | 'deleting';
 
+/** Product-facing avatar status (not K8s / harness loop enums). */
+export type AvatarDisplayStatus =
+  | 'busy'
+  | 'idle'
+  | 'stopped'
+  | 'starting'
+  | 'restarting'
+  | 'deleting'
+  | 'start_failed';
+
 export type Instance = {
   readonly id: string;
   readonly entity_id: string;
@@ -118,6 +130,8 @@ export type Instance = {
   readonly runtime_config: JsonObject | null;
   readonly created_at: string;
   readonly updated_at: string;
+  readonly display_status?: AvatarDisplayStatus | null;
+  readonly in_conversation?: boolean;
 };
 
 export type LoopStatus = 'idle' | 'running' | 'paused' | 'interrupted' | 'completed' | 'failed';
@@ -197,10 +211,13 @@ export type LiveStatusItem = {
   readonly glow: GlowColor;
   readonly outdated: boolean;
   readonly active_hash: string | null;
+  readonly instance_status?: string | null;
+  readonly mentionable?: boolean;
+  readonly display_status?: AvatarDisplayStatus | null;
 };
 
 export type TopologyNode = {
-  readonly kind: 'membership';
+  readonly kind: 'membership' | 'hub';
   readonly id: string;
   readonly instanceId: string | null;
   readonly x: number;
@@ -214,6 +231,9 @@ export type TopologyNode = {
   readonly glowIntensity: GlowIntensity;
   readonly outdated: boolean;
   readonly activeHash: string | null;
+  readonly instanceStatus: string | null;
+  readonly mentionable: boolean;
+  readonly displayStatus: AvatarDisplayStatus | null;
 };
 
 export type Passage = {
@@ -308,7 +328,11 @@ export type EntityInstanceStatus = {
   readonly id: string;
   readonly entity_id: string;
   readonly workspace_id: string;
-  readonly loop_status: LoopStatus;
+  /** Lifecycle status from Instance.status (running/pending/…). */
+  readonly status: string;
+  /** Product-facing avatar status (busy/idle/stopped/…). */
+  readonly display_status: AvatarDisplayStatus;
+  readonly in_conversation: boolean;
   readonly continuation_count: number;
   readonly last_checkpoint_at: string | null;
   readonly pod_name: string | null;

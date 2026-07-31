@@ -32,12 +32,26 @@ _STATUS_GLOWS: Final[dict[str, GlowColor]] = {
     "completed": GlowColor("#3b82f6", GlowIntensity.low),
     "failed": GlowColor("#dc2626", GlowIntensity.strong),
 }
+_AVATAR_DISPLAY_GLOWS: Final[dict[str, GlowColor]] = {
+    "busy": GlowColor("#10b981", GlowIntensity.strong),
+    "idle": GlowColor("#eab308", GlowIntensity.medium),
+    "stopped": GlowColor("#94a3b8", GlowIntensity.weak),
+    "starting": GlowColor("#3b82f6", GlowIntensity.medium),
+    "restarting": GlowColor("#f59e0b", GlowIntensity.medium),
+    "deleting": GlowColor("#94a3b8", GlowIntensity.weak),
+    "start_failed": GlowColor("#dc2626", GlowIntensity.strong),
+}
 _USER_MEMBERSHIP_GLOW: Final = GlowColor("#4f46e5", GlowIntensity.medium)
 
 
 def loop_status_to_glow(status: str) -> GlowColor:
     """Map a harness loop status to its fixed topology glow."""
     return _STATUS_GLOWS.get(status, _DEFAULT_GLOW)
+
+
+def avatar_display_status_to_glow(status: str) -> GlowColor:
+    """Map product-facing avatar display status to topology glow."""
+    return _AVATAR_DISPLAY_GLOWS.get(status, _DEFAULT_GLOW)
 
 
 def user_membership_glow() -> GlowColor:

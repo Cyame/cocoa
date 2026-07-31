@@ -107,6 +107,8 @@ async def create_entity(
             f"Entity slug '{body.slug}' is already taken",
         )
 
+    from app.core.migration_hash import compute_entity_migration_hash
+
     entity = Entity(
         namespace_id=namespace_id,
         name=body.name,
@@ -118,6 +120,7 @@ async def create_entity(
         system_prompt=body.system_prompt,
         config_override=body.config_override,
     )
+    entity.migration_hash = compute_entity_migration_hash(entity)
     db.add(entity)
     await db.commit()
     await db.refresh(entity)
@@ -175,12 +178,15 @@ async def delete_entity(
     db: DB,
     current_user: CurrentUserDep,
 ) -> None:
-    """Soft-delete an entity.
+    """Soft-delete an entity and cascade soft-delete its instances + memberships.
 
     The record is marked as deleted (``deleted_at`` is set) but not physically
     removed from the database.  Refreshes the registry cache after deletion.
     Raises 404 if the entity does not exist.
     """
+    from app.models.instance import Instance
+    from app.models.workspace import Membership
+
     entity = await db.get(Entity, entity_id)
     if entity is None or entity.deleted_at is not None:
         raise NotFoundError(
@@ -190,6 +196,27 @@ async def delete_entity(
         )
 
     entity.soft_delete()
+    instances = (
+        await db.execute(
+            select(Instance).where(
+                Instance.entity_id == entity_id,
+                Instance.deleted_at.is_(None),
+            )
+        )
+    ).scalars().all()
+    for inst in instances:
+        inst.soft_delete()
+        mems = (
+            await db.execute(
+                select(Membership).where(
+                    Membership.instance_id == inst.id,
+                    Membership.deleted_at.is_(None),
+                )
+            )
+        ).scalars().all()
+        for mem in mems:
+            mem.soft_delete()
+
     await db.commit()
 
     await registry.reload(db)

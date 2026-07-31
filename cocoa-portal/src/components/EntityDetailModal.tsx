@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router';
 import DistillResultModal from '@/components/DistillResultModal';
 import AiGenesTab from '@/components/entity-tabs/AiGenesTab';
 import BasicTab from '@/components/entity-tabs/BasicTab';
@@ -20,10 +21,16 @@ import InstancesTab from '@/components/entity-tabs/InstancesTab';
 import PromoteModal from '@/components/PromoteModal';
 import { ApiError } from '@/lib/api';
 import { type EntityDetail, fetchEntity, promoteEntity, transmuteEntity } from '@/lib/api/entities';
-import { deleteInstance, listInstancesForEntity } from '@/lib/api/learning';
-import type { EntityInstanceStatus, MemoryKind, TransmuteResult } from '@/lib/types';
+import { listInstancesForEntity } from '@/lib/api/learning';
+import {
+  deleteInstanceById,
+  restartInstance,
+  stopInstance,
+} from '@/lib/api/instances';
+import type { AvatarDisplayStatus, EntityInstanceStatus, MemoryKind, TransmuteResult } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { type EntityModalTabId, useEntityModalStore } from '@/stores/entityModalStore';
+import { useSelectedStore } from '@/stores/selected';
 
 const TAB_ORDER: readonly EntityModalTabId[] = [
   'basic',
@@ -33,12 +40,38 @@ const TAB_ORDER: readonly EntityModalTabId[] = [
   'distill',
 ];
 
+function resolveDisplayStatus(
+  status: string,
+  displayStatus: string | null | undefined,
+  inConversation: boolean,
+): AvatarDisplayStatus {
+  if (
+    displayStatus === 'busy' ||
+    displayStatus === 'idle' ||
+    displayStatus === 'stopped' ||
+    displayStatus === 'starting' ||
+    displayStatus === 'restarting' ||
+    displayStatus === 'deleting' ||
+    displayStatus === 'start_failed'
+  ) {
+    return displayStatus;
+  }
+  if (status === 'running') return inConversation ? 'busy' : 'idle';
+  if (status === 'pending') return 'stopped';
+  if (status === 'restarting') return 'restarting';
+  if (status === 'deleting') return 'deleting';
+  if (status === 'failed') return 'start_failed';
+  if (status === 'creating' || status === 'deploying') return 'starting';
+  return 'idle';
+}
+
 type EntityDetailModalProps = {
   readonly onClose: () => void;
 };
 
 export default function EntityDetailModal({ onClose }: EntityDetailModalProps) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const entityId = useEntityModalStore((state) => state.entityId);
   const initialTab = useEntityModalStore((state) => state.initialTab);
   const [tab, setTab] = useState<EntityModalTabId>('basic');
@@ -79,7 +112,13 @@ export default function EntityDetailModal({ onClose }: EntityDetailModalProps) {
           id: it.id,
           entity_id: it.entity_id,
           workspace_id: it.workspace_id,
-          loop_status: mapStatusToLoop(it.status),
+          status: it.status,
+          display_status: resolveDisplayStatus(
+            it.status,
+            it.display_status,
+            it.in_conversation === true,
+          ),
+          in_conversation: it.in_conversation === true,
           continuation_count: 0,
           last_checkpoint_at: null,
           pod_name: null,
@@ -182,8 +221,31 @@ export default function EntityDetailModal({ onClose }: EntityDetailModalProps) {
 
   const handleReap = useCallback(
     async (inst: EntityInstanceStatus) => {
+      const ok = window.confirm(
+        t('entityModal.instancesTab.reapConfirmBody', { id: inst.id.slice(0, 8) }),
+      );
+      if (!ok) return;
       try {
-        await deleteInstance(inst.id);
+        const { reapInstance } = await import('@/lib/api/learning');
+        await reapInstance(inst.id, null);
+        setToast({ kind: 'success', message: t('entityModal.instancesTab.reapSuccess') });
+        void loadInstances(inst.entity_id);
+      } catch (error) {
+        const message = error instanceof ApiError ? error.message : t('entityModal.errors.reap');
+        setToast({ kind: 'error', message });
+      }
+    },
+    [loadInstances, t],
+  );
+
+  const handleDelete = useCallback(
+    async (inst: EntityInstanceStatus) => {
+      const ok = window.confirm(
+        t('entityModal.instancesTab.deleteConfirmBody', { id: inst.id.slice(0, 8) }),
+      );
+      if (!ok) return;
+      try {
+        await deleteInstanceById(inst.id);
         setInstances((prev) => prev.filter((it) => it.id !== inst.id));
         setToast({ kind: 'success', message: t('entityModal.instancesTab.deleteSuccess') });
       } catch (error) {
@@ -192,6 +254,45 @@ export default function EntityDetailModal({ onClose }: EntityDetailModalProps) {
       }
     },
     [t],
+  );
+
+  const handleStop = useCallback(
+    async (inst: EntityInstanceStatus) => {
+      try {
+        await stopInstance(inst.id);
+        setInstances((prev) =>
+          prev.map((it) =>
+            it.id === inst.id
+              ? { ...it, status: 'pending', display_status: 'stopped' as const }
+              : it,
+          ),
+        );
+        setToast({ kind: 'success', message: t('entityModal.instancesTab.stopSuccess') });
+        void loadInstances(inst.entity_id);
+      } catch (error) {
+        const message = error instanceof ApiError ? error.message : t('entityModal.errors.reap');
+        setToast({ kind: 'error', message });
+      }
+    },
+    [loadInstances, t],
+  );
+
+  const handleRestart = useCallback(
+    async (inst: EntityInstanceStatus) => {
+      const ok = window.confirm(
+        t('entityModal.instancesTab.restartConfirmBody', { id: inst.id.slice(0, 8) }),
+      );
+      if (!ok) return;
+      try {
+        await restartInstance(inst.id, { force: true });
+        setToast({ kind: 'success', message: t('entityModal.instancesTab.restartSuccess') });
+        void loadInstances(inst.entity_id);
+      } catch (error) {
+        const message = error instanceof ApiError ? error.message : t('entityModal.errors.reap');
+        setToast({ kind: 'error', message });
+      }
+    },
+    [loadInstances, t],
   );
 
   const handleRemoveCapability = useCallback(
@@ -211,8 +312,34 @@ export default function EntityDetailModal({ onClose }: EntityDetailModalProps) {
   }, []);
 
   const handleFindInWorkspace = useCallback(() => {
-    setToast({ kind: 'success', message: t('entityModal.footer.findInTopologyPending') });
-  }, [t]);
+    const first = instances[0];
+    if (first === undefined || !first.workspace_id) {
+      setToast({ kind: 'error', message: t('entityModal.footer.findInTopologyEmpty') });
+      return;
+    }
+    useSelectedStore.getState().setWorkspaceId(first.workspace_id);
+    useSelectedStore.getState().setInstanceId(first.id);
+    navigate(`/workspaces/${encodeURIComponent(first.workspace_id)}`);
+    onClose();
+  }, [instances, navigate, onClose, t]);
+
+  const handleGoWorkspace = useCallback(
+    (inst: EntityInstanceStatus) => {
+      if (!inst.workspace_id) {
+        setToast({
+          kind: 'error',
+          message: t('entityModal.instancesTab.goToWorkspaceMissing'),
+        });
+        return;
+      }
+      // Navigate first, then close — closing unmounts this modal via zustand.
+      useSelectedStore.getState().setWorkspaceId(inst.workspace_id);
+      useSelectedStore.getState().setInstanceId(inst.id);
+      navigate(`/workspaces/${encodeURIComponent(inst.workspace_id)}`);
+      onClose();
+    },
+    [navigate, onClose, t],
+  );
 
   const handleGoToGenes = useCallback(() => {
     setTab('ai_genes');
@@ -220,10 +347,6 @@ export default function EntityDetailModal({ onClose }: EntityDetailModalProps) {
 
   const handleAddGene = useCallback(() => {
     setToast({ kind: 'success', message: t('entityModal.aiGenesTab.addExtraHint') });
-  }, [t]);
-
-  const handleGoIntroduce = useCallback(() => {
-    setToast({ kind: 'success', message: t('entityModal.instancesTab.goIntroduceHint') });
   }, [t]);
 
   const headerTitle = useMemo(() => {
@@ -369,10 +492,12 @@ export default function EntityDetailModal({ onClose }: EntityDetailModalProps) {
               instances={instances}
               isLoading={instancesLoading}
               errorMessage={instancesError}
-              onSpawn={handleGoIntroduce}
               onPromote={(inst) => setPromoteInstance(inst)}
               onReap={handleReap}
-              onDelete={handleReap}
+              onDelete={handleDelete}
+              onStop={handleStop}
+              onRestart={handleRestart}
+              onGoWorkspace={handleGoWorkspace}
             />
           ) : (
             <DistillTab entity={entity} canTransmute={canTransmute} onTransmute={handleTransmute} />
@@ -423,22 +548,3 @@ export default function EntityDetailModal({ onClose }: EntityDetailModalProps) {
   );
 }
 
-function mapStatusToLoop(status: string): EntityInstanceStatus['loop_status'] {
-  switch (status) {
-    case 'running':
-      return 'running';
-    case 'paused':
-      return 'paused';
-    case 'failed':
-      return 'failed';
-    case 'creating':
-    case 'pending':
-    case 'deploying':
-    case 'restarting':
-      return 'running';
-    case 'deleting':
-      return 'completed';
-    default:
-      return 'idle';
-  }
-}

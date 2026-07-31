@@ -1,3 +1,4 @@
+import DeployProgressFloat from '@/components/DeployProgressFloat';
 import EntityDetailModal from '@/components/EntityDetailModal';
 import FirstRunOnboardingModal from '@/pages/FirstRunOnboardingModal';
 import { useEntityModalStore } from '@/stores/entityModalStore';
@@ -24,6 +25,7 @@ export default function GlobalModals({ onOnboardingComplete }: GlobalModalsProps
           }}
         />
       ) : null}
+      <DeployProgressFloat />
     </>
   );
 }

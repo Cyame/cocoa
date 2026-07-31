@@ -23,6 +23,7 @@ export type InstanceCreatePayload = {
 
 export type InstanceWithToken = Instance & {
   readonly proxy_token?: string | null;
+  readonly deploy_record_id?: string | null;
 };
 
 export type OffsetPage<T> = {
@@ -77,6 +78,43 @@ export function batchRestartInstances(
       instance_ids: instanceIds,
       reason,
     }),
+  });
+}
+
+export function stopInstance(instanceId: string): Promise<Instance> {
+  return api<Instance>(`/instances/${encodeURIComponent(instanceId)}/stop`, {
+    method: 'POST',
+  });
+}
+
+export function restartInstance(
+  instanceId: string,
+  options: { readonly force?: boolean; readonly reason?: string | null } = {},
+): Promise<{
+  readonly restarted_at: string;
+  readonly instance_id: string;
+  readonly old_hash: string | null;
+  readonly new_hash: string | null;
+  readonly status_after: string;
+}> {
+  return api<{
+    readonly restarted_at: string;
+    readonly instance_id: string;
+    readonly old_hash: string | null;
+    readonly new_hash: string | null;
+    readonly status_after: string;
+  }>(`/instances/${encodeURIComponent(instanceId)}/restart`, {
+    method: 'POST',
+    body: JSON.stringify({
+      force: options.force ?? true,
+      reason: options.reason ?? null,
+    }),
+  });
+}
+
+export function deleteInstanceById(instanceId: string): Promise<void> {
+  return api<void>(`/instances/${encodeURIComponent(instanceId)}`, {
+    method: 'DELETE',
   });
 }
 

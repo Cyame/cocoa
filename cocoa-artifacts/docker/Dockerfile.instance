@@ -1,44 +1,44 @@
 # syntax=docker/dockerfile:1.7
-# Cocoa Instance Runtime Image — built with Aliyun (apt) + Tsinghua TUNA (PyPI) mirrors.
+# Cocoa Instance Host image — Node Host + pinned pi CLI (PRD-v3.5 Tunnel).
 #
-# P7 scaffolding hardened in P14b Wave 1 with the China-source multi-stage
-# pattern. Instance pods run app.agent_runtime and report back to cocoa-backend
-# via the P14b transport layer (Tunnel). Backend wiring is provided per-pod via
-# ConfigMap / Secret (see cocoa-artifacts/k8s/instance/).
+# Build from repo root:
+#   docker build -t cocoa-instance:latest -f cocoa-artifacts/docker/Dockerfile.instance .
 #
-# Build: docker build -t cocoa-instance:latest -f cocoa-artifacts/docker/Dockerfile.instance .
-# Pinned base image (Python 3.12 — Debian bookworm, matches Dockerfile.backend).
-# Pull: docker pull python:3.12.7-slim-bookworm
-FROM python:3.12.7-slim-bookworm AS builder
+# Pod main process: cocoa-instance-host (Tunnel WS client + pi --mode rpc).
+
+FROM node:24-bookworm-slim AS host-builder
 WORKDIR /build
 
 RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/*.sources 2>/dev/null || \
     sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list
 
-COPY cocoa-backend/pyproject.toml cocoa-backend/uv.lock ./
+COPY cocoa-instance-host/package.json cocoa-instance-host/package-lock.json* ./
+COPY cocoa-instance-host/tsconfig.json ./
+COPY cocoa-instance-host/src ./src
 
-RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple && \
-    pip config set global.trusted-host pypi.tuna.tsinghua.edu.cn && \
-    pip install --no-cache-dir uv && \
-    uv export --frozen --no-dev --no-hashes -o requirements.txt && \
-    pip install --no-cache-dir -r requirements.txt
+RUN npm config set registry https://registry.npmmirror.com && \
+    npm install && \
+    npm run build && \
+    npm prune --omit=dev && \
+    test -x node_modules/.bin/pi || test -f node_modules/@earendil-works/pi-coding-agent/dist/cli.js
 
-FROM python:3.12.7-slim-bookworm
+FROM node:24-bookworm-slim
 WORKDIR /app
 
 RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/*.sources 2>/dev/null || \
     sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list
 
-COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
+COPY --from=host-builder /build/dist ./dist
+COPY --from=host-builder /build/node_modules ./node_modules
+COPY --from=host-builder /build/package.json ./package.json
 
-COPY cocoa-backend/app /app/app
-COPY cocoa-backend/alembic /app/alembic
-COPY cocoa-backend/alembic.ini /app/
-
-ENV PYTHONPATH=/app
-# Marks the process as running inside an Instance Pod (vs the API-server backend).
 ENV COCOA_POD_MODE=true
+ENV COCOA_WORKSPACE_PATH=/data
+ENV COCOA_HOST_PORT=8080
+ENV NODE_ENV=production
+# Prefer package-local pi binary from @earendil-works/pi-coding-agent@0.83.0
+ENV PI_BIN=/app/node_modules/.bin/pi
+ENV PATH="/app/node_modules/.bin:${PATH}"
 
 EXPOSE 8080
-CMD ["python", "-m", "app.agent_runtime"]
+CMD ["node", "dist/main.js"]

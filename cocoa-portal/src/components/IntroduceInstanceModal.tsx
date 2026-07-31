@@ -5,6 +5,7 @@ import { ApiError, api } from '@/lib/api';
 import { introduceEntityIntoWorkspace } from '@/lib/api/instances';
 import type { Entity } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { useDeployProgressStore } from '@/stores/deployProgressStore';
 
 type IntroduceInstanceModalProps = {
   readonly workspaceId: string;
@@ -23,6 +24,7 @@ export default function IntroduceInstanceModal({
   onIntroduced,
 }: IntroduceInstanceModalProps) {
   const { t } = useTranslation();
+  const startDeploy = useDeployProgressStore((s) => s.start);
   const [entities, setEntities] = useState<readonly Entity[]>([]);
   const [entityId, setEntityId] = useState('');
   const [loading, setLoading] = useState(true);
@@ -60,6 +62,13 @@ export default function IntroduceInstanceModal({
       const instance = await introduceEntityIntoWorkspace(workspaceId, entityId);
       onIntroduced(instance.id);
       onClose();
+      if (instance.deploy_record_id) {
+        startDeploy({
+          recordId: instance.deploy_record_id,
+          instanceId: instance.id,
+          workspaceId,
+        });
+      }
     } catch (error) {
       setErrorMessage(
         error instanceof ApiError ? error.message : t('workspace.introduceFailed'),

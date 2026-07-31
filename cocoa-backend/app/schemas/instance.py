@@ -40,9 +40,14 @@ class InstanceOut(BaseModel):
     runtime_config: dict | None = None
     created_at: datetime
     updated_at: datetime
+    # Product-facing avatar status (busy/idle/stopped/…); not K8s / harness enums.
+    display_status: str | None = None
+    in_conversation: bool = False
 
 
 class InstanceOutWithToken(InstanceOut):
     """Response body for Instance creation, including its proxy token."""
 
     proxy_token: str | None = None
+    # Set when introduce/deploy kicks off a K8s pipeline (portal progress UI).
+    deploy_record_id: str | None = None

@@ -29,6 +29,7 @@ export type ContentRef = {
 
 export type Directive = {
   readonly target_entity: string | null;
+  /** Empty string = chat mention (@slug text) without a slash command. */
   readonly cmd: string;
   readonly args: readonly string[];
   readonly content_ref: ContentRef | null;
@@ -46,9 +47,10 @@ export type Turn = {
 
 /**
  * @employee-name at line start (alphanumeric + hyphens/underscores),
- * followed by whitespace. Matches Python ``^@([a-zA-Z0-9_-]+)\s+``.
+ * followed by whitespace or end-of-line. Matches Python
+ * ``^@([a-zA-Z0-9_-]+)(?:\s+|$)``.
  */
-const RE_TARGET = /^@([a-zA-Z0-9_-]+)\s+/;
+const RE_TARGET = /^@([a-zA-Z0-9_-]+)(?:\s+|$)/;
 
 /**
  * /command (lowercase-start, alphanumeric + hyphens).
@@ -98,9 +100,19 @@ export function parse_directive(line: string): Directive | string {
   }
 
   // 2. Extract /cmd (first occurrence, leftmost).
+  // PRD-v3.4.1: bare ``@slug message`` (no /cmd) is a chat mention.
   const cmdMatch = remaining.match(RE_CMD);
   if (cmdMatch === null) {
-    // No command found - this line is general text.
+    if (target !== null) {
+      const args = remaining.split(/\s+/).filter((a) => a.length > 0);
+      return {
+        target_entity: target,
+        cmd: '',
+        args,
+        content_ref: null,
+        raw_text: original,
+      };
+    }
     return original;
   }
   const cmd = cmdMatch[1];

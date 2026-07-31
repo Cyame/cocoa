@@ -19,6 +19,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 from dataclasses import asdict, dataclass
 from typing import Final
 
@@ -43,7 +44,7 @@ from app.services.k8s.resource_builder import (
 
 logger = logging.getLogger(__name__)
 
-DEPLOY_PIPELINE_TIMEOUT_SECONDS = 30  # healthz watch window
+DEPLOY_PIPELINE_TIMEOUT_SECONDS = 300  # healthz watch window (image start + ready)
 DEPLOY_HEALTHZ_PATH = "/healthz"  # reserved; pipeline only checks ready_replicas
 GATEWAY_CLUSTER_ID = "_gateway"  # sentinel; gateway client is the single API surface
 
@@ -79,8 +80,14 @@ def _load_deploy_config_snapshot(record: DeployRecord) -> dict[str, str | int | 
 
 
 def _dump_deploy_config_snapshot(snapshot: dict[str, object]) -> str:
-    """Serialize a deploy context snapshot deterministically."""
-    return json.dumps(snapshot, default=str, sort_keys=True)
+    """Serialize a deploy context snapshot deterministically (redact secrets)."""
+    from app.services.llm.instance_pi_env import redact_env_for_snapshot
+
+    safe = dict(snapshot)
+    env = safe.get("env_vars")
+    if isinstance(env, dict):
+        safe["env_vars"] = redact_env_for_snapshot(env)
+    return json.dumps(safe, default=str, sort_keys=True)
 
 
 PROGRESS_STEP_NAMES: Final[list[str]] = [
@@ -125,8 +132,15 @@ async def _run_post_ready_instance_steps(
     ctx: _DeployContext,
     deploy_record: DeployRecord,
 ) -> None:
-    """Run extension hooks after the instance pod becomes ready."""
+    """Mark Instance running after the pod becomes ready."""
     del deploy_record
+    from app.models.instance import Instance, InstanceStatus
+
+    async with get_session_factory()() as db:
+        instance = await db.get(Instance, ctx.instance_id)
+        if instance is not None and instance.deleted_at is None:
+            instance.status = InstanceStatus.running.value
+            await db.commit()
     logger.info(
         "deploy ready",
         extra={"deploy_id": ctx.record_id, "instance_id": ctx.instance_id},
@@ -151,9 +165,57 @@ async def _restore_agent_bundle_with_retry(
     return False
 
 
-def _namespace_for(name: str) -> str:
-    """Per-instance namespace naming (D9: ``cocoa-default-{slug}``)."""
-    return f"cocoa-default-{name}"
+def _k8s_resource_name(instance_id: str) -> str:
+    """DNS-1123 name for Deployment/Service (not workspace_path — that has dots/slashes)."""
+    compact = instance_id.replace("-", "").lower()
+    return f"inst-{compact[:20]}"
+
+
+def _namespace_for(instance_id: str) -> str:
+    """Per-instance namespace: ``cocoa-inst-{idprefix}``."""
+    compact = instance_id.replace("-", "").lower()
+    return f"cocoa-inst-{compact[:20]}"
+
+
+def _instance_pod_env(instance_id: str, proxy_token: str, extra: dict[str, str]) -> dict[str, str]:
+    """Env injected into every instance pod (API reachability + identity + pi)."""
+    api_url = extra.get("COCOA_API_URL") or os.environ.get(
+        "COCOA_API_URL",
+        "http://cocoa-backend.cocoa.svc.cluster.local:4510",
+    )
+    # Lifespan may mint COCOA_API_TOKEN into process env; pods need the same value
+    # to call /api/v1/internal/* (emit / control poll).
+    api_token = extra.get("COCOA_API_TOKEN") or os.environ.get("COCOA_API_TOKEN", "")
+    tunnel_url = extra.get("COCOA_TUNNEL_URL") or os.environ.get("COCOA_TUNNEL_URL", "")
+    workspace_path = extra.get("COCOA_WORKSPACE_PATH") or "/data"
+    env: dict[str, str] = {
+        **extra,
+        "COCOA_PROXY_TOKEN": proxy_token,
+        "COCOA_INSTANCE_ID": instance_id,
+        "COCOA_POD_MODE": "true",
+        "COCOA_API_URL": api_url,
+        "COCOA_WORKSPACE_PATH": workspace_path,
+    }
+    if tunnel_url:
+        env["COCOA_TUNNEL_URL"] = tunnel_url
+    if api_token:
+        env["COCOA_API_TOKEN"] = api_token
+    return env
+
+
+async def _instance_pod_env_async(
+    db: AsyncSession,
+    instance_id: str,
+    proxy_token: str,
+    extra: dict[str, str] | None = None,
+) -> dict[str, str]:
+    """Like ``_instance_pod_env`` plus resolved OrganizationProvider → pi env."""
+    from app.services.llm.instance_pi_env import resolve_pi_env_for_instance
+
+    base = _instance_pod_env(instance_id, proxy_token, extra or {})
+    pi_env = await resolve_pi_env_for_instance(db, instance_id)
+    # Caller extras / COCOA_* win over pi defaults if both set.
+    return {**pi_env, **base}
 
 
 # ---------------------------------------------------------------------------
@@ -192,6 +254,21 @@ class PrecheckResult:
 # ---------------------------------------------------------------------------
 # Pre-deploy check
 # ---------------------------------------------------------------------------
+
+
+async def _next_deploy_revision(db: AsyncSession, instance_id: str) -> int:
+    """Next monotonic revision for an instance among active DeployRecords."""
+    result = await db.execute(
+        select(DeployRecord.revision)
+        .where(
+            DeployRecord.instance_id == instance_id,
+            DeployRecord.deleted_at.is_(None),
+        )
+        .order_by(DeployRecord.revision.desc())
+        .limit(1)
+    )
+    current = result.scalar_one_or_none()
+    return 1 if current is None else int(current) + 1
 
 
 async def precheck(instance_name: str, db: AsyncSession) -> PrecheckResult:
@@ -283,8 +360,8 @@ async def deploy_instance(
         record_id=record_id,
         instance_id=instance_id,
         cluster_id=GATEWAY_CLUSTER_ID,
-        name=name,
-        namespace=_namespace_for(name),
+        name=_k8s_resource_name(instance_id),
+        namespace=_namespace_for(instance_id),
         image_version=image_version,
         replicas=replicas,
         cpu_request=cpu_request,
@@ -292,11 +369,67 @@ async def deploy_instance(
         mem_request=mem_request,
         mem_limit=mem_limit,
         storage_size=storage_size,
-        env_vars={
-            **env_vars,
-            "COCOA_PROXY_TOKEN": proxy_token,
-            "COCOA_INSTANCE_ID": instance_id,
-        },
+        env_vars=await _instance_pod_env_async(db, instance_id, proxy_token, env_vars),
+        proxy_token=proxy_token,
+    )
+    record.config_snapshot = _dump_deploy_config_snapshot(asdict(ctx))
+    _set_progress_step_names(record, PROGRESS_STEP_NAMES)
+    await db.commit()
+    return record_id, ctx
+
+
+async def deploy_existing_instance(
+    instance_id: str,
+    *,
+    image_version: str = "latest",
+    cpu_request: str = "100m",
+    cpu_limit: str = "500m",
+    mem_request: str = "256Mi",
+    mem_limit: str = "1Gi",
+    storage_size: str = "1Gi",
+    replicas: int = 1,
+    env_vars: dict[str, str] | None = None,
+    triggered_by: str | None = None,
+    db: AsyncSession,
+) -> tuple[str, _DeployContext]:
+    """Create a DeployRecord for an *existing* Instance (PRD-v3.4.1).
+
+    Unlike :func:`deploy_instance`, this does **not** INSERT another Instance row.
+    """
+    env_vars = env_vars or {}
+    instance = await db.get(Instance, instance_id)
+    if instance is None or instance.deleted_at is not None:
+        raise ValueError(f"Instance '{instance_id}' not found")
+
+    name = _k8s_resource_name(instance_id)
+    proxy_token = instance.proxy_token or ""
+    revision = await _next_deploy_revision(db, instance_id)
+
+    record = DeployRecord(
+        instance_id=instance_id,
+        revision=revision,
+        action=DeployAction.deploy.value,
+        status=DeployStatus.running.value,
+        image_version=image_version,
+        triggered_by=triggered_by,
+    )
+    db.add(record)
+    await db.flush()
+    record_id = record.id
+    ctx = _DeployContext(
+        record_id=record_id,
+        instance_id=instance_id,
+        cluster_id=GATEWAY_CLUSTER_ID,
+        name=name,
+        namespace=_namespace_for(instance_id),
+        image_version=image_version,
+        replicas=replicas,
+        cpu_request=cpu_request,
+        cpu_limit=cpu_limit,
+        mem_request=mem_request,
+        mem_limit=mem_limit,
+        storage_size=storage_size,
+        env_vars=await _instance_pod_env_async(db, instance_id, proxy_token, env_vars),
         proxy_token=proxy_token,
     )
     record.config_snapshot = _dump_deploy_config_snapshot(asdict(ctx))
@@ -356,12 +489,18 @@ async def _execute_deploy_pipeline(ctx: _DeployContext) -> None:
         await client.create_or_skip(client.core.create_namespaced_config_map, ctx.namespace, cm)
         await _publish(2, "done")
 
-        # 3. env secret
+        # 3. env secret (create-or-patch so COCOA_API_TOKEN refreshes on redeploy)
         await _publish(3, "running")
         secret = build_env_secret(
             f"{ctx.name}-env", ctx.namespace, env_vars=ctx.env_vars, labels=labels,
         )
-        await client.create_or_skip(client.core.create_namespaced_secret, ctx.namespace, secret)
+        await client.apply(
+            client.core.create_namespaced_secret,
+            client.core.patch_namespaced_secret,
+            ctx.namespace,
+            f"{ctx.name}-env",
+            secret,
+        )
         await _publish(3, "done")
 
         # 4. pvc
@@ -370,7 +509,7 @@ async def _execute_deploy_pipeline(ctx: _DeployContext) -> None:
         await client.create_or_skip(client.core.create_namespaced_persistent_volume_claim, ctx.namespace, pvc)
         await _publish(4, "done")
 
-        # 5. deployment
+        # 5. deployment (create-or-patch so restart after stop restores replicas)
         await _publish(5, "running")
         dep = build_deployment(
             ctx.name, ctx.namespace, image=f"cocoa-instance:{ctx.image_version}",
@@ -380,7 +519,16 @@ async def _execute_deploy_pipeline(ctx: _DeployContext) -> None:
             cpu_request=ctx.cpu_request, cpu_limit=ctx.cpu_limit,
             mem_request=ctx.mem_request, mem_limit=ctx.mem_limit, port=8080,
         )
-        await client.create_or_skip(client.apps.create_namespaced_deployment, ctx.namespace, dep)
+        await client.apply(
+            client.apps.create_namespaced_deployment,
+            client.apps.patch_namespaced_deployment,
+            ctx.namespace,
+            ctx.name,
+            dep,
+        )
+        # Belt-and-suspenders: stop→redeploy must leave desired replicas intact
+        # even if an older Deployment object was only partially patched.
+        await client.scale_deployment(ctx.namespace, ctx.name, ctx.replicas)
         await _publish(5, "done")
 
         # 6. service
@@ -450,10 +598,41 @@ async def _execute_deploy_pipeline(ctx: _DeployContext) -> None:
                     "deploy config snapshot",
                     extra={"record_id": ctx.record_id, "snapshot": _load_deploy_config_snapshot(record)},
                 )
-                await db.commit()
+            # Product rule: start/deploy failure must not leave a lingering avatar node.
+            await _wipe_failed_instance(db, ctx.instance_id)
+            await db.commit()
+        try:
+            await teardown_instance_namespace(ctx.instance_id)
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "teardown after deploy fail ignored instance_id=%s", ctx.instance_id
+            )
         await _publish(0, "failed", message=str(exc)[:500])
     finally:
         await _restore_agent_bundle_with_retry(ctx)
+
+
+async def _wipe_failed_instance(db: AsyncSession, instance_id: str) -> None:
+    """Soft-delete Instance + its Membership so failed avatars leave the canvas."""
+    from app.models.instance import Instance, InstanceStatus
+    from app.models.workspace import Membership
+
+    instance = await db.get(Instance, instance_id)
+    if instance is None or instance.deleted_at is not None:
+        return
+    instance.status = InstanceStatus.failed.value
+    mem_rows = (
+        await db.execute(
+            select(Membership).where(
+                Membership.instance_id == instance_id,
+                Membership.deleted_at.is_(None),
+            )
+        )
+    ).scalars().all()
+    for mem in mem_rows:
+        mem.soft_delete()
+    instance.soft_delete()
+    logger.info("wiped failed instance_id=%s memberships=%s", instance_id, len(mem_rows))
 
 
 # ---------------------------------------------------------------------------
@@ -477,7 +656,7 @@ async def cancel_deploy(record_id: str) -> str:
             return namespace
         instance = await db.get(Instance, record.instance_id)
         if instance is not None:
-            namespace = _namespace_for(instance.workspace_path or "")
+            namespace = _namespace_for(instance.id)
         record.status = DeployStatus.cancelled.value
         record.finished_at = record.finished_at or record.updated_at
         await db.commit()
@@ -495,3 +674,40 @@ async def cancel_deploy(record_id: str) -> str:
             extra={"namespace": namespace, "error": str(exc)},
         )
     return namespace
+
+
+async def scale_instance_runtime(instance_id: str, replicas: int) -> None:
+    """Best-effort scale the Instance Deployment (stop = 0, start = 1)."""
+    namespace = _namespace_for(instance_id)
+    name = _k8s_resource_name(instance_id)
+    try:
+        api_client = await k8s_manager.get_gateway_client()
+        client = K8sClient(api_client)
+        await client.scale_deployment(namespace, name, replicas)
+        logger.info(
+            "scaled instance runtime instance_id=%s replicas=%s",
+            instance_id,
+            replicas,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "scale_instance_runtime failed instance_id=%s replicas=%s err=%s",
+            instance_id,
+            replicas,
+            exc,
+        )
+
+
+async def teardown_instance_namespace(instance_id: str) -> None:
+    """Best-effort delete the per-instance K8s namespace."""
+    namespace = _namespace_for(instance_id)
+    try:
+        api_client = await k8s_manager.get_gateway_client()
+        client = K8sClient(api_client)
+        await client.core.delete_namespace(namespace)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "teardown_instance_namespace failed ns=%s err=%s",
+            namespace,
+            exc,
+        )

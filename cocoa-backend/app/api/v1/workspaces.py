@@ -24,8 +24,8 @@ from app.core.openapi import add_error_responses
 from app.core.pagination import OffsetPage, paginate_offset
 from app.core.tenant import resolve_namespace_id
 from app.models.workspace import Membership, MembershipRole, Workspace
-from app.schemas.introduce import IntroduceEntityRequest
 from app.schemas.instance import InstanceOutWithToken
+from app.schemas.introduce import IntroduceEntityRequest
 from app.schemas.workspace import WorkspaceCreate, WorkspaceOut, WorkspaceUpdate
 
 router = APIRouter(prefix="/workspaces", tags=["Workspaces"])
@@ -362,6 +362,10 @@ async def introduce_entity(
             "This entity already has a lost one in this workspace",
         )
 
+    # Ensure entity.migration_hash is populated so live-status outdated stays false.
+    if not entity.migration_hash:
+        entity.migration_hash = compute_entity_migration_hash(entity)
+
     workspace_path = generate_workspace_path(entity.slug, str(uuid4()))
     agent_config = await resolve_instance_agent_config(db, entity)
     runtime_config = {"agent_config": agent_config}
@@ -372,7 +376,7 @@ async def introduce_entity(
         status=InstanceStatus.creating.value,
         runtime_config=runtime_config,
         proxy_token=str(uuid4()),
-        active_hash=compute_entity_migration_hash(entity),
+        active_hash=entity.migration_hash or compute_entity_migration_hash(entity),
     )
     db.add(instance)
     await db.flush()
@@ -420,4 +424,43 @@ async def introduce_entity(
     )
     await db.commit()
     await db.refresh(instance)
-    return InstanceOutWithToken.model_validate(instance)
+
+    # PRD-v3.4.1: auto-deploy the introduced instance (best-effort).
+    deploy_record_id: str | None = None
+    try:
+        import asyncio
+        import logging
+
+        from app.api.v1.instances import _is_k8s_available, _transition
+        from app.core.event_types import INSTANCE_DEPLOYED
+        from app.services.deploy_service import (
+            deploy_existing_instance,
+            execute_deploy_pipeline,
+        )
+
+        if _is_k8s_available():
+            _record_id, ctx = await deploy_existing_instance(
+                instance.id,
+                image_version="latest",
+                triggered_by=current_user.user_id,
+                db=db,
+            )
+            deploy_record_id = _record_id
+            asyncio.create_task(execute_deploy_pipeline(ctx))
+        else:
+            await _transition(
+                instance.id,
+                allowed=[InstanceStatus.creating.value],
+                new_status=InstanceStatus.deploying.value,
+                event_type=INSTANCE_DEPLOYED,
+                db=db,
+                current_user=current_user,
+            )
+            await db.refresh(instance)
+    except Exception:  # noqa: BLE001 — introduce must still succeed
+        logging.getLogger(__name__).exception(
+            "auto-deploy after introduce failed instance_id=%s", instance.id
+        )
+
+    out = InstanceOutWithToken.model_validate(instance)
+    return out.model_copy(update={"deploy_record_id": deploy_record_id})

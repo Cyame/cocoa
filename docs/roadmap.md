@@ -128,7 +128,7 @@ Topology is the flagship: SVG nodes + glow(`loop_status`) + Select/Connect/Move 
 | Layer | Mechanism | Status vs PRD-v2 |
 |---|---|---|
 | Harness | Supervisor + 4 breakers + control commands | Done (P8); keep (Workspace layer) |
-| Instance driver | **pi** sandboxed agent loop (skeleton → real pi) | Skeleton (`agent_runtime.py`); real pi wiring pending |
+| Instance driver | **pi via Host RPC + Tunnel WS** | Done (PRD-v3.5): `cocoa-instance-host` + `WS /api/v1/tunnel/connect`; stub fallback when offline |
 | Deploy | 9-step K8s pipeline + DeployRecord + SSE | Done (P11–P15a); keep |
 | LLM | 4 providers + ModelCatalog + LLMDistiller | Done (P14a); keep |
 | Messaging | Passage-gated near-neighbor + 4 command families | Done (P5/P8/P10); rename Corridor→Passage pending |
@@ -257,25 +257,26 @@ Full history: `.omo/plans/archive/` + `.omo/plans/archive/cocoa-v2-roadmap.md` (
 
 | Slot | Title | Spec | Plan | Notes |
 |---|---|---|---|---|
-| **PRD-v3.4** | 次元契印真表 + 引入眷族→迷失者 + 觉醒者/迷失者命名 + 删空间级联 | `docs/prd-v3.4.md` | feat/prd-v3-4-contracts-introduce | Product **3.4.0**；硬切无回填 |
+| **PRD-v3.5** | Tunnel + pi Host 真连接 | `.omo/plans/prd-v3-5-tunnel-pi.md` | `feat/prd-v3-5-tunnel-pi` | Product **3.5.0** |
+| **PRD-v3.4.1** | Composer `@`/`/` 协议 + 流式终态 + deploy-existing + 拓扑 fit | `docs/prd-v3.4.1.md` | feat/prd-v3-4-contracts-introduce | Product **3.4.1** (verified) |
 
-PRD-v3 / v3-post MVP 已落地；本波纠偏成员与实例生命周期语义。
+PRD-v3.5 复活 P14b：Instance Host 出站 Tunnel + `pi --mode rpc`；Composer 复用现有 SSE。
 
-### 5.3 Near backlog (after PRD-v3.4)
+### 5.3 Near backlog (after PRD-v3.5)
 
 | Slot | Theme | Source |
 |---|---|---|
+| **PRD-v3.4.2** | 全神职基础 gene + capability（空间会话 / 拓扑邻接说话） | 建在 3.5 tunnel/pi 上 |
 | Avatar presets UI | 用户/眷族预设头像切换 | PRD-v3 Later-A（**后移**） |
 | Visual + 神职图 | 主视觉换皮、候选图挂卡片 | Later-B（**后移**） |
 | Empty IDE polish | 空空间 IDE 深打磨、神职预选 | Later-C（**后移**） |
 | Capability hub assist | skill/capability 中枢撰写 | Later-D（**后移**） |
 | Polish | Empty states, error UX, audit filters, i18n sticky | Former P15c leftovers |
-| Tunnel / streaming | Token stream Composer | Former P16b（**后移**） |
 | Session engine v2 | Multimodal day-1 protocol | `.omo/drafts/session-engine-v2.md`（原 v4+ **后移**） |
 | Gene LLM real | Richer distill than heuristics | Former P16c |
 | Voice / channels / multi-runtime / multi-compute / DLP / OTel / backup / S3 | nodeskclaw parity candidates | Former P16e–m |
 
-Priority among near-backlog items is **re-decided after PRD-v3.4 human QA on orbstack**, not copied blindly from the archived P16 queue.
+Priority among near-backlog items is **re-decided after PRD-v3.5 human QA on orbstack**, not copied blindly from the archived P16 queue.
 
 ---
 
