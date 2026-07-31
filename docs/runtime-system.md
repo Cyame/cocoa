@@ -114,7 +114,7 @@ All manifests live under `cocoa-artifacts/k8s/instance/`. Each file uses `{insta
 
 | File | Kind | Purpose |
 |------|------|---------|
-| `deployment.yaml` | Deployment | Single-replica pod running `cocoa-instance:latest`. Mounts workspace PVC at `/app/.pi/workspace`. Env from ConfigMap. Resources: 100m CPU / 256Mi memory. |
+| `deployment.yaml` | Deployment | Single-replica pod running `cocoa-instance:latest`. Mounts workspace PVC at `/data` (pi cwd), ConfigMap at `/etc/config` (SYSTEM.md bundle), optional workspace `shared` hostPath at `/data/shared`. Env from Secret. Resources: 100m CPU / 256Mi memory. |
 | `configmap.yaml` | ConfigMap | Injects `RUNTIME_CONFIG` (JSON) and `INSTANCE_ID` into the container. |
 | `pvc.yaml` | PersistentVolumeClaim | 1Gi `ReadWriteOnce` volume for the Instance workspace. One PVC per Instance. |
 | `service.yaml` | Service | `ClusterIP` on port 8080. Internal-only communication. |

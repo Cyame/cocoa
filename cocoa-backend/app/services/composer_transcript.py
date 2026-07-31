@@ -78,14 +78,18 @@ async def list_composer_messages(
     workspace_id: str,
     *,
     limit: int = 200,
+    instance_id: str | None = None,
 ) -> list[ComposerMessage]:
+    clauses = [
+        ComposerMessage.workspace_id == workspace_id,
+        ComposerMessage.deleted_at.is_(None),
+    ]
+    if instance_id:
+        clauses.append(ComposerMessage.instance_id == instance_id)
     rows = (
         await session.execute(
             select(ComposerMessage)
-            .where(
-                ComposerMessage.workspace_id == workspace_id,
-                ComposerMessage.deleted_at.is_(None),
-            )
+            .where(*clauses)
             .order_by(ComposerMessage.created_at.asc())
             .limit(min(limit, 500))
         )

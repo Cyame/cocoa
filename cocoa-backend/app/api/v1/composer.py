@@ -102,8 +102,16 @@ async def list_composer_transcript(
     db: DB,
     current_user: CurrentUserDep,
     limit: int = Query(200, ge=1, le=500),
+    instance_id: str | None = Query(
+        None,
+        description="When set, only messages for this Instance (Lost One scope).",
+    ),
 ) -> dict:
-    """Server-persisted Composer transcript (inbound + outbound)."""
+    """Server-persisted Composer transcript (inbound + outbound).
+
+    Composer UI omits ``instance_id`` for the global workspace view.
+    Instance Host / Lost One scoped readers should pass ``instance_id``.
+    """
     _ = current_user
     workspace = await db.get(Workspace, workspace_id)
     if workspace is None or workspace.deleted_at is not None:
@@ -112,7 +120,9 @@ async def list_composer_transcript(
             "errors.workspace.not_found",
             f"Workspace '{workspace_id}' not found",
         )
-    rows = await list_composer_messages(db, workspace_id, limit=limit)
+    rows = await list_composer_messages(
+        db, workspace_id, limit=limit, instance_id=instance_id
+    )
     items = await enrich_composer_message_items(db, rows)
     return {"items": items, "total": len(items)}
 

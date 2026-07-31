@@ -21,6 +21,7 @@ from kubernetes_asyncio.client import (
     V1DeploymentSpec,
     V1EnvFromSource,
     V1EnvVar,
+    V1HostPathVolumeSource,
     V1LabelSelector,
     V1NetworkPolicy,
     V1NetworkPolicyIngressRule,
@@ -59,6 +60,8 @@ CONFIG_VOLUME_NAME = "config"
 CONFIG_MOUNT_PATH = "/etc/config"
 DATA_VOLUME_NAME = "data"
 DATA_MOUNT_PATH = "/data"
+SHARED_VOLUME_NAME = "shared"
+SHARED_MOUNT_PATH = "/data/shared"
 
 
 def build_labels(instance_id: str, image_tag: str = "") -> dict[str, str]:
@@ -168,6 +171,7 @@ def build_deployment(
     configmap_name: str | None = None,
     secret_name: str | None = None,
     pvc_name: str | None = None,
+    shared_host_path: str | None = None,
     cpu_request: str = "100m",
     cpu_limit: str = "500m",
     mem_request: str = "256Mi",
@@ -182,6 +186,8 @@ def build_deployment(
     * ``configmap_name`` — mount the configmap at ``/etc/config``
     * ``secret_name`` — project secret keys as env vars (``envFrom``)
     * ``pvc_name`` — mount the PVC at ``/data``
+    * ``shared_host_path`` — hostPath mounted at ``/data/shared`` (orbstack /
+      single-node; production should use RWX PVC instead)
     * ``env_vars`` — additional literal env vars (``FOO=bar``)
 
     The container always gets a ``container_port`` and CPU/memory
@@ -233,6 +239,20 @@ def build_deployment(
         )
         volume_mounts.append(
             V1VolumeMount(name=DATA_VOLUME_NAME, mount_path=DATA_MOUNT_PATH),
+        )
+
+    if shared_host_path:
+        volumes.append(
+            V1Volume(
+                name=SHARED_VOLUME_NAME,
+                host_path=V1HostPathVolumeSource(
+                    path=shared_host_path,
+                    type="DirectoryOrCreate",
+                ),
+            ),
+        )
+        volume_mounts.append(
+            V1VolumeMount(name=SHARED_VOLUME_NAME, mount_path=SHARED_MOUNT_PATH),
         )
 
     if volume_mounts:

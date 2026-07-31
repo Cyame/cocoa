@@ -1,12 +1,15 @@
 # Cocoa Instance Deployment
 #
 # Template variables (substituted by a deploy script before apply):
-#   {instance_id}  — unique Instance UUID
-#   {office_id}    — Office UUID for isolation labels
+#   {instance_id}   — unique Instance UUID
+#   {office_id}     — Workspace UUID for isolation labels
+#   {workspace_id}  — Workspace UUID (shared hostPath)
 #
-# Each Instance runs as a single-replica Deployment with its own
-# workspace PVC and ConfigMap. The agent_runtime process listens
-# on port 8080 inside the container.
+# Live deploys are built by resource_builder.build_deployment (preferred).
+# This manifest documents the pi-native layout:
+#   PVC → /data (pi cwd)
+#   ConfigMap → /etc/config (SYSTEM.md …)
+#   hostPath shared → /data/shared
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -31,6 +34,12 @@ spec:
       containers:
       - name: cocoa-instance
         image: cocoa-instance:latest
+        imagePullPolicy: Never
+        env:
+        - name: COCOA_WORKSPACE_PATH
+          value: /data
+        - name: COCOA_AGENT_CONFIG_DIR
+          value: /etc/config
         envFrom:
         - configMapRef:
             name: "{instance_id}-config"
@@ -39,9 +48,20 @@ spec:
             cpu: 100m
             memory: 256Mi
         volumeMounts:
-        - name: workspace
-          mountPath: /app/.pi/workspace
+        - name: data
+          mountPath: /data
+        - name: config
+          mountPath: /etc/config
+        - name: shared
+          mountPath: /data/shared
       volumes:
-      - name: workspace
+      - name: data
         persistentVolumeClaim:
           claimName: "{instance_id}-workspace"
+      - name: config
+        configMap:
+          name: "{instance_id}-config"
+      - name: shared
+        hostPath:
+          path: /var/cocoa/workspaces/{workspace_id}/shared
+          type: DirectoryOrCreate

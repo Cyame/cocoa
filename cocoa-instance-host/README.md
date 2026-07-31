@@ -14,7 +14,8 @@ Runtime: **Node >= 24** (Docker base `node:24-bookworm-slim`).
 | `COCOA_TUNNEL_URL` | no | Full WS URL override |
 | `COCOA_INSTANCE_ID` | yes | Instance UUID |
 | `COCOA_PROXY_TOKEN` | yes | Matches `Instance.proxy_token` |
-| `COCOA_WORKSPACE_PATH` | no | pi cwd (default `/data`) |
+| `COCOA_WORKSPACE_PATH` | no | pi cwd (default `/data`; layout: `.pi/` `work/` `memory/` `shared/`) |
+| `COCOA_AGENT_CONFIG_DIR` | no | ConfigMap mount with SYSTEM.md (default `/etc/config`) |
 | `PI_MODEL` / `PI_PROVIDER` | no | Passed to `pi --mode rpc` |
 | `COCOA_HOST_PORT` | no | healthz port (default 8080) |
 

@@ -20,7 +20,7 @@ import asyncio
 import json
 import logging
 import os
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from typing import Final
 
 from sqlalchemy import select
@@ -147,22 +147,59 @@ async def _run_post_ready_instance_steps(
     )
 
 
+async def _build_agent_bundle(db: AsyncSession, instance_id: str) -> dict[str, str]:
+    """Compose pi project files for ConfigMap → Host copies into ``/data/.pi``."""
+    from app.core.overlay import resolve_instance_agent_config
+    from app.core.prompt_compose import (
+        compose_system_prompt_with_world_hub,
+        pi_global_settings_json,
+        pi_project_settings_json,
+    )
+    from app.models.entity import Entity
+    from app.models.instance import Instance
+
+    instance = await db.get(Instance, instance_id)
+    if instance is None or instance.deleted_at is not None:
+        return {}
+    entity = await db.get(Entity, instance.entity_id)
+    if entity is None or entity.deleted_at is not None:
+        return {}
+
+    agent_config = await resolve_instance_agent_config(db, entity)
+    # Persist latest resolve onto instance for API consumers.
+    runtime_config = dict(instance.runtime_config or {})
+    runtime_config["agent_config"] = agent_config
+    instance.runtime_config = runtime_config
+
+    system_md = await compose_system_prompt_with_world_hub(
+        db, instance_id=instance_id, agent_config=agent_config
+    )
+    entity_name = agent_config.get("entity_name") or entity.slug
+    agents_md = (
+        f"# {entity_name}\n\n"
+        f"眷族身份。能力与基因以眷族配置为准；神职仅为静态运行形式模板。\n"
+    )
+    return {
+        "SYSTEM.md": system_md,
+        "AGENTS.md": agents_md,
+        "settings.json": pi_project_settings_json(),
+        "global-settings.json": pi_global_settings_json(),
+    }
+
+
 async def _restore_agent_bundle_with_retry(
     ctx: _DeployContext,
     max_retries: int = 3,
 ) -> bool:
-    """Retry installing the agent bundle inside the instance pod."""
-    del ctx
-    for attempt in range(1, max_retries + 1):
-        try:
-            return True
-        except RuntimeError as exc:
-            logger.warning(
-                "agent bundle restore failed",
-                extra={"attempt": attempt, "error": str(exc)},
-            )
-            await asyncio.sleep(2**attempt)
-    return False
+    """Agent bundle is delivered via ConfigMap; Host materializes on boot."""
+    del max_retries
+    ok = bool(ctx.agent_bundle.get("SYSTEM.md"))
+    if not ok:
+        logger.warning(
+            "agent bundle empty instance_id=%s",
+            ctx.instance_id,
+        )
+    return ok
 
 
 def _k8s_resource_name(instance_id: str) -> str:
@@ -241,6 +278,8 @@ class _DeployContext:
     storage_size: str
     env_vars: dict[str, str]
     proxy_token: str
+    workspace_id: str = ""
+    agent_bundle: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -356,6 +395,7 @@ async def deploy_instance(
     db.add(record)
     await db.flush()
     record_id = record.id
+    agent_bundle = await _build_agent_bundle(db, instance_id)
     ctx = _DeployContext(
         record_id=record_id,
         instance_id=instance_id,
@@ -371,6 +411,8 @@ async def deploy_instance(
         storage_size=storage_size,
         env_vars=await _instance_pod_env_async(db, instance_id, proxy_token, env_vars),
         proxy_token=proxy_token,
+        workspace_id=workspace_id,
+        agent_bundle=agent_bundle,
     )
     record.config_snapshot = _dump_deploy_config_snapshot(asdict(ctx))
     _set_progress_step_names(record, PROGRESS_STEP_NAMES)
@@ -416,6 +458,7 @@ async def deploy_existing_instance(
     db.add(record)
     await db.flush()
     record_id = record.id
+    agent_bundle = await _build_agent_bundle(db, instance_id)
     ctx = _DeployContext(
         record_id=record_id,
         instance_id=instance_id,
@@ -431,6 +474,8 @@ async def deploy_existing_instance(
         storage_size=storage_size,
         env_vars=await _instance_pod_env_async(db, instance_id, proxy_token, env_vars),
         proxy_token=proxy_token,
+        workspace_id=instance.workspace_id or "",
+        agent_bundle=agent_bundle,
     )
     record.config_snapshot = _dump_deploy_config_snapshot(asdict(ctx))
     _set_progress_step_names(record, PROGRESS_STEP_NAMES)
@@ -479,14 +524,25 @@ async def _execute_deploy_pipeline(ctx: _DeployContext) -> None:
         await client.ensure_namespace(ctx.namespace, extra_labels=labels)
         await _publish(1, "done")
 
-        # 2. configmap
+        # 2. configmap (identity + agent bundle for Host → /data/.pi)
         await _publish(2, "running")
+        cm_data = {
+            "INSTANCE_ID": ctx.instance_id,
+            "IMAGE_VERSION": ctx.image_version,
+            **ctx.agent_bundle,
+        }
         cm = build_configmap(
             f"{ctx.name}-config", ctx.namespace,
-            data={"INSTANCE_ID": ctx.instance_id, "IMAGE_VERSION": ctx.image_version},
+            data=cm_data,
             labels=labels,
         )
-        await client.create_or_skip(client.core.create_namespaced_config_map, ctx.namespace, cm)
+        await client.apply(
+            client.core.create_namespaced_config_map,
+            client.core.patch_namespaced_config_map,
+            ctx.namespace,
+            f"{ctx.name}-config",
+            cm,
+        )
         await _publish(2, "done")
 
         # 3. env secret (create-or-patch so COCOA_API_TOKEN refreshes on redeploy)
@@ -511,11 +567,17 @@ async def _execute_deploy_pipeline(ctx: _DeployContext) -> None:
 
         # 5. deployment (create-or-patch so restart after stop restores replicas)
         await _publish(5, "running")
+        shared_path = None
+        if ctx.workspace_id:
+            from app.core.dirs import shared_host_path
+
+            shared_path = shared_host_path(ctx.workspace_id)
         dep = build_deployment(
             ctx.name, ctx.namespace, image=f"cocoa-instance:{ctx.image_version}",
             replicas=ctx.replicas, labels=labels,
             configmap_name=f"{ctx.name}-config", secret_name=f"{ctx.name}-env",
             pvc_name=f"{ctx.name}-data",
+            shared_host_path=shared_path,
             cpu_request=ctx.cpu_request, cpu_limit=ctx.cpu_limit,
             mem_request=ctx.mem_request, mem_limit=ctx.mem_limit, port=8080,
         )

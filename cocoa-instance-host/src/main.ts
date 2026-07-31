@@ -8,6 +8,7 @@ import { ChatBridge } from "./chat-bridge.js";
 import { PiRpc } from "./pi-rpc.js";
 import type { TunnelMessage } from "./protocol.js";
 import { TunnelClient } from "./tunnel-client.js";
+import { materializeAgentBundle } from "./workspace-bootstrap.js";
 
 function requireEnv(name: string): string {
   const v = process.env[name]?.trim();
@@ -44,10 +45,13 @@ async function main(): Promise<void> {
 
   console.log("[host] starting", { instanceId, apiUrl, workspace });
 
+  materializeAgentBundle(workspace, (m, ...a) => console.log(`[host] ${m}`, ...a));
+
   const health = startHealthz(healthPort);
 
   const pi = new PiRpc({
     cwd: workspace,
+    extraArgs: ["--approve"],
     log: (m, ...a) => console.log(`[pi-rpc] ${m}`, ...a),
   });
 

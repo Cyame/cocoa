@@ -5,7 +5,9 @@ import pytest
 from app.core.dirs import (
     entity_dir,
     fornix_dir,
+    instance_data_subdir,
     memory_export_path,
+    shared_host_path,
     vault_dir,
     workspace_dir,
 )
@@ -89,6 +91,20 @@ class TestMemoryExportPath:
     def test_dot_single_component_passes(self) -> None:
         # "." alone is not traversal — it's a valid slug (though unlikely in practice).
         assert memory_export_path(".") == "memory/..jsonl"
+
+
+class TestInstanceDataLayout:
+    def test_canonical_subdirs(self) -> None:
+        assert instance_data_subdir("work") == "work/"
+        assert instance_data_subdir(".pi") == ".pi/"
+        assert instance_data_subdir("shared") == "shared/"
+
+    def test_rejects_unknown(self) -> None:
+        with pytest.raises(ValueError, match="Unknown"):
+            instance_data_subdir("tmp")
+
+    def test_shared_host_path(self) -> None:
+        assert shared_host_path("ws-1") == "/var/cocoa/workspaces/ws-1/shared"
 
 
 class TestPathTraversalEdgeCases:

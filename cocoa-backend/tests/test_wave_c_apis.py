@@ -290,3 +290,6 @@ class TestInstanceOverlay:
         cfg = inst.json()["runtime_config"]["agent_config"]
         assert cfg["system_prompt"] == "Entity overlay prompt"
         assert cfg["default_model"] == "gpt-4o"
+        # Capabilities are Entity-authoritative (empty entity → empty, not BaseClass union).
+        assert cfg["default_capabilities"] == []
+        assert cfg["default_gene_refs"] == []

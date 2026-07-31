@@ -222,6 +222,10 @@ At P2 scope, the system defines these content scopes (aligned with `ContentRef.s
 | `vault` | `vault_entries` (cold storage) | Read-only (write via `/archive` command) | Permanent archive per Workspace |
 | `memory` | `memory_entries` (entity log) | Read + Append (no update) | Cross-Instance for the Entity |
 
+**Instance pod layout (pi-native):** PVC root `/data` is the **pi cwd**. Upstream pi loads project config from `/data/.pi/` (`SYSTEM.md`, `settings.json`, …). Sibling dirs `/data/work`, `/data/memory`, `/data/shared` are Cocoa conventions. Shared is a workspace-level hostPath on orbstack (use RWX in multi-node). Control-plane helper `.pi/<entity_slug>/` in `dirs.py` is **not** the in-pod pi project dir.
+
+**Agent config resolve:** BaseClass is a static operating-form template for prompt composition; Entity owns role/duties; **capabilities and genes are Entity-authoritative** (no BaseClass∪Entity union). World hub (org system hub / cerebellum LLM) may reorganize the SYSTEM prompt at deploy.
+
 Files within `blackboard` scope are represented as `BlackboardFile` rows with a virtual directory tree keyed by `(office_id, parent_path, name)`. The `storage_key` is a globally unique UUID referencing the underlying object store.
 
 ## Slash-Protocol Summary

@@ -1,11 +1,13 @@
-"""Agent config overlay — BaseClass.manifest ⊕ Entity fields (PRD-v2).
+"""Agent config overlay — BaseClass template ⊕ Entity identity (PRD-v2).
 
-Resolves the effective agent configuration subset used when spawning or
-deploying an Instance:
+Semantics (must not conflate):
 
-    BaseClass.manifest  (base template)
-    ⊕ Entity.system_prompt  (NULL → inherit from manifest)
-    ⊕ Entity.config_override  (deep-merge overlay)
+* **system_prompt**: BaseClass is a *static operating-form template*. Entity
+  ``NULL`` inherits; non-``NULL`` replaces. World-hub may later rewrite the
+  composed prompt (see ``prompt_compose``).
+* **capabilities / genes**: **Entity-authoritative only** — never a union with
+  BaseClass defaults. BaseClass is a static template for identity/prompt, not
+  the live capability source.
 """
 
 from __future__ import annotations
@@ -35,29 +37,61 @@ def deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]
     return result
 
 
-def _manifest_subset(manifest: dict[str, Any]) -> dict[str, Any]:
-    """Extract the agent-config subset from a BaseClass manifest."""
+def _manifest_template_subset(manifest: dict[str, Any]) -> dict[str, Any]:
+    """Static BaseClass template fields (prompt / model / commands / tools).
+
+    Does **not** copy capabilities or gene_refs — those come from Entity only.
+    """
     return {
         "provider_config": manifest.get("provider_config") or {},
         "default_model": manifest.get("default_model")
         or manifest.get("model")
         or "tbd",
         "commands": list(manifest.get("commands") or []),
-        "default_capabilities": list(
-            manifest.get("default_capabilities") or manifest.get("skills") or []
-        ),
-        "default_gene_refs": list(
-            manifest.get("default_gene_refs")
-            or manifest.get("installed_genes")
-            or manifest.get("gene_refs")
-            or []
-        ),
         "system_prompt": manifest.get("system_prompt")
         or manifest.get("prompt")
         or "",
         "tools": list(manifest.get("tools") or []),
         "runtime_config": dict(manifest.get("runtime_config") or {}),
+        # Template-only copies for world-hub prompt composition (not live caps).
+        "baseclass_template_prompt": manifest.get("system_prompt")
+        or manifest.get("prompt")
+        or "",
+        "baseclass_operating_form": manifest.get("operating_form")
+        or manifest.get("description")
+        or "",
     }
+
+
+def _entity_capabilities(entity: Entity) -> list[Any]:
+    caps = entity.capabilities
+    if caps is None:
+        return []
+    if isinstance(caps, list):
+        return list(caps)
+    if isinstance(caps, dict):
+        # Allow {"items": [...]} bags; otherwise treat values as list.
+        items = caps.get("items")
+        if isinstance(items, list):
+            return list(items)
+        return [caps]
+    return []
+
+
+def _entity_gene_refs(entity: Entity, config_override: dict[str, Any] | None) -> list[Any]:
+    """Gene refs live on the Entity surface only (override or capabilities bag)."""
+    if config_override:
+        for key in ("default_gene_refs", "gene_refs", "installed_genes"):
+            val = config_override.get(key)
+            if isinstance(val, list):
+                return list(val)
+    caps = entity.capabilities
+    if isinstance(caps, dict):
+        for key in ("gene_refs", "default_gene_refs", "installed_genes"):
+            val = caps.get(key)
+            if isinstance(val, list):
+                return list(val)
+    return []
 
 
 def resolve_entity_config(
@@ -65,13 +99,42 @@ def resolve_entity_config(
     base_manifest: dict[str, Any] | None,
 ) -> dict[str, Any]:
     """Resolve overlay without DB access (manifest already loaded)."""
-    resolved = _manifest_subset(base_manifest or {})
+    resolved = _manifest_template_subset(base_manifest or {})
 
+    # Prompt: Entity replaces when set; else inherit BaseClass template.
     if entity.system_prompt is not None:
         resolved["system_prompt"] = entity.system_prompt
 
-    if entity.config_override:
-        resolved = deep_merge(resolved, entity.config_override)
+    # Capabilities / genes: Entity only — never union with BaseClass.
+    override = dict(entity.config_override or {})
+    # Strip capability/gene keys from deep_merge so BaseClass cannot leak back
+    # if someone stuffed them into override incorrectly after we set Entity.
+    cap_keys = {
+        "default_capabilities",
+        "capabilities",
+        "default_gene_refs",
+        "gene_refs",
+        "installed_genes",
+    }
+    merge_overlay = {k: v for k, v in override.items() if k not in cap_keys}
+    if merge_overlay:
+        resolved = deep_merge(resolved, merge_overlay)
+
+    # Explicit Entity-side capability/gene assignment (override list wins if present).
+    if "default_capabilities" in override and isinstance(
+        override["default_capabilities"], list
+    ):
+        resolved["default_capabilities"] = list(override["default_capabilities"])
+    elif "capabilities" in override and isinstance(override["capabilities"], list):
+        resolved["default_capabilities"] = list(override["capabilities"])
+    else:
+        resolved["default_capabilities"] = _entity_capabilities(entity)
+
+    resolved["default_gene_refs"] = _entity_gene_refs(entity, override)
+
+    resolved["entity_slug"] = entity.slug
+    resolved["entity_name"] = entity.display_name or entity.name
+    resolved["entity_role_prompt"] = entity.system_prompt  # may be None
 
     return resolved
 
@@ -92,5 +155,9 @@ async def resolve_instance_agent_config(
         preset = result.scalar_one_or_none()
         if preset is not None and isinstance(preset.manifest, dict):
             manifest = preset.manifest
+            resolved = resolve_entity_config(entity, manifest)
+            resolved["baseclass_slug"] = preset.slug
+            resolved["baseclass_name"] = preset.display_name or preset.name
+            return resolved
 
     return resolve_entity_config(entity, manifest)
