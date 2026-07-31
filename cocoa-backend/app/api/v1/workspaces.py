@@ -294,6 +294,17 @@ async def delete_workspace(
             entry.soft_delete()
         vault.soft_delete()
 
+    from app.models.composer_message import ComposerMessage
+
+    await db.execute(
+        update(ComposerMessage)
+        .where(
+            ComposerMessage.workspace_id == workspace_id,
+            ComposerMessage.deleted_at.is_(None),
+        )
+        .values(deleted_at=func.now())
+    )
+
     workspace.soft_delete()
     await db.commit()
 
@@ -403,16 +414,15 @@ async def introduce_entity(
                 break
         if found:
             break
-    db.add(
-        Membership(
-            workspace_id=workspace_id,
-            instance_id=instance.id,
-            user_id=None,
-            posx=posx,
-            posy=posy,
-            role=MembershipRole.viewer.value,
-        )
+    instance_membership = Membership(
+        workspace_id=workspace_id,
+        instance_id=instance.id,
+        user_id=None,
+        posx=posx,
+        posy=posy,
+        role=MembershipRole.viewer.value,
     )
+    db.add(instance_membership)
     await emit(
         INSTANCE_CREATED,
         actor_type="user",

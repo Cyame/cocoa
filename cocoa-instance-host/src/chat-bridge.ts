@@ -14,6 +14,41 @@ interface ActiveTurn {
   turnId: string;
   targetEntity?: string;
   sawText: boolean;
+  replyText: string;
+}
+
+function extractAssistantText(evt: PiEvent): string {
+  // message_update.text_delta handled separately.
+  const ame = evt.assistantMessageEvent as
+    | { type?: string; delta?: string; text?: string }
+    | undefined;
+  if (ame && typeof ame.text === "string" && ame.text) return ame.text;
+
+  if (typeof evt.text === "string" && evt.text) return evt.text;
+  if (typeof evt.content === "string" && evt.content) return evt.content;
+
+  const message = evt.message as
+    | { role?: string; content?: string | Array<{ type?: string; text?: string }> }
+    | undefined;
+  if (message && typeof message.content === "string") return message.content;
+  if (message && Array.isArray(message.content)) {
+    return message.content
+      .map((p) => (typeof p?.text === "string" ? p.text : ""))
+      .join("");
+  }
+
+  const messages = evt.messages as
+    | Array<{ role?: string; content?: string }>
+    | undefined;
+  if (Array.isArray(messages)) {
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const m = messages[i];
+      if (m?.role === "assistant" && typeof m.content === "string" && m.content) {
+        return m.content;
+      }
+    }
+  }
+  return "";
 }
 
 export class ChatBridge {
@@ -70,7 +105,7 @@ export class ChatBridge {
       }
     }
 
-    this.active = { turnId, targetEntity, sawText: false };
+    this.active = { turnId, targetEntity, sawText: false, replyText: "" };
     this.log("prompt", turnId, text.slice(0, 80));
     const ok = this.pi.prompt(text || "(empty)", turnId);
     if (!ok) {
@@ -102,6 +137,7 @@ export class ChatBridge {
         | undefined;
       if (ame?.type === "text_delta" && typeof ame.delta === "string" && ame.delta) {
         turn.sawText = true;
+        turn.replyText += ame.delta;
         this.tunnel.send(
           makeMessage(
             "chat.response.chunk",
@@ -114,11 +150,77 @@ export class ChatBridge {
             { turn_id: turn.turnId },
           ),
         );
+      } else {
+        // Some pi builds emit full text on message_update without deltas.
+        const full = extractAssistantText(evt);
+        if (full && full.length > turn.replyText.length) {
+          const delta = full.slice(turn.replyText.length);
+          turn.sawText = true;
+          turn.replyText = full;
+          if (delta) {
+            this.tunnel.send(
+              makeMessage(
+                "chat.response.chunk",
+                {
+                  turn_id: turn.turnId,
+                  token: delta,
+                  status: "responding",
+                  target_entity: turn.targetEntity,
+                },
+                { turn_id: turn.turnId },
+              ),
+            );
+          }
+        }
+      }
+      return;
+    }
+
+    if (evt.type === "message" || evt.type === "agent_message") {
+      const full = extractAssistantText(evt);
+      if (full && full.length > turn.replyText.length) {
+        const delta = full.slice(turn.replyText.length);
+        turn.sawText = true;
+        turn.replyText = full;
+        if (delta) {
+          this.tunnel.send(
+            makeMessage(
+              "chat.response.chunk",
+              {
+                turn_id: turn.turnId,
+                token: delta,
+                status: "responding",
+                target_entity: turn.targetEntity,
+              },
+              { turn_id: turn.turnId },
+            ),
+          );
+        }
       }
       return;
     }
 
     if (evt.type === "agent_end") {
+      // Last chance: pull final assistant text if no deltas were streamed.
+      if (!turn.sawText) {
+        const full = extractAssistantText(evt);
+        if (full) {
+          turn.replyText = full;
+          turn.sawText = true;
+          this.tunnel.send(
+            makeMessage(
+              "chat.response.chunk",
+              {
+                turn_id: turn.turnId,
+                token: full,
+                status: "responding",
+                target_entity: turn.targetEntity,
+              },
+              { turn_id: turn.turnId },
+            ),
+          );
+        }
+      }
       this.tunnel.send(
         makeMessage(
           "chat.response.done",
@@ -127,6 +229,7 @@ export class ChatBridge {
             finish_reason: "stop",
             status: "completed",
             target_entity: turn.targetEntity,
+            text: turn.replyText,
           },
           { turn_id: turn.turnId },
         ),

@@ -2,9 +2,11 @@
 
 > **Status**: Living document. Canonical project roadmap + system goal blueprint.
 > **Authority**: Supersedes `.omo/plans/archive/cocoa-v2-roadmap.md` and `.omo/plans/archive/phase-15-foundation-roadmap.md` (archived 2026-07-29).
-> **Product specs**: `docs/prd-v1.md` · `docs/prd-v2.md` · `docs/prd-v3.md` · **`docs/prd-v3.4.md` (active)** · Later/v4+ deferred.
+> **Product specs**: `docs/prd-v1.md` · `docs/prd-v2.md` · `docs/prd-v3.md` · `docs/prd-v3.4.md` · `docs/prd-v3.4.1.md` · **3.5.x track active** · Later/v4+ deferred.
+> **Version track**: `.omo/plans/product-version-track-3-5-3-6.md` — **3.5.x = main-flow closed loop; 3.6 = UI major refactor**.
+> **Remainder tracking**: `.omo/plans/main-flow-remainder-tracking.md` — post-P14b living backlog (gene/tool, multimodal channel, browser, HA, …).
 > **Naming**: `docs/terminology.md` + `docs/metaphor-name-table.md` (15d locked).
-> **Last revision**: 2026-07-30.
+> **Last revision**: 2026-07-31.
 
 ---
 
@@ -253,30 +255,39 @@ Full history: `.omo/plans/archive/` + `.omo/plans/archive/cocoa-v2-roadmap.md` (
 | PRD-v2 generation | `docs/prd-v2.md` decision-complete |
 | **PRD-v2 impl** | Hard-cut tenant schema + genes + two-chain learning + portal IDE — `.omo/plans/prd-v2-implementation.md` |
 
-### 5.2 Next (immediate)
+### 5.2 Version track (locked 2026-07-31)
 
-| Slot | Title | Spec | Plan | Notes |
-|---|---|---|---|---|
-| **PRD-v3.5** | Tunnel + pi Host 真连接 | `.omo/plans/prd-v3-5-tunnel-pi.md` | `feat/prd-v3-5-tunnel-pi` | Product **3.5.0** |
-| **PRD-v3.4.1** | Composer `@`/`/` 协议 + 流式终态 + deploy-existing + 拓扑 fit | `docs/prd-v3.4.1.md` | feat/prd-v3-4-contracts-introduce | Product **3.4.1** (verified) |
+| Track | Intent | Plan |
+|---|---|---|
+| **3.5.x** | **主流程产品设计闭环** — summon / connect / talk / observe / lifecycle / brain handoff stub；行为正确、可部署、可人测；缺口随迭代小步修正 | `.omo/plans/product-version-track-3-5-3-6.md` |
+| **3.6** | **整体 UI 大重构** — 壳层 / 密度 / Composer·Topology 视觉语言 / 空态；不抢跑于 3.5.x 闭环之前 | same file §4–§5 |
 
-PRD-v3.5 复活 P14b：Instance Host 出站 Tunnel + `pi --mode rpc`；Composer 复用现有 SSE。
+**Working agreement:** 主功能仍有不通处与未修正项，随产品迭代逐步设计与变更；**不做**「先大改 UI 再通主流程」。
 
-### 5.3 Near backlog (after PRD-v3.5)
+### 5.3 Now (immediate — inside 3.5.x)
+
+| Slot | Title | Spec / Plan | Notes |
+|---|---|---|---|
+| **3.5 track** | Main-flow closed loop | `product-version-track-3-5-3-6.md` + `main-flow-remainder-tracking.md` | Product **3.5.2+**; iterative QA-driven slices |
+| **PRD-v3.5 baseline** | Tunnel + pi Host 真连接 | `.omo/plans/prd-v3-5-tunnel-pi.md` | Landed; Host chat + offline stub |
+| **PRD-v3.4.1** | Composer `@`/`/` + stream + deploy-existing | `docs/prd-v3.4.1.md` | Verified; passage gate + transcript continue in 3.5.x |
+
+### 5.4 Near backlog (after / alongside 3.5.x closure)
 
 | Slot | Theme | Source |
 |---|---|---|
-| **PRD-v3.4.2** | 全神职基础 gene + capability（空间会话 / 拓扑邻接说话） | 建在 3.5 tunnel/pi 上 |
-| Avatar presets UI | 用户/眷族预设头像切换 | PRD-v3 Later-A（**后移**） |
-| Visual + 神职图 | 主视觉换皮、候选图挂卡片 | Later-B（**后移**） |
-| Empty IDE polish | 空空间 IDE 深打磨、神职预选 | Later-C（**后移**） |
-| Capability hub assist | skill/capability 中枢撰写 | Later-D（**后移**） |
-| Polish | Empty states, error UX, audit filters, i18n sticky | Former P15c leftovers |
+| **PRD-v3.4.2** | 全神职基础 gene + capability（空间会话 / 拓扑邻接说话） | 建在 3.5 tunnel/pi 上；仍属 3.5.x 行为闭环 |
+| Cerebellum business | 未连线 `@` 转小脑的真实业务 | Stub exists; design in later 3.5.x slice |
+| **3.6 UI refactor** | Portal / Composer / Topology visual overhaul | After 3.5.x loops trusted |
+| Avatar presets UI | 用户/眷族预设头像切换 | → **3.6**（原 Later-A） |
+| Visual + 神职图 | 主视觉换皮、候选图挂卡片 | → **3.6**（原 Later-B） |
+| Empty IDE polish | 空空间 IDE 深打磨、神职预选 | → **3.6** unless blocking introduce |
+| Capability hub assist | skill/capability 中枢撰写 | Later-D |
 | Session engine v2 | Multimodal day-1 protocol | `.omo/drafts/session-engine-v2.md`（原 v4+ **后移**） |
 | Gene LLM real | Richer distill than heuristics | Former P16c |
 | Voice / channels / multi-runtime / multi-compute / DLP / OTel / backup / S3 | nodeskclaw parity candidates | Former P16e–m |
 
-Priority among near-backlog items is **re-decided after PRD-v3.5 human QA on orbstack**, not copied blindly from the archived P16 queue.
+Priority among remaining 3.5.x slices is **re-decided from orbstack human QA**, not copied blindly from the archived P16 queue.
 
 ---
 
@@ -368,5 +379,6 @@ Recorded so future planners do not lose intent:
 
 | 2026-07-30 | **PRD-v3 written** — Provider defaults, implicit system hub, promote update/fork（回魂/派生）+ transmute UX; `AGENTS.md` Rule 5 orbstack-only |
 | 2026-07-30 | **Runtime spine lock** — Workspace ≈ more flexible/observable senpi·oh-my-openagent·oh-my-pi; each 化身 driven by **pi** (sandboxed preferred; React optional). Reject equating pi with Senpi CLI |
+| 2026-07-31 | **Version track lock** — **3.5.x** = main-flow product closed loop (iterative fixes OK); **3.6** = whole UI major refactor. Plan: `.omo/plans/product-version-track-3-5-3-6.md` |
 
-*Next update trigger: PRD-v3 implementation plan approved, or v3 wave merged + orbstack verified.*
+*Next update trigger: a 3.5.x main-flow slice closes, or 3.6 UI refactor plan is opened.*

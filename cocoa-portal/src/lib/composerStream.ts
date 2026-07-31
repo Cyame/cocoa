@@ -13,6 +13,7 @@ export type ComposerStreamFrame = {
   readonly status?: string;
   readonly message?: string;
   readonly finish_reason?: string;
+  readonly text?: string;
 };
 
 export async function streamComposerTurn(

@@ -1,4 +1,4 @@
-"""Composer streaming + mention candidates (PRD-v3.4.1)."""
+"""Composer streaming + mention candidates + transcript history."""
 
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ from app.core.openapi import add_error_responses
 from app.models.entity import Entity
 from app.models.instance import Instance
 from app.models.workspace import Membership, Passage, Workspace
+from app.services.composer_transcript import list_composer_messages
 
 router = APIRouter(tags=["Composer"])
 add_error_responses(router)
@@ -27,7 +28,11 @@ async def list_mention_candidates(
     db: DB,
     current_user: CurrentUserDep,
 ) -> dict:
-    """Passage-neighbor Lost Ones for Composer ``@`` autocomplete."""
+    """Passage-neighbor Lost Ones for Composer ``@`` autocomplete.
+
+    Only neighbors are suggested. Typing ``@`` a non-neighbor is still parsed;
+    delivery then routes to the Workspace cerebellum stub (not the Host).
+    """
     workspace = await db.get(Workspace, workspace_id)
     if workspace is None or workspace.deleted_at is not None:
         raise NotFoundError(
@@ -89,9 +94,44 @@ async def list_mention_candidates(
                 "instance_id": inst.id,
                 "membership_id": mem.id,
                 "instance_status": inst.status,
+                "connected": True,
                 "mentionable": inst.status == "running",
             }
         )
+    return {"items": items, "total": len(items)}
+
+
+@router.get("/workspaces/{workspace_id}/composer/messages")
+async def list_composer_transcript(
+    workspace_id: str,
+    db: DB,
+    current_user: CurrentUserDep,
+    limit: int = Query(200, ge=1, le=500),
+) -> dict:
+    """Server-persisted Composer transcript (inbound + outbound)."""
+    _ = current_user
+    workspace = await db.get(Workspace, workspace_id)
+    if workspace is None or workspace.deleted_at is not None:
+        raise NotFoundError(
+            "workspace.not_found",
+            "errors.workspace.not_found",
+            f"Workspace '{workspace_id}' not found",
+        )
+    rows = await list_composer_messages(db, workspace_id, limit=limit)
+    items = [
+        {
+            "id": row.id,
+            "role": row.role,
+            "content": row.content,
+            "target_entity": row.target_entity,
+            "instance_id": row.instance_id,
+            "turn_id": row.turn_id,
+            "status": row.status,
+            "author_user_id": row.author_user_id,
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+        }
+        for row in rows
+    ]
     return {"items": items, "total": len(items)}
 
 
@@ -114,7 +154,6 @@ async def composer_stream(
         )
 
     async def event_gen():
-        # Replay history for late subscribers (stream may finish before SSE connects).
         terminal_seen = False
         for frame in list(state.history):
             event_name = str(frame.get("type", "message")).replace(".", "_")

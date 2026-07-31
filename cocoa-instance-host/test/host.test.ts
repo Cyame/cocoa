@@ -106,6 +106,44 @@ test("chat bridge maps pi text_delta to chunk and agent_end to done", async () =
   assert.equal(sent[1]?.type, "chat.response.done");
 });
 
+test("chat bridge falls back to agent_end message text when no deltas", async () => {
+  const sent: Array<{ type: string; payload: Record<string, unknown> }> = [];
+  const fakeTunnel = {
+    send(msg: { type: string; payload: Record<string, unknown> }) {
+      sent.push(msg);
+      return true;
+    },
+  };
+  const fakePi = new PiRpc({ log: () => {} });
+  Object.defineProperty(fakePi, "running", { get: () => true });
+  fakePi.prompt = () => true;
+  fakePi.start = () => {};
+
+  const bridge = new ChatBridge({
+    tunnel: fakeTunnel as unknown as TunnelClient,
+    pi: fakePi,
+    log: () => {},
+  });
+
+  await bridge.handleTunnelMessage(
+    makeMessage(
+      "chat.request",
+      { turn_id: "turn-b", text: "hello", target_entity: "alice" },
+      { turn_id: "turn-b" },
+    ),
+  );
+
+  fakePi.emit("event", {
+    type: "agent_end",
+    messages: [{ role: "assistant", content: "最终答复" }],
+  });
+
+  assert.equal(sent[0]?.type, "chat.response.chunk");
+  assert.equal(sent[0]?.payload.token, "最终答复");
+  assert.equal(sent[1]?.type, "chat.response.done");
+  assert.equal(sent[1]?.payload.text, "最终答复");
+});
+
 test("pi rpc framing splits only on LF", () => {
   class TestRpc extends PiRpc {
     feed(s: string) {

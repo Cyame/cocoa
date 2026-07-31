@@ -1,12 +1,10 @@
 """Message delivery router — fire-and-forget delivery with passage gating.
 
 Routes a parsed directive to eligible recipient entities within an workspace.
-Delivery only succeeds when an active Passage edge exists from the sender's
-membership to the target instance's membership (passage gating).
 
-Fire-and-forget: message content is NOT persisted to the database.  Only
-audit events (messaging.message_sent / messaging.delivery_blocked) are
-emitted for observability.
+Delivery requires an active Passage edge. User → Lost One without a passage
+is **not** proxied to the instance; the utterance is handed to the Workspace
+小脑 (cerebellum) stub for later business logic.
 """
 
 from __future__ import annotations
@@ -20,29 +18,13 @@ from app.core.event_types import MESSAGING_DELIVERY_BLOCKED, MESSAGING_MESSAGE_S
 from app.core.events import emit
 from app.models.entity import Entity
 from app.models.instance import Instance, InstanceStatus
-from app.models.workspace import Passage, Membership
+from app.models.workspace import Membership, Passage
 from app.schemas.slash import Directive
-
-# ---------------------------------------------------------------------------
-# Result dataclass
-# ---------------------------------------------------------------------------
 
 
 @dataclass
 class MessageDeliveryResult:
-    """Outcome of attempting to deliver a message to one target instance.
-
-    Attributes:
-        target_entity: Entity slug the directive was addressed to.
-        delivered: Whether the message passed passage gating.
-        reason: Machine-readable failure code when ``delivered`` is False.
-            Possible values: ``"entity_not_found"``,
-            ``"no_active_instance"``, ``"not_neighbor"``.
-        instance_id: UUID of the target :class:`~app.models.instance.Instance`
-            (populated for gating-attempt results, ``None`` for early-out
-            rejections like ``entity_not_found``).
-        turn_id: Composer turn id when a user_turn stream was scheduled.
-    """
+    """Outcome of attempting to deliver a message to one target instance."""
 
     target_entity: str
     delivered: bool
@@ -51,9 +33,80 @@ class MessageDeliveryResult:
     turn_id: str | None = None
 
 
-# ---------------------------------------------------------------------------
-# Router
-# ---------------------------------------------------------------------------
+def _turn_text_for_directive(directive: Directive, general_text: str | None) -> str:
+    if directive.cmd:
+        turn_text = (general_text or "").strip()
+        if not turn_text:
+            turn_text = " ".join(directive.args).strip()
+        if not turn_text:
+            turn_text = directive.cmd
+        return turn_text
+    turn_text = " ".join(directive.args).strip()
+    if not turn_text:
+        turn_text = (general_text or "").strip()
+    return turn_text
+
+
+async def _route_to_cerebellum(
+    session: AsyncSession,
+    *,
+    from_membership_id: str,
+    workspace_id: str,
+    directive: Directive,
+    general_text: str | None,
+    instance_id: str | None,
+    to_membership_id: str | None,
+    author_user_id: str | None,
+) -> MessageDeliveryResult:
+    """Persist the utterance + stub reply; do not proxy to the Lost One Host."""
+    from app.services.composer_transcript import append_composer_message
+
+    text = _turn_text_for_directive(directive, general_text)
+    await emit(
+        MESSAGING_DELIVERY_BLOCKED,
+        actor_type="membership",
+        actor_id=from_membership_id,
+        resource_type="instance" if instance_id else "workspace",
+        resource_id=instance_id or workspace_id,
+        payload={
+            "target_entity": directive.target_entity,
+            "cmd": directive.cmd,
+            "workspace_id": workspace_id,
+            "instance_id": instance_id,
+            "to_membership_id": to_membership_id,
+            "reason_detail": "routed_to_cerebellum",
+            "text": text,
+        },
+        session=session,
+    )
+    await append_composer_message(
+        session,
+        workspace_id=workspace_id,
+        role="user",
+        content=text,
+        target_entity=directive.target_entity,
+        instance_id=instance_id,
+        status="completed",
+        author_user_id=author_user_id,
+    )
+    await append_composer_message(
+        session,
+        workspace_id=workspace_id,
+        role="system",
+        content=(
+            f"@{directive.target_entity} is not connected via passage; "
+            "message routed to Workspace cerebellum (stub)."
+        ),
+        target_entity=directive.target_entity,
+        instance_id=instance_id,
+        status="completed",
+    )
+    return MessageDeliveryResult(
+        target_entity=directive.target_entity or "",
+        delivered=False,
+        reason="routed_to_cerebellum",
+        instance_id=instance_id,
+    )
 
 
 async def route_message(
@@ -63,39 +116,10 @@ async def route_message(
     directive: Directive,
     general_text: str | None = None,
 ) -> list[MessageDeliveryResult]:
-    """Attempt to deliver *directive* to eligible recipients in an workspace.
-
-    Delivery is gated by the passage graph: a message is only delivered
-    to a target instance when an active :class:`~app.models.workspace.Passage`
-    edge exists from *from_membership_id* to the target instance's membership.
-
-    Parameters
-    ----------
-    session:
-        Active async database session.  The caller owns the transaction
-        boundary — this function never commits.
-    from_membership_id:
-        UUID of the sender's :class:`~app.models.workspace.Membership`.
-    workspace_id:
-        UUID of the workspace where delivery occurs.
-    directive:
-        Parsed directive.  ``target_entity`` identifies the recipient;
-        a bare ``/cmd`` with ``target_entity=None`` is silently skipped.
-    general_text:
-        Optional free-form text accompanying the directive.  Included in
-        success audit payloads but never persisted as message content.
-
-    Returns
-    -------
-    list[MessageDeliveryResult]
-        One result per target instance that was attempted.  Empty list when
-        ``directive.target_entity`` is ``None``.
-    """
-    # ---- bare /cmd (no target) -----------------------------------------
+    """Attempt to deliver *directive* to eligible recipients in an workspace."""
     if directive.target_entity is None:
         return []
 
-    # ---- resolve target entity ---------------------------------------
     result = await session.execute(
         select(Entity).where(
             Entity.slug == directive.target_entity,
@@ -112,7 +136,6 @@ async def route_message(
             )
         ]
 
-    # ---- resolve active instances in this workspace -----------------------
     result = await session.execute(
         select(Instance).where(
             Instance.entity_id == entity.id,
@@ -138,11 +161,16 @@ async def route_message(
             )
         ]
 
-    # ---- per-instance passage gate ------------------------------------
-    results: list[MessageDeliveryResult] = []
+    sender = await session.get(Membership, from_membership_id)
+    sender_is_user = (
+        sender is not None
+        and sender.deleted_at is None
+        and sender.user_id is not None
+    )
+    author_user_id = sender.user_id if sender_is_user and sender is not None else None
 
+    results: list[MessageDeliveryResult] = []
     for instance in instances:
-        # --- resolve target membership ---
         result = await session.execute(
             select(Membership).where(
                 Membership.instance_id == instance.id,
@@ -152,119 +180,132 @@ async def route_message(
         )
         to_membership = result.scalar_one_or_none()
         if to_membership is None:
-            # Instance exists but has no membership — treat as not neighbor
-            await emit(
-                MESSAGING_DELIVERY_BLOCKED,
-                actor_type="membership",
-                actor_id=from_membership_id,
-                resource_type="instance",
-                resource_id=instance.id,
-                payload={
-                    "target_entity": directive.target_entity,
-                    "cmd": directive.cmd,
-                    "workspace_id": workspace_id,
-                    "instance_id": instance.id,
-                    "reason_detail": "target_membership_missing",
-                },
-                session=session,
-            )
-            results.append(
-                MessageDeliveryResult(
-                    target_entity=directive.target_entity,
-                    delivered=False,
-                    reason="not_neighbor",
-                    instance_id=instance.id,
+            if sender_is_user:
+                results.append(
+                    await _route_to_cerebellum(
+                        session,
+                        from_membership_id=from_membership_id,
+                        workspace_id=workspace_id,
+                        directive=directive,
+                        general_text=general_text,
+                        instance_id=instance.id,
+                        to_membership_id=None,
+                        author_user_id=author_user_id,
+                    )
                 )
-            )
+            else:
+                await emit(
+                    MESSAGING_DELIVERY_BLOCKED,
+                    actor_type="membership",
+                    actor_id=from_membership_id,
+                    resource_type="instance",
+                    resource_id=instance.id,
+                    payload={
+                        "target_entity": directive.target_entity,
+                        "cmd": directive.cmd,
+                        "workspace_id": workspace_id,
+                        "instance_id": instance.id,
+                        "reason_detail": "target_membership_missing",
+                    },
+                    session=session,
+                )
+                results.append(
+                    MessageDeliveryResult(
+                        target_entity=directive.target_entity,
+                        delivered=False,
+                        reason="not_neighbor",
+                        instance_id=instance.id,
+                    )
+                )
             continue
 
-        # --- check passage edge ---
         result = await session.execute(
             select(Passage).where(
                 Passage.workspace_id == workspace_id,
                 Passage.from_membership_id == from_membership_id,
                 Passage.to_membership_id == to_membership.id,
-                Passage.is_active,
+                Passage.is_active.is_(True),
                 Passage.deleted_at.is_(None),
             )
         )
         passage = result.scalar_one_or_none()
 
         if passage is None:
-            # No active passage → delivery blocked
-            await emit(
-                MESSAGING_DELIVERY_BLOCKED,
-                actor_type="membership",
-                actor_id=from_membership_id,
-                resource_type="membership",
-                resource_id=to_membership.id,
-                payload={
-                    "target_entity": directive.target_entity,
-                    "cmd": directive.cmd,
-                    "workspace_id": workspace_id,
-                    "instance_id": instance.id,
-                    "to_membership_id": to_membership.id,
-                },
-                session=session,
-            )
-            results.append(
-                MessageDeliveryResult(
-                    target_entity=directive.target_entity,
-                    delivered=False,
-                    reason="not_neighbor",
-                    instance_id=instance.id,
+            if sender_is_user:
+                results.append(
+                    await _route_to_cerebellum(
+                        session,
+                        from_membership_id=from_membership_id,
+                        workspace_id=workspace_id,
+                        directive=directive,
+                        general_text=general_text,
+                        instance_id=instance.id,
+                        to_membership_id=to_membership.id,
+                        author_user_id=author_user_id,
+                    )
                 )
-            )
-        else:
-            # Active passage present → deliver
-            await emit(
-                MESSAGING_MESSAGE_SENT,
-                actor_type="membership",
-                actor_id=from_membership_id,
-                resource_type="instance",
-                resource_id=instance.id,
-                payload={
-                    "target_entity": directive.target_entity,
-                    "cmd": directive.cmd,
-                    "args": directive.args,
-                    "workspace_id": workspace_id,
-                    "instance_id": instance.id,
-                    "to_membership_id": to_membership.id,
-                    "passage_id": passage.id,
-                    "general_text": general_text,
-                },
-                session=session,
-            )
-            # Chat mention: args hold the utterance after @slug.
-            # Slash directive: prefer general_text, else args joined.
-            if directive.cmd:
-                turn_text = (general_text or "").strip()
-                if not turn_text:
-                    turn_text = " ".join(directive.args).strip()
-                if not turn_text:
-                    turn_text = directive.cmd
             else:
-                turn_text = " ".join(directive.args).strip()
-                if not turn_text:
-                    turn_text = (general_text or "").strip()
-            from app.core.composer_turns import schedule_user_turn
-
-            turn_id = await schedule_user_turn(
-                session=session,
-                workspace_id=workspace_id,
-                instance_id=instance.id,
-                target_entity=directive.target_entity,
-                text=turn_text,
-                cmd=directive.cmd or None,
-                from_membership_id=from_membership_id,
-            )
-            results.append(
-                MessageDeliveryResult(
-                    target_entity=directive.target_entity,
-                    delivered=True,
-                    instance_id=instance.id,
-                    turn_id=turn_id,
+                await emit(
+                    MESSAGING_DELIVERY_BLOCKED,
+                    actor_type="membership",
+                    actor_id=from_membership_id,
+                    resource_type="membership",
+                    resource_id=to_membership.id,
+                    payload={
+                        "target_entity": directive.target_entity,
+                        "cmd": directive.cmd,
+                        "workspace_id": workspace_id,
+                        "instance_id": instance.id,
+                        "to_membership_id": to_membership.id,
+                    },
+                    session=session,
                 )
+                results.append(
+                    MessageDeliveryResult(
+                        target_entity=directive.target_entity,
+                        delivered=False,
+                        reason="not_neighbor",
+                        instance_id=instance.id,
+                    )
+                )
+            continue
+
+        await emit(
+            MESSAGING_MESSAGE_SENT,
+            actor_type="membership",
+            actor_id=from_membership_id,
+            resource_type="instance",
+            resource_id=instance.id,
+            payload={
+                "target_entity": directive.target_entity,
+                "cmd": directive.cmd,
+                "args": directive.args,
+                "workspace_id": workspace_id,
+                "instance_id": instance.id,
+                "to_membership_id": to_membership.id,
+                "passage_id": passage.id,
+                "general_text": general_text,
+            },
+            session=session,
+        )
+        from app.core.composer_turns import schedule_user_turn
+
+        turn_id = await schedule_user_turn(
+            session=session,
+            workspace_id=workspace_id,
+            instance_id=instance.id,
+            target_entity=directive.target_entity,
+            text=_turn_text_for_directive(directive, general_text),
+            cmd=directive.cmd or None,
+            from_membership_id=from_membership_id,
+        )
+        results.append(
+            MessageDeliveryResult(
+                target_entity=directive.target_entity,
+                delivered=True,
+                instance_id=instance.id,
+                turn_id=turn_id,
             )
+        )
 
     return results

@@ -171,7 +171,7 @@
   "composer": {
     "title": "编辑器",
     "tagline": "向一个或多个员工发送指令。用 @slug /command 触发动作。",
-    "placeholder": "输入 @邻接迷失者 说话，或 @slug /command。Cmd/Ctrl+Enter 发送。",
+    "placeholder": "输入 @已连线迷失者 说话，或 @slug /command。Cmd/Ctrl+Enter 发送。",
     "send": "发送",
     "sending": "发送中...",
     "sendFailed": "发送失败",
@@ -186,13 +186,23 @@
     "needAtTarget": "该命令需要 @目标；当前未绑定会话。",
     "delivered": "已投递",
     "blocked": "未投递",
+    "routedToCerebellum": "未连线，已转小脑",
     "streamFailed": "流式接收失败",
     "instanceOffline": "化身主机未上线或未能响应",
     "statusResponding": "响应中",
     "statusDone": "已完毕",
     "statusFailed": "失败",
     "compartmentGeneral": "通用",
-    "sendHint": "Cmd/Ctrl+Enter 发送"
+    "sendHint": "Cmd/Ctrl+Enter 发送",
+    "transcriptEmpty": "还没有对话。连线后用 @迷失者 说话。",
+    "roleUser": "你",
+    "roleAssistant": "化身",
+    "roleSystem": "系统",
+    "settings": "设置",
+    "settingsTitle": "编辑器设置",
+    "settingShowThinking": "显示思考链",
+    "settingRenderMarkdown": "渲染 Markdown",
+    "thinkingLabel": "思考过程"
   },
   "debug": {
     "title": "调试",

@@ -331,7 +331,7 @@
   "composer": {
     "title": "Composer",
     "tagline": "Send a turn to one or more employees. Use @slug /command for actions.",
-    "placeholder": "Type @neighbor to chat, or @slug /command. Cmd/Ctrl+Enter to send.",
+    "placeholder": "Type @connected lost-one to chat, or @slug /command. Cmd/Ctrl+Enter to send.",
     "send": "Send",
     "sending": "Sending...",
     "sendFailed": "Send failed",
@@ -346,13 +346,23 @@
     "needAtTarget": "This command needs an @target; no session is bound yet.",
     "delivered": "delivered",
     "blocked": "blocked",
+    "routedToCerebellum": "not connected — routed to cerebellum",
     "streamFailed": "Stream failed",
     "instanceOffline": "Avatar host is offline or failed to respond",
     "statusResponding": "Responding",
     "statusDone": "Done",
     "statusFailed": "Failed",
     "compartmentGeneral": "general",
-    "sendHint": "Cmd/Ctrl+Enter to send"
+    "sendHint": "Cmd/Ctrl+Enter to send",
+    "transcriptEmpty": "No messages yet. Connect a passage, then @ a Lost One.",
+    "roleUser": "You",
+    "roleAssistant": "Avatar",
+    "roleSystem": "System",
+    "settings": "Settings",
+    "settingsTitle": "Composer settings",
+    "settingShowThinking": "Show thinking chain",
+    "settingRenderMarkdown": "Render Markdown",
+    "thinkingLabel": "Thinking"
   },
   "debug": {
     "title": "Debug",

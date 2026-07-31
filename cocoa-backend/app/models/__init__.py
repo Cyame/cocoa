@@ -5,6 +5,7 @@ import app.models.base_class  # noqa: E402, F401
 import app.models.base_class_provider_default  # noqa: E402, F401
 import app.models.capability_market  # noqa: E402, F401
 import app.models.central_hub  # noqa: E402, F401
+import app.models.composer_message  # noqa: E402, F401
 import app.models.deploy_record  # noqa: E402, F401
 import app.models.entity  # noqa: E402, F401
 import app.models.event  # noqa: E402, F401
@@ -29,6 +30,7 @@ from app.models.capability_market import (  # noqa: E402, F401
     CapabilityMarketEntry,
     CapabilityType,
 )
+from app.models.composer_message import ComposerMessage  # noqa: E402, F401
 from app.models.central_hub import (  # noqa: E402, F401
     BrainstemSchedule,
     CentralHub,

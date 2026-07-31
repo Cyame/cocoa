@@ -136,7 +136,7 @@ bun run test         # 测试 (Vitest)
 | MINOR | **每完成一个 PRD**（PRD-v1 → `.1`，PRD-v2 → `.2`，PRD-v3 → `.3`） |
 | PATCH | **每个小改动 / hotfix**（当前 PRD 周期内） |
 
-当前应为 `3.4.x`。PRD 落地时升 MINOR 并重置 PATCH 为 `0`；日常修 UI/bug 只升 PATCH（如 3.4.1 Composer 流式）。
+当前 track 为 **`3.5.x`**（主流程闭环；见 `.omo/plans/product-version-track-3-5-3-6.md`）。命名 PRD 切片落地可升 MINOR；日常修主流程 / hotfix 只升 PATCH。**3.6** 留给整体 UI 大重构，不提前抢跑。
 
 ## 编码风格
 
@@ -362,7 +362,7 @@ chore(repo): 初始化根目录约定与启动脚本
 
 详细设计见 `.omo/drafts/session-engine-v2.md`；排队位置见 `docs/roadmap.md` §7。
 
-其他远期 backlog：见 `docs/roadmap.md` §5.3 / §7（原 P16 队列已吸收为「PRD-v2 落地后再重排」）。
+版本轨：`docs/roadmap.md` §5.2 + `.omo/plans/product-version-track-3-5-3-6.md`。遗留项清单：`.omo/plans/main-flow-remainder-tracking.md`。其他远期 backlog：见 `docs/roadmap.md` §5.4 / §7。
 
 ## Cocoa Deployment Operations Rules (2026-07-28)
 

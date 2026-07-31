@@ -87,6 +87,7 @@ export default function WorkspaceIdePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [introduceOpen, setIntroduceOpen] = useState(false);
+  const [topologyRefreshKey, setTopologyRefreshKey] = useState(0);
 
   useEffect(() => {
     if (id === undefined) return;
@@ -240,6 +241,7 @@ export default function WorkspaceIdePage() {
                 <TopologyPage
                   embedded
                   workspaceId={id}
+                  refreshKey={topologyRefreshKey}
                   onOpenBrain={() => {
                     setActiveTab('brain');
                     setBrainSubTab('fornix');
@@ -345,6 +347,7 @@ export default function WorkspaceIdePage() {
           onClose={() => setIntroduceOpen(false)}
           onIntroduced={() => {
             void loadData();
+            setTopologyRefreshKey((k) => k + 1);
           }}
         />
       ) : null}

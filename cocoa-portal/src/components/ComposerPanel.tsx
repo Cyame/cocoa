@@ -1,10 +1,16 @@
-import { AlertCircle, LoaderCircle, MessageSquare, Send } from 'lucide-react';
+import { AlertCircle, LoaderCircle, MessageSquare, Send, Settings } from 'lucide-react';
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CommandAutocomplete } from '@/components/CommandAutocomplete';
 import { MentionAutocomplete } from '@/components/MentionAutocomplete';
 import { ApiError, api } from '@/lib/api';
+import {
+  AgentThinkingStreamFilter,
+  extractThinkingBlocks,
+  stripAgentThinkingBlocks,
+} from '@/lib/agentOutput';
 import { streamComposerTurn } from '@/lib/composerStream';
+import { renderMarkdown } from '@/lib/markdown';
 import {
   type Compartment,
   parse_turn,
@@ -13,6 +19,7 @@ import {
   type Turn,
 } from '@/lib/slash-parser';
 import { useComposerDraftStore } from '@/stores/composerDraftStore';
+import { useComposerSettingsStore } from '@/stores/composerSettingsStore';
 import { useSessionStore } from '@/stores/session';
 
 type DeliveryItem = {
@@ -39,7 +46,18 @@ type StreamLane = {
   readonly target: string;
   status: 'responding' | 'completed' | 'failed';
   text: string;
+  thinking: string;
   error?: string;
+};
+
+type TranscriptMessage = {
+  readonly id: string;
+  readonly role: string;
+  readonly content: string;
+  readonly target_entity: string | null;
+  readonly turn_id: string | null;
+  readonly status: string;
+  readonly created_at: string | null;
 };
 
 type ComposerPanelProps = {
@@ -52,6 +70,10 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
   const token = useSessionStore((s) => s.token);
   const draft = useComposerDraftStore((s) => s.draft);
   const consumeDraft = useComposerDraftStore((s) => s.consumeDraft);
+  const showThinkingChain = useComposerSettingsStore((s) => s.showThinkingChain);
+  const renderMd = useComposerSettingsStore((s) => s.renderMarkdown);
+  const setShowThinkingChain = useComposerSettingsStore((s) => s.setShowThinkingChain);
+  const setRenderMarkdown = useComposerSettingsStore((s) => s.setRenderMarkdown);
 
   const [text, setText] = useState('');
   const [parseError, setParseError] = useState<string | null>(null);
@@ -59,12 +81,35 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
   const [sendError, setSendError] = useState<string | null>(null);
   const [deliveryRows, setDeliveryRows] = useState<readonly DirectiveResultRow[]>([]);
   const [lanes, setLanes] = useState<StreamLane[]>([]);
+  const [transcript, setTranscript] = useState<TranscriptMessage[]>([]);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [cmdMenuOpen, setCmdMenuOpen] = useState(false);
   const [presetByEntitySlug, setPresetByEntitySlug] = useState<
     Readonly<Record<string, string | null>>
   >({});
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const transcriptEndRef = useRef<HTMLDivElement>(null);
+  const streamFiltersRef = useRef<Map<string, AgentThinkingStreamFilter>>(new Map());
+
+  async function reloadTranscript() {
+    try {
+      const res = await api<{ items: TranscriptMessage[] }>(
+        `/workspaces/${encodeURIComponent(workspaceId)}/composer/messages`,
+      );
+      setTranscript(res.items);
+    } catch {
+      // history is best-effort; live lanes still work
+    }
+  }
+
+  useEffect(() => {
+    void reloadTranscript();
+  }, [workspaceId]);
+
+  useEffect(() => {
+    transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [transcript, lanes]);
 
   useEffect(() => {
     if (draft === null) return;
@@ -142,7 +187,6 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
         ) {
           return true;
         }
-        // per-preset style bare command
         if (!GLOBAL_LIKE.has(d.cmd)) return true;
       }
     }
@@ -160,12 +204,15 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
     const ac = new AbortController();
     abortRef.current = ac;
     setLanes([]);
+    streamFiltersRef.current.clear();
     try {
       const result = await api<MessageSendResult>('/messaging/messages', {
         method: 'POST',
         body: JSON.stringify({ turn_text: text, workspace_id: workspaceId }),
       });
       setDeliveryRows(result.results);
+      setText('');
+      await reloadTranscript();
 
       const turnIds: { turnId: string; target: string }[] = [];
       for (const row of result.results) {
@@ -181,15 +228,19 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
 
       if (turnIds.length > 0) {
         setLanes(
-          turnIds.map((t) => ({
-            turnId: t.turnId,
-            target: t.target,
+          turnIds.map((item) => ({
+            turnId: item.turnId,
+            target: item.target,
             status: 'responding',
             text: '',
+            thinking: '',
           })),
         );
         await Promise.all(
           turnIds.map(async ({ turnId }) => {
+            const filter = new AgentThinkingStreamFilter();
+            streamFiltersRef.current.set(turnId, filter);
+            let rawAccum = '';
             try {
               await streamComposerTurn(
                 workspaceId,
@@ -200,14 +251,37 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
                     prev.map((lane) => {
                       if (lane.turnId !== turnId) return lane;
                       if (frame.type === 'chat.response.chunk' && frame.token) {
+                        rawAccum += frame.token;
+                        const visible = showThinkingChain
+                          ? rawAccum
+                          : filter.feed(frame.token);
+                        const thinking = showThinkingChain
+                          ? extractThinkingBlocks(rawAccum)
+                          : '';
                         return {
                           ...lane,
                           status: 'responding',
-                          text: lane.text + frame.token,
+                          text: showThinkingChain
+                            ? stripAgentThinkingBlocks(rawAccum) || visible
+                            : lane.text + visible,
+                          thinking,
                         };
                       }
                       if (frame.type === 'chat.response.done') {
-                        return { ...lane, status: 'completed' };
+                        const finalRaw =
+                          typeof frame.text === 'string' && frame.text.length > 0
+                            ? frame.text
+                            : rawAccum || lane.text;
+                        const flushed = showThinkingChain ? '' : filter.flush();
+                        const body = showThinkingChain
+                          ? stripAgentThinkingBlocks(finalRaw)
+                          : stripAgentThinkingBlocks(finalRaw) || lane.text + flushed;
+                        return {
+                          ...lane,
+                          status: 'completed',
+                          text: body,
+                          thinking: extractThinkingBlocks(finalRaw),
+                        };
                       }
                       if (frame.type === 'chat.response.error') {
                         return {
@@ -238,6 +312,8 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
             }
           }),
         );
+        await reloadTranscript();
+        setLanes([]);
       }
     } catch (e) {
       setSendError(e instanceof ApiError ? e.message : t('composer.sendFailed'));
@@ -253,18 +329,60 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
     }
   }
 
-  const textareaHeight = compact ? 'h-40' : 'h-64';
+  const textareaHeight = compact ? 'h-28' : 'h-40';
 
   return (
     <section
       className={`flex h-full flex-col ${compact ? 'p-3' : 'p-6'}`}
       aria-label={t('composer.title')}
     >
-      {!compact ? (
-        <header className="mb-4 flex items-center gap-2">
-          <MessageSquare className="size-5 text-slate-700" aria-hidden="true" />
-          <h2 className="text-lg font-semibold text-slate-900">{t('composer.title')}</h2>
-        </header>
+      <header className="mb-2 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          {!compact ? (
+            <>
+              <MessageSquare className="size-5 text-slate-700" aria-hidden="true" />
+              <h2 className="text-lg font-semibold text-slate-900">{t('composer.title')}</h2>
+            </>
+          ) : (
+            <span className="text-xs font-semibold text-slate-700">{t('composer.title')}</span>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => setSettingsOpen((v) => !v)}
+          className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs ${
+            settingsOpen
+              ? 'bg-slate-200 text-slate-900'
+              : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
+          }`}
+          aria-expanded={settingsOpen}
+          aria-label={t('composer.settingsTitle')}
+        >
+          <Settings className="size-3.5" aria-hidden="true" />
+          {t('composer.settings')}
+        </button>
+      </header>
+
+      {settingsOpen ? (
+        <div className="mb-2 space-y-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800">
+          <p className="font-semibold text-slate-900">{t('composer.settingsTitle')}</p>
+          <label className="flex items-center justify-between gap-3">
+            <span>{t('composer.settingShowThinking')}</span>
+            <input
+              type="checkbox"
+              checked={showThinkingChain}
+              onChange={(e) => setShowThinkingChain(e.target.checked)}
+            />
+          </label>
+          <label className="flex items-center justify-between gap-3">
+            <span>{t('composer.settingRenderMarkdown')}</span>
+            <input
+              type="checkbox"
+              checked={renderMd}
+              onChange={(e) => setRenderMarkdown(e.target.checked)}
+            />
+          </label>
+        </div>
       ) : null}
 
       {parseError !== null ? (
@@ -293,40 +411,65 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
         </div>
       ) : null}
 
-      {lanes.length > 0 ? (
-        <ul className="mb-2 max-h-40 space-y-2 overflow-y-auto">
-          {lanes.map((lane) => (
-            <li
-              key={lane.turnId}
-              className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs"
-            >
-              <div className="mb-1 flex items-center justify-between gap-2">
-                <code className="font-mono text-slate-800">@{lane.target}</code>
-                <StatusBadge status={lane.status} />
-              </div>
-              <pre className="whitespace-pre-wrap break-words font-sans text-slate-700">
-                {lane.text || (lane.status === 'responding' ? '…' : '')}
-              </pre>
-              {lane.error ? <p className="mt-1 text-red-700">{lane.error}</p> : null}
-            </li>
+      <div className="mb-2 min-h-0 flex-1 space-y-2 overflow-y-auto rounded-lg border border-slate-200 bg-white p-2">
+        {transcript.length === 0 && lanes.length === 0 ? (
+          <p className="px-1 py-6 text-center text-xs text-slate-400">{t('composer.transcriptEmpty')}</p>
+        ) : null}
+        {transcript
+          .filter((msg) => {
+            if (msg.role !== 'assistant' || !msg.turn_id) return true;
+            return !lanes.some((lane) => lane.turnId === msg.turn_id);
+          })
+          .map((msg) => (
+            <MessageBubble
+              key={msg.id}
+              role={msg.role}
+              target={msg.target_entity}
+              content={msg.content}
+              status={msg.status}
+              showThinking={showThinkingChain}
+              renderMd={renderMd}
+            />
           ))}
-        </ul>
-      ) : null}
+        {lanes.map((lane) => (
+          <div
+            key={lane.turnId}
+            className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-2 py-1.5 text-xs"
+          >
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <code className="font-mono text-slate-800">@{lane.target}</code>
+              <StatusBadge status={lane.status} />
+            </div>
+            {showThinkingChain && lane.thinking ? (
+              <ThinkingBlock text={lane.thinking} />
+            ) : null}
+            <MessageBody text={lane.text || (lane.status === 'responding' ? '…' : '')} renderMd={renderMd} />
+            {lane.error ? <p className="mt-1 text-red-700">{lane.error}</p> : null}
+          </div>
+        ))}
+        <div ref={transcriptEndRef} />
+      </div>
 
-      {deliveryRows.length > 0 && lanes.length === 0 ? (
-        <ul className="mb-2 max-h-24 overflow-y-auto text-xs text-slate-700">
+      {deliveryRows.length > 0 ? (
+        <ul className="mb-2 max-h-16 overflow-y-auto text-xs text-slate-700">
           {deliveryRows.flatMap((row) =>
-            row.delivery.map((d, i) => (
-              <li key={`${row.target_entity}-${i}`} className="font-mono">
-                @{row.target_entity ?? '?'}:{' '}
-                {d.delivered ? t('composer.delivered') : d.reason ?? t('composer.blocked')}
-              </li>
-            )),
+            row.delivery.map((d, i) => {
+              if (d.delivered) return null;
+              const reasonLabel =
+                d.reason === 'routed_to_cerebellum'
+                  ? t('composer.routedToCerebellum')
+                  : (d.reason ?? t('composer.blocked'));
+              return (
+                <li key={`${row.target_entity}-${i}`} className="font-mono">
+                  @{row.target_entity ?? '?'}: {reasonLabel}
+                </li>
+              );
+            }),
           )}
         </ul>
       ) : null}
 
-      <div className="relative min-h-0 flex-1">
+      <div className="relative shrink-0">
         <textarea
           ref={textareaRef}
           id="composer-text"
@@ -355,17 +498,13 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
       </div>
 
       {compartments.length > 0 ? (
-        <ul className="mt-2 max-h-20 overflow-y-auto text-xs text-slate-600">
+        <ul className="mt-2 max-h-16 overflow-y-auto text-xs text-slate-600">
           {compartments.map((c) => (
             <li key={c.label} className="truncate font-mono">
-              {c.label === 'general'
-                ? t('composer.compartmentGeneral')
-                : `@${c.label}`}
+              {c.label === 'general' ? t('composer.compartmentGeneral') : `@${c.label}`}
               :{' '}
               {c.directives.length > 0
-                ? c.directives
-                    .map((d) => d.cmd || d.args.join(' ') || '(chat)')
-                    .join(', ')
+                ? c.directives.map((d) => d.cmd || d.args.join(' ') || '(chat)').join(', ')
                 : c.general_text ?? '—'}
             </li>
           ))}
@@ -409,4 +548,74 @@ function StatusBadge({ status }: { readonly status: StreamLane['status'] }) {
         ? 'bg-emerald-100 text-emerald-800'
         : 'bg-red-100 text-red-800';
   return <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${cls}`}>{label}</span>;
+}
+
+function ThinkingBlock({ text }: { readonly text: string }) {
+  const { t } = useTranslation();
+  return (
+    <details className="mb-1 rounded border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] text-amber-900">
+      <summary className="cursor-pointer select-none font-medium">{t('composer.thinkingLabel')}</summary>
+      <pre className="mt-1 whitespace-pre-wrap break-words font-sans opacity-90">{text}</pre>
+    </details>
+  );
+}
+
+function MessageBody({ text, renderMd }: { readonly text: string; readonly renderMd: boolean }) {
+  if (!text) return null;
+  if (renderMd) {
+    return (
+      <div
+        className="composer-markdown prose prose-sm max-w-none break-words text-slate-800"
+        // nodeskclaw-style sanitized HTML
+        dangerouslySetInnerHTML={{ __html: renderMarkdown(text) }}
+      />
+    );
+  }
+  return <pre className="whitespace-pre-wrap break-words font-sans text-slate-800">{text}</pre>;
+}
+
+function MessageBubble({
+  role,
+  target,
+  content,
+  status,
+  showThinking,
+  renderMd,
+}: {
+  readonly role: string;
+  readonly target: string | null;
+  readonly content: string;
+  readonly status: string;
+  readonly showThinking: boolean;
+  readonly renderMd: boolean;
+}) {
+  const { t } = useTranslation();
+  const thinking = role === 'assistant' && showThinking ? extractThinkingBlocks(content) : '';
+  const body =
+    role === 'assistant' ? stripAgentThinkingBlocks(content) : content;
+  const tone =
+    role === 'user'
+      ? 'bg-blue-50 text-slate-800'
+      : role === 'assistant'
+        ? 'bg-slate-50 text-slate-800'
+        : 'bg-amber-50 text-amber-900';
+  return (
+    <div className={`rounded-lg px-2 py-1.5 text-xs ${tone}`}>
+      <div className="mb-0.5 flex items-center justify-between gap-2 text-[10px] text-slate-500">
+        <span>
+          {role === 'user'
+            ? t('composer.roleUser')
+            : role === 'assistant'
+              ? t('composer.roleAssistant')
+              : t('composer.roleSystem')}
+          {target ? <code className="ml-1 font-mono text-slate-700">@{target}</code> : null}
+        </span>
+        {status === 'responding' ? (
+          <span className="text-amber-700">{t('composer.statusResponding')}</span>
+        ) : null}
+      </div>
+      {thinking ? <ThinkingBlock text={thinking} /> : null}
+      <MessageBody text={body || (status === 'responding' ? '…' : '')} renderMd={renderMd} />
+    </div>
+  );
 }

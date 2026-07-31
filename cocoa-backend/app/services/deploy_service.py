@@ -598,8 +598,14 @@ async def _execute_deploy_pipeline(ctx: _DeployContext) -> None:
                     "deploy config snapshot",
                     extra={"record_id": ctx.record_id, "snapshot": _load_deploy_config_snapshot(record)},
                 )
-            # Product rule: start/deploy failure must not leave a lingering avatar node.
-            await _wipe_failed_instance(db, ctx.instance_id)
+            # Product rule: deploy failure must NOT wipe the avatar node.
+            # Topology seat stays so the operator can connect / retry; status
+            # is marked failed for UI (start_failed / unhealthy).
+            instance = await db.get(Instance, ctx.instance_id)
+            if instance is not None and instance.deleted_at is None:
+                from app.models.instance import InstanceStatus
+
+                instance.status = InstanceStatus.failed.value
             await db.commit()
         try:
             await teardown_instance_namespace(ctx.instance_id)
@@ -610,29 +616,6 @@ async def _execute_deploy_pipeline(ctx: _DeployContext) -> None:
         await _publish(0, "failed", message=str(exc)[:500])
     finally:
         await _restore_agent_bundle_with_retry(ctx)
-
-
-async def _wipe_failed_instance(db: AsyncSession, instance_id: str) -> None:
-    """Soft-delete Instance + its Membership so failed avatars leave the canvas."""
-    from app.models.instance import Instance, InstanceStatus
-    from app.models.workspace import Membership
-
-    instance = await db.get(Instance, instance_id)
-    if instance is None or instance.deleted_at is not None:
-        return
-    instance.status = InstanceStatus.failed.value
-    mem_rows = (
-        await db.execute(
-            select(Membership).where(
-                Membership.instance_id == instance_id,
-                Membership.deleted_at.is_(None),
-            )
-        )
-    ).scalars().all()
-    for mem in mem_rows:
-        mem.soft_delete()
-    instance.soft_delete()
-    logger.info("wiped failed instance_id=%s memberships=%s", instance_id, len(mem_rows))
 
 
 # ---------------------------------------------------------------------------

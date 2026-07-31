@@ -35,11 +35,15 @@ class ComposerTurnState:
     workspace_id: str
     target_entity: str
     status: TurnStatus = "responding"
-    text: str = ""
+    text: str = ""  # user prompt
+    reply_text: str = ""  # accumulated assistant reply
     queue: asyncio.Queue[dict[str, Any] | None] = field(default_factory=asyncio.Queue)
     # Late SSE subscribers replay these (stub/LLM may finish before client connects).
     history: list[dict[str, Any]] = field(default_factory=list)
     via_tunnel: bool = False
+    user_message_id: str | None = None
+    assistant_message_id: str | None = None
+    from_user_id: str | None = None
 
 
 _TURNS: dict[str, ComposerTurnState] = {}
@@ -82,6 +86,9 @@ async def ingest_tunnel_chat_frame(turn_id: str, frame: dict[str, Any]) -> None:
     if msg_type == CHAT_RESPONSE_CHUNK:
         if "status" not in frame:
             frame["status"] = "responding"
+        token = frame.get("token")
+        if isinstance(token, str) and token:
+            state.reply_text += token
         await _emit_frame(state, frame)
         await _persist_chat_event(CHAT_RESPONSE_CHUNK, state, frame)
         return
@@ -90,8 +97,14 @@ async def ingest_tunnel_chat_frame(turn_id: str, frame: dict[str, Any]) -> None:
         state.status = "completed"
         frame.setdefault("status", "completed")
         frame.setdefault("finish_reason", "stop")
+        done_text = frame.get("text")
+        if isinstance(done_text, str) and done_text and not state.reply_text:
+            state.reply_text = done_text
+        if "text" not in frame or not frame.get("text"):
+            frame["text"] = state.reply_text
         await _emit_frame(state, frame)
         await _persist_chat_event(CHAT_RESPONSE_DONE, state, frame)
+        await _finalize_assistant_message(state, status="completed")
         await state.queue.put(None)
         return
 
@@ -100,6 +113,9 @@ async def ingest_tunnel_chat_frame(turn_id: str, frame: dict[str, Any]) -> None:
         frame.setdefault("status", "failed")
         await _emit_frame(state, frame)
         await _persist_chat_event(CHAT_RESPONSE_ERROR, state, frame)
+        await _finalize_assistant_message(
+            state, status="failed", content=str(frame.get("message") or state.reply_text)
+        )
         await state.queue.put(None)
         return
 
@@ -117,7 +133,35 @@ async def schedule_user_turn(
     from_membership_id: str,
 ) -> str:
     """Enqueue a user turn: Tunnel chat.request when Host online, else stub stream."""
+    from app.models.workspace import Membership
+    from app.services.composer_transcript import append_composer_message
+
     turn_id = str(uuid4())
+    sender = await session.get(Membership, from_membership_id)
+    from_user_id = sender.user_id if sender is not None else None
+
+    user_row = await append_composer_message(
+        session,
+        workspace_id=workspace_id,
+        role="user",
+        content=text,
+        target_entity=target_entity,
+        instance_id=instance_id,
+        turn_id=turn_id,
+        status="completed",
+        author_user_id=from_user_id,
+    )
+    assistant_row = await append_composer_message(
+        session,
+        workspace_id=workspace_id,
+        role="assistant",
+        content="",
+        target_entity=target_entity,
+        instance_id=instance_id,
+        turn_id=turn_id,
+        status="responding",
+    )
+
     state = ComposerTurnState(
         turn_id=turn_id,
         instance_id=instance_id,
@@ -125,6 +169,9 @@ async def schedule_user_turn(
         target_entity=target_entity,
         status="responding",
         text=text,
+        user_message_id=user_row.id if user_row else None,
+        assistant_message_id=assistant_row.id if assistant_row else None,
+        from_user_id=from_user_id,
     )
     _TURNS[turn_id] = state
 
@@ -191,6 +238,7 @@ async def _run_stream_turn(state: ComposerTurnState) -> None:
     try:
         async for chunk in _iter_tokens(user_content):
             if chunk.token:
+                state.reply_text += chunk.token
                 frame = {
                     "type": CHAT_RESPONSE_CHUNK,
                     "turn_id": state.turn_id,
@@ -210,9 +258,11 @@ async def _run_stream_turn(state: ComposerTurnState) -> None:
                     "target_entity": state.target_entity,
                     "finish_reason": chunk.finish_reason,
                     "status": "completed",
+                    "text": state.reply_text,
                 }
                 await _emit_frame(state, done)
                 await _persist_chat_event(CHAT_RESPONSE_DONE, state, done)
+                await _finalize_assistant_message(state, status="completed")
                 break
         else:
             state.status = "completed"
@@ -223,9 +273,11 @@ async def _run_stream_turn(state: ComposerTurnState) -> None:
                 "target_entity": state.target_entity,
                 "finish_reason": "stop",
                 "status": "completed",
+                "text": state.reply_text,
             }
             await _emit_frame(state, done)
             await _persist_chat_event(CHAT_RESPONSE_DONE, state, done)
+            await _finalize_assistant_message(state, status="completed")
     except LLMError as exc:
         state.status = "failed"
         err = {
@@ -238,6 +290,7 @@ async def _run_stream_turn(state: ComposerTurnState) -> None:
         }
         await _emit_frame(state, err)
         await _persist_chat_event(CHAT_RESPONSE_ERROR, state, err)
+        await _finalize_assistant_message(state, status="failed", content=str(exc))
     except Exception as exc:  # noqa: BLE001
         logger.exception("composer turn failed turn_id=%s", state.turn_id)
         state.status = "failed"
@@ -251,8 +304,36 @@ async def _run_stream_turn(state: ComposerTurnState) -> None:
         }
         await _emit_frame(state, err)
         await _persist_chat_event(CHAT_RESPONSE_ERROR, state, err)
+        await _finalize_assistant_message(state, status="failed", content=str(exc))
     finally:
         await state.queue.put(None)
+
+
+async def _finalize_assistant_message(
+    state: ComposerTurnState,
+    *,
+    status: str,
+    content: str | None = None,
+) -> None:
+    """Persist assistant bubble content/status after a turn finishes."""
+    from app.core.db import get_session_factory
+    from app.services.composer_transcript import update_composer_message_by_turn
+
+    body = content if content is not None else state.reply_text
+    try:
+        async with get_session_factory()() as session:
+            await update_composer_message_by_turn(
+                session,
+                turn_id=state.turn_id,
+                role="assistant",
+                content=body,
+                status=status,
+            )
+            await session.commit()
+    except Exception:  # noqa: BLE001
+        logger.exception(
+            "finalize assistant message failed turn_id=%s", state.turn_id
+        )
 
 
 async def _iter_tokens(user_content: str):

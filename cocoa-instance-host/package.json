@@ -1,6 +1,6 @@
 {
   "name": "cocoa-instance-host",
-  "version": "3.5.0",
+  "version": "3.5.2",
   "private": true,
   "type": "module",
   "description": "Cocoa Instance Host — Tunnel WS client + pi --mode rpc bridge",

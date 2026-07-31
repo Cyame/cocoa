@@ -820,10 +820,11 @@ async def fail_instance(
     db: DB,
     current_user: CurrentUserDep,
 ) -> InstanceOut:
-    """Mark start/runtime failure, then soft-delete the avatar (no lingering node).
+    """Transition instance to ``failed`` (keep topology seat for retry / connect).
 
-    Allowed from any non-deleted status. Topology membership is removed with the
-    instance so failed avatars do not remain on the canvas.
+    Allowed from any current status. The ``reason`` is recorded in the
+    emitted event payload. Does **not** soft-delete the membership — operators
+    need the node on canvas to reconnect or redeploy.
     """
     inst = await _transition(
         instance_id,
@@ -842,21 +843,4 @@ async def fail_instance(
         current_user=current_user,
         payload={"reason": body.reason},
     )
-    out = _instance_out(inst)
-    mem_rows = (
-        await db.execute(
-            select(Membership).where(
-                Membership.instance_id == instance_id,
-                Membership.deleted_at.is_(None),
-            )
-        )
-    ).scalars().all()
-    for mem in mem_rows:
-        mem.soft_delete()
-    inst.soft_delete()
-    await db.commit()
-    try:
-        await svc_teardown_instance_namespace(instance_id)
-    except Exception:  # noqa: BLE001
-        logger.exception("teardown after fail ignored instance_id=%s", instance_id)
-    return out
+    return _instance_out(inst)

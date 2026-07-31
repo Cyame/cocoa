@@ -4,14 +4,14 @@ P5 implements messaging endpoints.
 """
 
 from fastapi import APIRouter, Query, Response, status
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import DB, CurrentUserDep
 from app.core.errors import ConflictError, ForbiddenError, NotFoundError
 from app.core.openapi import add_error_responses
 from app.core.pagination import OffsetPage, paginate_offset
-from app.models.workspace import Membership, MembershipRole, Workspace
+from app.models.workspace import Membership, MembershipRole, Passage, Workspace
 from app.schemas.membership import MembershipCreate, MembershipOut, MembershipUpdate
 
 router = APIRouter(prefix="/messaging", tags=["Messaging"])
@@ -264,6 +264,18 @@ async def delete_membership(
             )
 
     membership.soft_delete()
+    # Soft-delete passages that touch this seat so dead edges cannot block Composer.
+    await db.execute(
+        update(Passage)
+        .where(
+            Passage.deleted_at.is_(None),
+            or_(
+                Passage.from_membership_id == membership_id,
+                Passage.to_membership_id == membership_id,
+            ),
+        )
+        .values(deleted_at=func.now(), is_active=False)
+    )
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -274,7 +286,6 @@ async def delete_membership(
 
 
 from app.core.topology import check_acyclic  # noqa: E402
-from app.models.workspace import Passage  # noqa: E402
 from app.schemas.passage import PassageCreate, PassageOut, PassageUpdate  # noqa: E402
 
 

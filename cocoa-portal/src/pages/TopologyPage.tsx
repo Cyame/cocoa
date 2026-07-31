@@ -90,6 +90,8 @@ type PassageCreateBody = {
 type TopologyPageProps = {
   readonly embedded?: boolean;
   readonly workspaceId?: string;
+  /** Bump to force-reload memberships / passages (e.g. after introduce). */
+  readonly refreshKey?: number;
   /** Open the workspace 主脑 tab (hub node click). */
   readonly onOpenBrain?: () => void;
 };
@@ -171,6 +173,7 @@ async function fetchStaticData(workspaceId: string): Promise<TopologyStaticData>
 export default function TopologyPage({
   embedded = false,
   workspaceId: workspaceIdProp,
+  refreshKey = 0,
   onOpenBrain,
 }: TopologyPageProps = {}) {
   const { id: routeWorkspaceId } = useParams<{ id: string }>();
@@ -259,7 +262,7 @@ export default function TopologyPage({
     return () => {
       isActive = false;
     };
-  }, [workspaceId, t]);
+  }, [workspaceId, refreshKey, t]);
 
   // ---- Live status polling (every 2s) ----
   useEffect(() => {

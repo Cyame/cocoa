@@ -11,13 +11,14 @@ Routes:
 from __future__ import annotations
 
 from fastapi import APIRouter, status
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 
 from app.api.deps import DB, CurrentUserDep
 from app.core.errors import ConflictError, NotFoundError
 from app.core.openapi import add_error_responses
 from app.core.pagination import OffsetPage, paginate_offset
 from app.core.tenant import get_default_namespace
+from app.models.composer_message import ComposerMessage
 from app.models.entity import Entity
 from app.models.organization import Namespace, Organization
 from app.models.workspace import Workspace
@@ -223,4 +224,12 @@ async def delete_namespace(
             f"Namespace '{namespace_id}' not found",
         )
     ns.soft_delete()
+    await db.execute(
+        update(ComposerMessage)
+        .where(
+            ComposerMessage.namespace_id == namespace_id,
+            ComposerMessage.deleted_at.is_(None),
+        )
+        .values(deleted_at=func.now())
+    )
     await db.commit()

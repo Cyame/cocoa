@@ -122,6 +122,8 @@ async def test_chunk_ingest_into_turn_queue():
         )
         done = await asyncio.wait_for(state.queue.get(), timeout=1)
         assert done["type"] == CHAT_RESPONSE_DONE
+        assert done.get("text") == "Hi"
+        assert get_turn(turn_id).reply_text == "Hi"
         sentinel = await asyncio.wait_for(state.queue.get(), timeout=1)
         assert sentinel is None
         assert get_turn(turn_id).status == "completed"
@@ -130,7 +132,37 @@ async def test_chunk_ingest_into_turn_queue():
 
 
 @pytest.mark.asyncio
-async def test_kick_old_connection():
+async def test_ingest_done_text_without_chunks():
+    """Host may emit done.text alone when pi skipped deltas."""
+    turn_id = str(uuid4())
+    state = ComposerTurnState(
+        turn_id=turn_id,
+        instance_id="inst-1",
+        workspace_id="ws-1",
+        target_entity="alice",
+        via_tunnel=True,
+    )
+    from app.core import composer_turns as ct
+
+    ct._TURNS[turn_id] = state
+    try:
+        await ingest_tunnel_chat_frame(
+            turn_id,
+            {
+                "type": CHAT_RESPONSE_DONE,
+                "finish_reason": "stop",
+                "status": "completed",
+                "text": "整段答复",
+            },
+        )
+        done = await asyncio.wait_for(state.queue.get(), timeout=1)
+        assert done["text"] == "整段答复"
+        assert state.reply_text == "整段答复"
+        assert state.status == "completed"
+        await asyncio.wait_for(state.queue.get(), timeout=1)  # sentinel
+    finally:
+        ct._TURNS.pop(turn_id, None)
+
     hub = TunnelHub()
     iid = str(uuid4())
     old = _mock_ws()

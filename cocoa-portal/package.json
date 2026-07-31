@@ -1,7 +1,7 @@
 {
   "name": "cocoa-portal",
   "private": true,
-  "version": "3.5.0",
+  "version": "3.5.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -15,8 +15,10 @@
   },
   "dependencies": {
     "clsx": "^2.1.1",
+    "dompurify": "^3.4.12",
     "i18next": "^26.3.6",
     "lucide-react": "^1.26.0",
+    "marked": "^18.0.7",
     "pinyin-pro": "^3.28.2",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
@@ -30,6 +32,8 @@
     "@tailwindcss/vite": "^4.1.0",
     "@testing-library/jest-dom": "^6.6.0",
     "@testing-library/react": "^16.3.0",
+    "@types/dompurify": "^3.2.0",
+    "@types/marked": "^6.0.0",
     "@types/node": "^22.5.0",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",

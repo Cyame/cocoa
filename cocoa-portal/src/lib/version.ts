@@ -7,4 +7,4 @@
  *
  * Keep in sync with `cocoa-portal/package.json` and `cocoa-backend/pyproject.toml`.
  */
-export const APP_VERSION = '3.5.0';
+export const APP_VERSION = '3.5.2';
