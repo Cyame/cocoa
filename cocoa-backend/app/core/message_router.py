@@ -2,9 +2,10 @@
 
 Routes a parsed directive to eligible recipient entities within an workspace.
 
-Delivery requires an active Passage edge. User → Lost One without a passage
-is **not** proxied to the instance; the utterance is handed to the Workspace
-小脑 (cerebellum) stub for later business logic.
+Delivery requires an active Passage edge (duplex: either orientation counts).
+User → Lost One without a passage is **not** proxied to the instance; the
+utterance is handed to the Workspace 小脑 (cerebellum) stub for later
+business logic.
 """
 
 from __future__ import annotations
@@ -16,9 +17,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.event_types import MESSAGING_DELIVERY_BLOCKED, MESSAGING_MESSAGE_SENT
 from app.core.events import emit
+from app.core.passages import find_active_passage_between
 from app.models.entity import Entity
 from app.models.instance import Instance, InstanceStatus
-from app.models.workspace import Membership, Passage
+from app.models.workspace import Membership
 from app.schemas.slash import Directive
 
 
@@ -219,16 +221,12 @@ async def route_message(
                 )
             continue
 
-        result = await session.execute(
-            select(Passage).where(
-                Passage.workspace_id == workspace_id,
-                Passage.from_membership_id == from_membership_id,
-                Passage.to_membership_id == to_membership.id,
-                Passage.is_active.is_(True),
-                Passage.deleted_at.is_(None),
-            )
+        passage = await find_active_passage_between(
+            session,
+            workspace_id,
+            from_membership_id,
+            to_membership.id,
         )
-        passage = result.scalar_one_or_none()
 
         if passage is None:
             if sender_is_user:

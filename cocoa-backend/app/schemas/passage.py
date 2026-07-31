@@ -1,10 +1,10 @@
-"""Passage schemas — Membership↔Membership only (PRD-v2)."""
+"""Passage schemas — Membership↔Membership duplex edges (PRD-v2 / dual mode)."""
 
 from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 
 class PassageCreate(BaseModel):
@@ -28,6 +28,7 @@ class PassageOut(BaseModel):
     from_membership_id: str
     to_membership_id: str
     is_active: bool
+    mode: str = "dual"
     edge_meta: dict | None
     created_at: datetime
     updated_at: datetime

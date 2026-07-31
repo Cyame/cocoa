@@ -265,8 +265,10 @@ class TestPassageCrud:
         )
         assert resp.status_code == 201
         body = resp.json()
-        assert body["from_membership_id"] == m1_id
-        assert body["to_membership_id"] == m2_id
+        lo, hi = (m1_id, m2_id) if m1_id <= m2_id else (m2_id, m1_id)
+        assert body["from_membership_id"] == lo
+        assert body["to_membership_id"] == hi
+        assert body["mode"] == "dual"
         assert body["is_active"] is True
 
     def test_passage_self_loop_rejected(

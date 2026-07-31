@@ -53,6 +53,7 @@ export type WorkspaceMembership = WorkspaceMember & {
   readonly updated_at: string;
   readonly entity_slug?: string | null;
   readonly entity_name?: string | null;
+  readonly username?: string | null;
 };
 
 export type Membership = WorkspaceMembership;
@@ -234,6 +235,8 @@ export type TopologyNode = {
   readonly instanceStatus: string | null;
   readonly mentionable: boolean;
   readonly displayStatus: AvatarDisplayStatus | null;
+  /** True when this seat is the signed-in Awakened user. */
+  readonly isCurrentUser: boolean;
 };
 
 export type Passage = {
@@ -242,6 +245,8 @@ export type Passage = {
   readonly from_membership_id: string;
   readonly to_membership_id: string;
   readonly is_active: boolean;
+  /** Duplex by default; stored endpoints are lexicographically ordered. */
+  readonly mode?: string;
   readonly edge_meta: JsonObject | null;
   readonly created_at: string;
   readonly updated_at: string;

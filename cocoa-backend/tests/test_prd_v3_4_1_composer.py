@@ -243,3 +243,93 @@ async def test_user_with_passage_proxies_to_instance(
     assert results[0].delivered is True
     assert results[0].turn_id == "turn-ok"
     assert scheduled and scheduled[0]["text"] == "你好"
+
+
+@pytest.mark.asyncio
+async def test_reverse_passage_still_proxies_to_instance(
+    session,
+    workspace_factory,
+    entity_factory,
+    instance_factory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Duplex lock: Lost One → User edge still counts for User → Lost One delivery."""
+    from uuid import uuid4
+
+    from app.core.message_router import route_message
+    from app.models.instance import InstanceStatus
+    from app.models.user import User
+    from app.models.workspace import Membership, MembershipRole, Passage
+    from app.schemas.slash import Directive
+
+    async def fake_emit(*_a, **_k):
+        return None
+
+    monkeypatch.setattr("app.core.message_router.emit", fake_emit)
+
+    scheduled: list[dict] = []
+
+    async def fake_schedule(**kwargs):
+        scheduled.append(kwargs)
+        return "turn-rev"
+
+    monkeypatch.setattr(
+        "app.core.composer_turns.schedule_user_turn",
+        fake_schedule,
+    )
+
+    user = User(
+        username=f"u-{uuid4().hex[:8]}",
+        email=f"{uuid4().hex[:8]}@example.com",
+        password_hash="x",
+    )
+    session.add(user)
+    await session.flush()
+
+    workspace = await workspace_factory()
+    entity = await entity_factory(slug="rev-ceshi", namespace_id=workspace.namespace_id)
+    instance = await instance_factory(
+        entity_id=entity.id,
+        workspace_id=workspace.id,
+        status=InstanceStatus.running.value,
+    )
+    user_mem = Membership(
+        workspace_id=workspace.id,
+        user_id=user.id,
+        instance_id=None,
+        posx=0,
+        posy=0,
+        role=MembershipRole.owner.value,
+    )
+    inst_mem = Membership(
+        workspace_id=workspace.id,
+        user_id=None,
+        instance_id=instance.id,
+        posx=120,
+        posy=0,
+        role=MembershipRole.viewer.value,
+    )
+    session.add_all([user_mem, inst_mem])
+    await session.flush()
+    # Reverse click-order orientation: Lost One → User
+    session.add(
+        Passage(
+            workspace_id=workspace.id,
+            from_membership_id=inst_mem.id,
+            to_membership_id=user_mem.id,
+            is_active=True,
+        )
+    )
+    await session.flush()
+
+    results = await route_message(
+        session,
+        from_membership_id=user_mem.id,
+        workspace_id=workspace.id,
+        directive=Directive(target_entity="rev-ceshi", cmd="", args=["ping"]),
+        general_text=None,
+    )
+    assert len(results) == 1
+    assert results[0].delivered is True
+    assert results[0].turn_id == "turn-rev"
+    assert scheduled

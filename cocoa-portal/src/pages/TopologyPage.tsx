@@ -32,6 +32,7 @@ import type {
 } from '@/lib/types';
 import { useComposerDraftStore } from '@/stores/composerDraftStore';
 import { useSelectedStore } from '@/stores/selected';
+import { useSessionStore } from '@/stores/session';
 import { useTabStore } from '@/stores/tabStore';
 
 // ---------------------------------------------------------------------------
@@ -182,6 +183,7 @@ export default function TopologyPage({
   const interactionMode = useSelectedStore((state) => state.interactionMode);
   const addTab = useTabStore((state) => state.addTab);
   const setComposerDraft = useComposerDraftStore((state) => state.setDraft);
+  const currentUserId = useSessionStore((state) => state.user?.user_id ?? null);
   const [staticData, setStaticData] = useState<TopologyStaticData | null>(null);
   const [liveStatus, setLiveStatus] = useState<readonly LiveStatusItem[]>([]);
   const [activePassages, setActivePassages] = useState<ReadonlyMap<string, number>>(
@@ -380,8 +382,12 @@ export default function TopologyPage({
         display_status: null,
       };
       const effective = status ?? fallbackStatus;
+      const isCurrentUser = isUser && currentUserId !== null && m.user_id === currentUserId;
+      const username = m.username?.trim() || null;
       const label = isUser
-        ? (m.user_id ?? t('topology.userLabel'))
+        ? isCurrentUser
+          ? t('topology.meLabel', { name: username ?? t('topology.userLabel') })
+          : (username ?? t('topology.userLabel'))
         : (m.entity_name ?? m.entity_slug ?? m.instance_id ?? t('topology.instanceLabel'));
       return {
         kind: 'membership' as const,
@@ -390,7 +396,7 @@ export default function TopologyPage({
         x: m.posx,
         y: m.posy,
         label,
-        slug: isUser ? (m.user_id ?? '') : (m.entity_slug ?? ''),
+        slug: isUser ? (username ?? m.user_id ?? '') : (m.entity_slug ?? ''),
         role,
         status: effective.display_status ?? effective.instance_status ?? effective.glow.intensity,
         fillColor: isUser ? userFillColor() : instanceFillColor(),
@@ -401,6 +407,7 @@ export default function TopologyPage({
         instanceStatus: effective.instance_status ?? null,
         mentionable: effective.mentionable === true,
         displayStatus: effective.display_status ?? null,
+        isCurrentUser,
       };
     });
 
@@ -429,10 +436,11 @@ export default function TopologyPage({
       instanceStatus: null,
       mentionable: false,
       displayStatus: null,
+      isCurrentUser: false,
     };
 
     return [hubNode, ...membershipNodes];
-  }, [staticData, liveStatus, t]);
+  }, [staticData, liveStatus, t, currentUserId]);
 
   const applyFit = useCallback(() => {
     const vp = fitNodes(nodes, {
@@ -1091,6 +1099,7 @@ function NodeView({
   dragOverride,
   isMoveCursor,
 }: NodeViewProps): ReactElement {
+  const { t } = useTranslation();
   const haloOpacity = intensityOpacity(node.glowIntensity);
   const coreStrokeOpacity = intensityStrokeOpacity(node.glowIntensity);
   const isUser = node.fillColor === DEFAULT_USER_FILL;
@@ -1180,9 +1189,9 @@ function NodeView({
       <circle
         r={NODE_RADIUS}
         fill={node.fillColor}
-        stroke={node.glowColor}
-        strokeOpacity={coreStrokeOpacity}
-        strokeWidth={CORE_STROKE_WIDTH}
+        stroke={node.isCurrentUser ? '#2563eb' : node.glowColor}
+        strokeOpacity={node.isCurrentUser ? 1 : coreStrokeOpacity}
+        strokeWidth={node.isCurrentUser ? CORE_STROKE_WIDTH + 1.5 : CORE_STROKE_WIDTH}
         data-testid={`topology-node-core-${node.id}`}
       />
       {node.outdated ? <OutdatedOverlay nodeId={node.id} /> : null}
@@ -1194,6 +1203,28 @@ function NodeView({
           <Icon size={20} strokeWidth={2} />
         </div>
       </foreignObject>
+      {node.kind !== 'hub' ? (
+        <text
+          y={NODE_RADIUS + 16}
+          textAnchor="middle"
+          className="fill-slate-700"
+          style={{ fontSize: 11, fontWeight: node.isCurrentUser ? 700 : 500 }}
+          data-testid={`topology-node-label-${node.id}`}
+        >
+          {node.label.length > 14 ? `${node.label.slice(0, 13)}…` : node.label}
+        </text>
+      ) : null}
+      {node.isCurrentUser ? (
+        <text
+          y={NODE_RADIUS + 30}
+          textAnchor="middle"
+          className="fill-blue-600"
+          style={{ fontSize: 10, fontWeight: 700 }}
+          data-testid={`topology-node-me-${node.id}`}
+        >
+          {t('topology.meBadge')}
+        </text>
+      ) : null}
       {isTooltipVisible ? (
         <g
           data-testid={`topology-tooltip-group-${node.id}`}

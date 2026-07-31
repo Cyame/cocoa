@@ -30,6 +30,7 @@ import type {
 } from '@/lib/types';
 import TopologyPage from '@/pages/TopologyPage';
 import { useSelectedStore } from '@/stores/selected';
+import { useSessionStore } from '@/stores/session';
 
 type CanvasTab = 'topology' | 'memberships' | 'instances' | 'brain';
 type BrainSubTab = 'fornix' | 'frontal' | 'brainstem' | 'cerebellum';
@@ -72,6 +73,7 @@ export default function WorkspaceIdePage() {
   const { id } = useParams<{ id: string }>();
   const setWorkspaceId = useSelectedStore((state) => state.setWorkspaceId);
   const interactionMode = useSelectedStore((state) => state.interactionMode);
+  const currentUserId = useSessionStore((state) => state.user?.user_id ?? null);
 
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [activeTab, setActiveTab] = useState<CanvasTab>('topology');
@@ -307,15 +309,22 @@ export default function WorkspaceIdePage() {
             <PanelList
               emptyTitle={t('workspace.emptyMembershipsTitle')}
               emptyDetail={t('workspace.emptyMembershipsDetail')}
-              items={memberships.map((m) => ({
-                id: m.id,
-                title: m.user_id ?? m.instance_id ?? m.id,
-                subtitle: m.role,
-                removeLabel: t('workspace.removeAwakened'),
-                onRemove: () => {
-                  void handleRemoveMembership(m.id, m.user_id ?? m.id);
-                },
-              }))}
+              items={memberships.map((m) => {
+                const isMe = currentUserId !== null && m.user_id === currentUserId;
+                const name = m.username?.trim() || t('topology.userLabel');
+                const title = isMe ? t('topology.meLabel', { name }) : name;
+                return {
+                  id: m.id,
+                  title,
+                  subtitle: isMe
+                    ? `${m.role} · ${t('workspace.meBadge')}`
+                    : m.role,
+                  removeLabel: t('workspace.removeAwakened'),
+                  onRemove: () => {
+                    void handleRemoveMembership(m.id, name);
+                  },
+                };
+              })}
               actionLabel={t('workspace.introduceInstance')}
               onAction={() => setIntroduceOpen(true)}
             />

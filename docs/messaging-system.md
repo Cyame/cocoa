@@ -10,42 +10,43 @@
 
 ## 1. Topology Model
 
-The messaging topology models an **acyclic directed graph** over memberships
-within a workspace. Each membership is a node; each passage (also called Corridor in legacy code) is a directed edge
-between two nodes.
+The messaging topology models an **acyclic undirected graph** over memberships
+within a workspace. Each membership is a node; each passage is a **duplex**
+edge between two nodes (`mode=dual` by default). Stored `from_membership_id` /
+`to_membership_id` are a canonical lexicographic pair (click order does not
+matter); delivery and `@` neighbors treat either orientation the same.
 
 ```
 Workspace
   |
-  +-- Membership A (user or instance in workspace, role + hex position)
+  +-- Membership A (user or instance in workspace, role + position)
   |     |   role: owner | editor | viewer
-  |     |   hex_q, hex_r: hexagonal grid coordinates
   |
   +-- Membership B
   |     |
-  |     +-- Passage from A -> B (one-way edge, is_active toggle)
+  |     +-- Passage A — B (duplex, is_active toggle)
   |
   +-- Membership C
         |
-        +-- Passage from A -> C
+        +-- Passage A — C
 
-Message routing: only direct neighbors (A -> B, A -> C) receive delivery.
-A cannot reach C through B (no transitive routing). The graph is enforced
-acyclic at passage creation via BFS (`app/core/topology.py:check_acyclic`).
+Message routing: only direct neighbors receive delivery (no transitive hops).
+The graph is enforced acyclic at passage creation via undirected BFS
+(`app/core/topology.py:check_acyclic`).
 ```
 
 **Key rules:**
 
 - **Neighbor-only delivery**: A message from member X only reaches members Y
-  where a passage (Corridor) `from_membership_id=X, to_membership_id=Y` is active.
+  where an active duplex passage links X and Y (either stored orientation).
 - **Passage gating**: Even if both memberships exist in the same workspace, a
   missing or inactive passage blocks delivery (reason: `not_neighbor`).
 - **Membership role model**: Three roles (`owner`, `editor`, `viewer`)
   defined in `app/models/office.py:MembershipRole`. Role does not affect
   delivery routing — it is metadata for authorization logic (P6+).
-- **Acyclicity**: `check_acyclic` runs a BFS from the target membership to
-  detect if the source is already reachable. If so, the new edge is rejected
-  with a 409 Conflict to prevent cycles.
+- **Acyclicity**: `check_acyclic` runs an undirected BFS from the target
+  membership; if the source is already reachable, the new edge is rejected
+  with a 409 Conflict.
 
 **Models (in `app/models/office.py`):**
 
@@ -131,7 +132,7 @@ route_message()             -- app/core/message_router.py
   |    a. Find Entity by slug
   |    b. Find active Instance(s) (running | pending)
   |    c. Find target Membership (by instance_id + office_id)
-  |    d. Check passage (from -> to, active, not deleted)
+  |    d. Check duplex passage (either orientation, active, not deleted)
   |       - Missing -> emit "messaging.delivery_blocked", reason: not_neighbor
   |       - Found   -> emit "messaging.message_sent", delivered: true
   v
@@ -256,7 +257,7 @@ route_message(session, from_membership_id, office_id, directive)  # app/core/mes
   |    1. Find Entity by slug
   |    2. Find Instance(s) (running | pending)
   |    3. Find target Membership (by instance_id)
-  |    4. Check passage (from -> to, active)
+  |    4. Check duplex passage (either orientation, active)
   |       - route blocked if no passage (reason: "not_neighbor")
   |       - route allowed -> emit MESSAGING_MESSAGE_SENT, delivered=true
   v

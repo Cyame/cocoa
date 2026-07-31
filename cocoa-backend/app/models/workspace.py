@@ -113,7 +113,12 @@ class Membership(BaseModel, Base):
 
 
 class Passage(BaseModel, Base):
-    """Directed Membership↔Membership edge (REMOVED_PassageNode dropped in PRD-v2)."""
+    """Duplex Membership↔Membership edge (default ``mode=dual``).
+
+    ``from_membership_id`` / ``to_membership_id`` are a canonical undirected
+    pair for ``mode=dual``: lexicographically smaller id is always stored in
+    ``from_membership_id``. Click / request order does not matter.
+    """
 
     __tablename__ = "passages"
     __table_args__ = (
@@ -145,6 +150,9 @@ class Passage(BaseModel, Base):
     is_active: Mapped[bool] = mapped_column(
         Boolean, default=True, nullable=False
     )
+    mode: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="dual", server_default="dual"
+    )
     edge_meta: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     def __repr__(self) -> str:
@@ -152,5 +160,5 @@ class Passage(BaseModel, Base):
         return (
             f"<{cls} {self.id!r} workspace={self.workspace_id!r}"
             f" from={self.from_membership_id!r}"
-            f" to={self.to_membership_id!r}>"
+            f" to={self.to_membership_id!r} mode={self.mode!r}>"
         )

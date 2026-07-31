@@ -4,7 +4,7 @@ P5 implements messaging endpoints.
 """
 
 from fastapi import APIRouter, Query, Response, status
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import DB, CurrentUserDep
@@ -312,6 +312,7 @@ async def delete_membership(
 
 
 from app.core.topology import check_acyclic  # noqa: E402
+from app.core.passages import PASSAGE_MODE_DUAL, normalize_endpoints  # noqa: E402
 from app.schemas.passage import PassageCreate, PassageOut, PassageUpdate  # noqa: E402
 
 
@@ -358,10 +359,16 @@ async def create_passage(
     db: DB = None,
     _current_user: CurrentUserDep = None,
 ) -> Passage:
-    """Create a Membership↔Membership passage. CorridorNode edges are gone (PRD-v2)."""
+    """Create a duplex Membership↔Membership passage.
+
+    Endpoints are normalized to lexicographic ``(lo, hi)`` so click order does
+    not create a second row for the same undirected pair.
+    """
+    from_id, to_id = normalize_endpoints(body.from_membership_id, body.to_membership_id)
+
     lock = await db.execute(
         select(Membership).where(
-            Membership.id == body.from_membership_id,
+            Membership.id == from_id,
             Membership.deleted_at.is_(None),
         ).with_for_update(),
     )
@@ -369,12 +376,12 @@ async def create_passage(
         raise NotFoundError(
             "membership.not_found",
             "errors.membership.not_found",
-            f"Membership '{body.from_membership_id}' not found",
+            f"Membership '{from_id}' not found",
         )
 
     to_lock = await db.execute(
         select(Membership).where(
-            Membership.id == body.to_membership_id,
+            Membership.id == to_id,
             Membership.deleted_at.is_(None),
         ).with_for_update(),
     )
@@ -382,14 +389,19 @@ async def create_passage(
         raise NotFoundError(
             "membership.not_found",
             "errors.membership.not_found",
-            f"Membership '{body.to_membership_id}' not found",
+            f"Membership '{to_id}' not found",
         )
 
+    # Match any orientation (legacy reverse rows) for the same undirected pair.
     result = await db.execute(
         select(Passage).where(
             Passage.workspace_id == body.workspace_id,
-            Passage.from_membership_id == body.from_membership_id,
-            Passage.to_membership_id == body.to_membership_id,
+            or_(
+                (Passage.from_membership_id == from_id)
+                & (Passage.to_membership_id == to_id),
+                (Passage.from_membership_id == to_id)
+                & (Passage.to_membership_id == from_id),
+            ),
         ),
     )
     existing = result.scalars().first()
@@ -402,13 +414,14 @@ async def create_passage(
             )
         existing.deleted_at = None
         existing.is_active = True
+        existing.mode = PASSAGE_MODE_DUAL
+        existing.from_membership_id = from_id
+        existing.to_membership_id = to_id
         await db.commit()
         await db.refresh(existing)
         return existing
 
-    acyclic = await check_acyclic(
-        db, body.workspace_id, body.from_membership_id, body.to_membership_id,
-    )
+    acyclic = await check_acyclic(db, body.workspace_id, from_id, to_id)
     if not acyclic:
         raise ConflictError(
             "passage.would_create_cycle",
@@ -418,9 +431,10 @@ async def create_passage(
 
     passage = Passage(
         workspace_id=body.workspace_id,
-        from_membership_id=body.from_membership_id,
-        to_membership_id=body.to_membership_id,
+        from_membership_id=from_id,
+        to_membership_id=to_id,
         is_active=True,
+        mode=PASSAGE_MODE_DUAL,
         edge_meta=body.edge_meta,
     )
     db.add(passage)
@@ -539,9 +553,14 @@ async def send_message(
 
 
 async def _enrich_memberships(db: DB, memberships: list) -> list[MembershipOut]:
-    """Attach entity_slug/name for instance seats (topology @slug)."""
+    """Attach display fields for topology / workspace lists.
+
+    Instance seats get ``entity_slug`` / ``entity_name``; user seats get
+    ``username``.
+    """
     from app.models.entity import Entity
     from app.models.instance import Instance
+    from app.models.user import User
 
     instance_ids = [m.instance_id for m in memberships if m.instance_id]
     inst_map: dict[str, Instance] = {}
@@ -568,18 +587,32 @@ async def _enrich_memberships(db: DB, memberships: list) -> list[MembershipOut]:
         ).scalars().all()
         ent_map = {e.id: e for e in rows}
 
+    user_ids = [m.user_id for m in memberships if m.user_id]
+    user_map: dict[str, User] = {}
+    if user_ids:
+        rows = (
+            await db.execute(
+                select(User).where(
+                    User.id.in_(user_ids),
+                    User.deleted_at.is_(None),
+                )
+            )
+        ).scalars().all()
+        user_map = {u.id: u for u in rows}
+
     out: list[MembershipOut] = []
     for m in memberships:
         base = MembershipOut.model_validate(m)
+        updates: dict[str, str | None] = {}
         if m.instance_id and m.instance_id in inst_map:
             ent = ent_map.get(inst_map[m.instance_id].entity_id)
             if ent is not None:
-                base = base.model_copy(
-                    update={
-                        "entity_slug": ent.slug,
-                        "entity_name": ent.display_name or ent.name,
-                    }
-                )
+                updates["entity_slug"] = ent.slug
+                updates["entity_name"] = ent.display_name or ent.name
+        if m.user_id and m.user_id in user_map:
+            updates["username"] = user_map[m.user_id].username
+        if updates:
+            base = base.model_copy(update=updates)
         out.append(base)
     return out
 

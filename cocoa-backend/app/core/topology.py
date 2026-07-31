@@ -1,12 +1,13 @@
-"""Passage acyclicity check via BFS.
+"""Passage acyclicity check via undirected BFS.
 
-P2 Passage model permits arbitrary (from, to) edge pairs in the DB layer;
-acyclicity is enforced at the P5 service layer here.
+Passages are duplex by product lock: an edge connects both endpoints regardless
+of stored ``from`` / ``to`` order. Adding an edge between two memberships already
+in the same connected component would create a cycle.
 """
 
 from collections import deque
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.workspace import Passage
@@ -18,34 +19,36 @@ async def check_acyclic(
     from_id: str,
     to_id: str,
 ) -> bool:
-    """Return True if adding edge from_id -> to_id keeps the graph acyclic.
+    """Return True if adding an undirected edge from_id—to_id keeps the graph acyclic.
 
-    A self-loop (from_id == to_id) is always a cycle.
-    Otherwise, BFS from to_id along active passage edges; if from_id is
-    reachable, the new edge would create a cycle.
+    A self-loop is always a cycle. Otherwise BFS from ``to_id`` along active
+    duplex passages; if ``from_id`` is reachable, the new edge would close a cycle.
     """
     if from_id == to_id:
-        return False  # Self-loop is a trivial cycle
+        return False
+
     visited: set[str] = {to_id}
-    queue = deque([to_id])
+    queue: deque[str] = deque([to_id])
 
     while queue:
         current = queue.popleft()
-        # Find all edges coming OUT of current (active + not deleted)
         result = await session.execute(
-            select(Passage.to_membership_id).where(
+            select(Passage.from_membership_id, Passage.to_membership_id).where(
                 Passage.workspace_id == workspace_id,
-                Passage.from_membership_id == current,
                 Passage.is_active.is_(True),
                 Passage.deleted_at.is_(None),
+                or_(
+                    Passage.from_membership_id == current,
+                    Passage.to_membership_id == current,
+                ),
             )
         )
-        neighbors = [row[0] for row in result.all()]
-        for neighbor in neighbors:
+        for a, b in result.all():
+            neighbor = b if a == current else a
             if neighbor == from_id:
-                return False  # Would create a cycle
+                return False
             if neighbor not in visited:
                 visited.add(neighbor)
                 queue.append(neighbor)
 
-    return True  # No cycle detected
+    return True

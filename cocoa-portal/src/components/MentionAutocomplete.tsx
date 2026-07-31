@@ -180,7 +180,7 @@ export function MentionAutocomplete({
         e.preventDefault();
         setHighlighted((h) => (h - 1 + filtered.length) % filtered.length);
       } else if (e.key === 'Enter' || e.key === 'Tab') {
-        if (activeToken === null || activeToken.filter.length === 0) return;
+        if (activeToken === null) return;
         e.preventDefault();
         const chosen = filtered[highlighted];
         if (chosen !== undefined && chosen.mentionable !== false) handleSelect(chosen.slug);

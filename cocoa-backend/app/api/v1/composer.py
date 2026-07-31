@@ -13,9 +13,10 @@ from app.api.deps import DB, CurrentUserDep
 from app.core.composer_turns import get_turn
 from app.core.errors import NotFoundError
 from app.core.openapi import add_error_responses
+from app.core.passages import neighbor_membership_ids
 from app.models.entity import Entity
 from app.models.instance import Instance
-from app.models.workspace import Membership, Passage, Workspace
+from app.models.workspace import Membership, Workspace
 from app.services.composer_transcript import list_composer_messages
 
 router = APIRouter(tags=["Composer"])
@@ -30,8 +31,9 @@ async def list_mention_candidates(
 ) -> dict:
     """Passage-neighbor Lost Ones for Composer ``@`` autocomplete.
 
-    Only neighbors are suggested. Typing ``@`` a non-neighbor is still parsed;
-    delivery then routes to the Workspace cerebellum stub (not the Host).
+    Neighbors are duplex: an active Passage in either orientation counts.
+    Typing ``@`` a non-neighbor is still parsed; delivery then routes to the
+    Workspace cerebellum stub (not the Host).
     """
     workspace = await db.get(Workspace, workspace_id)
     if workspace is None or workspace.deleted_at is not None:
@@ -53,17 +55,7 @@ async def list_mention_candidates(
     if sender is None:
         return {"items": [], "total": 0}
 
-    passage_rows = (
-        await db.execute(
-            select(Passage).where(
-                Passage.workspace_id == workspace_id,
-                Passage.from_membership_id == sender.id,
-                Passage.is_active.is_(True),
-                Passage.deleted_at.is_(None),
-            )
-        )
-    ).scalars().all()
-    to_ids = [p.to_membership_id for p in passage_rows if p.to_membership_id]
+    to_ids = await neighbor_membership_ids(db, workspace_id, sender.id)
     if not to_ids:
         return {"items": [], "total": 0}
 
