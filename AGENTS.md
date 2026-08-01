@@ -4,7 +4,7 @@
 
 ## 0. 项目定位
 
-Cocoa v2 是 `nodeskclaw` 的 v2 重建（**轻量化 + 视觉优先**）。继承 nodeskclaw 的核心抽象（Employee = preset + memory / Instance = materialization / 近邻消息 / K8s-native 部署），但**做深不做宽**：单租户默认 / 极简前端 / 不复制 nodeskclaw 全部 6-registry 平台。系统目标蓝图与活 roadmap 见 **`docs/roadmap.md`**；当前产品目标为 **`docs/prd-v2.md`**（PRD-v1 为已落地基线）。
+Cocoa v2 是 `nodeskclaw` 的 v2 重建（**轻量化 + 视觉优先**）。继承 nodeskclaw 的核心抽象（Employee = preset + memory / Instance = materialization / 近邻消息 / K8s-native 部署），但**做深不做宽**：单租户默认 / 极简前端 / 不复制 nodeskclaw 全部 6-registry 平台。系统目标蓝图与活 roadmap 见 **`docs/roadmap.md`**；设计 SoT 为 **`.omo/evidence/audit-product-design.md`**；实现波为 **v4**（`docs/prd-v4.md` + `.omo/plans/v4-*.md`）。v3 及更早 PRD 在 `docs/archive/`。
 
 ## 0.1 Reference projects（planner / agent 必须先知道的外部参考）
 
@@ -27,7 +27,7 @@ Cocoa Instance / 化身（每个 pod 一个）
 **Planners 必须在回答"Cocoa 是否支持 X"类问题前**：
 1. 读 `.omo/evidence/nodeskclaw-capability-map.md`（外部参考）
 2. 读 `.omo/evidence/cocoa-capability-map.md`（当前实现）
-3. 读 `docs/roadmap.md`（系统蓝图 + 阶段状态 + 远期方向）+ 当前活跃 PRD（现为 `docs/prd-v2.md`）
+3. 读 `docs/roadmap.md`（系统蓝图 + 阶段状态 + 远期方向）+ 设计 SoT `.omo/evidence/audit-product-design.md` + 活跃实现波 `docs/prd-v4.md` / `.omo/plans/v4-roadmap.md`
 
 ## 0.2 Planning artifacts（`.omo/` 目录结构）
 
@@ -44,14 +44,15 @@ Cocoa Instance / 化身（每个 pod 一个）
 | `notepads/` | **已废弃**（gitignored；本地 session-only） | — | — |
 
 **Canonical docs**（产品与方向的单一事实来源）：
-- `docs/roadmap.md` — **系统目标蓝图 + 活 roadmap**（PRD 驱动迭代；orbstack 部署硬规则）
-- `docs/prd-v2.md` — **当前活跃产品目标**（多租户 + Agent 栈重构）
-- `docs/prd-v1.md` — PRD gen-1 冻结基线（P15f 已实现 must-have）
-- `docs/*.md` — 15d 命名 + 子系统契约（terminology / metaphor-name-table / domain-model / api-architecture / preset-system / portal-system / messaging-system / blackboard-system / runtime-system / harness-system / learning-system / observability / product-positioning）
+- `docs/roadmap.md` — **系统目标蓝图 + 活 roadmap**
+- `.omo/evidence/audit-product-design.md` — **设计 SoT**（v3.5.x design correction）
+- `docs/prd-v4.md` — **当前实现世代索引**（细节在 `.omo/plans/v4-*.md`）
+- `docs/archive/` — PRD-v1…v3.4.1（只读归档）
+- `docs/*.md` — 15d 命名 + 子系统契约（**pre-v4 参考**；冲突以 audit-product-design 为准）
 
 **Planners 在新会话开始时**：
 1. 读 `docs/roadmap.md` 看系统蓝图与当前 wave
-2. 读当前活跃 PRD（现为 `docs/prd-v2.md`）
+2. 读 `.omo/evidence/audit-product-design.md` + `audit-conclusions.md` + `.omo/plans/v4-roadmap.md`
 3. 读 `drafts/*.md` 看是否有进行中的设计讨论
 4. 读 `evidence/*-capability-map.md` 了解现状
 5. 读 `docs/terminology.md` + `docs/metaphor-name-table.md` 确认 15d 命名

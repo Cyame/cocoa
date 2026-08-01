@@ -1,3 +1,6 @@
+> **Pre-v4 reference**: Conflict with `.omo/evidence/audit-product-design.md` → audit wins. Awaiting v4 PRD rewrite.
+>
+
 # Cocoa Terminology Glossary (15d)
 
 > **Canonical source**: Naming decisions locked in `.omo/drafts/phase-15d-naming-system.md`. All 36 decisions (N1-N10, D1-D6, B1-B6, U1-U8, DOC1-DOC5) are approved.

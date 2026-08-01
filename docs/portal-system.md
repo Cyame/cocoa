@@ -1,3 +1,6 @@
+> **Pre-v4 reference**: Conflict with `.omo/evidence/audit-product-design.md` → audit wins. Awaiting v4 PRD rewrite.
+>
+
 # Cocoa Portal System
 
 > **15d naming convention** (effective 2026-07-28): This document uses the 15d naming scheme.

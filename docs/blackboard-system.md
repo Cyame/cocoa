@@ -1,3 +1,6 @@
+> **Pre-v4 reference**: Conflict with `.omo/evidence/audit-product-design.md` → audit wins. Awaiting v4 PRD rewrite.
+>
+
 # 中央主脑（CentralHub）系统
 
 > **15d 重构 + 4 脑区设计（2026-07-28）**：本文档描述 15d+ 的目标架构。代码层面 Blackboard 表名仍存在，15d-rename wave 会同步改为 CentralHub + 4 脑区子表（穹窿 / 额叶 / 脑干 / 小脑）。

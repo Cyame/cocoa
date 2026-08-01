@@ -1,3 +1,6 @@
+> **Pre-v4 reference**: Conflict with `.omo/evidence/audit-product-design.md` → audit wins. Awaiting v4 PRD rewrite.
+>
+
 # Cocoa Domain Model
 
 > **15d Naming Convention (July 2026)**

@@ -1,3 +1,6 @@
+> **Pre-v4 reference**: Conflict with `.omo/evidence/audit-product-design.md` → audit wins. Awaiting v4 PRD rewrite.
+>
+
 # Cocoa Metaphor Name Table (15d)
 
 > **Canonical source**: `.omo/drafts/phase-15d-naming-system.md` §3 (backend→frontend naming map) + §4 (11 BaseClasses). All decisions approved 2026-07-28.

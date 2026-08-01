@@ -1,3 +1,6 @@
+> **Pre-v4 reference**: Conflict with `.omo/evidence/audit-product-design.md` → audit wins. Awaiting v4 PRD rewrite.
+>
+
 # Cocoa Learning System
 
 > **Code rename pending (15d-rename wave)**: This document uses target (15d) naming — BaseClass, Entity, Workspace, Memory. The source code still uses legacy names (EmployeePreset, Employee, Office, MemoryEntry). API paths in this document reflect the current code; they will be renamed in the 15d-rename wave. See §7 for the full rename map.

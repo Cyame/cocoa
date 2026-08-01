@@ -1,3 +1,6 @@
+> **Pre-v4 reference**: Conflict with `.omo/evidence/audit-product-design.md` → audit wins. Awaiting v4 PRD rewrite.
+>
+
 # Cocoa Runtime System
 
 > **Code rename pending (15d-rename wave)**: This doc describes target architecture (15d+). Current code uses old naming.

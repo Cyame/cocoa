@@ -1,12 +1,13 @@
 # Cocoa System Roadmap & Blueprint
 
 > **Status**: Living document. Canonical project roadmap + system goal blueprint.
-> **Authority**: Supersedes `.omo/plans/archive/cocoa-v2-roadmap.md` and `.omo/plans/archive/phase-15-foundation-roadmap.md` (archived 2026-07-29).
-> **Product specs**: `docs/prd-v1.md` · `docs/prd-v2.md` · `docs/prd-v3.md` · `docs/prd-v3.4.md` · `docs/prd-v3.4.1.md` · **3.5.x track active** · Later/v4+ deferred.
-> **Version track**: `.omo/plans/product-version-track-3-5-3-6.md` — **3.5.x = main-flow closed loop; 3.6 = UI major refactor**.
-> **Remainder tracking**: `.omo/plans/main-flow-remainder-tracking.md` — post-P14b living backlog (gene/tool, multimodal channel, browser, HA, …).
-> **Naming**: `docs/terminology.md` + `docs/metaphor-name-table.md` (15d locked).
-> **Last revision**: 2026-07-31.
+> **Authority**: Supersedes archived pre-v4 roadmaps under `.omo/plans/archive/`.
+> **Design SoT (2026-08-01)**: `.omo/evidence/audit-product-design.md` (v3.5.x design correction; decisions D1–D11).
+> **Implementation wave**: **v4** — `.omo/plans/v4-roadmap.md` + `v4-0`…`v4-9`.
+> **Visual wave**: **v5 / 3.6** (pure UI; not in v4 closure).
+> **Archived PRDs**: `docs/archive/` (prd-v1 … prd-v3.4.1). Subsystem `docs/*-system.md` = pre-v4 reference; conflicts → audit wins.
+> **Naming**: `docs/terminology.md` + `docs/metaphor-name-table.md` (15d locked; incremental edits in v4).
+> **Last revision**: 2026-08-01.
 
 ---
 
@@ -14,11 +15,29 @@
 
 | Reader | Read first | Then |
 |---|---|---|
-| Planner / new session | §1 blueprint + §2 iteration model + §5 wave status | PRD of the active wave; capability maps under `.omo/evidence/` |
-| Worker implementing a wave | Active PRD + this §5 "Next" row + §6 hard rules | Phase plan under `.omo/plans/` (when written) |
-| Reviewer | §3 current state vs §4 target | Diff against PRD appendix C |
+| Planner / new session | `.omo/evidence/audit-product-design.md` + `.omo/plans/v4-roadmap.md` + this §0.1 / §5 | `audit-cross-reference.md` · `audit-conclusions.md` |
+| Worker implementing a wave | Active `v4-N-*.md` plan + §6 hard rules | `audit-implementation.md` (as-is baseline) |
+| Reviewer | `audit-cross-reference.md` vs target design | Closure gate `v4-9-closure-gate.md` |
 
-**Do not** treat archived `.omo/plans/archive/*roadmap*` as current direction.
+**Do not** treat `docs/archive/*` or `.omo/plans/archive/*` as current direction.
+
+### 0.1 Active wave — v4 functional closure
+
+| Slice | Plan | Goal |
+|---|---|---|
+| Docs | Phase 0 (done in evidence) | Design correction + archive |
+| v4.0 | `v4-0-schema-auth-scope.md` | Scope + FK-only + gene-only auth |
+| v4.1 | `v4-1-capability-gene-crud.md` | Capability/Gene CRUD + org 神职 |
+| v4.2 | `v4-2-knowledge-system.md` | Knowledge table + management UI |
+| v4.3 | `v4-3-tenant-dashboard-ia.md` | Multi-org + Dashboard IA + cerebellum cardinality |
+| v4.4 | `v4-4-clone-ops.md` | Deep clone (no Instance) |
+| v4.5 | `v4-5-fornix-hub.md` | Fornix mount + hub CRUD |
+| v4.6 | `v4-6-learning-writeback.md` | Promote write-back + audit |
+| v4.7 | `v4-7-harness-collab.md` | CLI/tool ↔ hub/topology |
+| v4.8 | `v4-8-meetings-schedules.md` | Meetings + scheduled-tasks |
+| v4.9 | `v4-9-closure-gate.md` | Zero functional holes + deploy |
+
+Out of v4: pure visual redesign → v5; session-engine-v2 multimodal day1 remains §7 far queue unless v4.9 finds a blocker.
 
 ---
 
@@ -167,15 +186,17 @@ Cocoa no longer plans primarily as open-ended "P-N feature waves". After foundat
 | `.omo/evidence/*` | Audits, capability maps, deploy state | Append; archive snapshots |
 | `.omo/drafts/*` | In-flight design before PRD/plan lock | Archive when superseded |
 
-**PRD generations**:
+**PRD / design generations**:
 
-| PRD | Intent | Engineering wave | Status |
-|---|---|---|---|
-| **v1** | Single-tenant MVP UX + distillation UI + 3-layer market scaffold | P15e (doc) → **P15f (impl)** | Doc done; backend+portal must-haves landed on master |
-| **v2** | Multi-tenant hierarchy + agent stack redesign + gene dual tables + IDE UX | **Done** (2026-07-29) — `.omo/plans/prd-v2-implementation.md` | Hard-cut schema + APIs + portal; orbstack redeploy for human QA |
-| **v3+** | Session-engine multimodal, Tunnel, Voice, … | Far queue (§7) | Draft only |
+| Gen | Intent | Status |
+|---|---|---|
+| **v1–v3.4.1** | Historical product slices | **Archived** → `docs/archive/` |
+| **v3.5.x design correction** | audit-review + D1–D11 → `audit-product-design.md` | **Done** (docs) |
+| **v4** | Functional closure (schema, tenant, knowledge, clone, harness collab, …) | **Active** — `.omo/plans/v4-*.md` |
+| **v5 / 3.6** | Pure visual refactor | Queued after v4.9 |
+| **Later** | Session-engine-v2 multimodal, Voice, … | §7 far queue |
 
-Code identifiers follow 15d/v2 names (`Workspace`, `Entity`, `Passage`, `BaseClass`). Pre-v2 names remain only in alembic history.
+Code identifiers follow 15d names (`Workspace`, `Entity`, `Passage`, `BaseClass`). Pre-v2 names remain only in alembic history.
 
 ---
 
