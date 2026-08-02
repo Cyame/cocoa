@@ -2,7 +2,7 @@
 
 > **Status**: Active implementation generation  
 > **Design SoT**: `.omo/evidence/audit-product-design.md`  
-> **Executable plans**: `.omo/plans/v4-roadmap.md` + `v4-0` … `v4-9`  
+> **Executable plans**: `.omo/plans/v4-roadmap.md` + `v4-0` … `v4-10`  
 > **Prior PRDs**: `docs/archive/` (v1–v3.4.1)  
 > **Visual follow-on**: v5 / 3.6
 
@@ -26,7 +26,8 @@ See `.omo/evidence/audit-conclusions.md` §一.
 | Harness collaboration | `v4-7-harness-collab.md`（D9：delivery_mode + soft inject + hub/topology；对照 [jcode](https://github.com/1jehuang/jcode)） |
 | Meetings / schedules | `v4-8-meetings-schedules.md` |
 | Closure gate | `v4-9-closure-gate.md` |
+| Default prompt polish | `v4-10-default-prompts.md` |
 
 ## Closure rule
 
-After v4.9, no intentional functional holes remain versus `audit-product-design.md` (except items explicitly deferred to v5 / §7).
+After v4.9, no intentional functional holes remain versus `audit-product-design.md` (except items explicitly deferred to v5 / §7). **v4.10** is post-closure content polish for shipped default prompts.

@@ -3,7 +3,7 @@
 > **Status**: Living document. Canonical project roadmap + system goal blueprint.
 > **Authority**: Supersedes archived pre-v4 roadmaps under `.omo/plans/archive/`.
 > **Design SoT (2026-08-01)**: `.omo/evidence/audit-product-design.md` (v3.5.x design correction; decisions D1–D11).
-> **Implementation wave**: **v4** — `.omo/plans/v4-roadmap.md` + `v4-0`…`v4-9`.
+> **Implementation wave**: **v4** — `.omo/plans/v4-roadmap.md` + `v4-0`…`v4-10`.
 > **Visual wave**: **v5 / 3.6** (pure UI; not in v4 closure).
 > **Archived PRDs**: `docs/archive/` (prd-v1 … prd-v3.4.1). Subsystem `docs/*-system.md` = pre-v4 reference; conflicts → audit wins.
 > **Naming**: `docs/terminology.md` + `docs/metaphor-name-table.md` (15d locked; incremental edits in v4).
@@ -36,6 +36,7 @@
 | v4.7 | `v4-7-harness-collab.md` | D9：`delivery_mode` + soft inject；hub/topology/report tools；cerebellum 真路径（对照 jcode） |
 | v4.8 | `v4-8-meetings-schedules.md` | Meetings + scheduled-tasks |
 | v4.9 | `v4-9-closure-gate.md` | Zero functional holes + deploy |
+| v4.10 | `v4-10-default-prompts.md` | Default prompt polish (after closure; inventory-first) |
 
 Out of v4: pure visual redesign → v5; session-engine-v2 multimodal day1 remains §7 far queue unless v4.9 finds a blocker.
 
