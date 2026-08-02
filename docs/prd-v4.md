@@ -10,7 +10,7 @@ This file is the **product index** for v4. Normative design lives in the audit p
 
 ## Locked product intents (D1–D16)
 
-See `.omo/evidence/audit-conclusions.md` §一。缺陷评审决议见 `audit-v4-design-review.md` 附录 B。
+See `.omo/evidence/audit-conclusions.md` §一。缺陷评审决议见 `audit-v4-design-review.md` 附录 B；执行层交叉验证锁定见 **附录 C** + `.omo/evidence/v4-0-migration-spec.md`。
 
 ## Waves
 
