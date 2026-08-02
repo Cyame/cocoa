@@ -13,6 +13,7 @@ Cocoa v2 是 `nodeskclaw` 的 v2 重建（**轻量化 + 视觉优先**）。继�
 | **nodeskclaw** | `/Users/xuwenrui/Documents/Codes/Researches/nodeskclaw/` | Cocoa v2 的 v1 生产系统 | K8s deploy / Tunnel / Gene / Knowledge / Voice / Multi-tenant 的设计源头。capability map 在 `.omo/evidence/nodeskclaw-capability-map.md`（896 行）。 |
 | **oh-my-openagent**（含 senpi / oh-my-pi 表面） | `/Users/xuwenrui/Documents/Codes/github/oh-my-openagent/` | **Workspace 层**参考：loop harness（Boulder / continuation / notepad）+ 多 harness 编排表面 | Cocoa **Workspace** 要对齐并超过的「更灵活、更可观测」目标面。P8 Boulder 设计来源。**Caveat**: `dev` 不稳定，引用 pin tag（如 v4.19.2）。**不是**化身底层 runtime。 |
 | **pi**（`@mariozechner/pi-coding-agent` 族） | npm / 上游 pi coding agent | **化身（Instance）底层 agent runtime**（优先沙箱式 pi；React runtime 可选项但稳定性次之） | 每个化身由 **pi** 驱动；Entity overlay 序列化为 AgentConfig 后交给 pi。**禁止**把 pi 写成「Senpi CLI」。Senpi 是挂在 Pi 上的 harness/adapter 表面，对应 Cocoa Workspace，不对应化身驱动。 |
+| **jcode** | https://github.com/1jehuang/jcode （远程；本地无强制 clone） | **多 agent 协作 / 投递语义**参考（swarm、soft interrupt、task-DAG handoff） | v4.7 D9 设计对照：`delivery_mode`（notify / soft_inject / wake）、安全点注入、typed handoff、file-touch。借模式不借产品面（拒 channel / 全场广播 / 千员 deep swarm）。可执行切片：`.omo/plans/v4-7-harness-collab.md`。关键文档：`docs/SWARM_ARCHITECTURE.md`、`docs/SWARM_TASK_GRAPH.md`、`docs/SOFT_INTERRUPT.md`。 |
 
 **Runtime spine（2026-07-30 锁定，两层勿混）**：
 
@@ -28,6 +29,7 @@ Cocoa Instance / 化身（每个 pod 一个）
 1. 读 `.omo/evidence/nodeskclaw-capability-map.md`（外部参考）
 2. 读 `.omo/evidence/cocoa-capability-map.md`（当前实现）
 3. 读 `docs/roadmap.md`（系统蓝图 + 阶段状态 + 远期方向）+ 设计 SoT `.omo/evidence/audit-product-design.md` + 活跃实现波 `docs/prd-v4.md` / `.omo/plans/v4-roadmap.md`
+4. 涉及 **agent 间通信 / inject / soft interrupt / 协作上报** 时：读 `.omo/plans/v4-7-harness-collab.md` + jcode 上述文档（借模式清单，勿照搬 swarm 聊天工具面）
 
 ## 0.2 Planning artifacts（`.omo/` 目录结构）
 

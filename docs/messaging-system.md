@@ -349,6 +349,17 @@ async def create_scheduled_task():
 These will be implemented in a later phase with full CRUD, recurrence, and
 passage-gated participation semantics.
 
+### v4.7 delivery & cerebellum (design draft)
+
+Pre-v4 delivery is audit-only fire-and-forget. **v4.7** (`.omo/plans/v4-7-harness-collab.md`) adds:
+
+- `delivery_mode`: `notify` | `soft_inject` | `wake` on payloads that target an Instance
+- Successful Passage hits enqueue Host downlink (not audit-only)
+- Human `@` without Passage → **cerebellum path** (no silent proxy to target Host); see `_route_to_cerebellum` stub today
+- Durable substance prefers Hub / ContentRef; not a second flat chat log
+
+External pattern study: [jcode](https://github.com/1jehuang/jcode) (soft interrupt + handoff; reject swarm broadcast/channels). Design SoT: `audit-product-design.md` §九.
+
 ### Rings & Cycles
 
 The topology is currently acyclic-only. Support for cyclic topologies

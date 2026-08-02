@@ -56,7 +56,11 @@ oh-my-openagent (and its senpi / oh-my-pi surfaces) provide the loop-engineering
 |--------|-------|----------|-----------|--------|--------|-----------------|
 | **nodeskclaw** | Multi-agent workspace (prototype) | Single human | Flat broadcast, polluted context | None | Web UI (basic) | engine pick at create |
 | **oh-my-openagent / senpi** | Agent BaseClasses + loop harness (CLI) | Single human (CLI) | None (no multi-agent studio) | Per-session notepad | None | harness over Pi / other |
-| **Cocoa** | Multi-agent control studio | Multiple humans + AI team | Near-neighbor + passages, scoped | Per-entity, persistent, cross-instance | Web portal, debug-first | **pi** per 化身 |
+| **jcode** | Local multi-session coding harness | Single human (+ spawned workers) | Swarm DM / soft interrupt / evolving task-DAG handoff | Semantic memory graph | TUI | self-hosted agent sessions |
+| **Cocoa** | Multi-agent control studio | Multiple humans + AI team | Near-neighbor + passages + **v4.7 delivery_mode** (scoped; Hub handoff) | Per-entity, persistent, cross-instance | Web portal, debug-first | **pi** per 化身 |
+
+**jcode note:** Not a product peer for Workspace or Instance driver. Cocoa borrows **collab delivery patterns** only (see `.omo/plans/v4-7-harness-collab.md` · https://github.com/1jehuang/jcode). Passage + Hub remain the product surfaces; no swarm channel bus.
+
 
 ## Who should adopt Cocoa
 

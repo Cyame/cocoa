@@ -134,6 +134,8 @@ class Event(BaseModel, Base):
 | `HARNESS_LOOP_STOPPED` | `harness.loop_stopped` | 控制循环 | P8 落地 |
 | `HARNESS_BREAKER_TRIPPED` | `harness.breaker_tripped` | 控制循环 | P8 落地 |
 
+**v4.7 计划新增**（设计稿；实现前勿当已落地）：`harness.inject_requested` / `harness.inject_applied` / `harness.inject_failed` / `harness.report_received`；可选 `messaging.file_touched`。见 `.omo/plans/v4-7-harness-collab.md`（对照 [jcode](https://github.com/1jehuang/jcode) soft-interrupt / report 卫生，非 swarm 广播）。
+
 **发射状态总结**：
 
 - **P3.5 落地**：`system.startup` / `system.shutdown`（2 个）
@@ -141,6 +143,7 @@ class Event(BaseModel, Base):
 - **P6 落地**：`blackboard.*` / `memory.*`（4 个）
 - **P7 落地**：`instance.*`（7 个，过去式命名 P7.5 已统一）
 - **P8 待落地**：`harness.*`（5 个，常量已预埋）
+- **v4.7 设计稿**：inject / report 事件族（上表）
 
 harness 族常量已定义但发射点（`emit()` 调用）留到 P8 落地。
 

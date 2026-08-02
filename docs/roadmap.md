@@ -7,7 +7,7 @@
 > **Visual wave**: **v5 / 3.6** (pure UI; not in v4 closure).
 > **Archived PRDs**: `docs/archive/` (prd-v1 … prd-v3.4.1). Subsystem `docs/*-system.md` = pre-v4 reference; conflicts → audit wins.
 > **Naming**: `docs/terminology.md` + `docs/metaphor-name-table.md` (15d locked; incremental edits in v4).
-> **Last revision**: 2026-08-01.
+> **Last revision**: 2026-08-02（v4.7 harness collab design draft + jcode 外部参考）。
 
 ---
 
@@ -33,7 +33,7 @@
 | v4.4 | `v4-4-clone-ops.md` | Deep clone (no Instance) |
 | v4.5 | `v4-5-fornix-hub.md` | Fornix mount + hub CRUD |
 | v4.6 | `v4-6-learning-writeback.md` | Promote write-back + audit |
-| v4.7 | `v4-7-harness-collab.md` | CLI/tool ↔ hub/topology |
+| v4.7 | `v4-7-harness-collab.md` | D9：`delivery_mode` + soft inject；hub/topology/report tools；cerebellum 真路径（对照 jcode） |
 | v4.8 | `v4-8-meetings-schedules.md` | Meetings + scheduled-tasks |
 | v4.9 | `v4-9-closure-gate.md` | Zero functional holes + deploy |
 
@@ -383,6 +383,7 @@ Recorded so future planners do not lose intent:
 | nodeskclaw | `/Users/xuwenrui/Documents/Codes/Researches/nodeskclaw/` | product ancestor |
 | oh-my-openagent (senpi / oh-my-pi surface) | `/Users/xuwenrui/Documents/Codes/github/oh-my-openagent/` (pin tags) | **Workspace** peer |
 | pi (`@mariozechner/pi-coding-agent`) | upstream pi coding agent | **Instance / 化身** driver |
+| jcode | https://github.com/1jehuang/jcode | **Collab / delivery semantics** reference for v4.7（soft interrupt、handoff、file-touch；非 Workspace 产品对标、非 Instance driver） |
 
 ---
 
@@ -401,5 +402,7 @@ Recorded so future planners do not lose intent:
 | 2026-07-30 | **PRD-v3 written** — Provider defaults, implicit system hub, promote update/fork（回魂/派生）+ transmute UX; `AGENTS.md` Rule 5 orbstack-only |
 | 2026-07-30 | **Runtime spine lock** — Workspace ≈ more flexible/observable senpi·oh-my-openagent·oh-my-pi; each 化身 driven by **pi** (sandboxed preferred; React optional). Reject equating pi with Senpi CLI |
 | 2026-07-31 | **Version track lock** — **3.5.x** = main-flow product closed loop (iterative fixes OK); **3.6** = whole UI major refactor. Plan: `.omo/plans/product-version-track-3-5-3-6.md` |
+| 2026-08-01 | **Design correction → v4** — `audit-product-design.md` SoT；实现切片 `v4-0`…`v4-9` |
+| 2026-08-02 | **v4.7 design draft** — D9 harness collab：`delivery_mode`（notify / soft_inject / wake）、cerebellum 真路径、hub/topology tools；外部对照 [jcode](https://github.com/1jehuang/jcode)。Plan: `.omo/plans/v4-7-harness-collab.md`（人工审阅后开工） |
 
-*Next update trigger: a 3.5.x main-flow slice closes, or 3.6 UI refactor plan is opened.*
+*Next update trigger: a v4 slice closes, or v4.7 review sign-off starts implementation.*

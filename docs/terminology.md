@@ -45,6 +45,7 @@ One-line definitions for every Cocoa code-term (backend), display-name (frontend
 - **DeployRecord** (降世记录) — K8s deployment lifecycle record: 9-step pipeline from build to pod-ready.
 - **InstanceProviderConfig** — LLM provider configuration for an Instance (openai-compatible, anthropic, etc.). Internal config, no UI equivalent.
 - **Topology** (心灵图景) — Spatial visualization of Workspace members as SVG nodes with glow halos, 3 interaction modes (Select/Connect/Move), and message-flow particle animation.
+- **delivery_mode** (投递模式, v4.7) — How a collaboration/inject payload reaches an Instance: `notify` (event only, no auto-wake), `soft_inject` (safe-point insert into running loop), `wake` (start/resume turn if idle). Normative in `.omo/plans/v4-7-harness-collab.md` / `audit-product-design.md` §九. Pattern study: [jcode](https://github.com/1jehuang/jcode) soft interrupt — not a Cocoa product synonym for swarm chat.
 
 ---
 

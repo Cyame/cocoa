@@ -273,3 +273,4 @@ The two paths are deliberately redundant: the event path is fast (millisecond la
 - [Blackboard System](blackboard-system.md) — Passive state the harness writes to
 - [Observability](observability.md) — Event constants and dispatcher semantics
 - [AGENTS.md](../AGENTS.md) — Development guide and commit conventions
+- **v4.7 (design draft)**: `.omo/plans/v4-7-harness-collab.md` — Instance tools ↔ Hub/topology, inject entry+exit, `delivery_mode` (`notify` / `soft_inject` / `wake`). External collab reference: [jcode](https://github.com/1jehuang/jcode) (`SOFT_INTERRUPT.md`, swarm task-DAG handoff). Pre-v4 text above; conflicts → `audit-product-design.md` §九.

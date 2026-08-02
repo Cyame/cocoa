@@ -23,7 +23,7 @@ See `.omo/evidence/audit-conclusions.md` §一.
 | Clone | `v4-4-clone-ops.md` |
 | Fornix / hub UI | `v4-5-fornix-hub.md` |
 | Learning write-back | `v4-6-learning-writeback.md` |
-| Harness collaboration | `v4-7-harness-collab.md` |
+| Harness collaboration | `v4-7-harness-collab.md`（D9：delivery_mode + soft inject + hub/topology；对照 [jcode](https://github.com/1jehuang/jcode)） |
 | Meetings / schedules | `v4-8-meetings-schedules.md` |
 | Closure gate | `v4-9-closure-gate.md` |
 
