@@ -8,9 +8,9 @@
 
 This file is the **product index** for v4. Normative design lives in the audit pack; wave execution lives in `.omo/plans/v4-*.md`. Do not duplicate full schema here—link out.
 
-## Locked product intents (D1–D11)
+## Locked product intents (D1–D16)
 
-See `.omo/evidence/audit-conclusions.md` §一.
+See `.omo/evidence/audit-conclusions.md` §一。缺陷评审决议见 `audit-v4-design-review.md` 附录 B。
 
 ## Waves
 

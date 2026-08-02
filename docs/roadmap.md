@@ -26,17 +26,17 @@
 | Slice | Plan | Goal |
 |---|---|---|
 | Docs | Phase 0 (done in evidence) | Design correction + archive |
-| v4.0 | `v4-0-schema-auth-scope.md` | Scope + FK-only + gene-only auth |
-| v4.1 | `v4-1-capability-gene-crud.md` | Capability/Gene CRUD + org 神职 |
-| v4.2 | `v4-2-knowledge-system.md` | Knowledge table + management UI |
-| v4.3 | `v4-3-tenant-dashboard-ia.md` | Multi-org + Dashboard IA + cerebellum cardinality |
-| v4.4 | `v4-4-clone-ops.md` | Deep clone (no Instance) |
-| v4.5 | `v4-5-fornix-hub.md` | Fornix mount + hub CRUD |
-| v4.6 | `v4-6-learning-writeback.md` | Promote write-back + audit |
-| v4.7 | `v4-7-harness-collab.md` | D9：`delivery_mode` + soft inject；hub/topology/report tools；cerebellum 真路径（对照 jcode） |
+| v4.0 | `v4-0-schema-auth-scope.md` | OrgContract + 原子 gene + 删 role |
+| v4.1 | `v4-1-capability-gene-crud.md` | Gene/Pack/Capability CRUD + scope 默认 |
+| v4.2 | `v4-2-knowledge-system.md` | Knowledge + WS>…>system override |
+| v4.3 | `v4-3-tenant-dashboard-ia.md` | Org 选择页 + 成员赋基因 + 小脑 |
+| v4.4 | `v4-4-clone-ops.md` | Clone + can_* + actor |
+| v4.5 | `v4-5-fornix-hub.md` | Fornix mount + Vault MVP |
+| v4.6 | `v4-6-learning-writeback.md` | Promote + Memory 目标 schema |
+| v4.7 | `v4-7-harness-collab.md` | D9；V47 已签核（notify-only 小脑、DB inject 队列、模板回复） |
 | v4.8 | `v4-8-meetings-schedules.md` | Meetings + scheduled-tasks |
 | v4.9 | `v4-9-closure-gate.md` | Zero functional holes + deploy |
-| v4.10 | `v4-10-default-prompts.md` | Default prompt polish (after closure; inventory-first) |
+| v4.10 | `v4-10-default-prompts.md` | Default prompt polish |
 
 Out of v4: pure visual redesign → v5; session-engine-v2 multimodal day1 remains §7 far queue unless v4.9 finds a blocker.
 
@@ -404,6 +404,8 @@ Recorded so future planners do not lose intent:
 | 2026-07-30 | **Runtime spine lock** — Workspace ≈ more flexible/observable senpi·oh-my-openagent·oh-my-pi; each 化身 driven by **pi** (sandboxed preferred; React optional). Reject equating pi with Senpi CLI |
 | 2026-07-31 | **Version track lock** — **3.5.x** = main-flow product closed loop (iterative fixes OK); **3.6** = whole UI major refactor. Plan: `.omo/plans/product-version-track-3-5-3-6.md` |
 | 2026-08-01 | **Design correction → v4** — `audit-product-design.md` SoT；实现切片 `v4-0`…`v4-9` |
-| 2026-08-02 | **v4.7 design draft** — D9 harness collab：`delivery_mode`（notify / soft_inject / wake）、cerebellum 真路径、hub/topology tools；外部对照 [jcode](https://github.com/1jehuang/jcode)。Plan: `.omo/plans/v4-7-harness-collab.md`（人工审阅后开工） |
+| 2026-08-02 | **附录 B 决议** — OrganizationContract + 原子 UserGene/基因组；Org 选择页；成员赋基因；Knowledge override；clone can_*。见 `audit-v4-design-review.md` |
 
-*Next update trigger: a v4 slice closes, or v4.7 review sign-off starts implementation.*
+| 2026-08-02 | **V47-1…11 签核** — 全部接受顾问建议；v4.7 可排队实现（仍依赖 v4.5/v4.6）。 |
+
+*Next update trigger: a v4 slice closes, or implementation of a signed plan starts.*
