@@ -3,7 +3,7 @@
 
 # Cocoa Terminology Glossary (15d)
 
-> **Canonical source**: Naming decisions locked in `.omo/drafts/phase-15d-naming-system.md`. All 36 decisions (N1-N10, D1-D6, B1-B6, U1-U8, DOC1-DOC5) are approved.
+> **Canonical source**: Naming decisions locked in `.omo/drafts/archive/phase-15d-naming-system.md`（已归档；活文档为本文件 + `metaphor-name-table.md`）。
 > **Code rename pending**: This doc describes the target architecture (15d+). The current codebase (P0-P15b) still uses old naming; a dedicated rename wave (15d-rename) is deferred until after P16d Org model decision.
 
 One-line definitions for every Cocoa code-term (backend), display-name (frontend Cthulhu-themed), and protocol entity. Derived from the naming system and the core domain model. Code-terms stay English; display-names in parentheses are for product UI reference.
@@ -33,7 +33,7 @@ One-line definitions for every Cocoa code-term (backend), display-name (frontend
 - **NamespaceContract** (契印) — **PRD-v3.4**. Namespace ↔ User seal. The **only** product use of the name 契印. Auto-ensured when a user creates/joins a workspace in that namespace.
 - **Passage** (通道) — Adjacency edge between two Memberships, defining the selectable neighbor set for messaging. CorridorNode dropped.
 - **CentralHub** (主脑) — Per-Workspace 协作中枢容器，含 4 脑区（穹窿 / 额叶 / 脑干 / **小脑=内置中央智能体 CerebellumAgent 1:1**）。Display 中文"主脑"，backend 代码名 `CentralHub`。
-- **CerebellumAgent** (小脑 / 中央智能体) — Built-in system agent on every CentralHub. Auto-created; not soft-deletable; not shown on topology. See `docs/blackboard-system.md` §4 and PRD-v2 §8.2.1.
+- **CerebellumAgent** (小脑 / 中央智能体) — Built-in system agent historically on every CentralHub. **v4**: migrates to Entity(`is_cerebellum`) + Instance；见 `.omo/plans/v4-0` / `v4-3` 与 migration-spec §6.3。
 - **Vault** (冰封库) — Cold archive per Workspace. PRD-v2: DB KV (`vault_entries`, optional inline value); eventual MinIO/S3 via `archived_key` — not expanded in v2.
 - **Memory** (记忆沉淀) — Append-only per-Entity memory log, indexed by kind (experience/lesson/decision/problem) and time. No `updated_at` column. Accumulates across Instances.
 
@@ -112,4 +112,4 @@ Code-term-only entities from the core domain model. No product UI display-names.
 
 ---
 
-*Derived from `.omo/drafts/phase-15d-naming-system.md` (2026-07-28). Code rename pending 15d-rename wave (after P16d Org model decision).*
+*Derived from `.omo/drafts/archive/phase-15d-naming-system.md` (2026-07-28). Code rename pending where still needed; v4 SoT = `audit-product-design.md`.*

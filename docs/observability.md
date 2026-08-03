@@ -275,7 +275,7 @@ task_id = await queue.enqueue("reminder.send", delay=30.0, payload={"user_id": "
 ## 参考
 
 - `docs/api-architecture.md` —— P3 API 约定（姊妹文档）
-- `docs/domain-model.md` —— P2 核心域模型
+- `docs/domain-model.md` —— 已迁 `docs/archive/pre-v4-system/domain-model.md`（P2 历史；v4 以 audit SoT 为准）
 - `app/core/logging.py` —— loguru 配置与 sink 选择
 - `app/core/events.py` —— emit / register_handler
 - `app/core/event_types.py` —— 事件分类法常量

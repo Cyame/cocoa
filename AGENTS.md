@@ -39,25 +39,28 @@ Cocoa Instance / 化身（每个 pod 一个）
 |---|---|---|---|
 | `plans/` | 当前和未来 phase 的可执行 plan + INDEX.md | planner | worker session（启动 `/start-work` 后读） |
 | `plans/archive/` | 已完成 phase 的 plan（只读；含 `README.md`） | — | 历史参考 |
-| `drafts/` | 当前规划 + 未来方向（15d naming、session-engine-v2 等） + INDEX.md | planner | planner |
-| `drafts/archive/` | 历史草稿 + phase 详情草稿（只读） | — | 历史参考 |
-| `evidence/` | 当前 capability map / gap / drift / deployment / orbstack ops + INDEX.md | worker + planner | 任何人 |
-| `evidence/archive/` | 历史 phase 审计 + 历史 capability 快照（只读） | — | 历史参考 |
-| `notepads/` | **已废弃**（gitignored；本地 session-only） | — | — |
+| `drafts/` | 远期设计（现仅 session-engine-v2）+ INDEX.md | planner | planner |
+| `drafts/archive/` | 已吸收草稿（15d / PRD intake 等；只读） | — | 历史参考 |
+| `evidence/` | 设计 SoT + migration-spec + capability/ops + INDEX.md | worker + planner | 任何人 |
+| `evidence/archive/` | 历史审计 / 三堂会审快照 / PRD 验证（只读） | — | 历史参考 |
 
 **Canonical docs**（产品与方向的单一事实来源）：
 - `docs/roadmap.md` — **系统目标蓝图 + 活 roadmap**
-- `.omo/evidence/audit-product-design.md` — **设计 SoT**（v3.5.x design correction）
+- `.omo/evidence/audit-product-design.md` — **设计 SoT**
 - `docs/prd-v4.md` — **当前实现世代索引**（细节在 `.omo/plans/v4-*.md`）
-- `docs/archive/` — PRD-v1…v3.4.1（只读归档）
-- `docs/*.md` — 15d 命名 + 子系统契约（**pre-v4 参考**；冲突以 audit-product-design 为准）
+- `.omo/evidence/v4-0-migration-spec.md` — v4.0 迁移算法 SoT
+- `docs/terminology.md` + `docs/metaphor-name-table.md` — 15d 命名
+- `docs/api-architecture.md` + `docs/observability.md` — API / 可观测惯例
+- `docs/archive/` — PRD-v1…v3.4.1 + **`pre-v4-system/`**（旧子系统文档；冲突以 audit 为准）
+
+**执行 v4 时禁止**把下列材料当开工事由：`evidence/archive/v4-plan-audits/*`、`docs/archive/pre-v4-system/*`、`drafts/archive/*`。
 
 **Planners 在新会话开始时**：
-1. 读 `docs/roadmap.md` 看系统蓝图与当前 wave
-2. 读 `.omo/evidence/audit-product-design.md` + `audit-conclusions.md` + `.omo/plans/v4-roadmap.md`
-3. 读 `drafts/*.md` 看是否有进行中的设计讨论
+1. 读 `docs/roadmap.md` + `.omo/plans/v4-roadmap.md`
+2. 读 `audit-product-design.md` + `audit-conclusions.md` + 当前 slice 的 `v4-N-*.md`
+3. 读 `drafts/session-engine-v2.md`（仅当涉及远期会话引擎）
 4. 读 `evidence/*-capability-map.md` 了解现状
-5. 读 `docs/terminology.md` + `docs/metaphor-name-table.md` 确认 15d 命名
+5. 读 `docs/terminology.md` + `docs/metaphor-name-table.md`
 6. 然后进入 INTENT ROUTING
 
 ## 项目概述
@@ -243,15 +246,9 @@ Cocoa 后端 API 遵循 `docs/api-architecture.md` 中的完整约定，核心�
 7. `DELETE` 映射软删除返 204；创建成功返 201；时间戳 ISO 8601 UTC；路径参数 UUID
 8. 分页：游标分页默认（`?limit=&cursor=`），偏移分页备选（`?limit=&offset=`），排序 `?sort=-created_at`
 - 日志/事件/队列约定见 `docs/observability.md`
-- Preset 系统设计见 `docs/preset-system.md`（P4 Agent Presets 核心文档）
-- 消息系统设计见 `docs/messaging-system.md`：消息拓扑、近邻投递、激活触发器、Directive 路由
-- 黑板系统设计见 `docs/blackboard-system.md`：Blackboard 被动状态模块、BlackboardFile 虚拟文件系统、Vault 归档、MemoryEntry 追加日志、权限模型
-- 实例运行时系统见 `docs/runtime-system.md`：Instance 生命周期模型、CRUD API、K8s 部署脚手架、多实例隔离、Langfuse 集成预留
-- Harness 系统设计见 `docs/harness-system.md`：D11 控制面、Supervisor + 4 个确定性熔断器、Boulder 循环引擎、5 个控制命令、Notepad 契约、Agent Runtime 骨架、Control Downlink 双路径机制
-- Portal 系统设计见 `docs/portal-system.md`：React 19 架构、7 页面路由表、事件查询 API、live-status 聚合端点、CorridorNode CRUD、Composer 分段语义、Topology viz 算法（glow 映射 + 连接动画）
-- Learning 子系统设计见 `docs/learning-system.md`（P10）：DistillationEngine Protocol 可插拔接口、AggregatingDistiller 启发式算法（按 MemoryKind 分组聚合 + 关键词提取 + 模板生成）、LEARNING_COMMANDS 第 4 命令族（`/distill` `/consolidate` `/reflect`）+ P5 路由优先级表、3 个 Learning API 端点（summary + distill + preset fetch）、portal EmployeeLearningPage + EmployeePreset 零迁移新增
-- 当前部署状态（DB / 容器 / 端口）见 `.omo/evidence/cocoa-deployment-state.md`（PG = OrbStack 的 `local-pgvector` 容器，port 5432，共享给 cocoa + browser_pilot + new-api + nodeskclaw）
-- 参考实现差异（Cocoa vs nodeskclaw）见 `.omo/evidence/cocoa-vs-nodeskclaw-drift.md`
+- **pre-v4 子系统长文**（Preset / Messaging / Blackboard / Runtime / Harness / Portal / Learning）已迁至 `docs/archive/pre-v4-system/`；**v4 实现以** `.omo/evidence/audit-product-design.md` + `.omo/plans/v4-*.md` **为准**
+- 当前部署状态见 `.omo/evidence/cocoa-deployment-state.md`
+- 参考实现差异见 `.omo/evidence/cocoa-vs-nodeskclaw-drift.md`
 
 **P9 Portal** (历史快照：P9 当期 7 个页面): React 19 + Vite 8 + TypeScript + Tailwind CSS v4 + Zustand + react-router v7, 零新增 npm 依赖。P9 落地 7 页面（Login / Office list / Office detail / Instance detail / Composer / Debug / Topology viz）；P10 加 Employee Learning → 8 页面；P15b 加 Employees list + Members list → 当前 **10 页面**。Topology viz 是旗舰功能：SVG 圆形节点 + 外框发光（`loop_status` → glow color）+ pan/zoom canvas + 3 种交互模式（Select/Connect/Move）+ 连接线消息传递流光动画。CorridorNode 是 first-class canvas 元素（`posx/posy` + `display_name` + `status`），支持 M<->M / M<->CN / CN<->CN 三种走廊连接。P9 全量前端 type-check + lint + build + vitest 通过；后端 315+ 测试零回归。
 
@@ -263,7 +260,7 @@ Cocoa 后端 API 遵循 `docs/api-architecture.md` 中的完整约定，核心�
 
 **P8 Harness**: D11 control plane lives in `app/core/harness_supervisor.py`. In-memory loop-state registry + 4 deterministic circuit breakers. Handler updates ONLY the registry (no DB writes — P3.5 contract). DB mutations happen via `handle_*` direct mutators from the API endpoint layer. Control commands (`/interrupt /pause /resume /status /snapshot`) are the third command category after P4 global scope-ops and per-preset commands.
 
-**P10 Learning**: Skill-distillation layer bridging employee memory to reusable agent presets. `DistillationEngine` Protocol in `app/core/distillation.py` defines the pluggable interface; `AggregatingDistiller` is the default heuristic implementation (no LLM). 3 API endpoints in `app/api/v1/learning.py`: `GET /learning/memories/{id}/summary`, `POST /learning/employees/{id}/distill`, `GET /learning/presets/{id}`. `LEARNING_COMMANDS` (`/distill`, `/consolidate`, `/reflect`) form the fourth command family registered in `app/core/preset_registry.py`, routed by `app/core/directive_router.py::_route_learning_directive()` with priority between control and global commands. Portal `EmployeeLearningPage` at `/employees/:id/learning` shows memory summary + distill form + result modal. See `docs/learning-system.md`.
+**P10 Learning**: Skill-distillation layer bridging employee memory to reusable agent presets. See archived `docs/archive/pre-v4-system/learning-system.md` for historical P10 detail; v4 learning write-back is `.omo/plans/v4-6-learning-writeback.md`.
 
 **Command family registry** (four families, priority-ordered in `directive_router.py::route_turn()`):
 

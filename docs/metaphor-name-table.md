@@ -3,7 +3,7 @@
 
 # Cocoa Metaphor Name Table (15d)
 
-> **Canonical source**: `.omo/drafts/phase-15d-naming-system.md` §3 (backend→frontend naming map) + §4 (11 BaseClasses). All decisions approved 2026-07-28.
+> **Canonical source**: `.omo/drafts/archive/phase-15d-naming-system.md` §3–§4（已归档；活表为本文件）。
 > **Code rename pending**: This table describes the target architecture. Current code (P0-P15b) still uses old naming.
 
 ## Preamble
@@ -95,4 +95,4 @@ Progression from shallow perception → deep knowledge → awakened mastery.
 
 ---
 
-*Derived from `.omo/drafts/phase-15d-naming-system.md` §3-§4 (2026-07-28).*
+*Derived from `.omo/drafts/archive/phase-15d-naming-system.md` §3-§4 (2026-07-28).*
