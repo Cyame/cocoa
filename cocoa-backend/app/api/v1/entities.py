@@ -94,6 +94,7 @@ async def list_entities(
     limit: int = 50,
     offset: int = 0,
     namespace_id: str | None = Query(None),
+    is_cerebellum: bool | None = Query(None),
 ) -> OffsetPage:
     """Return a paginated list of active (non-deleted) entities."""
     stmt = (
@@ -103,6 +104,8 @@ async def list_entities(
     )
     if namespace_id is not None:
         stmt = stmt.where(Entity.namespace_id == namespace_id)
+    if is_cerebellum is not None:
+        stmt = stmt.where(Entity.is_cerebellum.is_(is_cerebellum))
     page = await paginate_offset(db, stmt, offset, min(limit, 200))
     items = [await _entity_out(db, e) for e in page.items]
     return OffsetPage(
@@ -174,6 +177,23 @@ async def create_entity(
             f"Entity slug '{body.slug}' is already taken",
         )
 
+    # v4.3 D7: at most one is_cerebellum Entity per namespace
+    # (partial unique uq_entities_cerebellum_per_ns).
+    if body.is_cerebellum:
+        cb = await db.execute(
+            select(Entity).where(
+                Entity.namespace_id == namespace_id,
+                Entity.is_cerebellum.is_(True),
+                Entity.deleted_at.is_(None),
+            )
+        )
+        if cb.scalar_one_or_none() is not None:
+            raise ConflictError(
+                "entity.cerebellum_already_exists",
+                "errors.entity.cerebellum_already_exists",
+                "A cerebellum entity already exists in this namespace",
+            )
+
     from app.core.migration_hash import compute_entity_migration_hash
 
     entity = Entity(
@@ -186,6 +206,7 @@ async def create_entity(
         display_color=body.display_color,
         system_prompt=body.system_prompt,
         config_override=_strip_config_override_caps(body.config_override),
+        is_cerebellum=body.is_cerebellum,
     )
     db.add(entity)
     await db.flush()
@@ -231,6 +252,23 @@ async def update_entity(
             "errors.entity.preset_not_found",
             f"Preset '{body.preset_slug}' not found",
         )
+
+    # v4.3 D7: turning is_cerebellum on must respect one-per-namespace.
+    if body.is_cerebellum is True and not entity.is_cerebellum:
+        cb = await db.execute(
+            select(Entity).where(
+                Entity.namespace_id == entity.namespace_id,
+                Entity.is_cerebellum.is_(True),
+                Entity.deleted_at.is_(None),
+                Entity.id != entity.id,
+            )
+        )
+        if cb.scalar_one_or_none() is not None:
+            raise ConflictError(
+                "entity.cerebellum_already_exists",
+                "errors.entity.cerebellum_already_exists",
+                "A cerebellum entity already exists in this namespace",
+            )
 
     patch_data = body.model_dump(exclude_unset=True)
     for field, value in patch_data.items():

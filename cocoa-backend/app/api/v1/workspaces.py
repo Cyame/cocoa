@@ -126,19 +126,16 @@ async def create_workspace(
     db.add(workspace)
     await db.flush()
 
-    from app.models.central_hub import CentralHub, CerebellumAgent, Vault
+    from app.models.central_hub import CentralHub, Vault
 
     hub = CentralHub(workspace_id=workspace.id)
     db.add(hub)
     await db.flush()
-    db.add(
-        CerebellumAgent(
-            central_hub_id=hub.id,
-            name="cerebellum",
-            base_slug="cerebellum-baseclass",
-            loop_status="idle",
-        )
-    )
+    # v4.3 D7: the workspace cerebellum is now an Entity + Instance, never a
+    # legacy CerebellumAgent row.
+    from app.core.cerebellum_migration import ensure_cerebellum_entity_and_instance
+
+    await ensure_cerebellum_entity_and_instance(db, workspace.id)
     db.add(Vault(workspace_id=workspace.id))
 
     await ensure_namespace_contract(

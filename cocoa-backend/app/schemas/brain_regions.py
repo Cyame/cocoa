@@ -69,32 +69,36 @@ class BrainstemScheduleOut(BaseModel):
     updated_at: datetime | None = None
 
 
-class CerebellumAgentUpdate(BaseModel):
+class CerebellumUpdate(BaseModel):
+    """v4.3: cerebellum PATCH — operates on the Entity, not the legacy agent."""
+
+    name: str | None = None
     system_prompt: str | None = None
-    base_slug: str | None = None
-    installed_genes: list | dict | None = None
-    provider_id: str | None = None
-    model: str | None = None
+    preset_slug: str | None = None
 
 
-class CerebellumAgentOut(BaseModel):
+class CerebellumOut(BaseModel):
+    """v4.3: cerebellum GET — Entity + Instance projection.
+
+    ``status`` is derived from the workspace Instance lifecycle status.
+    """
+
     model_config = ConfigDict(from_attributes=True)
 
-    id: str
-    central_hub_id: str
+    entity_id: str
+    instance_id: str
+    workspace_id: str
     name: str
-    base_slug: str
+    slug: str
+    preset_slug: str | None = None
     system_prompt: str | None = None
-    loop_status: str
-    heartbeat_at: datetime | None = None
-    installed_genes: list | dict | None = None
-    provider_id: str | None = None
-    model: str | None = None
+    status: str
     created_at: datetime
     updated_at: datetime | None = None
 
 
 class CerebellumRestartOut(BaseModel):
-    cerebellum_id: str
-    loop_status: str
+    entity_id: str
+    instance_id: str
+    status: str
     restarted_at: datetime

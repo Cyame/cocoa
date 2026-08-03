@@ -14,7 +14,8 @@ Endpoints (15d+ canonical path /central_hub/...):
     DELETE /central-hubs/{wid}/fornix/files/{fid}    Soft-delete
     GET    /central-hubs/{wid}/vault                  Lazy-get Vault
     GET    /central-hubs/{wid}/vault/entries          List vault entries
-    POST   /central-hubs/{wid}/fornix/files/{fid}/archive  Archive file to Vault (was /central_hub/{wid}/files/{fid}/archive)
+    POST   /central-hubs/{wid}/fornix/files/{fid}/archive  Archive file to Vault (was
+    /central_hub/{wid}/files/{fid}/archive)
     GET    /{workspace_id}                        Lazy-get CentralHub
     PATCH  /{workspace_id}                        Update content/notes
     GET    /{workspace_id}/files                  List files (offset page)
@@ -50,19 +51,20 @@ from app.core.permissions import require_workspace_permission
 from app.models.central_hub import (
     BrainstemSchedule,
     CentralHub,
-    CerebellumAgent,
     FornixFile,
     FrontalLobeKanban,
     Vault,
     VaultEntry,
 )
+from app.models.entity import Entity
+from app.models.instance import Instance
 from app.schemas.brain_regions import (
     BrainstemScheduleCreate,
     BrainstemScheduleOut,
     BrainstemScheduleUpdate,
-    CerebellumAgentOut,
-    CerebellumAgentUpdate,
+    CerebellumOut,
     CerebellumRestartOut,
+    CerebellumUpdate,
     FrontalLobeKanbanCreate,
     FrontalLobeKanbanOut,
     FrontalLobeKanbanUpdate,
@@ -636,25 +638,18 @@ async def archive_file_to_vault(
 # ---------------------------------------------------------------------------
 
 
-async def _get_cerebellum(db: DB, workspace_id: str) -> CerebellumAgent:
-    hub = await _get_or_create_central_hub(db, workspace_id)
-    result = await db.execute(
-        select(CerebellumAgent).where(
-            CerebellumAgent.central_hub_id == hub.id,
-            CerebellumAgent.deleted_at.is_(None),
-        )
-    )
-    cerebellum = result.scalar_one_or_none()
-    if cerebellum is None:
-        cerebellum = CerebellumAgent(
-            central_hub_id=hub.id,
-            name="cerebellum",
-            base_slug="cerebellum-baseclass",
-            loop_status="idle",
-        )
-        db.add(cerebellum)
-        await db.flush()
-    return cerebellum
+async def _get_cerebellum_pair(
+    db: DB, workspace_id: str
+) -> tuple[Entity, Instance]:
+    """Return the workspace's cerebellum Entity + Instance (lazily created).
+
+    v4.3 D7: the cerebellum is no longer a ``CerebellumAgent`` row — it is an
+    ``Entity(is_cerebellum=True)`` in the workspace's Namespace materialized as
+    an ``Instance`` in the workspace.
+    """
+    from app.core.cerebellum_migration import ensure_cerebellum_entity_and_instance
+
+    return await ensure_cerebellum_entity_and_instance(db, workspace_id)
 
 
 @router.get(
@@ -939,13 +934,13 @@ async def delete_brainstem_schedule(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/{workspace_id}/cerebellum", response_model=CerebellumAgentOut)
+@router.get("/{workspace_id}/cerebellum", response_model=CerebellumOut)
 async def read_cerebellum(
     workspace_id: str,
     db: DB,
     current_user: CurrentUserDep,
     x_organization_id: XOrgIdHeader = None,
-) -> CerebellumAgent:
+) -> CerebellumOut:
     await require_workspace_permission(
         db,
         current_user.user_id,
@@ -953,20 +948,21 @@ async def read_cerebellum(
         "can_view_workspace",
         x_organization_id=x_organization_id,
     )
-    cerebellum = await _get_cerebellum(db, workspace_id)
+    entity, instance = await _get_cerebellum_pair(db, workspace_id)
     await db.commit()
-    await db.refresh(cerebellum)
-    return cerebellum
+    await db.refresh(entity)
+    await db.refresh(instance)
+    return _cerebellum_out(entity, instance, workspace_id)
 
 
-@router.patch("/{workspace_id}/cerebellum", response_model=CerebellumAgentOut)
+@router.patch("/{workspace_id}/cerebellum", response_model=CerebellumOut)
 async def update_cerebellum(
     workspace_id: str,
-    body: CerebellumAgentUpdate,
+    body: CerebellumUpdate,
     db: DB,
     current_user: CurrentUserDep,
     x_organization_id: XOrgIdHeader = None,
-) -> CerebellumAgent:
+) -> CerebellumOut:
     await require_workspace_permission(
         db,
         current_user.user_id,
@@ -974,12 +970,13 @@ async def update_cerebellum(
         "can_edit_workspace",
         x_organization_id=x_organization_id,
     )
-    cerebellum = await _get_cerebellum(db, workspace_id)
+    entity, instance = await _get_cerebellum_pair(db, workspace_id)
     for field, value in body.model_dump(exclude_unset=True).items():
-        setattr(cerebellum, field, value)
+        setattr(entity, field, value)
     await db.commit()
-    await db.refresh(cerebellum)
-    return cerebellum
+    await db.refresh(entity)
+    await db.refresh(instance)
+    return _cerebellum_out(entity, instance, workspace_id)
 
 
 @router.post("/{workspace_id}/cerebellum/restart", response_model=CerebellumRestartOut)
@@ -989,7 +986,7 @@ async def restart_cerebellum(
     current_user: CurrentUserDep,
     x_organization_id: XOrgIdHeader = None,
 ) -> CerebellumRestartOut:
-    """Mark cerebellum loop as restarting then idle (control-plane stub)."""
+    """Restart the cerebellum loop: bounce the workspace Instance (stub)."""
     await require_workspace_permission(
         db,
         current_user.user_id,
@@ -997,15 +994,34 @@ async def restart_cerebellum(
         "can_operate_workspace",
         x_organization_id=x_organization_id,
     )
-    cerebellum = await _get_cerebellum(db, workspace_id)
-    cerebellum.loop_status = "restarting"
+    entity, instance = await _get_cerebellum_pair(db, workspace_id)
+    from app.models.instance import InstanceStatus
+
+    instance.status = InstanceStatus.restarting.value
     await db.flush()
     restarted_at = datetime.now(timezone.utc)
-    cerebellum.loop_status = "idle"
-    cerebellum.heartbeat_at = restarted_at
+    instance.status = InstanceStatus.running.value
     await db.commit()
     return CerebellumRestartOut(
-        cerebellum_id=cerebellum.id,
-        loop_status=cerebellum.loop_status,
+        entity_id=entity.id,
+        instance_id=instance.id,
+        status=instance.status,
         restarted_at=restarted_at,
+    )
+
+
+def _cerebellum_out(
+    entity: Entity, instance: Instance, workspace_id: str
+) -> CerebellumOut:
+    return CerebellumOut(
+        entity_id=entity.id,
+        instance_id=instance.id,
+        workspace_id=workspace_id,
+        name=entity.name,
+        slug=entity.slug,
+        preset_slug=entity.preset_slug,
+        system_prompt=entity.system_prompt,
+        status=instance.status,
+        created_at=entity.created_at,
+        updated_at=entity.updated_at,
     )
