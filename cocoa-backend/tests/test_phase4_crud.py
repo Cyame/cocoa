@@ -5,7 +5,10 @@ lifespan + registry loading.  The ``auth_token`` fixture registers+logs in a
 throwaway user per test.  Each test runs against its own cloned database.
 """
 
+import uuid
+
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.testclient import TestClient
 
 
@@ -26,6 +29,20 @@ def auth_token(client: TestClient) -> str:
 
 def _auth_headers(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
+
+
+def _register(client: TestClient, username: str, email: str) -> tuple[str, str]:
+    resp = client.post(
+        "/api/v1/auth/register",
+        json={
+            "username": username,
+            "email": email,
+            "password": "password123",
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    return body["access_token"], body["user"]["id"]
 
 
 # =========================================================================
@@ -62,11 +79,23 @@ class TestBaseClassCrud:
             assert expected in slugs, f"Built-in preset {expected} missing"
         assert "zong-jian" not in slugs
 
-    def test_create_base_class(self, client: TestClient, auth_token: str) -> None:
+    async def test_create_base_class(
+        self,
+        client: TestClient,
+        session: AsyncSession,
+        create_org_bundle,
+    ) -> None:
         """POST /api/v1/base-classes returns 201 with the new preset."""
+        token, user_id = _register(
+            client,
+            f"bc-{uuid.uuid4().hex[:6]}",
+            f"bc-{uuid.uuid4().hex[:6]}@t.co",
+        )
+        bundle = await create_org_bundle(user_id, atoms=("can_manage_organization",))
+        headers = {**_auth_headers(token), "X-Organization-Id": bundle.org.id}
         response = client.post(
             "/api/v1/base-classes",
-            headers=_auth_headers(auth_token),
+            headers=headers,
             json={
                 "slug": "my-custom",
                 "name": "My Custom Preset",
@@ -80,37 +109,57 @@ class TestBaseClassCrud:
         assert body["name"] == "My Custom Preset"
         assert "id" in body
 
-    def test_create_base_class_duplicate_slug(
-        self, client: TestClient, auth_token: str,
+    async def test_create_base_class_duplicate_slug(
+        self,
+        client: TestClient,
+        session: AsyncSession,
+        create_org_bundle,
     ) -> None:
         """Creating a preset with an existing slug returns 409."""
+        token, user_id = _register(
+            client,
+            f"bc-{uuid.uuid4().hex[:6]}",
+            f"bc-{uuid.uuid4().hex[:6]}@t.co",
+        )
+        bundle = await create_org_bundle(user_id, atoms=("can_manage_organization",))
+        headers = {**_auth_headers(token), "X-Organization-Id": bundle.org.id}
         payload = {
             "slug": "dup-slug",
             "name": "Original",
         }
         resp1 = client.post(
             "/api/v1/base-classes",
-            headers=_auth_headers(auth_token),
+            headers=headers,
             json=payload,
         )
         assert resp1.status_code == 201
 
         resp2 = client.post(
             "/api/v1/base-classes",
-            headers=_auth_headers(auth_token),
+            headers=headers,
             json=payload,
         )
         assert resp2.status_code == 409
         assert resp2.json()["error_code"] == "base_class.slug_taken"
 
-    def test_delete_base_class_soft_delete(
-        self, client: TestClient, auth_token: str,
+    async def test_delete_base_class_soft_delete(
+        self,
+        client: TestClient,
+        session: AsyncSession,
+        create_org_bundle,
     ) -> None:
         """DELETE soft-deletes; subsequent GET returns 404."""
+        token, user_id = _register(
+            client,
+            f"bc-{uuid.uuid4().hex[:6]}",
+            f"bc-{uuid.uuid4().hex[:6]}@t.co",
+        )
+        bundle = await create_org_bundle(user_id, atoms=("can_manage_organization",))
+        headers = {**_auth_headers(token), "X-Organization-Id": bundle.org.id}
         # Create
         create_resp = client.post(
             "/api/v1/base-classes",
-            headers=_auth_headers(auth_token),
+            headers=headers,
             json={"slug": "to-delete", "name": "To Delete"},
         )
         assert create_resp.status_code == 201
@@ -119,14 +168,14 @@ class TestBaseClassCrud:
         # Delete
         del_resp = client.delete(
             f"/api/v1/base-classes/{preset_id}",
-            headers=_auth_headers(auth_token),
+            headers=headers,
         )
         assert del_resp.status_code == 204
 
         # Get by ID → 404
         get_resp = client.get(
             f"/api/v1/base-classes/{preset_id}",
-            headers=_auth_headers(auth_token),
+            headers=headers,
         )
         assert get_resp.status_code == 404
         assert get_resp.json()["error_code"] == "base_class.not_found"

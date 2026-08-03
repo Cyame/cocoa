@@ -77,6 +77,7 @@ class TestBaseClassesList:
                 manifest={"default_capabilities": []},
                 version="0.1.0",
                 tags=["test"],
+                scope="system",
             ))
         await session.commit()
 
@@ -93,7 +94,7 @@ class TestBaseClassesList:
         """Newest BaseClass first — critical for the onboarding modal's first-page affordance."""
         import asyncio
         for slug in ["first", "second", "third"]:
-            session.add(BaseClass(slug=slug, name=f"BC {slug}"))
+            session.add(BaseClass(slug=slug, name=f"BC {slug}", scope="system"))
             await session.commit()
             await asyncio.sleep(0.01)  # ensure distinct timestamps
 
@@ -106,8 +107,8 @@ class TestBaseClassesList:
     async def test_list_excludes_soft_deleted(
         self, client: TestClient, auth_token: str, session: AsyncSession,
     ) -> None:
-        alive = BaseClass(slug="alive", name="Alive")
-        deleted = BaseClass(slug="deleted", name="Deleted")
+        alive = BaseClass(slug="alive", name="Alive", scope="system")
+        deleted = BaseClass(slug="deleted", name="Deleted", scope="system")
         session.add_all([alive, deleted])
         await session.commit()
         deleted.soft_delete()

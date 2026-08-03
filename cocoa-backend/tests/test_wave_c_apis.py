@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import uuid
+
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.testclient import TestClient
 
 
@@ -26,6 +29,20 @@ def auth_token(client: TestClient) -> str:
 
 def _h(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
+
+
+def _register(client: TestClient, username: str, email: str) -> tuple[str, str]:
+    resp = client.post(
+        "/api/v1/auth/register",
+        json={
+            "username": username,
+            "email": email,
+            "password": "password123",
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    return body["access_token"], body["user"]["id"]
 
 
 class TestOrganizations:
@@ -154,12 +171,21 @@ class TestUserGenes:
 
 
 class TestAiGenes:
-    def test_crud_and_base_class_attach(
-        self, client: TestClient, auth_token: str
+    @pytest.mark.asyncio
+    async def test_crud_and_base_class_attach(
+        self,
+        client: TestClient,
+        session: AsyncSession,
+        create_org_bundle,
     ) -> None:
+        token, user_id = _register(
+            client, f"wc-{uuid.uuid4().hex[:6]}", f"wc-{uuid.uuid4().hex[:6]}@t.co"
+        )
+        bundle = await create_org_bundle(user_id, atoms=("can_manage_ai_genes",))
+        headers = {**_h(token), "X-Organization-Id": bundle.org.id}
         create = client.post(
             "/api/v1/ai-genes",
-            headers=_h(auth_token),
+            headers=headers,
             json={
                 "slug": "test-gene",
                 "name": "Test Gene",
@@ -170,13 +196,13 @@ class TestAiGenes:
         gene_id = create.json()["id"]
         by_slug = client.get(
             "/api/v1/ai-genes/by-slug/test-gene",
-            headers=_h(auth_token),
+            headers=headers,
         )
         assert by_slug.status_code == 200
-        bc = client.get("/api/v1/base-classes", headers=_h(auth_token)).json()["items"][0]
+        bc = client.get("/api/v1/base-classes", headers=headers).json()["items"][0]
         attach = client.post(
             f"/api/v1/ai-genes/{gene_id}/attach-base-class",
-            headers=_h(auth_token),
+            headers=headers,
             json={"base_class_id": bc["id"]},
         )
         assert attach.status_code == 201
@@ -241,12 +267,22 @@ class TestBrainRegions:
 
 
 class TestInstanceOverlay:
-    def test_create_instance_resolves_agent_config(
-        self, client: TestClient, auth_token: str
+    @pytest.mark.asyncio
+    async def test_create_instance_resolves_agent_config(
+        self,
+        client: TestClient,
+        session: AsyncSession,
+        create_org_bundle,
     ) -> None:
+        token, user_id = _register(
+            client, f"wc-{uuid.uuid4().hex[:6]}", f"wc-{uuid.uuid4().hex[:6]}@t.co"
+        )
+        bundle = await create_org_bundle(
+            user_id, atoms=("can_manage_organization",)
+        )
         bc = client.post(
             "/api/v1/base-classes",
-            headers=_h(auth_token),
+            headers={**_h(token), "X-Organization-Id": bundle.org.id},
             json={
                 "slug": "overlay-bc",
                 "name": "Overlay BC",
@@ -258,10 +294,10 @@ class TestInstanceOverlay:
             },
         )
         assert bc.status_code == 201
-        ns = client.get("/api/v1/namespaces", headers=_h(auth_token)).json()["items"][0]
+        ns = client.get("/api/v1/namespaces", headers=_h(token)).json()["items"][0]
         ent = client.post(
             "/api/v1/entities",
-            headers=_h(auth_token),
+            headers=_h(token),
             json={
                 "slug": "overlay-ent",
                 "name": "Overlay Entity",
@@ -275,13 +311,13 @@ class TestInstanceOverlay:
         assert ent.status_code == 201
         ws = client.post(
             "/api/v1/workspaces",
-            headers=_h(auth_token),
+            headers=_h(token),
             json={"slug": "overlay-ws", "name": "Overlay WS", "namespace_id": ns["id"]},
         )
         assert ws.status_code == 201
         inst = client.post(
             "/api/v1/instances",
-            headers=_h(auth_token),
+            headers=_h(token),
             json={
                 "entity_id": ent.json()["id"],
                 "workspace_id": ws.json()["id"],
