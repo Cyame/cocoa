@@ -1,17 +1,134 @@
-import { createBrowserRouter, Navigate } from 'react-router';
+import type { ReactNode } from 'react';
+import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import { createBrowserRouter, Navigate, useNavigate, useParams } from 'react-router';
 import AppShell from '@/components/AppShell';
+import { api } from '@/lib/api';
+import { fetchWorkspace } from '@/lib/api/workspaces';
+import type { Namespace } from '@/lib/types';
 import AccountPage from '@/pages/AccountPage';
-import BaseClassDetailPage from '@/pages/BaseClassDetailPage';
+import DashboardPage from '@/pages/DashboardPage';
 import ForbiddenPage from '@/pages/ForbiddenPage';
 import LoginPage from '@/pages/LoginPage';
-import NamespacesPage from '@/pages/NamespacesPage';
-import OrganizationPage from '@/pages/OrganizationPage';
+import OrgPickerPage from '@/pages/OrgPickerPage';
+import PagePlaceholder from '@/pages/PagePlaceholder';
 import WorkspaceIdePage from '@/pages/WorkspaceIdePage';
 import { useSessionStore } from '@/stores/session';
 
 function RootRedirect() {
   const token = useSessionStore((state) => state.token);
-  return <Navigate to={token === null ? '/login' : '/namespaces'} replace />;
+  const currentOrgId = useSessionStore((state) => state.currentOrgId);
+  if (token === null) {
+    return <Navigate to="/login" replace />;
+  }
+  // Persisted org context resumes on the org Dashboard; otherwise the picker.
+  return <Navigate to={currentOrgId !== null ? `/orgs/${currentOrgId}` : '/orgs/picker'} replace />;
+}
+
+function RequireAuth({ children }: { readonly children: ReactNode }) {
+  const token = useSessionStore((state) => state.token);
+  if (token === null) {
+    return <Navigate to="/login" replace />;
+  }
+  return children;
+}
+
+/**
+ * Shared legacy-redirect shell: with an active org we compute the new
+ * canonical path (replacing the `:orgId` placeholder); without one there is
+ * no org context to attach to, so the safest landing is the org picker
+ * (B1 compatibility rule). The template string is compared by value in the
+ * dependency list, so a stable literal never retriggers the effect.
+ */
+function useLegacyOrgRedirect(target: string) {
+  const navigate = useNavigate();
+  const currentOrgId = useSessionStore((state) => state.currentOrgId);
+  const token = useSessionStore((state) => state.token);
+
+  useEffect(() => {
+    if (token === null) {
+      navigate('/login', { replace: true });
+      return;
+    }
+    if (currentOrgId !== null) {
+      navigate(target.replace(':orgId', currentOrgId), { replace: true });
+      return;
+    }
+    navigate('/orgs/picker', { replace: true });
+  }, [currentOrgId, navigate, target, token]);
+}
+
+function LegacyNamespacesRedirect() {
+  useLegacyOrgRedirect('/orgs/:orgId/namespaces');
+  return <RedirectingNote />;
+}
+
+function LegacyOrganizationRedirect() {
+  useLegacyOrgRedirect('/orgs/:orgId/settings');
+  return <RedirectingNote />;
+}
+
+function LegacyBaseClassRedirect() {
+  const { slug } = useParams<{ slug: string }>();
+  useLegacyOrgRedirect(`/orgs/:orgId/base-classes/${slug ?? ''}`);
+  return <RedirectingNote />;
+}
+
+/**
+ * /workspaces/:id → /orgs/:orgId/workspaces/:wsId. With an active org the
+ * destination is immediate; without one, resolve ws → namespace → org via the
+ * API (cheap two hops) and fall back to the picker on failure.
+ */
+function LegacyWorkspaceRedirect() {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const currentOrgId = useSessionStore((state) => state.currentOrgId);
+  const token = useSessionStore((state) => state.token);
+
+  useEffect(() => {
+    if (token === null) {
+      navigate('/login', { replace: true });
+      return;
+    }
+    let cancelled = false;
+    if (currentOrgId !== null) {
+      if (id !== undefined) {
+        navigate(`/orgs/${currentOrgId}/workspaces/${id}`, { replace: true });
+      } else {
+        navigate('/orgs/picker', { replace: true });
+      }
+      return;
+    }
+    async function resolve() {
+      try {
+        if (id === undefined) throw new Error('missing workspace id');
+        const workspace = await fetchWorkspace(id);
+        const namespace = await api<Namespace>(
+          `/namespaces/${encodeURIComponent(workspace.namespace_id)}`,
+        );
+        if (!cancelled) {
+          navigate(`/orgs/${namespace.org_id}/workspaces/${id}`, { replace: true });
+        }
+      } catch {
+        if (!cancelled) navigate('/orgs/picker', { replace: true });
+      }
+    }
+    void resolve();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentOrgId, id, navigate, token]);
+
+  return <RedirectingNote />;
+}
+
+function RedirectingNote() {
+  const { t } = useTranslation();
+  return (
+    <div className="grid min-h-dvh place-items-center bg-slate-100 text-sm text-slate-500">
+      {t('legacyRedirect.redirecting')}
+    </div>
+  );
 }
 
 const router = createBrowserRouter([
@@ -28,30 +145,55 @@ const router = createBrowserRouter([
     Component: ForbiddenPage,
   },
   {
-    path: '/workspaces/:id',
-    Component: WorkspaceIdePage,
+    path: '/orgs/picker',
+    element: (
+      <RequireAuth>
+        <OrgPickerPage />
+      </RequireAuth>
+    ),
   },
   {
+    path: '/account',
+    element: (
+      <RequireAuth>
+        <AccountPage />
+      </RequireAuth>
+    ),
+  },
+  {
+    path: '/orgs/:orgId',
     Component: AppShell,
     children: [
       {
-        path: '/namespaces',
-        Component: NamespacesPage,
+        index: true,
+        Component: DashboardPage,
       },
+      { path: 'settings', element: <PagePlaceholder titleKey="nav.settings" /> },
+      { path: 'members', element: <PagePlaceholder titleKey="nav.members" /> },
+      { path: 'base-classes', element: <PagePlaceholder titleKey="nav.divinity" /> },
+      { path: 'base-classes/:slug', element: <PagePlaceholder titleKey="nav.divinity" /> },
+      { path: 'capabilities', element: <PagePlaceholder titleKey="nav.capabilities" /> },
+      { path: 'genes', element: <PagePlaceholder titleKey="nav.genes" /> },
+      { path: 'knowledge', element: <PagePlaceholder titleKey="nav.knowledge" /> },
+      { path: 'namespaces', element: <PagePlaceholder titleKey="nav.namespaces" /> },
+      { path: 'namespaces/:nsId', element: <PagePlaceholder titleKey="nav.namespaces" /> },
       {
-        path: '/base-classes/:slug',
-        Component: BaseClassDetailPage,
+        path: 'namespaces/:nsId/workspaces',
+        element: <PagePlaceholder titleKey="nav.workspaces" />,
       },
-      {
-        path: '/organization',
-        Component: OrganizationPage,
-      },
-      {
-        path: '/account',
-        Component: AccountPage,
-      },
+      { path: 'namespaces/:nsId/entities', element: <PagePlaceholder titleKey="nav.entities" /> },
+      { path: 'namespaces/:nsId/instances', element: <PagePlaceholder titleKey="nav.instances" /> },
+      { path: 'namespaces/:nsId/contracts', element: <PagePlaceholder titleKey="nav.contracts" /> },
+      // Param named `id` on purpose: WorkspaceIdePage reads useParams<{ id }>.
+      { path: 'workspaces/:id', Component: WorkspaceIdePage },
+      { path: 'debug', element: <PagePlaceholder titleKey="nav.debug" /> },
     ],
   },
+  // Legacy URL redirects — nothing 404s (B1 compatibility).
+  { path: '/namespaces', Component: LegacyNamespacesRedirect },
+  { path: '/organization', Component: LegacyOrganizationRedirect },
+  { path: '/workspaces/:id', Component: LegacyWorkspaceRedirect },
+  { path: '/base-classes/:slug', Component: LegacyBaseClassRedirect },
 ]);
 
 export default router;

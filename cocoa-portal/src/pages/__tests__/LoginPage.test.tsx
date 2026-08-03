@@ -17,7 +17,7 @@ function renderLogin(initialPath = '/login') {
     <MemoryRouter initialEntries={[initialPath]}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/namespaces" element={<p>Namespaces destination</p>} />
+        <Route path="/orgs/picker" element={<p>Org picker destination</p>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -56,7 +56,7 @@ describe('LoginPage', () => {
       });
     });
     expect(useSessionStore.getState().token).toBe('jwt-token');
-    expect(await screen.findByText('Namespaces destination')).toBeInTheDocument();
+    expect(await screen.findByText('Org picker destination')).toBeInTheDocument();
   });
 
   it('shows an authentication error after a 401 response', async () => {
@@ -110,7 +110,7 @@ describe('LoginPage', () => {
       });
     });
     expect(useSessionStore.getState().token).toBe('new-jwt');
-    expect(await screen.findByText('Namespaces destination')).toBeInTheDocument();
+    expect(await screen.findByText('Org picker destination')).toBeInTheDocument();
   });
 
   it('renders sign-in mode by default', () => {

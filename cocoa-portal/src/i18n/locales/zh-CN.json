@@ -34,7 +34,64 @@
     "genes": "基因",
     "capability": "能力",
     "debug": "调试",
-    "account": "账户"
+    "account": "账户",
+    "dashboard": "仪表盘",
+    "settings": "设置",
+    "members": "成员",
+    "divinity": "神职",
+    "capabilities": "能力",
+    "knowledge": "知识",
+    "namespaces": "次元列表",
+    "workspaces": "工作区列表",
+    "currentNamespace": "当前次元",
+    "pending": "内容迁移中"
+  },
+  "orgPicker": {
+    "title": "选择世界",
+    "subtitle": "选择要操作的世界，或创建一个新世界。",
+    "loading": "正在加载世界",
+    "listTitle": "你的世界",
+    "ctaCreate": "创建世界",
+    "createTitle": "新世界",
+    "emptyTitle": "还没有世界",
+    "emptyDetail": "创建你的第一个世界，开始编排智能体。",
+    "name": "名称",
+    "nameRequired": "名称不能为空。",
+    "slug": "标识",
+    "slugPattern": "标识必须以小写字母开头，后跟小写字母、数字或连字符。",
+    "description": "描述（可选）",
+    "submitCreate": "创建并进入",
+    "switcherLabel": "切换世界",
+    "switcherPlaceholder": "选择一个世界",
+    "switcherEmpty": "暂无可用世界。",
+    "switchDirtyConfirm": "离开当前世界将丢失未保存的本地工作区状态。是否继续？"
+  },
+  "dashboard": {
+    "title": "世界仪表盘",
+    "loading": "正在加载世界",
+    "statsNamespaces": "次元",
+    "statsMembers": "成员",
+    "statsWorkspaces": "工作区",
+    "quickActions": "快捷操作",
+    "quickCreateNamespace": "创建次元",
+    "quickAddMember": "添加成员",
+    "emptyNamespacesTitle": "还没有次元",
+    "emptyNamespacesDetail": "创建次元以组织工作区、眷族与化身。",
+    "emptyMembersTitle": "还没有成员",
+    "emptyMembersDetail": "邀请或添加成员，让他们一起在这个世界协作。",
+    "recentNamespacesTitle": "最近次元"
+  },
+  "statusBar": {
+    "atomsLabel": "世界原子",
+    "role": {
+      "owner": "拥有者",
+      "operator": "操作员",
+      "editor": "编辑者",
+      "viewer": "查看者"
+    }
+  },
+  "legacyRedirect": {
+    "redirecting": "正在跳转…"
   },
   "login": {
     "signInHeading": "登录",

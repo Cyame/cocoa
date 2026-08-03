@@ -34,7 +34,64 @@
     "genes": "Gene",
     "capability": "Capability",
     "debug": "Debug",
-    "account": "Account"
+    "account": "Account",
+    "dashboard": "Dashboard",
+    "settings": "Settings",
+    "members": "Members",
+    "divinity": "Deity",
+    "capabilities": "Capabilities",
+    "knowledge": "Knowledge",
+    "namespaces": "Namespaces",
+    "workspaces": "Workspaces",
+    "currentNamespace": "Current namespace",
+    "pending": "Content migration in progress"
+  },
+  "orgPicker": {
+    "title": "Select a world",
+    "subtitle": "Pick a world to operate in, or create a new one.",
+    "loading": "Loading worlds",
+    "listTitle": "Your worlds",
+    "ctaCreate": "Create world",
+    "createTitle": "New world",
+    "emptyTitle": "No worlds yet",
+    "emptyDetail": "Create your first world to start orchestrating agents.",
+    "name": "Name",
+    "nameRequired": "Name is required.",
+    "slug": "Slug",
+    "slugPattern": "Slug must start with a lowercase letter, then lowercase letters, digits, or hyphens.",
+    "description": "Description (optional)",
+    "submitCreate": "Create and enter",
+    "switcherLabel": "Switch world",
+    "switcherPlaceholder": "Select a world",
+    "switcherEmpty": "No worlds available.",
+    "switchDirtyConfirm": "Leaving this world discards unsaved local workspace state. Continue?"
+  },
+  "dashboard": {
+    "title": "World dashboard",
+    "loading": "Loading world",
+    "statsNamespaces": "Namespaces",
+    "statsMembers": "Members",
+    "statsWorkspaces": "Workspaces",
+    "quickActions": "Quick actions",
+    "quickCreateNamespace": "Create namespace",
+    "quickAddMember": "Add member",
+    "emptyNamespacesTitle": "No namespaces yet",
+    "emptyNamespacesDetail": "Create a namespace to organize workspaces, entities, and avatars.",
+    "emptyMembersTitle": "No members yet",
+    "emptyMembersDetail": "Invite or add members so they can collaborate in this world.",
+    "recentNamespacesTitle": "Recent namespaces"
+  },
+  "statusBar": {
+    "atomsLabel": "World atoms",
+    "role": {
+      "owner": "Owner",
+      "operator": "Operator",
+      "editor": "Editor",
+      "viewer": "Viewer"
+    }
+  },
+  "legacyRedirect": {
+    "redirecting": "Redirecting…"
   },
   "login": {
     "signInHeading": "Sign in",

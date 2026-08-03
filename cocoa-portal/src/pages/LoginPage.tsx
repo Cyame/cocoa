@@ -37,7 +37,7 @@ export default function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (token !== null) {
-    return <Navigate to="/namespaces" replace />;
+    return <Navigate to="/orgs/picker" replace />;
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -70,7 +70,7 @@ export default function LoginPage() {
         extra_gene_slugs: response.user?.extra_gene_slugs ?? [],
         token: response.access_token,
       });
-      navigate('/namespaces', { replace: true });
+      navigate('/orgs/picker', { replace: true });
     } catch (error) {
       if (error instanceof ApiError) {
         const apiMessage =
