@@ -56,12 +56,10 @@ Thumbs.db
 data/
 
 # ========================
-# Orchestrator ephemeral state
+# Planning / CI（未维护，暂不追踪；恢复维护时移除以下两行）
 # ========================
-.omo/boulder.json
-.omo/run-continuation/
-.omo/ulw-loop/
-.omo/notepads/
+.omo/
+.github/
 
 # ========================
 # OS tool caches
