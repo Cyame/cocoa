@@ -3,6 +3,7 @@
 Routes (identity-system / super-admin):
     GET    /api/v1/users
     POST   /api/v1/users
+    GET    /api/v1/users/search     (v4-3 D14: org member-manager search)
     GET    /api/v1/users/{id}
     PATCH  /api/v1/users/{id}
     DELETE /api/v1/users/{id}
@@ -15,14 +16,16 @@ from __future__ import annotations
 import secrets
 import string
 
-from fastapi import APIRouter, status
-from sqlalchemy import select
+from fastapi import APIRouter, Query, status
+from sqlalchemy import or_, select
 
-from app.api.deps import DB, CurrentUserDep
+from app.api.deps import DB, CurrentUserDep, XOrgIdHeader
 from app.core.errors import ConflictError, ForbiddenError, NotFoundError
 from app.core.identity import resolve_user_identity
 from app.core.openapi import add_error_responses
+from app.core.org_scope import resolve_current_org_id
 from app.core.pagination import OffsetPage, paginate_offset
+from app.core.permissions import require_permission
 from app.core.security import hash_password
 from app.models.user import User
 from app.models.user_gene import UserGene, UserUserGene
@@ -33,6 +36,7 @@ from app.schemas.users import (
     UserGeneRef,
     UserIdentitySet,
     UserOut,
+    UserSearchOut,
     UserUpdate,
 )
 
@@ -123,6 +127,74 @@ async def list_users(
     )
     page = await paginate_offset(db, stmt, offset, min(limit, 200))
     items = [await _to_out(db, u) for u in page.items]
+    return OffsetPage(
+        items=items,
+        offset=page.offset,
+        limit=page.limit,
+        total=page.total,
+    )
+
+
+@router.get("/search", response_model=OffsetPage[UserSearchOut])
+async def search_users(
+    db: DB,
+    current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
+    q: str | None = Query(default=None, max_length=255),
+    limit: int = 10,
+    offset: int = 0,
+) -> OffsetPage:
+    """v4-3 D14: search existing users by username/email prefix.
+
+    Permission: ``can_manage_org_members`` on the current org (resolved via
+    ``X-Organization-Id`` header + :func:`resolve_current_org_id`) OR
+    super-admin. No valid org context and not super-admin → 403. Response is
+    slim (``UserSearchOut``) — no password_hash / identity / gene data.
+
+    ``q`` empty or missing → up to ``limit`` most recent users (created_at
+    desc). ``q`` present → case-insensitive prefix match (ILIKE) on username
+    OR email; ``%`` / ``_`` / ``\\`` are escaped and treated literally.
+    ``limit`` is clamped to [1, 50] (default 10).
+    """
+    org_id = await resolve_current_org_id(
+        db, current_user.user_id, x_organization_id
+    )
+    if not current_user.is_super_admin:
+        if org_id is None:
+            raise ForbiddenError(
+                "organization.context_required",
+                "errors.organization.context_required",
+                "Organization context is required (X-Organization-Id or a single org contract)",
+            )
+        await require_permission(
+            db,
+            current_user.user_id,
+            "can_manage_org_members",
+            organization_id=org_id,
+        )
+
+    limit = min(max(limit, 1), 50)
+    offset = max(offset, 0)
+    stmt = select(User).where(User.deleted_at.is_(None))
+    needle = q.strip() if q is not None else ""
+    if needle:
+        escaped = needle.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        pattern = f"{escaped}%"
+        stmt = stmt.where(
+            or_(
+                User.username.ilike(pattern, escape="\\"),
+                User.email.ilike(pattern, escape="\\"),
+            )
+        ).order_by(User.username, User.id)
+    else:
+        stmt = stmt.order_by(User.created_at.desc(), User.id)
+    page = await paginate_offset(db, stmt, offset, limit)
+    items = [
+        UserSearchOut(
+            id=u.id, username=u.username, email=u.email, nickname=u.nickname
+        )
+        for u in page.items
+    ]
     return OffsetPage(
         items=items,
         offset=page.offset,

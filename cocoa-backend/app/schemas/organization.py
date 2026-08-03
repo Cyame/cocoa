@@ -20,6 +20,11 @@ class OrganizationOut(BaseModel):
     system_hub_model: str | None = None
     cerebellum_default_provider_id: str | None = None
     cerebellum_default_model: str | None = None
+    use_proxy: bool = False
+    proxy_host: str | None = None
+    proxy_port: int | None = None
+    proxy_username: str | None = None
+    proxy_password: str | None = None
     created_at: datetime
     updated_at: datetime | None = None
 
@@ -27,12 +32,26 @@ class OrganizationOut(BaseModel):
 class OrganizationUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
+    system_hub_provider_id: str | None = None
+    system_hub_model: str | None = None
+    cerebellum_default_provider_id: str | None = None
+    cerebellum_default_model: str | None = None
+    use_proxy: bool | None = None
+    proxy_host: str | None = None
+    proxy_port: int | None = None
+    proxy_username: str | None = None
+    proxy_password: str | None = None
 
 
 class OrganizationCreate(BaseModel):
     slug: str = Field(min_length=1, max_length=255)
     name: str = Field(min_length=1, max_length=255)
     description: str | None = None
+    use_proxy: bool = False
+    proxy_host: str | None = None
+    proxy_port: int | None = None
+    proxy_username: str | None = None
+    proxy_password: str | None = None
 
 
 class ProviderOrigin(str, Enum):
@@ -247,3 +266,53 @@ class GenerateDescriptionRequest(BaseModel):
 
 class GenerateDescriptionOut(BaseModel):
     description: str
+
+
+class OrganizationMemberUserRef(BaseModel):
+    """Nested user payload — never a UUID wall (v4-3 D14)."""
+
+    id: str
+    username: str
+    email: str
+    nickname: str | None = None
+
+
+class OrganizationMemberAtomRef(BaseModel):
+    """One atom entry in a world-member (世界契印) item."""
+
+    id: str
+    slug: str
+    name: str
+
+
+class OrganizationMemberCreate(BaseModel):
+    """POST /organizations/{id}/members — user_id OR unique-prefix q.
+
+    Exactly one of ``user_id`` / ``q`` must be provided (422 otherwise).
+    ``atom_slugs`` is validated against ``ATOM_CATALOG`` by the route.
+    """
+
+    user_id: str | None = Field(default=None, min_length=1, max_length=36)
+    q: str | None = Field(default=None, max_length=255)
+    atom_slugs: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _exactly_one_target(self) -> OrganizationMemberCreate:
+        if (self.user_id is None) == (self.q is None):
+            raise ValueError("Provide exactly one of user_id or q")
+        return self
+
+
+class OrganizationMemberAtomsUpdate(BaseModel):
+    """PATCH /organizations/{id}/members/{contract_id} — full atom replace."""
+
+    atom_slugs: list[str]
+
+
+class OrganizationMemberOut(BaseModel):
+    """One world-member item — v4-3 D14 locked response shape."""
+
+    id: str
+    user: OrganizationMemberUserRef
+    atoms: list[OrganizationMemberAtomRef] = Field(default_factory=list)
+    created_at: datetime

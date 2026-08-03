@@ -24,7 +24,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.db import get_session_factory
-from app.core.errors import UnauthorizedError
+from app.core.errors import CocoaError, UnauthorizedError
+from app.core.org_scope import resolve_current_org_id
 from app.core.security import decode_token
 from app.models.user import User
 from app.schemas.auth import CurrentUser
@@ -106,3 +107,32 @@ DB = Annotated[AsyncSession, Depends(get_db)]
 CurrentUserDep = Annotated[CurrentUser, Depends(get_current_user)]
 PaginationParams = Annotated[dict, Depends(get_pagination_params)]
 XOrgIdHeader = Annotated[str | None, Header(alias="X-Organization-Id")]
+
+
+async def get_current_org(
+    db: DB,
+    current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader,
+) -> str:
+    """Resolve the active organization id from the ``X-Organization-Id`` header.
+
+    Delegates validation to :func:`resolve_current_org_id` (raises 404 for a
+    missing org, 403 for a non-member). When no header is supplied and the
+    user holds zero or multiple active contracts, no org context can be
+    resolved — raise 400.
+    """
+    org_id = await resolve_current_org_id(
+        db, current_user.user_id, x_organization_id
+    )
+    if org_id is None:
+        raise CocoaError(
+            "organization.context_required",
+            "errors.organization.context_required",
+            "Unable to resolve an organization context — set X-Organization-Id "
+            "or hold exactly one OrganizationContract",
+            status_code=400,
+        )
+    return org_id
+
+
+CurrentOrg = Annotated[str, Depends(get_current_org)]

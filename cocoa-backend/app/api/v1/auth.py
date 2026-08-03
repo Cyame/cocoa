@@ -7,16 +7,21 @@ so the portal can hydrate ``session.user`` (username + is_super_admin).
 from fastapi import APIRouter
 from sqlalchemy import func, select
 
-from app.api.deps import DB, CurrentUserDep
+from app.api.deps import DB, CurrentUserDep, XOrgIdHeader
 from app.core.config import settings
-from app.core.errors import ConflictError, NotFoundError, UnauthorizedError
+from app.core.errors import ConflictError, ForbiddenError, NotFoundError, UnauthorizedError
+from app.core.gene_atoms import ATOM_CATALOG
 from app.core.identity import resolve_user_identity
 from app.core.openapi import add_error_responses
+from app.core.org_scope import resolve_current_org_id
+from app.core.permissions import list_grant_slugs
 from app.core.security import create_access_token, hash_password, verify_password
 from app.models.user import User
 from app.schemas.auth import (
     AuthUserOut,
+    CurrentUser,
     LoginRequest,
+    OrgIdentityOut,
     RegisterRequest,
     TokenResponse,
 )
@@ -112,9 +117,66 @@ async def login(body: LoginRequest, db: DB) -> TokenResponse:
     return await _token_for(db, user)
 
 
+def _display_label(atoms: list[str]) -> str:
+    """Map org atoms to a display-only label (v4-3 B4; never auth).
+
+    Priority: owner > operator > editor > viewer.
+    """
+    if "can_manage_organization" in atoms:
+        return "owner"
+    if "can_operate_workspace" in atoms:
+        return "operator"
+    if "can_edit_workspace" in atoms:
+        return "editor"
+    return "viewer"
+
+
+async def _org_identity_for(
+    db: DB, current_user: CurrentUser, x_organization_id: str | None
+) -> OrgIdentityOut | None:
+    """Resolve the tenant identity for /me; ``None`` on invalid org / non-member.
+
+    /auth/me is a status endpoint: an invalid ``X-Organization-Id`` header
+    (unknown org, malformed id, non-member) must not fail the request — the
+    portal renders from ``org_identity``. Super-admins bypass membership and
+    report the full atom catalog.
+    """
+    if x_organization_id is None:
+        return None
+    try:
+        org_id = await resolve_current_org_id(db, current_user.user_id, x_organization_id)
+    except (NotFoundError, ForbiddenError):
+        return None
+    if org_id is None:
+        return None
+    if current_user.is_super_admin:
+        atoms = sorted(ATOM_CATALOG)
+    else:
+        atoms = sorted(
+            await list_grant_slugs(
+                db, current_user.user_id, organization_id=org_id
+            )
+        )
+    return OrgIdentityOut(
+        organization_id=org_id,
+        atoms=atoms,
+        display_label=_display_label(atoms),
+    )
+
+
 @router.get("/me", response_model=AuthUserOut)
-async def get_me(db: DB, current_user: CurrentUserDep) -> AuthUserOut:
-    """Return the authenticated user profile (for session hydration)."""
+async def get_me(
+    db: DB,
+    current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
+) -> AuthUserOut:
+    """Return the authenticated user profile (for session hydration).
+
+    v4-3 B4: when ``X-Organization-Id`` is present and the user holds a valid
+    OrganizationContract for that org, the response carries ``org_identity``
+    (org-level atom slugs + display label). Invalid / non-member headers
+    resolve to ``org_identity: null`` — this endpoint never 4xxes on them.
+    """
     result = await db.execute(
         select(User).where(
             User.id == current_user.user_id,
@@ -128,4 +190,6 @@ async def get_me(db: DB, current_user: CurrentUserDep) -> AuthUserOut:
             "errors.auth.user_not_found",
             "Authenticated user not found",
         )
-    return await _user_out(db, user)
+    out = await _user_out(db, user)
+    out.org_identity = await _org_identity_for(db, current_user, x_organization_id)
+    return out

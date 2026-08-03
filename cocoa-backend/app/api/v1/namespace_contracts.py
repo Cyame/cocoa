@@ -6,7 +6,7 @@ from fastapi import APIRouter, status
 from sqlalchemy import select
 
 from app.api.deps import DB, CurrentUserDep
-from app.core.errors import ConflictError, NotFoundError
+from app.core.errors import ConflictError, NotFoundError, ValidationError
 from app.core.gene_atoms import ATOM_CATALOG
 from app.core.openapi import add_error_responses
 from app.core.pagination import OffsetPage, paginate_offset
@@ -20,8 +20,10 @@ from app.models.organization_contract import (
 from app.models.user import User
 from app.models.user_gene import UserGene
 from app.schemas.namespace_contract import (
+    NamespaceContractAtomsUpdate,
     NamespaceContractCreate,
     NamespaceContractGeneRef,
+    NamespaceContractMergedOut,
     NamespaceContractOut,
     NamespaceContractUpdate,
 )
@@ -136,11 +138,10 @@ async def _contract_out(db: DB, contract: NamespaceContract) -> NamespaceContrac
     )
 
 
-async def _replace_genes(
-    db: DB, contract: NamespaceContract, gene_slugs: list[str]
+async def _apply_gene_set(
+    db: DB, contract: NamespaceContract, desired_ids: set[str]
 ) -> None:
-    genes_by_slug = await _atom_genes(db, gene_slugs)
-    desired_ids = {g.id for g in genes_by_slug.values()}
+    """Replace the contract's active gene links with *desired_ids* (soft delete)."""
     links = (
         await db.execute(
             select(NamespaceContractGene).where(
@@ -158,18 +159,135 @@ async def _replace_genes(
     await db.flush()
 
 
+async def _replace_genes(
+    db: DB, contract: NamespaceContract, gene_slugs: list[str]
+) -> None:
+    genes_by_slug = await _atom_genes(db, gene_slugs)
+    await _apply_gene_set(db, contract, {g.id for g in genes_by_slug.values()})
+
+
+async def _replace_genes_by_ids(
+    db: DB, contract: NamespaceContract, gene_ids: list[str]
+) -> None:
+    """Replace the active gene links by UserGene ids (v4-3 atoms PATCH)."""
+    ids = set(gene_ids)
+    rows = (
+        await db.execute(
+            select(UserGene).where(
+                UserGene.id.in_(ids),
+                UserGene.deleted_at.is_(None),
+            )
+        )
+    ).scalars().all()
+    found = {g.id for g in rows}
+    missing = ids - found
+    if missing:
+        raise NotFoundError(
+            "user_gene.not_found",
+            "errors.user_gene.not_found",
+            f"Unknown atom gene id(s): {', '.join(sorted(missing))}",
+        )
+    await _apply_gene_set(db, contract, found)
+
+
+async def _ns_atom_refs(db: DB, contract_id: str) -> list[dict[str, str]]:
+    """The contract's OWN NamespaceContractGene atoms (id/slug/name)."""
+    rows = (
+        await db.execute(
+            select(UserGene)
+            .join(
+                NamespaceContractGene,
+                NamespaceContractGene.user_gene_id == UserGene.id,
+            )
+            .where(
+                NamespaceContractGene.contract_id == contract_id,
+                NamespaceContractGene.deleted_at.is_(None),
+                UserGene.deleted_at.is_(None),
+            )
+            .order_by(UserGene.slug)
+        )
+    ).scalars().all()
+    return [{"id": g.id, "slug": g.slug, "name": g.name} for g in rows]
+
+
+async def _org_inherited_atom_refs(
+    db: DB, *, organization_id: str, user_id: str
+) -> list[dict[str, str]]:
+    """Org-level atoms inherited from the user's OrganizationContract.
+
+    Mirrors the org branch of ``list_grant_slugs`` (app/core/permissions.py):
+    the union of OrganizationContractGene atoms for *user_id* on the
+    namespace's org.
+    """
+    rows = (
+        await db.execute(
+            select(UserGene)
+            .select_from(OrganizationContract)
+            .join(
+                OrganizationContractGene,
+                OrganizationContractGene.contract_id == OrganizationContract.id,
+            )
+            .join(UserGene, UserGene.id == OrganizationContractGene.user_gene_id)
+            .where(
+                OrganizationContract.organization_id == organization_id,
+                OrganizationContract.user_id == user_id,
+                OrganizationContract.deleted_at.is_(None),
+                OrganizationContractGene.deleted_at.is_(None),
+                UserGene.deleted_at.is_(None),
+            )
+            .order_by(UserGene.slug)
+        )
+    ).scalars().all()
+    return [{"id": g.id, "slug": g.slug, "name": g.name} for g in rows]
+
+
+async def _merged_contract_item(
+    db: DB,
+    contract: NamespaceContract,
+    *,
+    organization_id: str,
+    include_inherited: bool,
+) -> dict | None:
+    """Build a v4-3 tenant-dashboard item (nested user, never a UUID wall).
+
+    Returns None only when the FK-backed user row is missing — the list
+    caller skips such stale contracts instead of failing the whole page.
+    """
+    user = await db.get(User, contract.user_id)
+    if user is None:
+        return None
+    item: dict = {
+        "contract_id": contract.id,
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "nickname": user.nickname,
+        },
+        "namespace_atoms": await _ns_atom_refs(db, contract.id),
+        "created_at": contract.created_at,
+    }
+    if include_inherited:
+        item["inherited_org_atoms"] = await _org_inherited_atom_refs(
+            db, organization_id=organization_id, user_id=contract.user_id
+        )
+    return item
+
+
 @router.get(
     "/{namespace_id}/contracts",
-    response_model=OffsetPage[NamespaceContractOut],
+    response_model=OffsetPage[NamespaceContractMergedOut],
+    response_model_exclude_unset=True,
 )
 async def list_contracts(
     namespace_id: str,
     db: DB,
     current_user: CurrentUserDep,
+    include_inherited: bool = False,
     limit: int = 50,
     offset: int = 0,
 ) -> OffsetPage:
-    await _get_namespace(db, namespace_id)
+    ns = await _get_namespace(db, namespace_id)
     # v4.0 audit fix: reading the contract ledger requires at least view-level
     # access to the namespace (org or namespace grant).
     await require_permission(
@@ -187,7 +305,16 @@ async def list_contracts(
         .order_by(NamespaceContract.created_at)
     )
     page = await paginate_offset(db, stmt, offset, min(limit, 200))
-    items = [await _contract_out(db, c) for c in page.items]
+    items: list[dict] = []
+    for c in page.items:
+        item = await _merged_contract_item(
+            db,
+            c,
+            organization_id=ns.org_id,
+            include_inherited=include_inherited,
+        )
+        if item is not None:
+            items.append(item)
     return OffsetPage(
         items=items,
         offset=page.offset,
@@ -284,6 +411,71 @@ async def update_contract(
     await db.commit()
     await db.refresh(contract)
     return await _contract_out(db, contract)
+
+
+@router.patch(
+    "/{namespace_id}/contracts/{contract_id}/atoms",
+    response_model=NamespaceContractMergedOut,
+    response_model_exclude_unset=True,
+)
+async def update_contract_atoms(
+    namespace_id: str,
+    contract_id: str,
+    body: NamespaceContractAtomsUpdate,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> dict:
+    """v4-3 locked: replace ONLY ``namespace_contract_genes``.
+
+    The org-inherited layer is read-only from the namespace side — this
+    endpoint never touches OrganizationContract rows.
+    """
+    ns = await _get_namespace(db, namespace_id)
+    await require_permission(
+        db,
+        current_user.user_id,
+        "can_manage_namespace",
+        namespace_id=namespace_id,
+    )
+    contract = await db.get(NamespaceContract, contract_id)
+    if (
+        contract is None
+        or contract.deleted_at is not None
+        or contract.namespace_id != namespace_id
+    ):
+        raise NotFoundError(
+            "namespace_contract.not_found",
+            "errors.namespace_contract.not_found",
+            f"Contract '{contract_id}' not found",
+        )
+    if body.atom_slugs is not None and body.gene_ids is not None:
+        raise ValidationError(
+            "namespace_contract.atoms_conflict",
+            "errors.namespace_contract.atoms_conflict",
+            "Provide either atom_slugs or gene_ids, not both",
+        )
+    if body.atom_slugs is None and body.gene_ids is None:
+        raise ValidationError(
+            "namespace_contract.atoms_required",
+            "errors.namespace_contract.atoms_required",
+            "Provide atom_slugs or gene_ids to replace the namespace atoms",
+        )
+    if body.atom_slugs is not None:
+        await _replace_genes(db, contract, body.atom_slugs)
+    else:
+        await _replace_genes_by_ids(db, contract, body.gene_ids or [])
+    await db.commit()
+    await db.refresh(contract)
+    item = await _merged_contract_item(
+        db, contract, organization_id=ns.org_id, include_inherited=False
+    )
+    if item is None:
+        raise NotFoundError(
+            "user.not_found",
+            "errors.user.not_found",
+            f"User '{contract.user_id}' not found",
+        )
+    return item
 
 
 @router.delete(

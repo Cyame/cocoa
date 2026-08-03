@@ -80,6 +80,21 @@ class UserOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class UserSearchOut(BaseModel):
+    """Slim user search result (v4-3 D14) — no sensitive cross-org fields.
+
+    Deliberately excludes password_hash, identity, and gene data: this is the
+    only shape exposed to org member-managers (``can_manage_org_members``).
+    """
+
+    id: str
+    username: str
+    email: str
+    nickname: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
 class UserCreateOut(UserOut):
     """Create response includes one-time plaintext password."""
 

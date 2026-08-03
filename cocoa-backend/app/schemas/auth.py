@@ -50,6 +50,14 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class OrgIdentityOut(BaseModel):
+    """Tenant identity summary for /me (v4-3 B4, display-only, not auth)."""
+
+    organization_id: str
+    atoms: list[str]
+    display_label: str
+
+
 class AuthUserOut(BaseModel):
     """Public user fields returned with auth responses /me."""
 
@@ -61,6 +69,7 @@ class AuthUserOut(BaseModel):
     identity: str | None = None
     locked_gene_slugs: list[str] = []
     extra_gene_slugs: list[str] = []
+    org_identity: OrgIdentityOut | None = None
 
 
 class TokenResponse(BaseModel):
