@@ -43,8 +43,13 @@ async def _resolve_org_ns(
     namespace_id: str | None,
     workspace_id: str | None,
 ) -> tuple[str | None, str | None]:
-    """Resolve (organization_id, namespace_id) from the deepest given id."""
-    org_id = organization_id
+    """Resolve (organization_id, namespace_id) from the resource chain.
+
+    The resource's own ancestry always wins: when a workspace / namespace is
+    given, its true org is resolved and an explicitly passed
+    *organization_id* must match it (header/session consistency check,
+    migration-spec §2).
+    """
     ns_id = namespace_id
     if workspace_id is not None:
         workspace = await session.get(Workspace, workspace_id)
@@ -56,7 +61,8 @@ async def _resolve_org_ns(
             )
         if ns_id is None:
             ns_id = workspace.namespace_id
-    if ns_id is not None and org_id is None:
+    resource_org_id: str | None = None
+    if ns_id is not None:
         namespace = await session.get(Namespace, ns_id)
         if namespace is None or namespace.deleted_at is not None:
             raise NotFoundError(
@@ -64,8 +70,19 @@ async def _resolve_org_ns(
                 "errors.namespace.not_found",
                 f"Namespace '{ns_id}' not found",
             )
-        org_id = namespace.org_id
-    return org_id, ns_id
+        resource_org_id = namespace.org_id
+    if (
+        organization_id is not None
+        and resource_org_id is not None
+        and organization_id != resource_org_id
+    ):
+        raise ForbiddenError(
+            "organization.mismatch",
+            "errors.organization.mismatch",
+            "X-Organization-Id does not match the resource's organization",
+            details={"expected": resource_org_id, "got": organization_id},
+        )
+    return resource_org_id or organization_id, ns_id
 
 
 async def list_grant_slugs(
@@ -188,13 +205,6 @@ async def require_permission(
         namespace_id=namespace_id,
         workspace_id=workspace_id,
     )
-    if organization_id is not None and org_id is not None and organization_id != org_id:
-        raise ForbiddenError(
-            "organization.mismatch",
-            "errors.organization.mismatch",
-            "X-Organization-Id does not match the resource's organization",
-            details={"expected": org_id, "got": organization_id},
-        )
 
     slugs = await list_grant_slugs(
         session, user_id, organization_id=org_id, namespace_id=ns_id
