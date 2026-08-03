@@ -60,9 +60,13 @@ def _strip_config_override_caps(override: dict | None) -> dict | None:
 
 async def _entity_out(db: DB, entity: Entity) -> EntityOut:
     """Serialize an Entity with the capabilities mirror filled from junction."""
-    from app.core.capabilities import load_entity_capability_dicts
+    from app.core.capabilities import (
+        load_entity_ai_gene_dicts,
+        load_entity_capability_dicts,
+    )
 
     caps = await load_entity_capability_dicts(db, entity.id)
+    genes = await load_entity_ai_gene_dicts(db, entity)
     return EntityOut(
         id=entity.id,
         namespace_id=entity.namespace_id,
@@ -76,6 +80,7 @@ async def _entity_out(db: DB, entity: Entity) -> EntityOut:
         config_override=entity.config_override,
         migration_hash=entity.migration_hash,
         capabilities=caps,
+        ai_genes=genes,
         is_cerebellum=entity.is_cerebellum,
         created_at=entity.created_at,
         updated_at=entity.updated_at,
@@ -215,6 +220,9 @@ async def update_entity(
             "errors.entity.not_found",
             f"Entity '{entity_id}' not found",
         )
+    await require_permission(
+        db, current_user.user_id, "can_manage_namespace", namespace_id=entity.namespace_id
+    )
 
     # Selection gate: validate preset_slug against registry.
     if body.preset_slug is not None and not registry.get(body.preset_slug):
@@ -400,6 +408,9 @@ async def delete_entity(
             "errors.entity.not_found",
             f"Entity '{entity_id}' not found",
         )
+    await require_permission(
+        db, current_user.user_id, "can_manage_namespace", namespace_id=entity.namespace_id
+    )
 
     active_instances = (
         await db.execute(

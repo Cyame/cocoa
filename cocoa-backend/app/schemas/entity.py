@@ -55,6 +55,11 @@ class EntityOut(BaseModel):
     # v4.0: read-only aggregate DTO filled from the entity_capabilities
     # junction — not a DB column and never a write truth.
     capabilities: list | dict | None = None
+    # v4.1: read-only AI-gene aggregate DTO filled from the entity_ai_genes
+    # junction plus preset BaseClass inheritance — not a DB column and never
+    # a write truth. Items are ``{"slug": ..., "source": "extra_added" |
+    # "from_base_class"}``.
+    ai_genes: list | dict | None = None
     is_cerebellum: bool = False
     created_at: datetime
     updated_at: datetime

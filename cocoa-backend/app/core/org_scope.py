@@ -5,10 +5,11 @@ from __future__ import annotations
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import NotFoundError, ValidationError
+from app.core.errors import ForbiddenError, NotFoundError, ValidationError
 from app.core.scope_guard import VALID_SCOPES
 from app.models.organization import Organization
 from app.models.organization_contract import OrganizationContract
+from app.models.user import User
 
 
 async def resolve_current_org_id(
@@ -30,6 +31,29 @@ async def resolve_current_org_id(
                 "errors.organization.not_found",
                 f"Organization '{x_organization_id}' not found",
             )
+        user = await db.get(User, user_id)
+        if user is None or user.deleted_at is not None:
+            raise ForbiddenError(
+                "auth.user_not_found",
+                "errors.auth.user_not_found",
+                f"User '{user_id}' not found",
+                details={"user_id": user_id},
+            )
+        if not user.is_super_admin:
+            contract = await db.execute(
+                select(OrganizationContract.id).where(
+                    OrganizationContract.user_id == user_id,
+                    OrganizationContract.organization_id == org.id,
+                    OrganizationContract.deleted_at.is_(None),
+                )
+            )
+            if contract.scalar_one_or_none() is None:
+                raise ForbiddenError(
+                    "organization.not_a_member",
+                    "errors.organization.not_a_member",
+                    f"User '{user_id}' is not a member of organization '{org.id}'",
+                    details={"user_id": user_id, "organization_id": org.id},
+                )
         return org.id
 
     result = await db.execute(

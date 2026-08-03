@@ -293,6 +293,14 @@ async def attach_base_class_capability(
             "errors.capability_market.not_found",
             f"Capability '{body.capability_id}' not found",
         )
+    if cap.scope != "system":
+        await require_permission(
+            db,
+            current_user.user_id,
+            "can_manage_capabilities",
+            organization_id=cap.organization_id,
+            namespace_id=cap.namespace_id,
+        )
     await attach_base_class_capability(
         db, base_class_id=preset_id, capability_id=body.capability_id
     )
@@ -331,6 +339,21 @@ async def detach_base_class_capability_route(
         organization_id=preset.organization_id,
         namespace_id=preset.namespace_id,
     )
+    cap = await db.get(CapabilityMarketEntry, capability_id)
+    if cap is None or cap.deleted_at is not None:
+        raise NotFoundError(
+            "capability_market.not_found",
+            "errors.capability_market.not_found",
+            f"Capability '{capability_id}' not found",
+        )
+    if cap.scope != "system":
+        await require_permission(
+            db,
+            current_user.user_id,
+            "can_manage_capabilities",
+            organization_id=cap.organization_id,
+            namespace_id=cap.namespace_id,
+        )
     await detach_base_class_capability(
         db, base_class_id=preset_id, capability_id=capability_id
     )
@@ -373,6 +396,14 @@ async def attach_base_class_ai_gene_route(
             "errors.ai_gene.not_found",
             f"AiGene '{body.ai_gene_id}' not found",
         )
+    if gene.scope != "system":
+        await require_permission(
+            db,
+            current_user.user_id,
+            "can_manage_ai_genes",
+            organization_id=gene.organization_id,
+            namespace_id=gene.namespace_id,
+        )
     await attach_base_class_ai_gene(
         db, base_class_id=preset_id, ai_gene_id=body.ai_gene_id
     )
@@ -411,6 +442,21 @@ async def detach_base_class_ai_gene_route(
         organization_id=preset.organization_id,
         namespace_id=preset.namespace_id,
     )
+    gene = await db.get(AiGene, ai_gene_id)
+    if gene is None or gene.deleted_at is not None:
+        raise NotFoundError(
+            "ai_gene.not_found",
+            "errors.ai_gene.not_found",
+            f"AiGene '{ai_gene_id}' not found",
+        )
+    if gene.scope != "system":
+        await require_permission(
+            db,
+            current_user.user_id,
+            "can_manage_ai_genes",
+            organization_id=gene.organization_id,
+            namespace_id=gene.namespace_id,
+        )
     await detach_base_class_ai_gene(
         db, base_class_id=preset_id, ai_gene_id=ai_gene_id
     )
@@ -518,6 +564,9 @@ async def update_base_class(
     system-scoped presets are read-only (v4.0 D15)."""
     from app.core.scope_guard import ensure_scope_mutable
 
+    current_org_id = await resolve_current_org_id(
+        db, current_user.user_id, x_organization_id
+    )
     preset = await db.get(BaseClass, preset_id)
     if preset is None or preset.deleted_at is not None:
         raise NotFoundError(
@@ -533,6 +582,13 @@ async def update_base_class(
         organization_id=preset.organization_id,
         namespace_id=preset.namespace_id,
     )
+    if current_org_id is not None and preset.scope != "system":
+        if preset.organization_id != current_org_id:
+            raise NotFoundError(
+                "base_class.not_found",
+                "errors.base_class.not_found",
+                f"BaseClass '{preset_id}' not found",
+            )
 
     for field, value in body.model_dump(exclude_unset=True).items():
         if field == "manifest":
@@ -556,6 +612,9 @@ async def delete_base_class(
     """Soft-delete a base class. System-scoped presets are read-only (D15)."""
     from app.core.scope_guard import ensure_scope_mutable
 
+    current_org_id = await resolve_current_org_id(
+        db, current_user.user_id, x_organization_id
+    )
     preset = await db.get(BaseClass, preset_id)
     if preset is None or preset.deleted_at is not None:
         raise NotFoundError(
@@ -571,6 +630,13 @@ async def delete_base_class(
         organization_id=preset.organization_id,
         namespace_id=preset.namespace_id,
     )
+    if current_org_id is not None and preset.scope != "system":
+        if preset.organization_id != current_org_id:
+            raise NotFoundError(
+                "base_class.not_found",
+                "errors.base_class.not_found",
+                f"BaseClass '{preset_id}' not found",
+            )
 
     preset.soft_delete()
     await db.commit()

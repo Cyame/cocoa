@@ -258,6 +258,14 @@ async def attach_ai_gene_to_base_class(
             "errors.base_class.not_found",
             f"BaseClass '{body.base_class_id}' not found",
         )
+    if bc.scope != "system":
+        await require_permission(
+            db,
+            current_user.user_id,
+            "can_manage_ai_genes",
+            organization_id=bc.organization_id,
+            namespace_id=bc.namespace_id,
+        )
     existing = await db.execute(
         select(BaseClassAiGene).where(
             BaseClassAiGene.base_class_id == bc.id,
@@ -300,6 +308,21 @@ async def detach_ai_gene_from_base_class(
         organization_id=gene.organization_id or current_org_id,
         namespace_id=gene.namespace_id,
     )
+    bc = await db.get(BaseClass, base_class_id)
+    if bc is None or bc.deleted_at is not None:
+        raise NotFoundError(
+            "base_class.not_found",
+            "errors.base_class.not_found",
+            f"BaseClass '{base_class_id}' not found",
+        )
+    if bc.scope != "system":
+        await require_permission(
+            db,
+            current_user.user_id,
+            "can_manage_ai_genes",
+            organization_id=bc.organization_id,
+            namespace_id=bc.namespace_id,
+        )
     result = await db.execute(
         select(BaseClassAiGene).where(
             BaseClassAiGene.base_class_id == base_class_id,

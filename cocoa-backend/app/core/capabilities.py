@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import NotFoundError
 from app.models.ai_gene import AiGene, BaseClassAiGene
+from app.models.base_class import BaseClass
 from app.models.capability_market import CapabilityMarketEntry
 from app.models.entity import Entity
 from app.models.junctions import (
@@ -88,6 +89,65 @@ async def load_entity_gene_refs(db: AsyncSession, entity_id: str) -> list[str]:
         .order_by(AiGene.slug)
     )
     return list(result.scalars().all())
+
+
+async def load_entity_ai_gene_dicts(
+    db: AsyncSession, entity: Entity
+) -> list[dict[str, Any]]:
+    """Junction-read: an Entity's AI genes as ``{"slug", "source"}`` dicts.
+
+    Genes attached explicitly via the ``entity_ai_genes`` junction are
+    reported with ``source="extra_added"``. Genes attached to the BaseClass
+    referenced by ``entity.preset_slug`` are inherited with
+    ``source="from_base_class"`` (base-class lookup by slug, matching the
+    codebase's other preset resolution paths — the slug index is global so
+    no extra org scoping is needed). A slug present in both sources is
+    reported once, with the explicit ``extra_added`` attachment winning.
+    """
+    explicit: list[dict[str, Any]] = []
+    result = await db.execute(
+        select(AiGene.slug)
+        .join(EntityAiGene, EntityAiGene.ai_gene_id == AiGene.id)
+        .where(
+            EntityAiGene.entity_id == entity.id,
+            EntityAiGene.deleted_at.is_(None),
+            AiGene.deleted_at.is_(None),
+        )
+        .order_by(AiGene.slug)
+    )
+    explicit = [
+        {"slug": slug, "source": "extra_added"} for slug in result.scalars().all()
+    ]
+
+    inherited: list[dict[str, Any]] = []
+    if entity.preset_slug:
+        base_result = await db.execute(
+            select(BaseClass).where(
+                BaseClass.slug == entity.preset_slug,
+                BaseClass.deleted_at.is_(None),
+            )
+        )
+        base_class = base_result.scalar_one_or_none()
+        if base_class is not None:
+            inherited_result = await db.execute(
+                select(AiGene.slug)
+                .join(BaseClassAiGene, BaseClassAiGene.ai_gene_id == AiGene.id)
+                .where(
+                    BaseClassAiGene.base_class_id == base_class.id,
+                    BaseClassAiGene.deleted_at.is_(None),
+                    AiGene.deleted_at.is_(None),
+                )
+                .order_by(AiGene.slug)
+            )
+            inherited = [
+                {"slug": slug, "source": "from_base_class"}
+                for slug in inherited_result.scalars().all()
+            ]
+
+    explicit_slugs = {gene["slug"] for gene in explicit}
+    merged = list(explicit)
+    merged.extend(gene for gene in inherited if gene["slug"] not in explicit_slugs)
+    return merged
 
 
 def mirror_arrays(cap_dicts: list[dict[str, Any]]) -> dict[str, list[str]]:
