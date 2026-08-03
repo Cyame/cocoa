@@ -17,6 +17,7 @@ from app.api.deps import DB, CurrentUserDep
 from app.core.errors import ConflictError, NotFoundError
 from app.core.openapi import add_error_responses
 from app.core.pagination import OffsetPage, paginate_offset
+from app.core.permissions import require_permission
 from app.core.tenant import get_default_namespace
 from app.models.composer_message import ComposerMessage
 from app.models.entity import Entity
@@ -154,6 +155,9 @@ async def create_namespace(
 ) -> Namespace:
     """Create a namespace under the default (or specified) Organization."""
     org_id = await _resolve_org_id(db, body.org_id)
+    await require_permission(
+        db, current_user.user_id, "can_manage_namespace", organization_id=org_id
+    )
     existing = await db.execute(
         select(Namespace).where(
             Namespace.org_id == org_id,

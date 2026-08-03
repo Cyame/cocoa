@@ -22,7 +22,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 
-from app.api.deps import DB, CurrentUserDep
+from app.api.deps import DB, CurrentUserDep, XOrgIdHeader
 from app.core.avatar_status import compute_avatar_display_status
 from app.core.composer_turns import instance_has_active_turn
 from app.core.errors import ConflictError, NotFoundError
@@ -157,6 +157,7 @@ def _is_k8s_available() -> bool:
 async def list_instances(
     db: DB,
     current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
     limit: int = 50,
     offset: int = 0,
     entity_id: str | None = None,
@@ -172,7 +173,13 @@ async def list_instances(
     if entity_id is not None:
         stmt = stmt.where(Instance.entity_id == entity_id)
     if workspace_id is not None:
-        await require_workspace_permission(db, current_user.user_id, workspace_id, "can_view_workspace")
+        await require_workspace_permission(
+            db,
+            current_user.user_id,
+            workspace_id,
+            "can_view_workspace",
+            x_organization_id=x_organization_id,
+        )
         stmt = stmt.where(Instance.workspace_id == workspace_id)
     else:
         stmt = stmt.where(
@@ -201,6 +208,7 @@ async def get_instance(
     instance_id: str,
     db: DB,
     current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
 ) -> InstanceOut:
     """Return a single instance by ID.
 
@@ -213,7 +221,13 @@ async def get_instance(
             "errors.instance.not_found",
             f"Instance '{instance_id}' not found",
         )
-    await require_workspace_permission(db, current_user.user_id, instance.workspace_id, "can_view_workspace")
+    await require_workspace_permission(
+        db,
+        current_user.user_id,
+        instance.workspace_id,
+        "can_view_workspace",
+        x_organization_id=x_organization_id,
+    )
     return _instance_out(instance)
 
 
@@ -229,6 +243,7 @@ async def create_instance(
     body: InstanceCreate,
     db: DB,
     current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
 ) -> Instance:
     """Create a new instance.
 
@@ -254,7 +269,13 @@ async def create_instance(
             f"Workspace '{body.workspace_id}' not found",
         )
 
-    await require_workspace_permission(db, current_user.user_id, body.workspace_id, "can_edit_workspace")
+    await require_workspace_permission(
+        db,
+        current_user.user_id,
+        body.workspace_id,
+        "can_edit_workspace",
+        x_organization_id=x_organization_id,
+    )
 
     workspace_path = body.workspace_path or generate_workspace_path(
         entity.slug, str(uuid4())
@@ -337,6 +358,7 @@ async def update_instance(
     body: InstanceUpdate,
     db: DB,
     current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
 ) -> Instance:
     """Update an existing instance.
 
@@ -352,7 +374,13 @@ async def update_instance(
             f"Instance '{instance_id}' not found",
         )
 
-    await require_workspace_permission(db, current_user.user_id, instance.workspace_id, "can_edit_workspace")
+    await require_workspace_permission(
+        db,
+        current_user.user_id,
+        instance.workspace_id,
+        "can_edit_workspace",
+        x_organization_id=x_organization_id,
+    )
 
     patch_data = body.model_dump(exclude_unset=True)
     for field, value in patch_data.items():
@@ -377,6 +405,7 @@ async def delete_instance(
     instance_id: str,
     db: DB,
     current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
 ) -> None:
     """Soft-delete an instance.
 
@@ -392,7 +421,13 @@ async def delete_instance(
             f"Instance '{instance_id}' not found",
         )
 
-    await require_workspace_permission(db, current_user.user_id, instance.workspace_id, "can_edit_workspace")
+    await require_workspace_permission(
+        db,
+        current_user.user_id,
+        instance.workspace_id,
+        "can_edit_workspace",
+        x_organization_id=x_organization_id,
+    )
 
     if instance.status == InstanceStatus.deleting.value:
         return
@@ -448,6 +483,7 @@ async def _transition(
     db,
     current_user: CurrentUserDep,
     *,
+    x_organization_id: XOrgIdHeader = None,
     payload: dict | None = None,
 ) -> Instance:
     """Shared state-machine transition helper.
@@ -469,7 +505,13 @@ async def _transition(
             f"Instance '{instance_id}' not found",
         )
 
-    await require_workspace_permission(db, current_user.user_id, instance.workspace_id, "can_edit_workspace")
+    await require_workspace_permission(
+        db,
+        current_user.user_id,
+        instance.workspace_id,
+        "can_edit_workspace",
+        x_organization_id=x_organization_id,
+    )
 
     if instance.status not in allowed:
         raise ConflictError(
@@ -502,6 +544,7 @@ async def deploy_instance(
     instance_id: str,
     db: DB,
     current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
 ):
     """Deploy an instance — P7 contract with P11c K8s upgrade.
 
@@ -526,7 +569,11 @@ async def deploy_instance(
                 f"Instance '{instance_id}' not found",
             )
         await require_workspace_permission(
-            db, current_user.user_id, instance.workspace_id, "can_edit_workspace"
+            db,
+            current_user.user_id,
+            instance.workspace_id,
+            "can_edit_workspace",
+            x_organization_id=x_organization_id,
         )
         await _refresh_instance_agent_config(db, instance)
         await db.flush()
@@ -541,6 +588,7 @@ async def deploy_instance(
             event_type=INSTANCE_DEPLOYED,
             db=db,
             current_user=current_user,
+            x_organization_id=x_organization_id,
         )
 
     instance = await db.get(Instance, instance_id)
@@ -551,7 +599,13 @@ async def deploy_instance(
             f"Instance '{instance_id}' not found",
         )
 
-    await require_workspace_permission(db, current_user.user_id, instance.workspace_id, "can_edit_workspace")
+    await require_workspace_permission(
+        db,
+        current_user.user_id,
+        instance.workspace_id,
+        "can_edit_workspace",
+        x_organization_id=x_organization_id,
+    )
 
     await _refresh_instance_agent_config(db, instance)
 
@@ -579,6 +633,7 @@ async def start_instance(
     instance_id: str,
     db: DB,
     current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
 ) -> Instance:
     """Transition instance from pending/deploying to running (P7 contract).
 
@@ -593,6 +648,7 @@ async def start_instance(
         event_type=INSTANCE_STARTED,
         db=db,
         current_user=current_user,
+        x_organization_id=x_organization_id,
     )
 
 
@@ -602,6 +658,7 @@ async def restart_instance(
     body: RestartRequest,
     db: DB,
     current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
 ) -> RestartResultOut:
     """Re-sync / recycle an instance (stop → re-deploy).
 
@@ -625,7 +682,13 @@ async def restart_instance(
             f"Entity '{instance.entity_id}' not found",
         )
 
-    await require_workspace_permission(db, current_user.user_id, instance.workspace_id, "can_operate_workspace")
+    await require_workspace_permission(
+        db,
+        current_user.user_id,
+        instance.workspace_id,
+        "can_operate_workspace",
+        x_organization_id=x_organization_id,
+    )
 
     was_running = instance.status == InstanceStatus.running.value
     if was_running:
@@ -691,6 +754,7 @@ async def batch_restart_instances(
     body: BatchRestartRequest,
     db: DB,
     current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
 ) -> BatchRestartResultOut:
     """Bulk re-sync for T4 — picks up every outdated instance in one call.
 
@@ -720,7 +784,13 @@ async def batch_restart_instances(
     # 2. Auth: operator role in the first instance's workspace (the batch
     # is implicitly same-workspace — if not, the permission check fails).
     first_workspace = instances[0].workspace_id
-    await require_workspace_permission(db, current_user.user_id, first_workspace, "can_operate_workspace")
+    await require_workspace_permission(
+        db,
+        current_user.user_id,
+        first_workspace,
+        "can_operate_workspace",
+        x_organization_id=x_organization_id,
+    )
 
     # 3. Reject batch if any instance is running.
     running = [i.id for i in instances if i.status == InstanceStatus.running.value]
@@ -781,6 +851,7 @@ async def instance_tunnel_status(
     instance_id: str,
     db: DB,
     current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
 ) -> dict[str, object]:
     """Report whether the Instance Host is connected on the Tunnel hub."""
     result = await db.execute(
@@ -793,7 +864,13 @@ async def instance_tunnel_status(
             "errors.instance.not_found",
             f"Instance '{instance_id}' not found",
         )
-    await require_workspace_permission(db, current_user.user_id, inst.workspace_id, "can_view_workspace")
+    await require_workspace_permission(
+        db,
+        current_user.user_id,
+        inst.workspace_id,
+        "can_view_workspace",
+        x_organization_id=x_organization_id,
+    )
     from app.services.tunnel.tunnel_hub import tunnel_hub
 
     connected = tunnel_hub.is_connected(instance_id)
@@ -805,6 +882,7 @@ async def stop_instance(
     instance_id: str,
     db: DB,
     current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
 ) -> Instance:
     """Stop the Instance runtime (scale to 0) and mark ``pending``.
 
@@ -817,6 +895,7 @@ async def stop_instance(
         event_type=INSTANCE_STOPPED,
         db=db,
         current_user=current_user,
+        x_organization_id=x_organization_id,
     )
     await svc_scale_instance_runtime(instance_id, 0)
     return inst
@@ -828,6 +907,7 @@ async def fail_instance(
     body: FailBody,
     db: DB,
     current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
 ) -> InstanceOut:
     """Transition instance to ``failed`` (keep topology seat for retry / connect).
 
@@ -850,6 +930,7 @@ async def fail_instance(
         event_type=INSTANCE_FAILED,
         db=db,
         current_user=current_user,
+        x_organization_id=x_organization_id,
         payload={"reason": body.reason},
     )
     return _instance_out(inst)

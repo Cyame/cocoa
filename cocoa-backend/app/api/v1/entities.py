@@ -21,6 +21,7 @@ from app.api.deps import DB, CurrentUserDep
 from app.core.errors import ConflictError, NotFoundError, ValidationError
 from app.core.openapi import add_error_responses
 from app.core.pagination import OffsetPage, paginate_offset
+from app.core.permissions import require_permission
 from app.core.preset_registry import registry
 from app.core.tenant import resolve_namespace_id
 from app.models.entity import Entity
@@ -130,6 +131,9 @@ async def create_entity(
     Refreshes the registry cache after creation.
     """
     namespace_id = await resolve_namespace_id(db, body.namespace_id)
+    await require_permission(
+        db, current_user.user_id, "can_manage_namespace", namespace_id=namespace_id
+    )
 
     # Selection gate: validate preset_slug against registry.
     if body.preset_slug and not registry.get(body.preset_slug):

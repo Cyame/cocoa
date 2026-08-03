@@ -3,7 +3,7 @@
 from fastapi import APIRouter
 from sqlalchemy import select
 
-from app.api.deps import DB, CurrentUserDep
+from app.api.deps import DB, CurrentUserDep, XOrgIdHeader
 from app.core.avatar_status import compute_avatar_display_status
 from app.core.composer_turns import instance_has_active_turn
 from app.core.glow import (
@@ -36,6 +36,7 @@ async def get_workspace_live_status(
     workspace_id: str,
     db: DB,
     current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
 ) -> list[LiveStatusItemOut]:
     """Aggregate per-node glow state for the topology canvas.
 
@@ -45,7 +46,13 @@ async def get_workspace_live_status(
     ``Entity.migration_hash`` (or the instance has no
     ``active_hash`` yet — first-time spawn caveat).
     """
-    await require_workspace_permission(db, current_user.user_id, workspace_id, "can_view_workspace")
+    await require_workspace_permission(
+        db,
+        current_user.user_id,
+        workspace_id,
+        "can_view_workspace",
+        x_organization_id=x_organization_id,
+    )
 
     memberships = (
         await db.execute(

@@ -17,7 +17,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Query, status
 from sqlalchemy import func, select, update
 
-from app.api.deps import DB, CurrentUserDep
+from app.api.deps import DB, CurrentUserDep, XOrgIdHeader
 from app.core.errors import ConflictError, NotFoundError
 from app.core.namespace_contract import ensure_namespace_contract
 from app.core.openapi import add_error_responses
@@ -354,6 +354,7 @@ async def introduce_entity(
     body: IntroduceEntityRequest,
     db: DB,
     current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
 ) -> InstanceOutWithToken:
     """Introduce a 眷族 into this workspace → create 迷失者 (Instance).
 
@@ -370,7 +371,13 @@ async def introduce_entity(
     from app.models.entity import Entity
     from app.models.instance import Instance, InstanceStatus
 
-    await require_workspace_permission(db, current_user.user_id, workspace_id, "can_edit_workspace")
+    await require_workspace_permission(
+        db,
+        current_user.user_id,
+        workspace_id,
+        "can_edit_workspace",
+        x_organization_id=x_organization_id,
+    )
 
     workspace = await db.get(Workspace, workspace_id)
     if workspace is None or workspace.deleted_at is not None:
@@ -499,6 +506,7 @@ async def introduce_entity(
                 event_type=INSTANCE_DEPLOYED,
                 db=db,
                 current_user=current_user,
+                x_organization_id=x_organization_id,
             )
             await db.refresh(instance)
     except Exception:  # noqa: BLE001 — introduce must still succeed

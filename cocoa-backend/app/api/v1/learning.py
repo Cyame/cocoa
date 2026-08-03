@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Query, status
 from sqlalchemy import func, select
 
-from app.api.deps import DB, CurrentUserDep
+from app.api.deps import DB, CurrentUserDep, XOrgIdHeader
 from app.core.distillation import AggregatingDistiller, DistillationError
 from app.core.errors import ConflictError, NotFoundError, ValidationError
 from app.core.event_types import (
@@ -142,6 +142,7 @@ async def get_memory_summary(
     entity_id: str,
     db: DB,
     current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
     kind: list[str] | None = Query(None),
     limit: int = Query(50, ge=1, le=200),
 ) -> MemorySummaryOut:
@@ -161,7 +162,13 @@ async def get_memory_summary(
 
     # 2. Get workspace_id from entity's instance → check permission.
     workspace_id = await _get_workspace_id_for_entity(db, entity_id)
-    await require_workspace_permission(db, current_user.user_id, workspace_id, "can_view_workspace")
+    await require_workspace_permission(
+        db,
+        current_user.user_id,
+        workspace_id,
+        "can_view_workspace",
+        x_organization_id=x_organization_id,
+    )
 
     # 3. Aggregate counts by kind (direct SQL).
     count_q = (
@@ -254,6 +261,7 @@ async def distill_entity(
     body: DistillRequest,
     db: DB,
     current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
 ) -> DistillResultOut:
     """Distill an entity's memory entries into a new BaseClass.
 
@@ -272,7 +280,13 @@ async def distill_entity(
 
     # 2. Permission check — editor in the entity's workspace.
     workspace_id = await _get_workspace_id_for_entity(db, entity_id)
-    await require_workspace_permission(db, current_user.user_id, workspace_id, "can_edit_workspace")
+    await require_workspace_permission(
+        db,
+        current_user.user_id,
+        workspace_id,
+        "can_edit_workspace",
+        x_organization_id=x_organization_id,
+    )
 
     # 3. Run distillation.
     try:
@@ -432,6 +446,7 @@ async def reap_instance(
     body: ReapRequest,
     db: DB,
     current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
 ) -> ReapResultOut:
     """Reap reusable capabilities from an instance's Memory log.
 
@@ -456,7 +471,13 @@ async def reap_instance(
             f"Entity {instance.entity_id!r} not found",
         )
 
-    await require_workspace_permission(db, current_user.user_id, instance.workspace_id, "can_view_workspace")
+    await require_workspace_permission(
+        db,
+        current_user.user_id,
+        instance.workspace_id,
+        "can_view_workspace",
+        x_organization_id=x_organization_id,
+    )
 
     # 1. Pull memory entries visible to this instance.
     mem_q = (
@@ -578,6 +599,7 @@ async def promote_entity(
     body: PromoteRequest,
     db: DB,
     current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
 ) -> PromoteResultOut:
     """Promote an instance's capability set into the Entity (回魂) or fork a new Entity (派生)."""
     entity = await db.get(Entity, entity_id)
@@ -642,7 +664,13 @@ async def promote_entity(
                 f"Entity {entity_id!r} has no active instance",
             )
 
-    await require_workspace_permission(db, current_user.user_id, instance.workspace_id, "can_edit_workspace")
+    await require_workspace_permission(
+        db,
+        current_user.user_id,
+        instance.workspace_id,
+        "can_edit_workspace",
+        x_organization_id=x_organization_id,
+    )
 
     # 2. Compute instance's effective capability set (v4.0: junction is truth).
     from app.core.capabilities import (
@@ -855,6 +883,7 @@ async def transmute_entity(
     body: TransmuteRequest,
     db: DB = None,
     current_user: CurrentUserDep = None,
+    x_organization_id: XOrgIdHeader = None,
 ) -> TransmuteResultOut:
     """Distill an Entity into a new BaseClass (L3 神职).
 
@@ -885,7 +914,13 @@ async def transmute_entity(
             f"Entity {entity_id!r} is not associated with any workspace",
         )
 
-    await require_workspace_permission(db, current_user.user_id, workspace_id, "can_edit_workspace")
+    await require_workspace_permission(
+        db,
+        current_user.user_id,
+        workspace_id,
+        "can_edit_workspace",
+        x_organization_id=x_organization_id,
+    )
 
     # 1. Build the new manifest (v4.0: capability truth is the junction).
     from app.core.capabilities import (

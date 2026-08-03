@@ -19,7 +19,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.agent_runtime import start_runtime_for
-from app.api.deps import DB, CurrentUserDep
+from app.api.deps import DB, CurrentUserDep, XOrgIdHeader
 from app.core.errors import NotFoundError
 from app.core.harness_supervisor import supervisor
 from app.core.openapi import add_error_responses
@@ -86,10 +86,17 @@ async def interrupt_instance(
     instance_id: str,
     db: DB,
     current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
 ) -> InstanceLoopStateOut:
     """Send a kill signal to the agent loop and mark it interrupted."""
     instance = await _get_instance_or_404(instance_id, db)
-    await require_workspace_permission(db, current_user.user_id, instance.workspace_id, "can_edit_workspace")
+    await require_workspace_permission(
+        db,
+        current_user.user_id,
+        instance.workspace_id,
+        "can_edit_workspace",
+        x_organization_id=x_organization_id,
+    )
     state = await supervisor.handle_interrupt(instance_id, db)
     await db.commit()
     await db.refresh(state)
@@ -101,10 +108,17 @@ async def pause_instance(
     instance_id: str,
     db: DB,
     current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
 ) -> InstanceLoopStateOut:
     """Pause the agent loop and mark its loop state paused."""
     instance = await _get_instance_or_404(instance_id, db)
-    await require_workspace_permission(db, current_user.user_id, instance.workspace_id, "can_edit_workspace")
+    await require_workspace_permission(
+        db,
+        current_user.user_id,
+        instance.workspace_id,
+        "can_edit_workspace",
+        x_organization_id=x_organization_id,
+    )
     state = await supervisor.handle_pause(instance_id, db)
     await db.commit()
     await db.refresh(state)
@@ -116,10 +130,17 @@ async def resume_instance(
     instance_id: str,
     db: DB,
     current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
 ) -> InstanceLoopStateOut:
     """Resume the agent loop and ensure its runtime task is started."""
     instance = await _get_instance_or_404(instance_id, db)
-    await require_workspace_permission(db, current_user.user_id, instance.workspace_id, "can_edit_workspace")
+    await require_workspace_permission(
+        db,
+        current_user.user_id,
+        instance.workspace_id,
+        "can_edit_workspace",
+        x_organization_id=x_organization_id,
+    )
     state = await supervisor.handle_resume(instance_id, db)
     await db.commit()
     await db.refresh(state)
@@ -132,10 +153,17 @@ async def get_instance_status(
     instance_id: str,
     db: DB,
     current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
 ) -> InstanceLoopStateOut:
     """Return the persisted loop state merged with live supervisor metrics."""
     instance = await _get_instance_or_404(instance_id, db)
-    await require_workspace_permission(db, current_user.user_id, instance.workspace_id, "can_edit_workspace")
+    await require_workspace_permission(
+        db,
+        current_user.user_id,
+        instance.workspace_id,
+        "can_edit_workspace",
+        x_organization_id=x_organization_id,
+    )
     state = await _ensure_loop_state(instance_id, db)
     return InstanceLoopStateOut.model_validate(_to_status_payload(state))
 
@@ -145,10 +173,17 @@ async def snapshot_instance(
     instance_id: str,
     db: DB,
     current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
 ) -> BoulderSnapshotOut:
     """Capture and validate the current Boulder snapshot."""
     instance = await _get_instance_or_404(instance_id, db)
-    await require_workspace_permission(db, current_user.user_id, instance.workspace_id, "can_edit_workspace")
+    await require_workspace_permission(
+        db,
+        current_user.user_id,
+        instance.workspace_id,
+        "can_edit_workspace",
+        x_organization_id=x_organization_id,
+    )
     snapshot, continuation_count, captured_at = await supervisor.capture_snapshot(
         instance_id, db
     )

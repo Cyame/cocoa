@@ -16,7 +16,7 @@ Each dependency also exports an ``Annotated`` type alias (``DB``,
 from collections.abc import AsyncGenerator
 from typing import Annotated
 
-from fastapi import Depends, Query, Request, Security
+from fastapi import Depends, Header, Query, Request, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError
 from sqlalchemy import select
@@ -105,3 +105,4 @@ async def get_pagination_params(
 DB = Annotated[AsyncSession, Depends(get_db)]
 CurrentUserDep = Annotated[CurrentUser, Depends(get_current_user)]
 PaginationParams = Annotated[dict, Depends(get_pagination_params)]
+XOrgIdHeader = Annotated[str | None, Header(alias="X-Organization-Id")]
