@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import importlib.util
 import uuid
+from pathlib import Path
 
 # ---------------------------------------------------------------------------
 # Workaround: the parallel P11c Todo "agent-runtime package split" introduced
@@ -38,9 +39,10 @@ import uuid
 # the harness. Re-export ``start_runtime_for`` from the module file onto
 # the package namespace BEFORE any ``app.main`` import resolves.
 # ---------------------------------------------------------------------------
+_APP_DIR = Path(__file__).resolve().parent.parent / "app"
 _spec = importlib.util.spec_from_file_location(
     "app.agent_runtime._compat_module",
-    "***REMOVED***cocoa-backend/app/agent_runtime/__init__.py",
+    str(_APP_DIR / "agent_runtime" / "__init__.py"),
 )
 _agent_runtime_compat = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_agent_runtime_compat)

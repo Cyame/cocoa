@@ -20,6 +20,7 @@ from __future__ import annotations
 import importlib.util
 import sys
 from contextlib import asynccontextmanager
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -397,9 +398,10 @@ def _LLMProviderConfig_from_preset(preset: dict) -> LLMProviderConfig:
 
 def _load_agent_runtime_module():
     """Load the legacy agent_runtime.py under a stable test alias."""
+    app_dir = Path(__file__).resolve().parent.parent / "app"
     spec = importlib.util.spec_from_file_location(
         "app._agent_runtime_for_integration",
-        "***REMOVED***cocoa-backend/app/agent_runtime.py",
+        str(app_dir / "agent_runtime.py"),
     )
     mod = importlib.util.module_from_spec(spec)
     sys.modules["app._agent_runtime_for_integration"] = mod

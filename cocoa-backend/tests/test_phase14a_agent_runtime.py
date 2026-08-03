@@ -25,6 +25,7 @@ import importlib.util
 import sys
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -36,9 +37,10 @@ from app.core.event_types import (
 )
 from app.services.llm.llm_client import LLMResponse
 
+_APP_DIR = Path(__file__).resolve().parent.parent / "app"
 _spec = importlib.util.spec_from_file_location(
     "app._agent_runtime_legacy_for_tests",
-    "***REMOVED***cocoa-backend/app/agent_runtime.py",
+    str(_APP_DIR / "agent_runtime.py"),
 )
 _legacy = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_legacy)

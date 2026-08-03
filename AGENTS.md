@@ -33,7 +33,7 @@ Cocoa Instance / 化身（每个 pod 一个）
 
 ## 0.2 Planning artifacts（`.omo/` 目录结构）
 
-`***REMOVED***.omo/` 是项目的 planning system。**2026-07-28 起按 15d 时间分线**：活跃 vs 归档分离，归档只读不再修改。
+`.omo/` 是项目的 planning system。**2026-07-28 起按 15d 时间分线**：活跃 vs 归档分离，归档只读不再修改。
 
 | 子目录 | 用途 | 谁写 | 谁读 |
 |---|---|---|---|
