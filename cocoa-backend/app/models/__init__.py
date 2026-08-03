@@ -11,10 +11,12 @@ import app.models.entity  # noqa: E402, F401
 import app.models.event  # noqa: E402, F401
 import app.models.instance  # noqa: E402, F401
 import app.models.instance_provider_config  # noqa: E402, F401
+import app.models.junctions  # noqa: E402, F401
 import app.models.loop_state  # noqa: E402, F401
 import app.models.memory  # noqa: E402, F401
 import app.models.namespace_contract  # noqa: E402, F401
 import app.models.organization  # noqa: E402, F401
+import app.models.organization_contract  # noqa: E402, F401
 import app.models.organization_provider  # noqa: E402, F401
 import app.models.user  # noqa: E402, F401
 import app.models.user_gene  # noqa: E402, F401
@@ -43,14 +45,30 @@ from app.models.central_hub import (  # noqa: E402, F401
     VaultEntrySourceType,
 )
 from app.models.entity import Entity, EntityRank  # noqa: E402, F401
+from app.models.junctions import (  # noqa: E402, F401
+    BaseClassCapability,
+    EntityAiGene,
+    EntityCapability,
+)
 from app.models.memory import Memory, Memory, MemoryKind  # noqa: E402, F401
-from app.models.namespace_contract import NamespaceContract  # noqa: E402, F401
+from app.models.namespace_contract import (  # noqa: E402, F401
+    NamespaceContract,
+    NamespaceContractGene,
+)
 from app.models.organization import Namespace, Organization  # noqa: E402, F401
+from app.models.organization_contract import (  # noqa: E402, F401
+    OrganizationContract,
+    OrganizationContractGene,
+)
 from app.models.organization_provider import OrganizationProvider  # noqa: E402, F401
-from app.models.user_gene import UserGene, UserGeneKind, UserUserGene  # noqa: E402, F401
+from app.models.user_gene import (  # noqa: E402, F401
+    UserGene,
+    UserGeneEffectScope,
+    UserGeneKind,
+    UserUserGene,
+)
 from app.models.workspace import (  # noqa: E402, F401
     Membership,
-    MembershipRole,
     Passage,
     Workspace,
 )

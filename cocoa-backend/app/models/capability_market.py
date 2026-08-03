@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from enum import Enum
 
-from sqlalchemy import ForeignKey, Index, String, Text, text
+from sqlalchemy import CheckConstraint, ForeignKey, Index, String, Text, text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -36,6 +36,7 @@ class CapabilityType(str, Enum):
     tool = "tool"
     mcp = "mcp"
     lsp = "lsp"
+    command = "command"  # v4.0: builtin directive verbs (cmd-*)
 
 
 class CapabilityCreatedVia(str, Enum):
@@ -62,11 +63,31 @@ class CapabilityMarketEntry(BaseModel, Base):
             unique=True,
             postgresql_where=text("deleted_at IS NULL"),
         ),
+        Index(
+            "ix_capability_market_org",
+            "organization_id",
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+        CheckConstraint(
+            "scope IN ('system', 'org', 'namespace')",
+            name="ck_capability_market_scope",
+        ),
     )
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     type: Mapped[str] = mapped_column(
         String(20), nullable=False, default=CapabilityType.skill.value
+    )
+    # v4.0 D15 scope triple: system rows are preset-only (both FKs NULL);
+    # org rows require organization_id; namespace rows require both FKs.
+    scope: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="org", server_default="org"
+    )
+    organization_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("organizations.id"), nullable=True
+    )
+    namespace_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("namespaces.id"), nullable=True
     )
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     config_template: Mapped[dict | None] = mapped_column(JSONB, nullable=True)

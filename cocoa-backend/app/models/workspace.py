@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import enum
-
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
@@ -18,14 +16,6 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
 from app.models.base import BaseModel
-
-
-class MembershipRole(str, enum.Enum):
-    """Roles a member can hold within a Workspace."""
-
-    owner = "owner"
-    editor = "editor"
-    viewer = "viewer"
 
 
 class Workspace(BaseModel, Base):
@@ -101,15 +91,13 @@ class Membership(BaseModel, Base):
     )
     posx: Mapped[int] = mapped_column(Integer, nullable=False)
     posy: Mapped[int] = mapped_column(Integer, nullable=False)
-    role: Mapped[str] = mapped_column(String(20), nullable=False)
+    # v4.0: static ``role`` column physically dropped (design §3.6 / §4.2).
+    # Authorization is computed from Contract atoms, never from Membership.
     permissions: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     def __repr__(self) -> str:
         cls = type(self).__name__
-        return (
-            f"<{cls} {self.id!r} workspace={self.workspace_id!r}"
-            f" role={self.role!r}>"
-        )
+        return f"<{cls} {self.id!r} workspace={self.workspace_id!r}>"
 
 
 class Passage(BaseModel, Base):

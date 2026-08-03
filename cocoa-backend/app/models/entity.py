@@ -31,6 +31,13 @@ class Entity(BaseModel, Base):
             unique=True,
             postgresql_where=text("deleted_at IS NULL"),
         ),
+        # v4.0 D7: at most one cerebellum Entity per Namespace.
+        Index(
+            "uq_entities_cerebellum_per_ns",
+            "namespace_id",
+            unique=True,
+            postgresql_where=text("is_cerebellum IS TRUE AND deleted_at IS NULL"),
+        ),
     )
 
     namespace_id: Mapped[str] = mapped_column(
@@ -51,8 +58,10 @@ class Entity(BaseModel, Base):
     migration_hash: Mapped[str | None] = mapped_column(
         String(64), nullable=True, default=None
     )
-    capabilities: Mapped[list | dict | None] = mapped_column(
-        JSONB, nullable=True, default=list
+    # v4.0 D7: cerebellum flag (小脑). Capabilities moved to the
+    # ``entity_capabilities`` junction (see app.models.junctions).
+    is_cerebellum: Mapped[bool] = mapped_column(
+        nullable=False, default=False, server_default="false"
     )
 
     def __repr__(self) -> str:

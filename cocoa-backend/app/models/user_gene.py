@@ -1,11 +1,10 @@
-"""user_genes — human permission packs (觉醒基因)."""
+"""user_genes — atomic human permissions (觉醒基因, v4.0 catalog-neutral)."""
 
 from __future__ import annotations
 
 import enum
 
-from sqlalchemy import ForeignKey, Index, String, Text, text
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import CheckConstraint, ForeignKey, Index, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -17,8 +16,18 @@ class UserGeneKind(str, enum.Enum):
     custom = "custom"
 
 
+class UserGeneEffectScope(str, enum.Enum):
+    """Layer at which an atomic permission takes effect (design §3.6)."""
+
+    platform = "platform"
+    org = "org"
+    namespace = "namespace"
+    workspace = "workspace"
+
+
 class UserGene(BaseModel, Base):
-    """Named pack of can_* permission keys."""
+    """One atomic ``can_*`` permission. Catalog-neutral: describes the
+    permission itself, never who holds it (grants live on Contracts)."""
 
     __tablename__ = "user_genes"
     __table_args__ = (
@@ -28,6 +37,10 @@ class UserGene(BaseModel, Base):
             unique=True,
             postgresql_where=text("deleted_at IS NULL"),
         ),
+        CheckConstraint(
+            "effect_scope IN ('platform', 'org', 'namespace', 'workspace')",
+            name="ck_user_genes_effect_scope",
+        ),
     )
 
     slug: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -35,8 +48,8 @@ class UserGene(BaseModel, Base):
     kind: Mapped[str] = mapped_column(
         String(20), nullable=False, default=UserGeneKind.builtin.value
     )
-    permission_keys: Mapped[list | None] = mapped_column(
-        JSONB, nullable=False, default=list
+    effect_scope: Mapped[str] = mapped_column(
+        String(20), nullable=False, default=UserGeneEffectScope.org.value
     )
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
