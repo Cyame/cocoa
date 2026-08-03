@@ -12,6 +12,7 @@ import app.models.event  # noqa: E402, F401
 import app.models.instance  # noqa: E402, F401
 import app.models.instance_provider_config  # noqa: E402, F401
 import app.models.junctions  # noqa: E402, F401
+import app.models.knowledge  # noqa: E402, F401
 import app.models.loop_state  # noqa: E402, F401
 import app.models.memory  # noqa: E402, F401
 import app.models.namespace_contract  # noqa: E402, F401
@@ -21,7 +22,6 @@ import app.models.organization_provider  # noqa: E402, F401
 import app.models.user  # noqa: E402, F401
 import app.models.user_gene  # noqa: E402, F401
 import app.models.workspace  # noqa: E402, F401
-
 from app.models.ai_gene import AiGene, BaseClassAiGene  # noqa: E402, F401
 from app.models.base_class import BaseClass  # noqa: E402, F401
 from app.models.base_class_provider_default import (  # noqa: E402, F401
@@ -32,7 +32,6 @@ from app.models.capability_market import (  # noqa: E402, F401
     CapabilityMarketEntry,
     CapabilityType,
 )
-from app.models.composer_message import ComposerMessage  # noqa: E402, F401
 from app.models.central_hub import (  # noqa: E402, F401
     BrainstemSchedule,
     CentralHub,
@@ -44,13 +43,19 @@ from app.models.central_hub import (  # noqa: E402, F401
     VaultEntry,
     VaultEntrySourceType,
 )
+from app.models.composer_message import ComposerMessage  # noqa: E402, F401
 from app.models.entity import Entity, EntityRank  # noqa: E402, F401
 from app.models.junctions import (  # noqa: E402, F401
     BaseClassCapability,
     EntityAiGene,
     EntityCapability,
 )
-from app.models.memory import Memory, Memory, MemoryKind  # noqa: E402, F401
+from app.models.knowledge import (  # noqa: E402, F401
+    SCOPE_NULL_SENTINEL,
+    KnowledgeDimension,
+    KnowledgeEntry,
+)
+from app.models.memory import Memory, MemoryKind  # noqa: E402, F401
 from app.models.namespace_contract import (  # noqa: E402, F401
     NamespaceContract,
     NamespaceContractGene,

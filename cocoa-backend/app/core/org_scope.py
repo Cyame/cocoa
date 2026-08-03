@@ -1,4 +1,14 @@
-"""Organization context resolution and scoped-resource visibility (v4.1)."""
+"""Organization context resolution and scoped-resource visibility (v4.1).
+
+v4.2 Knowledge: scoped rows may live at the workspace layer. ``validate_scope_fks``
+enforces the H2 write-time matrix (system all-null; org requires organization_id;
+namespace requires organization_id+namespace_id; workspace requires all three).
+``scoped_visibility_clause`` gains an opt-in ``include_workspace`` flag: when the
+caller is org-scoped, workspace rows of that org are also visible (they were
+created with org ancestry validated at write time, and org_scope has no
+workspace-membership helper — the least-invasive correct option). Existing
+system/org/namespace callers are unchanged (flag defaults to ``False``).
+"""
 
 from __future__ import annotations
 
@@ -70,18 +80,32 @@ async def resolve_current_org_id(
     return None
 
 
-def scoped_visibility_clause(model, org_id: str | None, scope_filter: str | None):
+def scoped_visibility_clause(
+    model, org_id: str | None, scope_filter: str | None, *, include_workspace: bool = False
+):
     """SQLAlchemy filter for scoped rows visible to *org_id*.
 
     Callers must apply ``deleted_at IS NULL`` separately.
+
+    ``include_workspace`` (opt-in, v4.2): when the caller is org-scoped, also
+    expose workspace rows of that org. Workspace rows carry ``organization_id``
+    validated at write time, so org-level filtering works without joins. When
+    ``org_id`` is None (system-only), workspace rows are org-owned and never
+    visible — the flag is ignored.
     """
     if org_id is None:
         visibility = model.scope == "system"
     else:
+        workspace_branch = []
+        if include_workspace:
+            workspace_branch.append(
+                and_(model.scope == "workspace", model.organization_id == org_id)
+            )
         visibility = or_(
             model.scope == "system",
             and_(model.scope == "org", model.organization_id == org_id),
             and_(model.scope == "namespace", model.organization_id == org_id),
+            *workspace_branch,
         )
 
     if scope_filter is not None:
@@ -101,9 +125,15 @@ def validate_scope_fks(
     organization_id: str | None,
     namespace_id: str | None,
     *,
+    workspace_id: str | None = None,
     current_org_id: str | None,
-) -> tuple[str | None, str | None]:
-    """Validate scope ↔ FK triple (B1). Raises ValidationError on mismatch."""
+) -> tuple[str | None, str | None, str | None]:
+    """Validate scope ↔ FK triple (B1 / H2). Raises ValidationError on mismatch.
+
+    v4.2 H2 write-time matrix: system requires all null; org requires
+    organization_id (ns/ws null); namespace requires organization_id +
+    namespace_id (ws null); workspace requires all three.
+    """
     if scope not in VALID_SCOPES:
         raise ValidationError(
             "scope.invalid",
@@ -114,18 +144,26 @@ def validate_scope_fks(
 
     org_id = organization_id
     ns_id = namespace_id
+    ws_id = workspace_id
 
+    # current_org_id fallback only applies to org/namespace scopes; workspace
+    # requires the client to supply all three ids explicitly.
     if scope in ("org", "namespace") and org_id is None and current_org_id is not None:
         org_id = current_org_id
 
     if scope == "system":
-        if org_id is not None or ns_id is not None:
+        if org_id is not None or ns_id is not None or ws_id is not None:
             raise ValidationError(
                 "scope.fk_mismatch",
                 "errors.scope.fk_mismatch",
-                "system scope requires organization_id and namespace_id to be null",
+                "system scope requires organization_id, namespace_id and workspace_id to be null",
+                details={
+                    "organization_id": org_id,
+                    "namespace_id": ns_id,
+                    "workspace_id": ws_id,
+                },
             )
-        return None, None
+        return None, None, None
 
     if scope == "org":
         if org_id is None:
@@ -134,11 +172,15 @@ def validate_scope_fks(
                 "errors.scope.organization_required",
                 "organization_id is required for org scope",
             )
-        if ns_id is not None:
+        if ns_id is not None or ws_id is not None:
             raise ValidationError(
                 "scope.fk_mismatch",
                 "errors.scope.fk_mismatch",
-                "org scope requires namespace_id to be null",
+                "org scope requires namespace_id and workspace_id to be null",
+                details={
+                    "namespace_id": ns_id,
+                    "workspace_id": ws_id,
+                },
             )
         if current_org_id is not None and org_id != current_org_id:
             raise ValidationError(
@@ -146,7 +188,27 @@ def validate_scope_fks(
                 "errors.scope.organization_mismatch",
                 "organization_id does not match current organization context",
             )
-        return org_id, None
+        return org_id, None, None
+
+    if scope == "workspace":
+        if org_id is None or ns_id is None or ws_id is None:
+            raise ValidationError(
+                "scope.workspace_ids_required",
+                "errors.scope.workspace_ids_required",
+                "organization_id, namespace_id and workspace_id are required for workspace scope",
+                details={
+                    "organization_id": org_id,
+                    "namespace_id": ns_id,
+                    "workspace_id": ws_id,
+                },
+            )
+        if current_org_id is not None and org_id != current_org_id:
+            raise ValidationError(
+                "scope.organization_mismatch",
+                "errors.scope.organization_mismatch",
+                "organization_id does not match current organization context",
+            )
+        return org_id, ns_id, ws_id
 
     # namespace scope
     if org_id is None:
@@ -161,10 +223,17 @@ def validate_scope_fks(
             "errors.scope.namespace_required",
             "namespace_id is required for namespace scope",
         )
+    if ws_id is not None:
+        raise ValidationError(
+            "scope.fk_mismatch",
+            "errors.scope.fk_mismatch",
+            "namespace scope requires workspace_id to be null",
+            details={"workspace_id": ws_id},
+        )
     if current_org_id is not None and org_id != current_org_id:
         raise ValidationError(
             "scope.organization_mismatch",
             "errors.scope.organization_mismatch",
             "organization_id does not match current organization context",
         )
-    return org_id, ns_id
+    return org_id, ns_id, None

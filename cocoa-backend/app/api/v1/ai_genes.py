@@ -119,7 +119,7 @@ async def create_ai_gene(
     current_org_id = await resolve_current_org_id(
         db, current_user.user_id, x_organization_id
     )
-    org_id, ns_id = validate_scope_fks(
+    org_id, ns_id, _ = validate_scope_fks(
         body.scope,
         body.organization_id,
         body.namespace_id,

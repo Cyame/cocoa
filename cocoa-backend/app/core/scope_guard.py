@@ -3,13 +3,16 @@
 ``system`` scope rows are platform presets: visible and usable, but general
 users must not create / edit / delete them — the write path returns 4xx.
 Preset scope changes are likewise forbidden.
+
+``workspace`` was added with v4.2 Knowledge: scoped rows may now live at the
+workspace layer (workspace > namespace > org > system override chain).
 """
 
 from __future__ import annotations
 
 from app.core.errors import ForbiddenError
 
-VALID_SCOPES = frozenset({"system", "org", "namespace"})
+VALID_SCOPES = frozenset({"system", "org", "namespace", "workspace"})
 
 
 def ensure_scope_create_allowed(scope: str, *, resource: str) -> None:
