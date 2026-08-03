@@ -63,42 +63,20 @@ def _manifest_template_subset(manifest: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _entity_capabilities(entity: Entity) -> list[Any]:
-    caps = entity.capabilities
-    if caps is None:
-        return []
-    if isinstance(caps, list):
-        return list(caps)
-    if isinstance(caps, dict):
-        # Allow {"items": [...]} bags; otherwise treat values as list.
-        items = caps.get("items")
-        if isinstance(items, list):
-            return list(items)
-        return [caps]
-    return []
-
-
-def _entity_gene_refs(entity: Entity, config_override: dict[str, Any] | None) -> list[Any]:
-    """Gene refs live on the Entity surface only (override or capabilities bag)."""
-    if config_override:
-        for key in ("default_gene_refs", "gene_refs", "installed_genes"):
-            val = config_override.get(key)
-            if isinstance(val, list):
-                return list(val)
-    caps = entity.capabilities
-    if isinstance(caps, dict):
-        for key in ("gene_refs", "default_gene_refs", "installed_genes"):
-            val = caps.get(key)
-            if isinstance(val, list):
-                return list(val)
-    return []
-
-
 def resolve_entity_config(
     entity: Entity,
     base_manifest: dict[str, Any] | None,
+    *,
+    capabilities: list[Any] | None = None,
+    gene_refs: list[Any] | None = None,
 ) -> dict[str, Any]:
-    """Resolve overlay without DB access (manifest already loaded)."""
+    """Resolve overlay without DB access (manifest already loaded).
+
+    v4.0: Entity capabilities / gene refs come from the junction tables —
+    callers pass them preloaded via *capabilities* / *gene_refs* (see
+    :func:`resolve_instance_agent_config`). ``config_override`` lists still
+    win when explicitly present.
+    """
     resolved = _manifest_template_subset(base_manifest or {})
 
     # Prompt: Entity replaces when set; else inherit BaseClass template.
@@ -128,9 +106,16 @@ def resolve_entity_config(
     elif "capabilities" in override and isinstance(override["capabilities"], list):
         resolved["default_capabilities"] = list(override["capabilities"])
     else:
-        resolved["default_capabilities"] = _entity_capabilities(entity)
+        resolved["default_capabilities"] = list(capabilities or [])
 
-    resolved["default_gene_refs"] = _entity_gene_refs(entity, override)
+    refs: list[Any] | None = None
+    if override:
+        for key in ("default_gene_refs", "gene_refs", "installed_genes"):
+            val = override.get(key)
+            if isinstance(val, list):
+                refs = list(val)
+                break
+    resolved["default_gene_refs"] = refs if refs is not None else list(gene_refs or [])
 
     resolved["entity_slug"] = entity.slug
     resolved["entity_name"] = entity.display_name or entity.name
@@ -143,7 +128,18 @@ async def resolve_instance_agent_config(
     db: AsyncSession,
     entity: Entity,
 ) -> dict[str, Any]:
-    """Load BaseClass by ``entity.preset_slug`` and resolve the config subset."""
+    """Load BaseClass by ``entity.preset_slug`` and resolve the config subset.
+
+    v4.0: capabilities / gene refs are JOINed from the junction tables.
+    """
+    from app.core.capabilities import (
+        load_entity_capability_dicts,
+        load_entity_gene_refs,
+    )
+
+    capabilities = await load_entity_capability_dicts(db, entity.id)
+    gene_refs = await load_entity_gene_refs(db, entity.id)
+
     manifest: dict[str, Any] | None = None
     if entity.preset_slug:
         result = await db.execute(
@@ -155,9 +151,13 @@ async def resolve_instance_agent_config(
         preset = result.scalar_one_or_none()
         if preset is not None and isinstance(preset.manifest, dict):
             manifest = preset.manifest
-            resolved = resolve_entity_config(entity, manifest)
+            resolved = resolve_entity_config(
+                entity, manifest, capabilities=capabilities, gene_refs=gene_refs
+            )
             resolved["baseclass_slug"] = preset.slug
             resolved["baseclass_name"] = preset.display_name or preset.name
             return resolved
 
-    return resolve_entity_config(entity, manifest)
+    return resolve_entity_config(
+        entity, manifest, capabilities=capabilities, gene_refs=gene_refs
+    )

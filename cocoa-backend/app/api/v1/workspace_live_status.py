@@ -124,8 +124,8 @@ async def get_workspace_live_status(
             if entity is None:
                 outdated = True
             else:
-                expected_hash = entity.migration_hash or compute_entity_migration_hash(
-                    entity
+                expected_hash = entity.migration_hash or await compute_entity_migration_hash(
+                    db, entity
                 )
                 outdated = active_hash is None or active_hash != expected_hash
 

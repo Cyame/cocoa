@@ -398,7 +398,7 @@ async def introduce_entity(
 
     # Ensure entity.migration_hash is populated so live-status outdated stays false.
     if not entity.migration_hash:
-        entity.migration_hash = compute_entity_migration_hash(entity)
+        entity.migration_hash = await compute_entity_migration_hash(db, entity)
 
     workspace_path = generate_workspace_path(entity.slug, str(uuid4()))
     agent_config = await resolve_instance_agent_config(db, entity)
@@ -410,7 +410,7 @@ async def introduce_entity(
         status=InstanceStatus.creating.value,
         runtime_config=runtime_config,
         proxy_token=str(uuid4()),
-        active_hash=entity.migration_hash or compute_entity_migration_hash(entity),
+        active_hash=entity.migration_hash or await compute_entity_migration_hash(db, entity),
     )
     db.add(instance)
     await db.flush()

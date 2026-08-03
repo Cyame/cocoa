@@ -35,6 +35,8 @@ import hashlib
 import json
 from collections.abc import Iterable
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.models.entity import Entity
 
 _CAPABILITIES_SEPARATOR = (",", ":")
@@ -88,13 +90,13 @@ def compute_migration_hash(
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def compute_entity_migration_hash(entity: Entity) -> str:
+async def compute_entity_migration_hash(db: AsyncSession, entity: Entity) -> str:
     """Compute the migration hash for an :class:`Entity` instance.
 
-    Convenience wrapper that reads the relevant fields off the ORM
-    model. The capability list is coalesced to ``[]`` for legacy rows
-    where the JSONB column is ``NULL`` (pre-migration rows survive the
-    additive column add with NULL).
+    v4.0: the capability surface is read from the ``entity_capabilities``
+    junction (the ``entities.capabilities`` JSONB column was dropped).
     """
-    caps = entity.capabilities or []
+    from app.core.capabilities import load_entity_capability_dicts
+
+    caps = await load_entity_capability_dicts(db, entity.id)
     return compute_migration_hash(caps, entity.system_prompt)

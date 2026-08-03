@@ -106,7 +106,7 @@ async def _refresh_instance_agent_config(db: DB, instance: Instance) -> None:
     runtime_config = dict(instance.runtime_config or {})
     runtime_config["agent_config"] = agent_config
     instance.runtime_config = runtime_config
-    instance.active_hash = compute_entity_migration_hash(entity)
+    instance.active_hash = await compute_entity_migration_hash(db, entity)
 
 
 class FailBody(BaseModel):
@@ -271,7 +271,7 @@ async def create_instance(
         status=InstanceStatus.creating.value,
         runtime_config=runtime_config,
         proxy_token=str(uuid4()),
-        active_hash=compute_entity_migration_hash(entity),
+        active_hash=await compute_entity_migration_hash(db, entity),
     )
     db.add(instance)
     await db.flush()

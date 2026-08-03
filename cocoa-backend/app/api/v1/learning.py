@@ -644,22 +644,30 @@ async def promote_entity(
 
     await require_workspace_permission(db, current_user.user_id, instance.workspace_id, "can_edit_workspace")
 
-    # 2. Compute instance's effective capability set.
+    # 2. Compute instance's effective capability set (v4.0: junction is truth).
+    from app.core.capabilities import (
+        attach_entity_capability,
+        load_entity_capability_dicts,
+        upsert_capability,
+    )
+
+    existing_caps = await load_entity_capability_dicts(db, entity.id)
     instance_runtime = instance.runtime_config or {}
     reaped_caps = list(instance_runtime.get("reaped_capabilities", []))
     if not reaped_caps:
-        reaped_caps = list(entity.capabilities or [])
+        reaped_caps = list(existing_caps)
 
     # 3. Build idempotent union.
-    existing_caps = list(entity.capabilities or [])
     existing_names = {c.get("name") for c in existing_caps if c.get("name")}
     promoted_now = 0
     merged = list(existing_caps)
+    new_caps: list[dict] = []
     for cap in reaped_caps:
-        name = cap.get("name")
+        name = cap.get("name") if isinstance(cap, dict) else None
         if not name or name in existing_names:
             continue
         merged.append(cap)
+        new_caps.append(cap)
         existing_names.add(name)
         promoted_now += 1
 
@@ -701,11 +709,33 @@ async def promote_entity(
             display_color=entity.display_color,
             system_prompt=prompt_regen if body.include_prompt_regen else entity.system_prompt,
             config_override=entity.config_override,
-            capabilities=merged,
         )
         db.add(new_entity)
         await db.flush()
-        new_migration_hash = compute_entity_migration_hash(new_entity)
+        # v4.0 §6.4: fork copies the merged capability set via junction rows.
+        from app.models.organization import Namespace
+
+        ns = await db.get(Namespace, entity.namespace_id)
+        fork_org_id = ns.org_id if ns is not None else None
+        for cap in merged:
+            name = cap.get("name") if isinstance(cap, dict) else None
+            if not name:
+                continue
+            market = await upsert_capability(
+                db,
+                name=name,
+                cap_type=cap.get("type") or "skill",
+                scope="org" if fork_org_id else "system",
+                organization_id=fork_org_id,
+                created_via="promote",
+                description=cap.get("description"),
+                config_template=cap.get("config_template") or cap.get("config"),
+                source_entity_slug=entity.slug,
+            )
+            await attach_entity_capability(
+                db, entity_id=new_entity.id, capability_id=market.id
+            )
+        new_migration_hash = await compute_entity_migration_hash(db, new_entity)
         new_entity.migration_hash = new_migration_hash
 
         await emit(
@@ -737,11 +767,29 @@ async def promote_entity(
             capability_market_uploaded=0,
         )
 
-    # 6. Persist to Entity only (Chain B — never write capability_market).
-    entity.capabilities = merged
+    # 6. Persist via junction (v4.0 §6.4 — JSONB write path removed).
+    from app.models.organization import Namespace
+
+    ns = await db.get(Namespace, entity.namespace_id)
+    entity_org_id = ns.org_id if ns is not None else None
+    for cap in new_caps:
+        market = await upsert_capability(
+            db,
+            name=cap["name"],
+            cap_type=cap.get("type") or "skill",
+            scope="org" if entity_org_id else "system",
+            organization_id=entity_org_id,
+            created_via="promote",
+            description=cap.get("description"),
+            config_template=cap.get("config_template") or cap.get("config"),
+            source_entity_slug=entity.slug,
+        )
+        await attach_entity_capability(
+            db, entity_id=entity.id, capability_id=market.id
+        )
     if body.include_prompt_regen and prompt_regen:
         entity.system_prompt = prompt_regen
-    new_migration_hash = compute_entity_migration_hash(entity)
+    new_migration_hash = await compute_entity_migration_hash(db, entity)
     entity.migration_hash = new_migration_hash
 
     market_uploaded = 0
@@ -839,12 +887,22 @@ async def transmute_entity(
 
     await require_workspace_permission(db, current_user.user_id, workspace_id, "can_edit_workspace")
 
-    # 1. Build the new manifest.
+    # 1. Build the new manifest (v4.0: capability truth is the junction).
+    from app.core.capabilities import (
+        attach_base_class_capability,
+        load_entity_capability_dicts,
+        upsert_capability,
+    )
+    from app.models.organization import Namespace
+
+    entity_caps = await load_entity_capability_dicts(db, entity.id)
+    ns = await db.get(Namespace, entity.namespace_id)
+    entity_org_id = ns.org_id if ns is not None else None
     manifest = {
         "provider_config": {},
         "default_model": "tbd",
         "commands": [],
-        "default_capabilities": list(entity.capabilities or []),
+        "default_capabilities": list(entity_caps),
         "default_gene_refs": [],
         "system_prompt": entity.system_prompt or "",
     }
@@ -873,15 +931,34 @@ async def transmute_entity(
             source_entity_id=entity_id,
         )
 
-    # 4. Create BaseClass.
+    # 4. Create BaseClass (org scope) + base_class_capabilities junction (§6.4).
     new_bc = BaseClass(
         slug=body.target_base_class_slug,
         name=body.target_base_class_name,
         manifest=manifest,
+        scope="org" if entity_org_id else "system",
+        organization_id=entity_org_id,
         version="0.1.0",
     )
     db.add(new_bc)
     await db.flush()
+    for cap in entity_caps:
+        name = cap.get("name")
+        if not name:
+            continue
+        market = await upsert_capability(
+            db,
+            name=name,
+            cap_type=cap.get("type") or "skill",
+            scope="org" if entity_org_id else "system",
+            organization_id=entity_org_id,
+            created_via="manual",
+            description=cap.get("description"),
+            config_template=cap.get("config_template") or cap.get("config"),
+        )
+        await attach_base_class_capability(
+            db, base_class_id=new_bc.id, capability_id=market.id
+        )
 
     # 5. Emit event.
     await emit(

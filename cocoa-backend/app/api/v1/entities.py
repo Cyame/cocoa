@@ -120,8 +120,9 @@ async def create_entity(
         system_prompt=body.system_prompt,
         config_override=body.config_override,
     )
-    entity.migration_hash = compute_entity_migration_hash(entity)
     db.add(entity)
+    await db.flush()
+    entity.migration_hash = await compute_entity_migration_hash(db, entity)
     await db.commit()
     await db.refresh(entity)
 
