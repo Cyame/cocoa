@@ -263,7 +263,7 @@ class TestBrainRegions:
             headers=_h(auth_token),
         )
         assert restart.status_code == 200
-        assert restart.json()["loop_status"] == "idle"
+        assert restart.json()["status"] == "running"
 
 
 class TestInstanceOverlay:

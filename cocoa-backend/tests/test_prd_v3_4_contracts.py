@@ -75,7 +75,7 @@ class TestNamespaceContracts:
         assert contracts.status_code == 200, contracts.text
         assert contracts.json()["total"] >= 1
         me = client.get("/api/v1/auth/me", headers=_h(auth_token)).json()
-        user_ids = {c["user_id"] for c in contracts.json()["items"]}
+        user_ids = {c["user"]["id"] for c in contracts.json()["items"]}
         assert me["id"] in user_ids
 
     def test_list_namespace_contracts(
