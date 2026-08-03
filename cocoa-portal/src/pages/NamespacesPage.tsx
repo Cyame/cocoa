@@ -13,16 +13,19 @@ import {
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, Navigate, useSearchParams } from 'react-router';
+import {
+  CapabilityMarketTab,
+  DeepSeaGenesPanel,
+  HumanGenesPanel,
+} from '@/components/namespaces/CatalogGeneCrudPanels';
 import PromoteModal from '@/components/PromoteModal';
 import { ApiError, api } from '@/lib/api';
-import { type AiGeneCatalogItem, listAiGenes } from '@/lib/api/aiGenes';
 import { fetchBaseClassesPage } from '@/lib/api/baseClasses';
 import { listNamespaceContracts, type NamespaceContract } from '@/lib/api/contracts';
 import { type EntityDetail, fetchEntity, promoteEntity } from '@/lib/api/entities';
 import { listMemberships } from '@/lib/api/instances';
 import type { NamespaceWithStats } from '@/lib/api/namespaces';
 import { fetchDefaultNamespace } from '@/lib/api/namespaces';
-import { type CatalogUserGene, listUserGenes } from '@/lib/api/users';
 import { createWorkspace, fetchWorkspaces } from '@/lib/api/workspaces';
 import { translateBaseClassTag } from '@/lib/baseClassTags';
 import { toSlug } from '@/lib/slug';
@@ -256,33 +259,6 @@ export default function NamespacesPage() {
               <Plus className="size-4" aria-hidden="true" />
               {t('namespaces.goIntroduceInWorkspace')}
             </Link>
-          ) : null}
-          {activeTab === 'genes' ? (
-            <button
-              type="button"
-              disabled
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-400"
-            >
-              {t('namespaces.genesPack')}
-            </button>
-          ) : null}
-          {activeTab === 'capability-market' ? (
-            <>
-              <button
-                type="button"
-                disabled
-                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white opacity-50"
-              >
-                {t('namespaces.capabilityCreate')}
-              </button>
-              <button
-                type="button"
-                disabled
-                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-400"
-              >
-                {t('namespaces.capabilityDistill')}
-              </button>
-            </>
           ) : null}
         </div>
       </header>
@@ -883,186 +859,3 @@ function GenesTab({ t }: { readonly t: TFn }) {
   );
 }
 
-function DeepSeaGenesPanel({ t }: { readonly t: TFn }) {
-  const [genes, setGenes] = useState<readonly AiGeneCatalogItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    setIsLoading(true);
-    setErrorMessage(null);
-    try {
-      const page = await listAiGenes();
-      setGenes(page.items);
-    } catch (error) {
-      setErrorMessage(error instanceof ApiError ? error.message : String(error));
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center gap-3 py-16 text-sm text-slate-500">
-        <LoaderCircle className="size-5 animate-spin" aria-hidden="true" />
-        {t('common.loading')}
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      <div>
-        <h2 className="text-base font-semibold text-slate-900">{t('namespaces.aiGenesTitle')}</h2>
-        <p className="mt-1 text-sm text-slate-500">{t('namespaces.aiGenesDetail')}</p>
-      </div>
-      {errorMessage ? (
-        <p role="alert" className="text-sm text-red-600">
-          {errorMessage}
-        </p>
-      ) : null}
-      {genes.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center text-sm text-slate-500">
-          {t('namespaces.aiGenesEmpty')}
-        </p>
-      ) : (
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-          <table className="min-w-full text-sm" data-testid="ai-genes-table">
-            <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-              <tr>
-                <th className="px-4 py-3">{t('entityModal.fields.displayName')}</th>
-                <th className="px-4 py-3">{t('entityModal.fields.slug')}</th>
-                <th className="px-4 py-3">{t('namespaces.aiGenesTags')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {genes.map((gene) => (
-                <tr key={gene.id} className="border-b border-slate-100 last:border-0">
-                  <td className="px-4 py-3">
-                    <p className="font-medium text-slate-900">{gene.name}</p>
-                    {gene.description ? (
-                      <p className="mt-0.5 line-clamp-2 text-xs text-slate-500">
-                        {gene.description}
-                      </p>
-                    ) : null}
-                  </td>
-                  <td className="px-4 py-3 font-mono text-xs text-slate-500">{gene.slug}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-1">
-                      {(gene.tags ?? []).length === 0 ? (
-                        <span className="text-xs text-slate-400">—</span>
-                      ) : (
-                        (gene.tags ?? []).map((tag) => (
-                          <span
-                            key={tag}
-                            className="rounded-md bg-slate-100 px-2 py-0.5 font-mono text-xs text-slate-600"
-                          >
-                            {tag}
-                          </span>
-                        ))
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function HumanGenesPanel({ t }: { readonly t: TFn }) {
-  // v4.0: the UserGene catalog is atomic (can_*) and display-only here;
-  // grants are managed via Contracts, full CRUD lands in v4.1.
-  const [genes, setGenes] = useState<readonly CatalogUserGene[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    setIsLoading(true);
-    setErrorMessage(null);
-    try {
-      const genePage = await listUserGenes();
-      setGenes(genePage.items);
-    } catch (error) {
-      setErrorMessage(error instanceof ApiError ? error.message : String(error));
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center gap-3 py-16 text-sm text-slate-500">
-        <LoaderCircle className="size-5 animate-spin" aria-hidden="true" />
-        {t('common.loading')}
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      <div>
-        <h2 className="text-base font-semibold text-slate-900">{t('namespaces.genesTitle')}</h2>
-        <p className="mt-1 text-sm text-slate-500">{t('namespaces.genesDetail')}</p>
-      </div>
-      {errorMessage ? (
-        <p role="alert" className="text-sm text-red-600">
-          {errorMessage}
-        </p>
-      ) : null}
-      {genes.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center text-sm text-slate-500">
-          {t('namespaces.genesEmpty')}
-        </p>
-      ) : (
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-          <table className="min-w-full text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-              <tr>
-                <th className="px-4 py-3">{t('namespaces.genesSlug')}</th>
-                <th className="px-4 py-3">{t('namespaces.genesScope')}</th>
-                <th className="px-4 py-3">{t('namespaces.genesDescription')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {genes.map((gene) => (
-                <tr key={gene.id} className="border-b border-slate-100 last:border-0">
-                  <td className="px-4 py-3 font-mono text-xs text-slate-700">{gene.slug}</td>
-                  <td className="px-4 py-3">
-                    <span className="rounded-md bg-blue-50 px-2 py-0.5 font-mono text-xs text-blue-700">
-                      {gene.effect_scope}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-xs text-slate-500">{gene.description ?? '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function CapabilityMarketTab({ t }: { readonly t: TFn }) {
-  return (
-    <div className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center">
-      <Sparkles className="mx-auto size-8 text-slate-400" aria-hidden="true" />
-      <h2 className="mt-4 text-base font-semibold text-slate-900">
-        {t('namespaces.capabilityMarketTitle')}
-      </h2>
-      <p className="mt-2 text-sm text-slate-500">{t('namespaces.capabilityMarketDetail')}</p>
-    </div>
-  );
-}

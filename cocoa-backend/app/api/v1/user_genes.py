@@ -16,12 +16,13 @@ from __future__ import annotations
 from fastapi import APIRouter, status
 from sqlalchemy import select
 
-from app.api.deps import DB, CurrentUserDep
-from app.core.errors import ConflictError, NotFoundError
+from app.api.deps import DB, CurrentUserDep, XOrgIdHeader
+from app.core.errors import ConflictError, ForbiddenError, NotFoundError
 from app.core.gene_atoms import ATOM_CATALOG, ensure_atom_genes
 from app.core.openapi import add_error_responses
+from app.core.org_scope import resolve_current_org_id
 from app.core.pagination import OffsetPage, paginate_offset
-from app.core.permissions import require_super_admin
+from app.core.permissions import require_permission
 from app.models.user import User
 from app.models.user_gene import UserGene, UserGeneKind, UserUserGene
 from app.schemas.user_gene import (
@@ -44,6 +45,29 @@ async def _get_active_gene(db: DB, gene_id: str) -> UserGene:
             f"UserGene '{gene_id}' not found",
         )
     return gene
+
+
+async def _require_manage_genes(
+    db: DB,
+    current_user: CurrentUserDep,
+    x_organization_id: str | None,
+) -> str | None:
+    """Resolve org context and require can_manage_genes (non-super-admin)."""
+    org_id = await resolve_current_org_id(
+        db, current_user.user_id, x_organization_id
+    )
+    if current_user.is_super_admin:
+        return org_id
+    if org_id is None:
+        raise ForbiddenError(
+            "organization.context_required",
+            "errors.organization.context_required",
+            "Organization context is required (X-Organization-Id or a single org contract)",
+        )
+    await require_permission(
+        db, current_user.user_id, "can_manage_genes", organization_id=org_id
+    )
+    return org_id
 
 
 @router.get("/permission-keys")
@@ -111,9 +135,10 @@ async def create_user_gene(
     body: UserGeneCreate,
     db: DB,
     current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
 ) -> UserGene:
-    """Create a custom user gene (super-admin)."""
-    require_super_admin(current_user)
+    """Create a custom user gene (requires can_manage_genes)."""
+    await _require_manage_genes(db, current_user, x_organization_id)
     existing = await db.execute(
         select(UserGene).where(
             UserGene.slug == body.slug,
@@ -145,9 +170,10 @@ async def update_user_gene(
     body: UserGeneUpdate,
     db: DB,
     current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
 ) -> UserGene:
-    """Update a user gene. Builtin genes cannot change slug/kind (super-admin)."""
-    require_super_admin(current_user)
+    """Update a user gene. Builtin genes cannot change slug/kind."""
+    await _require_manage_genes(db, current_user, x_organization_id)
     gene = await _get_active_gene(db, gene_id)
     for field, value in body.model_dump(exclude_unset=True).items():
         setattr(gene, field, value)
@@ -161,9 +187,10 @@ async def delete_user_gene(
     gene_id: str,
     db: DB,
     current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
 ) -> None:
     """Soft-delete a user gene. Builtin presets cannot be deleted."""
-    require_super_admin(current_user)
+    await _require_manage_genes(db, current_user, x_organization_id)
     gene = await _get_active_gene(db, gene_id)
     if gene.kind == UserGeneKind.builtin.value:
         raise ConflictError(
@@ -181,10 +208,10 @@ async def attach_user_gene(
     body: UserGeneAttachRequest,
     db: DB,
     current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
 ) -> dict[str, str]:
-    """Attach a user gene to a user (super-admin; legacy platform tooling —
-    tenant grants are Contract-based since v4.0). Idempotent."""
-    require_super_admin(current_user)
+    """Attach a user gene to a user (requires can_manage_genes). Idempotent."""
+    await _require_manage_genes(db, current_user, x_organization_id)
     gene = await _get_active_gene(db, gene_id)
     user = await db.get(User, body.user_id)
     if user is None or user.deleted_at is not None:
@@ -215,9 +242,10 @@ async def detach_user_gene(
     user_id: str,
     db: DB,
     current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
 ) -> None:
-    """Detach a user gene from a user (super-admin)."""
-    require_super_admin(current_user)
+    """Detach a user gene from a user."""
+    await _require_manage_genes(db, current_user, x_organization_id)
     await _get_active_gene(db, gene_id)
     result = await db.execute(
         select(UserUserGene).where(

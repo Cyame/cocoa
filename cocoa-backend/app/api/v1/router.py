@@ -6,6 +6,7 @@ from app.api.v1.ai_genes import router as ai_genes_router
 from app.api.v1.account import router as account_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.base_classes import router as base_classes_router
+from app.api.v1.capability_market import router as capability_market_router
 from app.api.v1.central_hubs import router as central_hubs_router
 from app.api.v1.composer import router as composer_router
 from app.api.v1.deploy import router as deploy_router
@@ -35,6 +36,7 @@ api_router.include_router(auth_router)
 api_router.include_router(ai_genes_router)
 api_router.include_router(base_classes_router)
 api_router.include_router(central_hubs_router)
+api_router.include_router(capability_market_router)
 api_router.include_router(composer_router)
 api_router.include_router(deploy_router)
 api_router.include_router(entities_router)

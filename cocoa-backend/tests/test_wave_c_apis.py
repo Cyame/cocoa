@@ -195,7 +195,7 @@ class TestCapabilityMarket:
         self, client: TestClient, auth_token: str
     ) -> None:
         resp = client.get(
-            "/api/v1/learning/capability-market?type=skill",
+            "/api/v1/capability-market?type=skill",
             headers=_h(auth_token),
         )
         assert resp.status_code == 200

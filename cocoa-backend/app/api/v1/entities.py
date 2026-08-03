@@ -15,6 +15,7 @@ Routes (all require authentication):
 from __future__ import annotations
 
 from fastapi import APIRouter, Query, status
+from pydantic import BaseModel
 from sqlalchemy import select
 
 from app.api.deps import DB, CurrentUserDep
@@ -24,11 +25,21 @@ from app.core.pagination import OffsetPage, paginate_offset
 from app.core.permissions import require_permission
 from app.core.preset_registry import registry
 from app.core.tenant import resolve_namespace_id
+from app.models.ai_gene import AiGene
+from app.models.capability_market import CapabilityMarketEntry
 from app.models.entity import Entity
 from app.schemas.entity import EntityCreate, EntityOut, EntityUpdate
 
 router = APIRouter(prefix="/entities", tags=["Entitys"])
 add_error_responses(router)
+
+
+class EntityCapabilityAttachBody(BaseModel):
+    capability_id: str
+
+
+class EntityAiGeneAttachBody(BaseModel):
+    ai_gene_id: str
 
 # config_override keys that mirror capability/gene state — stripped on write
 # (v4.0: the junction tables are the only write truth).
@@ -224,6 +235,148 @@ async def update_entity(
 
     await registry.reload(db)
     return await _entity_out(db, entity)
+
+
+@router.post("/{entity_id}/capabilities", status_code=status.HTTP_201_CREATED)
+async def attach_entity_capability_route(
+    entity_id: str,
+    body: EntityCapabilityAttachBody,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> dict[str, str]:
+    """Attach a capability to an entity."""
+    from app.core.capabilities import attach_entity_capability
+
+    entity = await db.get(Entity, entity_id)
+    if entity is None or entity.deleted_at is not None:
+        raise NotFoundError(
+            "entity.not_found",
+            "errors.entity.not_found",
+            f"Entity '{entity_id}' not found",
+        )
+    await require_permission(
+        db,
+        current_user.user_id,
+        "can_manage_capabilities",
+        namespace_id=entity.namespace_id,
+    )
+    cap = await db.get(CapabilityMarketEntry, body.capability_id)
+    if cap is None or cap.deleted_at is not None:
+        raise NotFoundError(
+            "capability_market.not_found",
+            "errors.capability_market.not_found",
+            f"Capability '{body.capability_id}' not found",
+        )
+    await attach_entity_capability(
+        db, entity_id=entity_id, capability_id=body.capability_id
+    )
+    await db.commit()
+    return {"entity_id": entity_id, "capability_id": body.capability_id}
+
+
+@router.delete(
+    "/{entity_id}/capabilities/{capability_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def detach_entity_capability_route(
+    entity_id: str,
+    capability_id: str,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> None:
+    """Detach a capability from an entity."""
+    from app.core.capabilities import (
+        bump_entity_migration_hash,
+        detach_entity_capability,
+    )
+
+    entity = await db.get(Entity, entity_id)
+    if entity is None or entity.deleted_at is not None:
+        raise NotFoundError(
+            "entity.not_found",
+            "errors.entity.not_found",
+            f"Entity '{entity_id}' not found",
+        )
+    await require_permission(
+        db,
+        current_user.user_id,
+        "can_manage_capabilities",
+        namespace_id=entity.namespace_id,
+    )
+    await detach_entity_capability(
+        db, entity_id=entity_id, capability_id=capability_id
+    )
+    await bump_entity_migration_hash(db, entity)
+    await db.commit()
+
+
+@router.post("/{entity_id}/ai-genes", status_code=status.HTTP_201_CREATED)
+async def attach_entity_ai_gene_route(
+    entity_id: str,
+    body: EntityAiGeneAttachBody,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> dict[str, str]:
+    """Attach an ai gene to an entity."""
+    from app.core.capabilities import attach_entity_ai_gene
+
+    entity = await db.get(Entity, entity_id)
+    if entity is None or entity.deleted_at is not None:
+        raise NotFoundError(
+            "entity.not_found",
+            "errors.entity.not_found",
+            f"Entity '{entity_id}' not found",
+        )
+    await require_permission(
+        db,
+        current_user.user_id,
+        "can_manage_ai_genes",
+        namespace_id=entity.namespace_id,
+    )
+    gene = await db.get(AiGene, body.ai_gene_id)
+    if gene is None or gene.deleted_at is not None:
+        raise NotFoundError(
+            "ai_gene.not_found",
+            "errors.ai_gene.not_found",
+            f"AiGene '{body.ai_gene_id}' not found",
+        )
+    await attach_entity_ai_gene(db, entity_id=entity_id, ai_gene_id=body.ai_gene_id)
+    await db.commit()
+    return {"entity_id": entity_id, "ai_gene_id": body.ai_gene_id}
+
+
+@router.delete(
+    "/{entity_id}/ai-genes/{ai_gene_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def detach_entity_ai_gene_route(
+    entity_id: str,
+    ai_gene_id: str,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> None:
+    """Detach an ai gene from an entity."""
+    from app.core.capabilities import (
+        bump_entity_migration_hash,
+        detach_entity_ai_gene,
+    )
+
+    entity = await db.get(Entity, entity_id)
+    if entity is None or entity.deleted_at is not None:
+        raise NotFoundError(
+            "entity.not_found",
+            "errors.entity.not_found",
+            f"Entity '{entity_id}' not found",
+        )
+    await require_permission(
+        db,
+        current_user.user_id,
+        "can_manage_ai_genes",
+        namespace_id=entity.namespace_id,
+    )
+    await detach_entity_ai_gene(db, entity_id=entity_id, ai_gene_id=ai_gene_id)
+    await bump_entity_migration_hash(db, entity)
+    await db.commit()
 
 
 @router.delete("/{entity_id}", status_code=status.HTTP_204_NO_CONTENT)

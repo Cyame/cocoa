@@ -69,7 +69,7 @@ Cocoa 是多 Agent 控制台（multi-agent control studio）。本仓库已完�
 
 | 组件 | 技术栈 | 状态 |
 |------|--------|------|
-| `cocoa-backend/` | Python 3.12 + FastAPI + SQLAlchemy (async) + asyncpg + Alembic | P2 引入 12 核心域模型；P3.5 加入 Event 模型；P8 加入 InstanceLoopState 模型 + 4 熔断器配置 + Boulder snapshot 字段；P9 加入 CorridorNode 模型 + glow helper + events 查询端点 + live-status 聚合端点 + Membership 坐标迁移（`hex_q/hex_r` → `posx/posy`）；P11b 加入 DeployRecord 模型 + 9 步 K8s pipeline + SSE 进度推送；P14a 加入 InstanceProviderConfig 模型 + LLMClient (4 provider 类型) + ProviderRouter + ModelCatalog (models.dev + 600s 缓存) + LLMDistiller + 6 preset 升级 manifest；P10 加入 Learning 子系统（DistillationEngine Protocol + AggregatingDistiller 启发式引擎 + 3 个 learning API 端点 + LEARNING_COMMANDS 第 4 命令族 + portal Learning 页面 + 零 schema 变更）；**v4.0** 加入 OrganizationContract/OrganizationContractGene/NamespaceContractGene + 3 个 junction（base_class_capabilities/entity_capabilities/entity_ai_genes）+ scope 三元组（base_classes/ai_genes/capability_market）+ entities.is_cerebellum + UserGene 原子化（effect_scope，DROP permission_keys）+ 物理删除 memberships.role/namespace_contracts.role+permissions/entities.capabilities + require_permission 分层鉴权（Contract 原子替代 role），合计 **23 models** + **552 backend 测试通过**（v4.0 状态；20 个存量失败与 master 基线一致，见 `.omo/evidence/cocoa-vs-nodeskclaw-drift.md` §4.4–§4.5） |
+| `cocoa-backend/` | Python 3.12 + FastAPI + SQLAlchemy (async) + asyncpg + Alembic | P2 引入 12 核心域模型；P3.5 加入 Event 模型；P8 加入 InstanceLoopState 模型 + 4 熔断器配置 + Boulder snapshot 字段；P9 加入 CorridorNode 模型 + glow helper + events 查询端点 + live-status 聚合端点 + Membership 坐标迁移（`hex_q/hex_r` → `posx/posy`）；P11b 加入 DeployRecord 模型 + 9 步 K8s pipeline + SSE 进度推送；P14a 加入 InstanceProviderConfig 模型 + LLMClient (4 provider 类型) + ProviderRouter + ModelCatalog (models.dev + 600s 缓存) + LLMDistiller + 6 preset 升级 manifest；P10 加入 Learning 子系统（DistillationEngine Protocol + AggregatingDistiller 启发式引擎 + 3 个 learning API 端点 + LEARNING_COMMANDS 第 4 命令族 + portal Learning 页面 + 零 schema 变更）；**v4.0** 加入 OrganizationContract/OrganizationContractGene/NamespaceContractGene + 3 个 junction（base_class_capabilities/entity_capabilities/entity_ai_genes）+ scope 三元组（base_classes/ai_genes/capability_market）+ entities.is_cerebellum + UserGene 原子化（effect_scope，DROP permission_keys）+ 物理删除 memberships.role/namespace_contracts.role+permissions/entities.capabilities + require_permission 分层鉴权（Contract 原子替代 role），合计 **23 models** + **569 backend 测试通过**（v4.0 收尾状态；20 个存量失败与 master 基线一致，见 `.omo/evidence/cocoa-vs-nodeskclaw-drift.md` §4.4–§4.5 与 `.omo/evidence/v4-0-audit-followups.md`） |
 | `cocoa-portal/`  | React 19 + Vite 8 + TypeScript + Tailwind CSS v4 + Bun + lucide-react + Zustand | P10 first UI（8 页面：Login / Office list / Office detail / Instance detail / Composer / Debug / Topology viz / Employee Learning）+ 零新增 npm 依赖；P15b 加 2 个页面（Employees list `/offices/:id/employees` + Members list `/offices/:id/members`）+ zh-CN/en i18n switcher + LoginPage register 模式 + nginx `/api/v1` 反代修复 405；P14a 不动 LLM 核心逻辑 |
 | `cocoa-artifacts/` | Dockerfile + K8s 清单（Deployment/Service/ConfigMap/PVC/NetworkPolicy） | P7 已完成 |
 | `.github/workflows/` | CI 基础（lint + build） | 骨架 |
@@ -272,6 +272,19 @@ Cocoa 后端 API 遵循 `docs/api-architecture.md` 中的完整约定，核心�
 | LEARNING | `/distill`, `/consolidate`, `/reflect` | P10 | AggregatingDistiller | Yes |
 
 ## Git 规范
+
+### Committer 身份（强制）
+
+本仓库**主动 commit**（人类或 Agent 代为执行的 `git commit`）的 Author / Committer **必须**使用 **Cyame** 身份：
+
+| 字段 | 值 |
+|------|-----|
+| `user.name` | `Cyame` |
+| `user.email` | `marlonxu1121@qq.com` |
+
+- 提交前执行 shell 别名 **`use-git-github`**（等价于 `git config --global user.name 'Cyame' && git config --global user.email 'marlonxu1121@qq.com'`），或在单次 commit 上用同名的 `GIT_AUTHOR_*` / `GIT_COMMITTER_*` 环境变量覆盖。
+- **禁止**以其他 name/email 写入本仓库历史（含 Cursor / 云 Agent 默认身份）。
+- 提交后可用 `git log -1 --format='%an <%ae>'` 自检，须为 `Cyame <marlonxu1121@qq.com>`。
 
 ### 分支命名
 

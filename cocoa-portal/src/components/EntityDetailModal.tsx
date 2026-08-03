@@ -348,10 +348,6 @@ export default function EntityDetailModal({ onClose }: EntityDetailModalProps) {
     [t],
   );
 
-  const handleRemoveGene = useCallback(() => {
-    setToast({ kind: 'success', message: 'gene removed (local only)' });
-  }, []);
-
   const handleUpdated = useCallback((next: EntityDetail) => {
     setEntity(next);
   }, []);
@@ -390,9 +386,17 @@ export default function EntityDetailModal({ onClose }: EntityDetailModalProps) {
     setTab('ai_genes');
   }, []);
 
-  const handleAddGene = useCallback(() => {
-    setToast({ kind: 'success', message: t('entityModal.aiGenesTab.addExtraHint') });
-  }, [t]);
+  const handleRefreshEntity = useCallback(async () => {
+    if (entityId === null) return;
+    await loadEntity(entityId);
+  }, [entityId, loadEntity]);
+
+  const handleGeneNotify = useCallback(
+    (kind: 'success' | 'error', message: string) => {
+      setToast({ kind, message });
+    },
+    [],
+  );
 
   const headerTitle = useMemo(() => {
     if (entity === null) return t('entityModal.title');
@@ -531,7 +535,11 @@ export default function EntityDetailModal({ onClose }: EntityDetailModalProps) {
               onRemove={handleRemoveCapability}
             />
           ) : tab === 'ai_genes' ? (
-            <AiGenesTab entity={entity} onAdd={handleAddGene} onRemove={handleRemoveGene} />
+            <AiGenesTab
+              entity={entity}
+              onRefresh={handleRefreshEntity}
+              onNotify={handleGeneNotify}
+            />
           ) : tab === 'instances' ? (
             <InstancesTab
               instances={instances}

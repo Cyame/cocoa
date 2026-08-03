@@ -379,7 +379,14 @@
       "addExtraConfirm": "添加到 {{entity}}",
       "addExtraHint": "将在下次 spawn 化身时生效。",
       "filter": "筛选",
-      "loading": "正在加载基因"
+      "loading": "正在加载基因",
+      "attachPick": "从目录中选择要附加到本眷族的基因。",
+      "attach": "附加",
+      "cancelPick": "取消",
+      "attachSuccess": "基因已附加。",
+      "attachFailed": "附加失败。",
+      "detachSuccess": "基因已移除。",
+      "detachFailed": "移除失败。"
     },
     "instancesTab": {
       "total": "总计",
@@ -677,7 +684,28 @@
     "entityActions": "操作",
     "viewDetail": "查看详情",
     "capabilityMarketTitle": "能力市场",
-    "capabilityMarketDetail": "原子能力浏览器即将上线。",
+    "capabilityMarketDetail": "浏览与管理眷族、神职可用的原子能力。",
+    "capabilityMarketEmpty": "当前视图下暂无能力。",
+    "scopeLabel": "作用域",
+    "readonly": "只读",
+    "create": "创建",
+    "edit": "编辑",
+    "delete": "删除",
+    "save": "保存",
+    "name": "名称",
+    "type": "类型",
+    "confirmDelete": "确定删除「{{name}}」？将执行软删除。",
+    "hideSystem": "隐藏 system 作用域",
+    "createCapability": "创建能力",
+    "createAiGene": "创建深海基因",
+    "createUserGene": "创建人类基因",
+    "scope": {
+      "system": "系统",
+      "org": "组织",
+      "namespace": "次元",
+      "platform": "平台",
+      "workspace": "空间"
+    },
     "tabs": {
       "workspace": "空间",
       "baseClasses": "神职",
@@ -1033,5 +1061,10 @@
       "healthz_watch": "等待就绪",
       "status_update": "更新状态"
     }
+  },
+  "genePacks": {
+    "orgAdmin": "组织管理",
+    "namespaceOps": "次元运维",
+    "workspaceOps": "空间运维"
   }
 }

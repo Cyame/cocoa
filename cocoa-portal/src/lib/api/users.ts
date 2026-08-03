@@ -163,3 +163,7 @@ export async function createUserGene(body: {
     body: JSON.stringify({ kind: 'custom', ...body }),
   });
 }
+
+export async function deleteUserGene(geneId: string): Promise<void> {
+  await api(`/user-genes/${encodeURIComponent(geneId)}`, { method: 'DELETE' });
+}

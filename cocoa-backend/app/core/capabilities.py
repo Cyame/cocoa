@@ -12,8 +12,10 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.ai_gene import AiGene
+from app.core.errors import NotFoundError
+from app.models.ai_gene import AiGene, BaseClassAiGene
 from app.models.capability_market import CapabilityMarketEntry
+from app.models.entity import Entity
 from app.models.junctions import (
     BaseClassCapability,
     EntityAiGene,
@@ -182,3 +184,143 @@ async def attach_base_class_capability(
             )
         )
         await db.flush()
+
+
+async def detach_entity_capability(
+    db: AsyncSession, *, entity_id: str, capability_id: str
+) -> None:
+    """Soft-delete Entity ↔ capability junction."""
+    result = await db.execute(
+        select(EntityCapability).where(
+            EntityCapability.entity_id == entity_id,
+            EntityCapability.capability_id == capability_id,
+            EntityCapability.deleted_at.is_(None),
+        )
+    )
+    link = result.scalar_one_or_none()
+    if link is None:
+        raise NotFoundError(
+            "entity.capability_not_attached",
+            "errors.entity.capability_not_attached",
+            f"Capability '{capability_id}' is not attached to entity '{entity_id}'",
+        )
+    link.soft_delete()
+    await db.flush()
+
+
+async def detach_base_class_capability(
+    db: AsyncSession, *, base_class_id: str, capability_id: str
+) -> None:
+    """Soft-delete BaseClass ↔ capability junction."""
+    result = await db.execute(
+        select(BaseClassCapability).where(
+            BaseClassCapability.base_class_id == base_class_id,
+            BaseClassCapability.capability_id == capability_id,
+            BaseClassCapability.deleted_at.is_(None),
+        )
+    )
+    link = result.scalar_one_or_none()
+    if link is None:
+        raise NotFoundError(
+            "base_class.capability_not_attached",
+            "errors.base_class.capability_not_attached",
+            f"Capability '{capability_id}' is not attached to base class '{base_class_id}'",
+        )
+    link.soft_delete()
+    await db.flush()
+
+
+async def attach_entity_ai_gene(
+    db: AsyncSession, *, entity_id: str, ai_gene_id: str
+) -> None:
+    """Idempotently link an Entity to an AiGene."""
+    result = await db.execute(
+        select(EntityAiGene).where(
+            EntityAiGene.entity_id == entity_id,
+            EntityAiGene.ai_gene_id == ai_gene_id,
+            EntityAiGene.deleted_at.is_(None),
+        )
+    )
+    if result.scalar_one_or_none() is None:
+        db.add(EntityAiGene(entity_id=entity_id, ai_gene_id=ai_gene_id))
+        await db.flush()
+
+
+async def detach_entity_ai_gene(
+    db: AsyncSession, *, entity_id: str, ai_gene_id: str
+) -> None:
+    """Soft-delete Entity ↔ AiGene junction."""
+    result = await db.execute(
+        select(EntityAiGene).where(
+            EntityAiGene.entity_id == entity_id,
+            EntityAiGene.ai_gene_id == ai_gene_id,
+            EntityAiGene.deleted_at.is_(None),
+        )
+    )
+    link = result.scalar_one_or_none()
+    if link is None:
+        raise NotFoundError(
+            "entity.ai_gene_not_attached",
+            "errors.entity.ai_gene_not_attached",
+            f"AiGene '{ai_gene_id}' is not attached to entity '{entity_id}'",
+        )
+    link.soft_delete()
+    await db.flush()
+
+
+async def attach_base_class_ai_gene(
+    db: AsyncSession, *, base_class_id: str, ai_gene_id: str
+) -> None:
+    """Idempotently link a BaseClass to an AiGene."""
+    result = await db.execute(
+        select(BaseClassAiGene).where(
+            BaseClassAiGene.base_class_id == base_class_id,
+            BaseClassAiGene.ai_gene_id == ai_gene_id,
+            BaseClassAiGene.deleted_at.is_(None),
+        )
+    )
+    if result.scalar_one_or_none() is None:
+        db.add(BaseClassAiGene(base_class_id=base_class_id, ai_gene_id=ai_gene_id))
+        await db.flush()
+
+
+async def detach_base_class_ai_gene(
+    db: AsyncSession, *, base_class_id: str, ai_gene_id: str
+) -> None:
+    """Soft-delete BaseClass ↔ AiGene junction."""
+    result = await db.execute(
+        select(BaseClassAiGene).where(
+            BaseClassAiGene.base_class_id == base_class_id,
+            BaseClassAiGene.ai_gene_id == ai_gene_id,
+            BaseClassAiGene.deleted_at.is_(None),
+        )
+    )
+    link = result.scalar_one_or_none()
+    if link is None:
+        raise NotFoundError(
+            "base_class.ai_gene_not_attached",
+            "errors.base_class.ai_gene_not_attached",
+            f"AiGene '{ai_gene_id}' is not attached to base class '{base_class_id}'",
+        )
+    link.soft_delete()
+    await db.flush()
+
+
+async def bump_entity_migration_hash(db: AsyncSession, entity: Entity) -> None:
+    """Recompute and persist migration_hash for one Entity."""
+    from app.core.migration_hash import compute_entity_migration_hash
+
+    entity.migration_hash = await compute_entity_migration_hash(db, entity)
+    await db.flush()
+
+
+async def bump_entities_for_base_class(db: AsyncSession, base_class_slug: str) -> None:
+    """Bump migration_hash for all active entities using *base_class_slug*."""
+    result = await db.execute(
+        select(Entity).where(
+            Entity.preset_slug == base_class_slug,
+            Entity.deleted_at.is_(None),
+        )
+    )
+    for entity in result.scalars().all():
+        await bump_entity_migration_hash(db, entity)

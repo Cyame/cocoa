@@ -48,7 +48,6 @@ from app.models.capability_market import (
 from app.models.entity import Entity
 from app.models.instance import Instance
 from app.models.memory import Memory
-from app.schemas.capability_market import CapabilityMarketEntryOut
 from app.schemas.learning import (
     AggregatedMemoryCount,
     CombineRequest,
@@ -100,36 +99,6 @@ async def _get_workspace_id_for_entity(db: DB, entity_id: str) -> str:
             f"Entity {entity_id!r} is not associated with any workspace",
         )
     return workspace_id
-
-
-# ---------------------------------------------------------------------------
-# Capability market (L1) — list
-# ---------------------------------------------------------------------------
-
-
-@router.get("/capability-market", response_model=OffsetPage[CapabilityMarketEntryOut])
-async def list_capability_market(
-    db: DB,
-    current_user: CurrentUserDep,
-    type: str | None = Query(None, alias="type"),
-    tag: str | None = Query(None),
-    created_via: str | None = Query(None),
-    limit: int = Query(50, ge=1, le=200),
-    offset: int = Query(0, ge=0),
-) -> OffsetPage:
-    """Return paginated L1 capability market entries with optional filters."""
-    stmt = (
-        select(CapabilityMarketEntry)
-        .where(CapabilityMarketEntry.deleted_at.is_(None))
-        .order_by(CapabilityMarketEntry.name)
-    )
-    if type is not None:
-        stmt = stmt.where(CapabilityMarketEntry.type == type)
-    if created_via is not None:
-        stmt = stmt.where(CapabilityMarketEntry.created_via == created_via)
-    if tag is not None:
-        stmt = stmt.where(CapabilityMarketEntry.tags.contains([tag]))
-    return await paginate_offset(db, stmt, offset, limit)
 
 
 # ---------------------------------------------------------------------------

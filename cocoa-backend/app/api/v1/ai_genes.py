@@ -13,14 +13,19 @@ Routes:
 
 from __future__ import annotations
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Query, status
 from sqlalchemy import select
 
-from app.api.deps import DB, CurrentUserDep
+from app.api.deps import DB, CurrentUserDep, XOrgIdHeader
 from app.core.errors import ConflictError, NotFoundError
 from app.core.openapi import add_error_responses
+from app.core.org_scope import (
+    resolve_current_org_id,
+    scoped_visibility_clause,
+    validate_scope_fks,
+)
 from app.core.pagination import OffsetPage, paginate_offset
-from app.core.permissions import require_super_admin
+from app.core.permissions import require_permission
 from app.models.ai_gene import AiGene, BaseClassAiGene
 from app.models.base_class import BaseClass
 from app.schemas.ai_gene import (
@@ -49,13 +54,19 @@ async def _get_active_gene(db: DB, gene_id: str) -> AiGene:
 async def list_ai_genes(
     db: DB,
     current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
+    scope: str | None = Query(None),
     limit: int = 50,
     offset: int = 0,
 ) -> OffsetPage:
-    """Return all active ai genes."""
+    """Return ai genes visible in the current org context."""
+    current_org_id = await resolve_current_org_id(
+        db, current_user.user_id, x_organization_id
+    )
     stmt = (
         select(AiGene)
         .where(AiGene.deleted_at.is_(None))
+        .where(scoped_visibility_clause(AiGene, current_org_id, scope))
         .order_by(AiGene.slug)
     )
     return await paginate_offset(db, stmt, offset, min(limit, 200))
@@ -99,15 +110,28 @@ async def create_ai_gene(
     body: AiGeneCreate,
     db: DB,
     current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
 ) -> AiGene:
-    """Create a new ai gene (super-admin).
-
-    v4.0 D15: new rows default to ``scope=org``; ``scope=system`` rejected.
-    """
+    """Create a new ai gene (requires can_manage_ai_genes)."""
     from app.core.scope_guard import ensure_scope_create_allowed
 
-    require_super_admin(current_user)
     ensure_scope_create_allowed(body.scope, resource="ai_gene")
+    current_org_id = await resolve_current_org_id(
+        db, current_user.user_id, x_organization_id
+    )
+    org_id, ns_id = validate_scope_fks(
+        body.scope,
+        body.organization_id,
+        body.namespace_id,
+        current_org_id=current_org_id,
+    )
+    await require_permission(
+        db,
+        current_user.user_id,
+        "can_manage_ai_genes",
+        organization_id=org_id,
+        namespace_id=ns_id,
+    )
     existing = await db.execute(
         select(AiGene).where(
             AiGene.slug == body.slug,
@@ -120,18 +144,6 @@ async def create_ai_gene(
             "errors.ai_gene.slug_taken",
             f"AiGene slug '{body.slug}' is already taken",
         )
-    organization_id = body.organization_id
-    if body.scope == "org" and organization_id is None:
-        from app.models.organization import Organization
-
-        org = await db.execute(
-            select(Organization).where(
-                Organization.slug == "default",
-                Organization.deleted_at.is_(None),
-            )
-        )
-        org_row = org.scalar_one_or_none()
-        organization_id = org_row.id if org_row is not None else None
     gene = AiGene(
         slug=body.slug,
         name=body.name,
@@ -139,8 +151,8 @@ async def create_ai_gene(
         manifest=body.manifest,
         description=body.description,
         scope=body.scope,
-        organization_id=organization_id,
-        namespace_id=body.namespace_id,
+        organization_id=org_id,
+        namespace_id=ns_id,
     )
     db.add(gene)
     await db.commit()
@@ -154,14 +166,31 @@ async def update_ai_gene(
     body: AiGeneUpdate,
     db: DB,
     current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
 ) -> AiGene:
-    """Partial-update an ai gene (super-admin). Slug and scope are immutable;
+    """Partial-update an ai gene. Slug and scope are immutable;
     system-scoped presets are read-only (v4.0 D15)."""
     from app.core.scope_guard import ensure_scope_mutable
 
-    require_super_admin(current_user)
+    current_org_id = await resolve_current_org_id(
+        db, current_user.user_id, x_organization_id
+    )
     gene = await _get_active_gene(db, gene_id)
     ensure_scope_mutable(gene.scope, resource="ai_gene", row_id=gene_id)
+    await require_permission(
+        db,
+        current_user.user_id,
+        "can_manage_ai_genes",
+        organization_id=gene.organization_id,
+        namespace_id=gene.namespace_id,
+    )
+    if current_org_id is not None and gene.scope != "system":
+        if gene.organization_id != current_org_id:
+            raise NotFoundError(
+                "ai_gene.not_found",
+                "errors.ai_gene.not_found",
+                f"AiGene '{gene_id}' not found",
+            )
     for field, value in body.model_dump(exclude_unset=True).items():
         setattr(gene, field, value)
     await db.commit()
@@ -174,13 +203,30 @@ async def delete_ai_gene(
     gene_id: str,
     db: DB,
     current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
 ) -> None:
-    """Soft-delete an ai gene (super-admin). System presets are read-only."""
+    """Soft-delete an ai gene. System presets are read-only."""
     from app.core.scope_guard import ensure_scope_mutable
 
-    require_super_admin(current_user)
+    current_org_id = await resolve_current_org_id(
+        db, current_user.user_id, x_organization_id
+    )
     gene = await _get_active_gene(db, gene_id)
     ensure_scope_mutable(gene.scope, resource="ai_gene", row_id=gene_id)
+    await require_permission(
+        db,
+        current_user.user_id,
+        "can_manage_ai_genes",
+        organization_id=gene.organization_id,
+        namespace_id=gene.namespace_id,
+    )
+    if current_org_id is not None and gene.scope != "system":
+        if gene.organization_id != current_org_id:
+            raise NotFoundError(
+                "ai_gene.not_found",
+                "errors.ai_gene.not_found",
+                f"AiGene '{gene_id}' not found",
+            )
     gene.soft_delete()
     await db.commit()
 
@@ -191,10 +237,20 @@ async def attach_ai_gene_to_base_class(
     body: AiGeneAttachBaseClassRequest,
     db: DB,
     current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
 ) -> dict[str, str]:
-    """Link an ai gene to a BaseClass via junction table (super-admin)."""
-    require_super_admin(current_user)
+    """Link an ai gene to a BaseClass via junction table."""
+    current_org_id = await resolve_current_org_id(
+        db, current_user.user_id, x_organization_id
+    )
     gene = await _get_active_gene(db, gene_id)
+    await require_permission(
+        db,
+        current_user.user_id,
+        "can_manage_ai_genes",
+        organization_id=gene.organization_id or current_org_id,
+        namespace_id=gene.namespace_id,
+    )
     bc = await db.get(BaseClass, body.base_class_id)
     if bc is None or bc.deleted_at is not None:
         raise NotFoundError(
@@ -230,10 +286,20 @@ async def detach_ai_gene_from_base_class(
     base_class_id: str,
     db: DB,
     current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
 ) -> None:
-    """Remove ai gene ↔ BaseClass junction link (super-admin)."""
-    require_super_admin(current_user)
-    await _get_active_gene(db, gene_id)
+    """Remove ai gene ↔ BaseClass junction link."""
+    current_org_id = await resolve_current_org_id(
+        db, current_user.user_id, x_organization_id
+    )
+    gene = await _get_active_gene(db, gene_id)
+    await require_permission(
+        db,
+        current_user.user_id,
+        "can_manage_ai_genes",
+        organization_id=gene.organization_id or current_org_id,
+        namespace_id=gene.namespace_id,
+    )
     result = await db.execute(
         select(BaseClassAiGene).where(
             BaseClassAiGene.base_class_id == base_class_id,

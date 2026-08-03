@@ -220,17 +220,30 @@ describe('EntityDetailModal', () => {
     expect(body.target_base_class_name).toBe('金密士');
   });
 
-  it('renders genes tab safely when API omits ai_genes', async () => {
+  it('opens gene attach picker when add extra is clicked', async () => {
     mockedApi.mockImplementation((path, init) => {
       if (path === `/entities/${ENTITY_ID}` && (!init || init.method === undefined)) {
-        return Promise.resolve({
-          ...ENTITY_RESPONSE,
-          ai_genes: undefined,
-          capabilities: null,
-        });
+        return Promise.resolve(ENTITY_RESPONSE);
       }
       if (path.startsWith(`/instances?entity_id=${ENTITY_ID}`)) {
-        return Promise.resolve({ items: [], total: 0 });
+        return Promise.resolve(INSTANCES_RESPONSE);
+      }
+      if (path.startsWith('/ai-genes?')) {
+        return Promise.resolve({
+          items: [
+            {
+              id: 'gene-extra-1',
+              slug: 'extra-tool',
+              name: 'Extra tool',
+              tags: [],
+              description: null,
+              scope: 'org',
+              created_at: '2026-07-01T00:00:00Z',
+              updated_at: null,
+            },
+          ],
+          total: 1,
+        });
       }
       return Promise.reject(new Error(`Unmocked call: ${init?.method ?? 'GET'} ${path}`));
     });
@@ -240,5 +253,8 @@ describe('EntityDetailModal', () => {
     await screen.findByTestId('entity-modal-title');
     fireEvent.click(screen.getByTestId('entity-tab-ai_genes'));
     expect(await screen.findByTestId('genes-add-extra')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('genes-add-extra'));
+    expect(await screen.findByTestId('genes-add-modal')).toBeInTheDocument();
+    expect(screen.queryByTestId('genes-add-modal-stub')).not.toBeInTheDocument();
   });
 });

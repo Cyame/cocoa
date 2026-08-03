@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, computed_field
 
 
 class AiGeneCreate(BaseModel):
@@ -39,6 +39,11 @@ class AiGeneOut(BaseModel):
     namespace_id: str | None = None
     created_at: datetime
     updated_at: datetime | None = None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def readonly(self) -> bool:
+        return self.scope == "system"
 
 
 class AiGeneAttachBaseClassRequest(BaseModel):

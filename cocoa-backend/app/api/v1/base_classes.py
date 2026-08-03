@@ -12,16 +12,24 @@ Routes (all require authentication):
 from __future__ import annotations
 
 from fastapi import APIRouter, Query, status
+from pydantic import BaseModel
 from sqlalchemy import and_, or_, select
 
-from app.api.deps import DB, CurrentUserDep
+from app.api.deps import DB, CurrentUserDep, XOrgIdHeader
 from app.core.errors import ConflictError, NotFoundError, ValidationError
 from app.core.openapi import add_error_responses
+from app.core.org_scope import (
+    resolve_current_org_id,
+    scoped_visibility_clause,
+    validate_scope_fks,
+)
 from app.core.pagination import OffsetPage, paginate_offset
-from app.core.permissions import require_super_admin
+from app.core.permissions import require_permission, require_super_admin
 from app.core.preset_registry import registry
+from app.models.ai_gene import AiGene
 from app.models.base_class import BaseClass
 from app.models.base_class_provider_default import BaseClassProviderDefault
+from app.models.capability_market import CapabilityMarketEntry
 from app.models.organization import Organization
 from app.models.organization_provider import OrganizationProvider
 from app.schemas.base_class import (
@@ -39,6 +47,14 @@ add_error_responses(router)
 
 _INTERNAL_SLUGS = frozenset({"cerebellum-baseclass"})
 _INTERNAL_TAGS = frozenset({"internal", "system"})
+
+
+class BaseClassCapabilityAttachBody(BaseModel):
+    capability_id: str
+
+
+class BaseClassAiGeneAttachBody(BaseModel):
+    ai_gene_id: str
 
 # Manifest mirror keys — read-only aggregates filled from junction rows;
 # never a write truth (v4.0 migration-spec §1 aggregate read path).
@@ -95,6 +111,8 @@ def _public_base_class_filter():
 async def list_base_classes(
     db: DB,
     current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
+    scope: str | None = Query(None),
     limit: int = 50,
     offset: int = 0,
     include_internal: bool = Query(
@@ -107,10 +125,19 @@ async def list_base_classes(
     ),
 ) -> OffsetPage:
     """Return a paginated list of active (non-deleted) base classes."""
+    current_org_id = await resolve_current_org_id(
+        db, current_user.user_id, x_organization_id
+    )
+    visibility = scoped_visibility_clause(BaseClass, current_org_id, scope)
     if include_internal:
-        stmt = select(BaseClass).where(BaseClass.deleted_at.is_(None))
+        stmt = select(BaseClass).where(
+            BaseClass.deleted_at.is_(None),
+            visibility,
+        )
     else:
-        stmt = select(BaseClass).where(_public_base_class_filter())
+        stmt = select(BaseClass).where(
+            and_(_public_base_class_filter(), visibility),
+        )
     if tag:
         stmt = stmt.where(BaseClass.tags.contains([tag]))
     stmt = stmt.order_by(BaseClass.created_at.desc())
@@ -231,6 +258,166 @@ async def update_provider_default(
     return binding
 
 
+@router.post(
+    "/{preset_id}/capabilities",
+    status_code=status.HTTP_201_CREATED,
+)
+async def attach_base_class_capability(
+    preset_id: str,
+    body: BaseClassCapabilityAttachBody,
+    db: DB,
+    current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
+) -> dict[str, str]:
+    """Attach a capability to a base class."""
+    from app.core.capabilities import attach_base_class_capability
+
+    preset = await db.get(BaseClass, preset_id)
+    if preset is None or preset.deleted_at is not None:
+        raise NotFoundError(
+            "base_class.not_found",
+            "errors.base_class.not_found",
+            f"BaseClass '{preset_id}' not found",
+        )
+    await require_permission(
+        db,
+        current_user.user_id,
+        "can_manage_capabilities",
+        organization_id=preset.organization_id,
+        namespace_id=preset.namespace_id,
+    )
+    cap = await db.get(CapabilityMarketEntry, body.capability_id)
+    if cap is None or cap.deleted_at is not None:
+        raise NotFoundError(
+            "capability_market.not_found",
+            "errors.capability_market.not_found",
+            f"Capability '{body.capability_id}' not found",
+        )
+    await attach_base_class_capability(
+        db, base_class_id=preset_id, capability_id=body.capability_id
+    )
+    await db.commit()
+    return {"base_class_id": preset_id, "capability_id": body.capability_id}
+
+
+@router.delete(
+    "/{preset_id}/capabilities/{capability_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def detach_base_class_capability_route(
+    preset_id: str,
+    capability_id: str,
+    db: DB,
+    current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
+) -> None:
+    """Detach a capability from a base class (soft-delete junction)."""
+    from app.core.capabilities import (
+        bump_entities_for_base_class,
+        detach_base_class_capability,
+    )
+
+    preset = await db.get(BaseClass, preset_id)
+    if preset is None or preset.deleted_at is not None:
+        raise NotFoundError(
+            "base_class.not_found",
+            "errors.base_class.not_found",
+            f"BaseClass '{preset_id}' not found",
+        )
+    await require_permission(
+        db,
+        current_user.user_id,
+        "can_manage_capabilities",
+        organization_id=preset.organization_id,
+        namespace_id=preset.namespace_id,
+    )
+    await detach_base_class_capability(
+        db, base_class_id=preset_id, capability_id=capability_id
+    )
+    await bump_entities_for_base_class(db, preset.slug)
+    await db.commit()
+
+
+@router.post(
+    "/{preset_id}/ai-genes",
+    status_code=status.HTTP_201_CREATED,
+)
+async def attach_base_class_ai_gene_route(
+    preset_id: str,
+    body: BaseClassAiGeneAttachBody,
+    db: DB,
+    current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
+) -> dict[str, str]:
+    """Attach an ai gene to a base class."""
+    from app.core.capabilities import attach_base_class_ai_gene
+
+    preset = await db.get(BaseClass, preset_id)
+    if preset is None or preset.deleted_at is not None:
+        raise NotFoundError(
+            "base_class.not_found",
+            "errors.base_class.not_found",
+            f"BaseClass '{preset_id}' not found",
+        )
+    await require_permission(
+        db,
+        current_user.user_id,
+        "can_manage_ai_genes",
+        organization_id=preset.organization_id,
+        namespace_id=preset.namespace_id,
+    )
+    gene = await db.get(AiGene, body.ai_gene_id)
+    if gene is None or gene.deleted_at is not None:
+        raise NotFoundError(
+            "ai_gene.not_found",
+            "errors.ai_gene.not_found",
+            f"AiGene '{body.ai_gene_id}' not found",
+        )
+    await attach_base_class_ai_gene(
+        db, base_class_id=preset_id, ai_gene_id=body.ai_gene_id
+    )
+    await db.commit()
+    return {"base_class_id": preset_id, "ai_gene_id": body.ai_gene_id}
+
+
+@router.delete(
+    "/{preset_id}/ai-genes/{ai_gene_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def detach_base_class_ai_gene_route(
+    preset_id: str,
+    ai_gene_id: str,
+    db: DB,
+    current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
+) -> None:
+    """Detach an ai gene from a base class."""
+    from app.core.capabilities import (
+        bump_entities_for_base_class,
+        detach_base_class_ai_gene,
+    )
+
+    preset = await db.get(BaseClass, preset_id)
+    if preset is None or preset.deleted_at is not None:
+        raise NotFoundError(
+            "base_class.not_found",
+            "errors.base_class.not_found",
+            f"BaseClass '{preset_id}' not found",
+        )
+    await require_permission(
+        db,
+        current_user.user_id,
+        "can_manage_ai_genes",
+        organization_id=preset.organization_id,
+        namespace_id=preset.namespace_id,
+    )
+    await detach_base_class_ai_gene(
+        db, base_class_id=preset_id, ai_gene_id=ai_gene_id
+    )
+    await bump_entities_for_base_class(db, preset.slug)
+    await db.commit()
+
+
 @router.get("/{slug}", response_model=BaseClassOut)
 async def get_base_class_by_slug(
     slug: str,
@@ -260,16 +447,32 @@ async def create_base_class(
     body: BaseClassCreate,
     db: DB,
     current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
 ) -> BaseClassOut:
     """Create a new base class. Raises 409 on active slug conflict.
 
-    v4.0 D15: new rows default to ``scope=org`` (bound to the default org
-    unless ``organization_id`` is given); ``scope=system`` is preset-only and
-    rejected with 4xx. Manifest mirror arrays are stripped on write.
+    v4.0 D15: new rows default to ``scope=org``; ``scope=system`` is preset-only.
+    Manifest mirror arrays are stripped on write.
     """
     from app.core.scope_guard import ensure_scope_create_allowed
 
     ensure_scope_create_allowed(body.scope, resource="base_class")
+    current_org_id = await resolve_current_org_id(
+        db, current_user.user_id, x_organization_id
+    )
+    org_id, ns_id = validate_scope_fks(
+        body.scope,
+        body.organization_id,
+        body.namespace_id,
+        current_org_id=current_org_id,
+    )
+    await require_permission(
+        db,
+        current_user.user_id,
+        "can_manage_organization",
+        organization_id=org_id,
+        namespace_id=ns_id,
+    )
     existing = await db.execute(
         select(BaseClass).where(
             BaseClass.slug == body.slug,
@@ -283,17 +486,6 @@ async def create_base_class(
             f"BaseClass slug '{body.slug}' is already taken",
         )
 
-    organization_id = body.organization_id
-    if body.scope == "org" and organization_id is None:
-        org = await db.execute(
-            select(Organization).where(
-                Organization.slug == "default",
-                Organization.deleted_at.is_(None),
-            )
-        )
-        org_row = org.scalar_one_or_none()
-        organization_id = org_row.id if org_row is not None else None
-
     preset = BaseClass(
         slug=body.slug,
         name=body.name,
@@ -303,8 +495,8 @@ async def create_base_class(
         description=body.description,
         tags=body.tags,
         scope=body.scope,
-        organization_id=organization_id,
-        namespace_id=body.namespace_id,
+        organization_id=org_id,
+        namespace_id=ns_id,
     )
     db.add(preset)
     await db.commit()
@@ -320,6 +512,7 @@ async def update_base_class(
     body: BaseClassUpdate,
     db: DB,
     current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
 ) -> BaseClassOut:
     """Partial-update an existing base class. Slug and scope are immutable;
     system-scoped presets are read-only (v4.0 D15)."""
@@ -333,6 +526,13 @@ async def update_base_class(
             f"BaseClass '{preset_id}' not found",
         )
     ensure_scope_mutable(preset.scope, resource="base_class", row_id=preset_id)
+    await require_permission(
+        db,
+        current_user.user_id,
+        "can_manage_organization",
+        organization_id=preset.organization_id,
+        namespace_id=preset.namespace_id,
+    )
 
     for field, value in body.model_dump(exclude_unset=True).items():
         if field == "manifest":
@@ -351,6 +551,7 @@ async def delete_base_class(
     preset_id: str,
     db: DB,
     current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
 ) -> None:
     """Soft-delete a base class. System-scoped presets are read-only (D15)."""
     from app.core.scope_guard import ensure_scope_mutable
@@ -363,6 +564,13 @@ async def delete_base_class(
             f"BaseClass '{preset_id}' not found",
         )
     ensure_scope_mutable(preset.scope, resource="base_class", row_id=preset_id)
+    await require_permission(
+        db,
+        current_user.user_id,
+        "can_manage_organization",
+        organization_id=preset.organization_id,
+        namespace_id=preset.namespace_id,
+    )
 
     preset.soft_delete()
     await db.commit()

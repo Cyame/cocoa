@@ -1,0 +1,35 @@
+{
+  "packs": [
+    {
+      "id": "org-admin",
+      "label_key": "genePacks.orgAdmin",
+      "slugs": [
+        "can_manage_organization",
+        "can_manage_org_members",
+        "can_manage_genes",
+        "can_manage_capabilities",
+        "can_manage_ai_genes",
+        "can_manage_knowledge",
+        "can_clone_base_class",
+        "can_clone_organization"
+      ]
+    },
+    {
+      "id": "namespace-ops",
+      "label_key": "genePacks.namespaceOps",
+      "slugs": ["can_manage_namespace", "can_clone_entity"]
+    },
+    {
+      "id": "workspace-ops",
+      "label_key": "genePacks.workspaceOps",
+      "slugs": [
+        "can_manage_workspace",
+        "can_edit_workspace",
+        "can_view_workspace",
+        "can_operate_workspace",
+        "can_clone_workspace",
+        "can_manage_meetings"
+      ]
+    }
+  ]
+}

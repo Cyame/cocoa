@@ -542,7 +542,14 @@
       "addExtraConfirm": "Add to {{entity}}",
       "addExtraHint": "Will be applied on the next spawn of an instance.",
       "filter": "Filter",
-      "loading": "Loading genes"
+      "loading": "Loading genes",
+      "attachPick": "Pick a catalog gene to attach to this entity.",
+      "attach": "Attach",
+      "cancelPick": "Cancel",
+      "attachSuccess": "Gene attached.",
+      "attachFailed": "Could not attach gene.",
+      "detachSuccess": "Gene removed.",
+      "detachFailed": "Could not remove gene."
     },
     "instancesTab": {
       "total": "Total",
@@ -840,7 +847,28 @@
     "entityActions": "Actions",
     "viewDetail": "View detail",
     "capabilityMarketTitle": "Capability market",
-    "capabilityMarketDetail": "Atomic capability browser coming soon.",
+    "capabilityMarketDetail": "Browse and manage atomic capabilities for entities and base classes.",
+    "capabilityMarketEmpty": "No capabilities in this view yet.",
+    "scopeLabel": "Scope",
+    "readonly": "Read-only",
+    "create": "Create",
+    "edit": "Edit",
+    "delete": "Delete",
+    "save": "Save",
+    "name": "Name",
+    "type": "Type",
+    "confirmDelete": "Delete \"{{name}}\"? This uses soft-delete.",
+    "hideSystem": "Hide system scope",
+    "createCapability": "Create capability",
+    "createAiGene": "Create deep-sea gene",
+    "createUserGene": "Create human gene",
+    "scope": {
+      "system": "System",
+      "org": "Organization",
+      "namespace": "Namespace",
+      "platform": "Platform",
+      "workspace": "Workspace"
+    },
     "tabs": {
       "workspace": "Workspaces",
       "baseClasses": "Base classes",
@@ -1033,5 +1061,10 @@
       "healthz_watch": "Wait until ready",
       "status_update": "Update status"
     }
+  },
+  "genePacks": {
+    "orgAdmin": "Organization admin",
+    "namespaceOps": "Namespace ops",
+    "workspaceOps": "Workspace ops"
   }
 }
