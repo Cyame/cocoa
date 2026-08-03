@@ -24,8 +24,42 @@ _COMPOSE_INSTRUCTIONS = """你是 Cocoa 世界中枢。请把下面的结构化�
 """
 
 
-def build_prompt_scaffold(agent_config: dict[str, Any]) -> str:
-    """Deterministic SYSTEM.md scaffold (no LLM)."""
+def _knowledge_block(knowledge) -> str:
+    """Render the ``## 知识`` section body from resolved knowledge entries.
+
+    Each entry is rendered as ``- {title}：{body}`` (falling back to whichever
+    of title / body is present). Accepts plain dicts (API items) or ORM
+    objects; the body is inserted verbatim as inert scaffold text.
+    """
+    if not knowledge:
+        return ""
+    lines: list[str] = []
+    for item in knowledge:
+        if isinstance(item, dict):
+            title = item.get("title") or ""
+            body = item.get("body") or ""
+        else:
+            title = getattr(item, "title", None) or ""
+            body = getattr(item, "body", None) or ""
+        if title and body:
+            lines.append(f"- {title}：{body}")
+        elif title:
+            lines.append(f"- {title}")
+        elif body:
+            lines.append(f"- {body}")
+    return "\n".join(lines)
+
+
+def build_prompt_scaffold(
+    agent_config: dict[str, Any], *, knowledge=None
+) -> str:
+    """Deterministic SYSTEM.md scaffold (no LLM).
+
+    *knowledge* is an optional iterable of resolved knowledge entries
+    (dicts or ORM objects with ``key`` / ``title`` / ``body`` / ``scope``);
+    when provided, a ``## 知识`` section is appended. Backward compatible:
+    callers that omit it get the previous scaffold verbatim.
+    """
     base_name = agent_config.get("baseclass_name") or agent_config.get("baseclass_slug") or "神职"
     base_form = (
         agent_config.get("baseclass_operating_form")
@@ -51,6 +85,11 @@ def build_prompt_scaffold(agent_config: dict[str, Any]) -> str:
         "\n".join(f"- {g}" for g in genes) if genes else "- （眷族未配置基因）"
     )
 
+    knowledge_block = _knowledge_block(knowledge)
+    knowledge_section = (
+        f"## 知识\n\n{knowledge_block}\n\n" if knowledge_block else ""
+    )
+
     return (
         f"# 身份\n\n"
         f"你是眷族 **{entity_name}**。"
@@ -62,7 +101,8 @@ def build_prompt_scaffold(agent_config: dict[str, Any]) -> str:
         f"## 能力（仅继承自眷族）\n\n"
         f"{caps_block}\n\n"
         f"## 基因（仅继承自眷族）\n\n"
-        f"{genes_block}\n"
+        f"{genes_block}\n\n"
+        f"{knowledge_section}"
     )
 
 
@@ -73,7 +113,20 @@ async def compose_system_prompt_with_world_hub(
     agent_config: dict[str, Any],
 ) -> str:
     """Return SYSTEM.md body: world-hub LLM polish when available, else scaffold."""
-    scaffold = build_prompt_scaffold(agent_config)
+    knowledge = None
+    try:
+        from app.core.knowledge import resolve_knowledge_for_instance
+        from app.models.instance import Instance
+
+        inst = await db.get(Instance, instance_id)
+        if inst is not None and inst.deleted_at is None:
+            knowledge = await resolve_knowledge_for_instance(db, inst)
+    except Exception:  # noqa: BLE001
+        logger.exception(
+            "knowledge resolve failed; scaffold without it instance_id=%s",
+            instance_id,
+        )
+    scaffold = build_prompt_scaffold(agent_config, knowledge=knowledge)
     try:
         from app.services.llm.instance_pi_env import resolve_provider_for_instance
         from app.services.llm.org_provider import build_llm_client_from_org_provider

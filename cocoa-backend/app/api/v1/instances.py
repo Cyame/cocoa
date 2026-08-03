@@ -37,6 +37,7 @@ from app.core.event_types import (
     INSTANCE_STOPPED,
 )
 from app.core.events import emit
+from app.core.knowledge import entry_to_dict, resolve_knowledge_for_instance
 from app.core.migration_hash import compute_entity_migration_hash
 from app.core.openapi import add_error_responses
 from app.core.overlay import resolve_instance_agent_config
@@ -875,6 +876,38 @@ async def instance_tunnel_status(
 
     connected = tunnel_hub.is_connected(instance_id)
     return {"instance_id": instance_id, "connected": connected}
+
+
+@router.get("/{instance_id}/knowledge/resolved")
+async def resolve_instance_knowledge(
+    instance_id: str,
+    db: DB,
+    current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
+) -> dict[str, object]:
+    """Resolve the knowledge visible to an instance (v4.2 D16/H1).
+
+    Scope chain: instance → entity → namespace → org. Rows are filtered by
+    scope ownership visibility + binding, then merged per key so at most one
+    item survives: workspace > namespace > org > system, same-scope tie by
+    ``updated_at`` DESC then ``id`` DESC.
+    """
+    inst = await db.get(Instance, instance_id)
+    if inst is None or inst.deleted_at is not None:
+        raise NotFoundError(
+            "instance.not_found",
+            "errors.instance.not_found",
+            f"Instance '{instance_id}' not found",
+        )
+    await require_workspace_permission(
+        db,
+        current_user.user_id,
+        inst.workspace_id,
+        "can_view_workspace",
+        x_organization_id=x_organization_id,
+    )
+    resolved = await resolve_knowledge_for_instance(db, inst)
+    return {"items": [entry_to_dict(row) for row in resolved]}
 
 
 @router.post("/{instance_id}/stop", response_model=InstanceOut)

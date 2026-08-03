@@ -98,6 +98,19 @@ async def lifespan(app: FastAPI):
     except Exception:
         logger.opt(exception=True).error("Failed to load preset registry")
 
+    # v4.2: idempotently ensure the two system knowledge seeds exist.
+    # Test clones (cocoa_test_*) are skipped: they pin exact resolved counts
+    # and must stay seed-free.
+    if "cocoa_test" not in settings.DATABASE_URL:
+        try:
+            from app.core.knowledge import ensure_knowledge_seeds
+
+            async with get_session_factory()() as s:
+                await ensure_knowledge_seeds(s)
+                await s.commit()
+        except Exception:
+            logger.opt(exception=True).error("Failed to ensure knowledge seeds")
+
     try:
         async with get_session_factory()() as s:
             await emit(
