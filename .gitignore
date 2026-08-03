@@ -66,3 +66,6 @@ data/
 # ========================
 .codex-screenshots/
 .playwright-mcp/
+
+# 本地约定文件（保留本地副本，不入库）
+AGENTS.md
