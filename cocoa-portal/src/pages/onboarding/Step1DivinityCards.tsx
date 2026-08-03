@@ -213,6 +213,9 @@ function primaryTag(baseClass: BaseClass): string {
 
 function extractCommands(manifest: JsonObject | null): readonly string[] {
   if (manifest === null) return [];
+  // manifest here comes from GET /base-classes — the server merges the
+  // junction aggregate into manifest.commands (read-only mirror), never the
+  // DB-embedded write truth.
   const value = manifest.commands;
   if (!Array.isArray(value)) return [];
   return value.filter((item): item is string => typeof item === 'string');

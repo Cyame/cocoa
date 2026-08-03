@@ -87,6 +87,9 @@ export function CommandAutocomplete({
     void Promise.all(
       missing.map(async (slug) => {
         try {
+          // GET /base-classes/{slug} — server fills manifest.commands from
+          // the junction aggregate (read-only mirror), never the DB-embedded
+          // write truth.
           const preset = await api<EmployeePreset>(`/base-classes/${encodeURIComponent(slug)}`);
           const cmds = preset.manifest?.commands ?? [];
           cacheRef.current.set(slug, cmds);

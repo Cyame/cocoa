@@ -11,7 +11,10 @@ vi.mock('@/lib/api', async (importOriginal) => {
 
 const mockedApi = vi.mocked(api);
 
-function Wrapper({ targetSlugs = [] as readonly string[] }) {
+function Wrapper({
+  targetSlugs = [] as readonly string[],
+  presetByEntitySlug = {} as Readonly<Record<string, string | null | undefined>>,
+}) {
   const [text, setText] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   return (
@@ -27,6 +30,7 @@ function Wrapper({ targetSlugs = [] as readonly string[] }) {
         text={text}
         onTextChange={setText}
         targetSlugs={targetSlugs}
+        presetByEntitySlug={presetByEntitySlug}
       />
     </div>
   );
@@ -89,7 +93,7 @@ describe('CommandAutocomplete', () => {
       updated_at: '2026-07-01T00:00:00Z',
     } as never);
 
-    render(<Wrapper targetSlugs={['密士']} />);
+    render(<Wrapper targetSlugs={['密士']} presetByEntitySlug={{ 密士: 'mi-shi' }} />);
     const textarea = screen.getByTestId('composer') as HTMLTextAreaElement;
 
     act(() => {
@@ -104,7 +108,9 @@ describe('CommandAutocomplete', () => {
     expect(screen.getByText('/read')).toBeInTheDocument();
     expect(screen.getByText('/interrupt')).toBeInTheDocument();
     expect(screen.getByText('/distill')).toBeInTheDocument();
-    expect(mockedApi).toHaveBeenCalledWith(`/employee-presets/${encodeURIComponent('密士')}`);
+    // Commands are read from the base-class GET (junction-aggregated mirror),
+    // not the legacy employee-presets endpoint.
+    expect(mockedApi).toHaveBeenCalledWith(`/base-classes/${encodeURIComponent('mi-shi')}`);
   });
 
   it('inserts the highlighted command into the textarea on Enter', async () => {

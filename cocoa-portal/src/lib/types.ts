@@ -84,8 +84,11 @@ export type Employee = Entity;
 export type PresetManifest = {
   readonly model: string;
   readonly prompt: string;
-  /** v4.0: readonly mirror aggregated from junction rows by the backend —
-   * never a write truth (writes go through capability/gene junction APIs). */
+  /** v4.0: skills/tools/commands are readonly mirrors aggregated from
+   * junction rows (base_class_capabilities / entity_capabilities) by the
+   * backend on read paths — never a write truth. Writes go through the
+   * capability / gene junction APIs; the arrays here may be absent or stale
+   * on write payloads and are always server-filled in GET responses. */
   readonly skills: readonly string[];
   readonly tools: readonly string[];
   readonly commands: readonly string[];

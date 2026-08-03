@@ -24,6 +24,8 @@ export default function DistillResultModal({ result, onClose }: DistillResultMod
 
   if (result === null) return null;
 
+  // manifest_preview is the distiller's aggregated output (junction-derived
+  // skills/tools/commands), not DB-embedded manifest rows — display only.
   const preview = result.manifest_preview ?? {};
   const fieldValue = (key: string): string => {
     const v = preview[key as keyof typeof preview];
