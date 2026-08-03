@@ -29,6 +29,46 @@ from app.schemas.entity import EntityCreate, EntityOut, EntityUpdate
 router = APIRouter(prefix="/entities", tags=["Entitys"])
 add_error_responses(router)
 
+# config_override keys that mirror capability/gene state — stripped on write
+# (v4.0: the junction tables are the only write truth).
+_CAP_OVERRIDE_KEYS = (
+    "default_capabilities",
+    "capabilities",
+    "default_gene_refs",
+    "gene_refs",
+    "installed_genes",
+)
+
+
+def _strip_config_override_caps(override: dict | None) -> dict | None:
+    if not isinstance(override, dict):
+        return override
+    return {k: v for k, v in override.items() if k not in _CAP_OVERRIDE_KEYS}
+
+
+async def _entity_out(db: DB, entity: Entity) -> EntityOut:
+    """Serialize an Entity with the capabilities mirror filled from junction."""
+    from app.core.capabilities import load_entity_capability_dicts
+
+    caps = await load_entity_capability_dicts(db, entity.id)
+    return EntityOut(
+        id=entity.id,
+        namespace_id=entity.namespace_id,
+        name=entity.name,
+        slug=entity.slug,
+        rank=entity.rank,
+        preset_slug=entity.preset_slug,
+        display_name=entity.display_name,
+        display_color=entity.display_color,
+        system_prompt=entity.system_prompt,
+        config_override=entity.config_override,
+        migration_hash=entity.migration_hash,
+        capabilities=caps,
+        is_cerebellum=entity.is_cerebellum,
+        created_at=entity.created_at,
+        updated_at=entity.updated_at,
+    )
+
 
 @router.get("", response_model=OffsetPage[EntityOut])
 async def list_entities(
@@ -46,7 +86,14 @@ async def list_entities(
     )
     if namespace_id is not None:
         stmt = stmt.where(Entity.namespace_id == namespace_id)
-    return await paginate_offset(db, stmt, offset, min(limit, 200))
+    page = await paginate_offset(db, stmt, offset, min(limit, 200))
+    items = [await _entity_out(db, e) for e in page.items]
+    return OffsetPage(
+        items=items,
+        offset=page.offset,
+        limit=page.limit,
+        total=page.total,
+    )
 
 
 @router.get("/{entity_id}", response_model=EntityOut)
@@ -54,7 +101,7 @@ async def get_entity(
     entity_id: str,
     db: DB,
     current_user: CurrentUserDep,
-) -> Entity:
+) -> EntityOut:
     """Return a single entity by ID.
 
     Raises 404 if the entity does not exist or has been soft-deleted.
@@ -66,7 +113,7 @@ async def get_entity(
             "errors.entity.not_found",
             f"Entity '{entity_id}' not found",
         )
-    return entity
+    return await _entity_out(db, entity)
 
 
 @router.post("", response_model=EntityOut, status_code=status.HTTP_201_CREATED)
@@ -74,7 +121,7 @@ async def create_entity(
     body: EntityCreate,
     db: DB,
     current_user: CurrentUserDep,
-) -> Entity:
+) -> EntityOut:
     """Create a new entity.
 
     Raises 409 if an entity with the same slug already exists (active).
@@ -118,7 +165,7 @@ async def create_entity(
         display_name=body.display_name,
         display_color=body.display_color,
         system_prompt=body.system_prompt,
-        config_override=body.config_override,
+        config_override=_strip_config_override_caps(body.config_override),
     )
     db.add(entity)
     await db.flush()
@@ -127,7 +174,7 @@ async def create_entity(
     await db.refresh(entity)
 
     await registry.reload(db)
-    return entity
+    return await _entity_out(db, entity)
 
 
 @router.patch("/{entity_id}", response_model=EntityOut)
@@ -136,7 +183,7 @@ async def update_entity(
     body: EntityUpdate,
     db: DB,
     current_user: CurrentUserDep,
-) -> Entity:
+) -> EntityOut:
     """Update an existing entity.
 
     Only the fields provided in the request body are updated (partial update).
@@ -164,13 +211,15 @@ async def update_entity(
 
     patch_data = body.model_dump(exclude_unset=True)
     for field, value in patch_data.items():
+        if field == "config_override":
+            value = _strip_config_override_caps(value)
         setattr(entity, field, value)
 
     await db.commit()
     await db.refresh(entity)
 
     await registry.reload(db)
-    return entity
+    return await _entity_out(db, entity)
 
 
 @router.delete("/{entity_id}", status_code=status.HTTP_204_NO_CONTENT)

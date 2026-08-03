@@ -29,6 +29,12 @@ class OrganizationUpdate(BaseModel):
     description: str | None = None
 
 
+class OrganizationCreate(BaseModel):
+    slug: str = Field(min_length=1, max_length=255)
+    name: str = Field(min_length=1, max_length=255)
+    description: str | None = None
+
+
 class ProviderOrigin(str, Enum):
     catalog = "catalog"
     custom = "custom"

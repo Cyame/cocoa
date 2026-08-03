@@ -100,8 +100,14 @@ async def create_ai_gene(
     db: DB,
     current_user: CurrentUserDep,
 ) -> AiGene:
-    """Create a new ai gene (super-admin)."""
+    """Create a new ai gene (super-admin).
+
+    v4.0 D15: new rows default to ``scope=org``; ``scope=system`` rejected.
+    """
+    from app.core.scope_guard import ensure_scope_create_allowed
+
     require_super_admin(current_user)
+    ensure_scope_create_allowed(body.scope, resource="ai_gene")
     existing = await db.execute(
         select(AiGene).where(
             AiGene.slug == body.slug,
@@ -114,12 +120,27 @@ async def create_ai_gene(
             "errors.ai_gene.slug_taken",
             f"AiGene slug '{body.slug}' is already taken",
         )
+    organization_id = body.organization_id
+    if body.scope == "org" and organization_id is None:
+        from app.models.organization import Organization
+
+        org = await db.execute(
+            select(Organization).where(
+                Organization.slug == "default",
+                Organization.deleted_at.is_(None),
+            )
+        )
+        org_row = org.scalar_one_or_none()
+        organization_id = org_row.id if org_row is not None else None
     gene = AiGene(
         slug=body.slug,
         name=body.name,
         tags=body.tags,
         manifest=body.manifest,
         description=body.description,
+        scope=body.scope,
+        organization_id=organization_id,
+        namespace_id=body.namespace_id,
     )
     db.add(gene)
     await db.commit()
@@ -134,9 +155,13 @@ async def update_ai_gene(
     db: DB,
     current_user: CurrentUserDep,
 ) -> AiGene:
-    """Partial-update an ai gene (super-admin). Slug is immutable."""
+    """Partial-update an ai gene (super-admin). Slug and scope are immutable;
+    system-scoped presets are read-only (v4.0 D15)."""
+    from app.core.scope_guard import ensure_scope_mutable
+
     require_super_admin(current_user)
     gene = await _get_active_gene(db, gene_id)
+    ensure_scope_mutable(gene.scope, resource="ai_gene", row_id=gene_id)
     for field, value in body.model_dump(exclude_unset=True).items():
         setattr(gene, field, value)
     await db.commit()
@@ -150,9 +175,12 @@ async def delete_ai_gene(
     db: DB,
     current_user: CurrentUserDep,
 ) -> None:
-    """Soft-delete an ai gene (super-admin)."""
+    """Soft-delete an ai gene (super-admin). System presets are read-only."""
+    from app.core.scope_guard import ensure_scope_mutable
+
     require_super_admin(current_user)
     gene = await _get_active_gene(db, gene_id)
+    ensure_scope_mutable(gene.scope, resource="ai_gene", row_id=gene_id)
     gene.soft_delete()
     await db.commit()
 

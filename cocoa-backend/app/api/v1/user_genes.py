@@ -218,7 +218,7 @@ async def detach_user_gene(
 ) -> None:
     """Detach a user gene from a user (super-admin)."""
     require_super_admin(current_user)
-    gene = await _get_active_gene(db, gene_id)
+    await _get_active_gene(db, gene_id)
     result = await db.execute(
         select(UserUserGene).where(
             UserUserGene.user_id == user_id,

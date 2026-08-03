@@ -13,6 +13,9 @@ class AiGeneCreate(BaseModel):
     tags: list[str] | None = None
     manifest: dict | None = None
     description: str | None = None
+    scope: str = "org"
+    organization_id: str | None = None
+    namespace_id: str | None = None
 
 
 class AiGeneUpdate(BaseModel):
@@ -31,6 +34,9 @@ class AiGeneOut(BaseModel):
     tags: list | None = None
     manifest: dict | None = None
     description: str | None = None
+    scope: str = "org"
+    organization_id: str | None = None
+    namespace_id: str | None = None
     created_at: datetime
     updated_at: datetime | None = None
 

@@ -30,6 +30,7 @@ from app.schemas.organization import (
     CatalogModelsOut,
     CerebellumDefaultsOut,
     CerebellumDefaultsUpdate,
+    OrganizationCreate,
     OrganizationOut,
     OrganizationProviderCreate,
     OrganizationProviderOut,
@@ -55,6 +56,60 @@ from app.services.llm.org_provider import (
 
 router = APIRouter(prefix="/organizations", tags=["Organizations"])
 add_error_responses(router)
+
+
+@router.post(
+    "",
+    response_model=OrganizationOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_organization(
+    body: OrganizationCreate,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> Organization:
+    """Create a new Organization (world) — v4.0 audit B3 contract.
+
+    Any authenticated user may create an organization (users with zero
+    effective OrgContracts **bypass** ``can_manage_organization``; users who
+    already hold contracts may also create additional worlds — abuse control
+    is a later配额 concern, not this slice). The creator receives an
+    :class:`OrganizationContract` with the full org|namespace|workspace atom
+    seed set.
+    """
+    from app.core.gene_atoms import ORG_OWNER_ATOMS, ensure_atom_genes
+    from app.core.org_contract import ensure_org_contract, grant_atoms
+
+    existing = await db.execute(
+        select(Organization).where(
+            Organization.slug == body.slug,
+            Organization.deleted_at.is_(None),
+        )
+    )
+    if existing.scalar_one_or_none() is not None:
+        raise ConflictError(
+            "organization.slug_taken",
+            "errors.organization.slug_taken",
+            f"Organization slug '{body.slug}' is already taken",
+        )
+
+    org = Organization(
+        slug=body.slug,
+        name=body.name,
+        description=body.description,
+    )
+    db.add(org)
+    await db.flush()
+
+    await ensure_atom_genes(db)
+    contract = await ensure_org_contract(
+        db, organization_id=org.id, user_id=current_user.user_id
+    )
+    await grant_atoms(db, contract.id, ORG_OWNER_ATOMS)
+
+    await db.commit()
+    await db.refresh(org)
+    return org
 
 
 async def _get_default_org(db: DB) -> Organization:

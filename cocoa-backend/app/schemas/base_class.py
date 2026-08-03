@@ -17,6 +17,9 @@ class BaseClassCreate(BaseModel):
     display_name: str | None = None
     description: str | None = None
     tags: list[str] | None = None
+    scope: str = "org"
+    organization_id: str | None = None
+    namespace_id: str | None = None
 
 
 class BaseClassUpdate(BaseModel):
@@ -52,5 +55,8 @@ class BaseClassOut(BaseModel):
     manifest: dict | PresetManifestOut | None = None
     version: str | None = None
     tags: list[str] | None = None
+    scope: str = "org"
+    organization_id: str | None = None
+    namespace_id: str | None = None
     created_at: datetime
     updated_at: datetime | None = None

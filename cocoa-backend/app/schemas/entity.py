@@ -52,6 +52,9 @@ class EntityOut(BaseModel):
     system_prompt: str | None = None
     config_override: dict | None = None
     migration_hash: str | None = None
+    # v4.0: read-only aggregate DTO filled from the entity_capabilities
+    # junction — not a DB column and never a write truth.
     capabilities: list | dict | None = None
+    is_cerebellum: bool = False
     created_at: datetime
     updated_at: datetime

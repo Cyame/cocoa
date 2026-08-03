@@ -28,7 +28,6 @@ from app.schemas.base_class import (
     BaseClassCreate,
     BaseClassOut,
     BaseClassUpdate,
-    PresetManifestOut,
 )
 from app.schemas.organization import (
     BaseClassProviderDefaultOut,
@@ -40,6 +39,44 @@ add_error_responses(router)
 
 _INTERNAL_SLUGS = frozenset({"cerebellum-baseclass"})
 _INTERNAL_TAGS = frozenset({"internal", "system"})
+
+# Manifest mirror keys — read-only aggregates filled from junction rows;
+# never a write truth (v4.0 migration-spec §1 aggregate read path).
+_MIRROR_KEYS = ("skills", "tools", "commands")
+
+
+def _strip_manifest_mirror(manifest: dict | None) -> dict | None:
+    """Drop mirror arrays from an incoming manifest (write-path strip)."""
+    if not isinstance(manifest, dict):
+        return manifest
+    return {k: v for k, v in manifest.items() if k not in _MIRROR_KEYS}
+
+
+async def _base_class_out(db: DB, preset: BaseClass) -> BaseClassOut:
+    """Serialize a BaseClass with the manifest mirror filled from junctions."""
+    from app.core.capabilities import (
+        load_base_class_capability_dicts,
+        mirror_arrays,
+    )
+
+    manifest = dict(preset.manifest) if isinstance(preset.manifest, dict) else {}
+    cap_dicts = await load_base_class_capability_dicts(db, preset.id)
+    manifest.update(mirror_arrays(cap_dicts))
+    return BaseClassOut(
+        id=preset.id,
+        slug=preset.slug,
+        name=preset.name,
+        display_name=preset.display_name,
+        description=preset.description,
+        version=preset.version,
+        tags=preset.tags,
+        scope=preset.scope,
+        organization_id=preset.organization_id,
+        namespace_id=preset.namespace_id,
+        manifest=manifest,
+        created_at=preset.created_at,
+        updated_at=preset.updated_at,
+    )
 
 
 def _public_base_class_filter():
@@ -77,7 +114,14 @@ async def list_base_classes(
     if tag:
         stmt = stmt.where(BaseClass.tags.contains([tag]))
     stmt = stmt.order_by(BaseClass.created_at.desc())
-    return await paginate_offset(db, stmt, offset, min(limit, 200))
+    page = await paginate_offset(db, stmt, offset, min(limit, 200))
+    items = [await _base_class_out(db, bc) for bc in page.items]
+    return OffsetPage(
+        items=items,
+        offset=page.offset,
+        limit=page.limit,
+        total=page.total,
+    )
 
 
 @router.get(
@@ -208,19 +252,7 @@ async def get_base_class_by_slug(
             f"BaseClass '{slug}' not found",
         )
 
-    manifest_data = preset.manifest if isinstance(preset.manifest, dict) else {}
-    return BaseClassOut(
-        id=preset.id,
-        slug=preset.slug,
-        name=preset.name,
-        display_name=preset.display_name,
-        description=preset.description,
-        version=preset.version,
-        tags=preset.tags,
-        manifest=PresetManifestOut.model_validate(manifest_data),
-        created_at=preset.created_at,
-        updated_at=preset.updated_at,
-    )
+    return await _base_class_out(db, preset)
 
 
 @router.post("", response_model=BaseClassOut, status_code=status.HTTP_201_CREATED)
@@ -228,8 +260,16 @@ async def create_base_class(
     body: BaseClassCreate,
     db: DB,
     current_user: CurrentUserDep,
-) -> BaseClass:
-    """Create a new base class. Raises 409 on active slug conflict."""
+) -> BaseClassOut:
+    """Create a new base class. Raises 409 on active slug conflict.
+
+    v4.0 D15: new rows default to ``scope=org`` (bound to the default org
+    unless ``organization_id`` is given); ``scope=system`` is preset-only and
+    rejected with 4xx. Manifest mirror arrays are stripped on write.
+    """
+    from app.core.scope_guard import ensure_scope_create_allowed
+
+    ensure_scope_create_allowed(body.scope, resource="base_class")
     existing = await db.execute(
         select(BaseClass).where(
             BaseClass.slug == body.slug,
@@ -243,21 +283,35 @@ async def create_base_class(
             f"BaseClass slug '{body.slug}' is already taken",
         )
 
+    organization_id = body.organization_id
+    if body.scope == "org" and organization_id is None:
+        org = await db.execute(
+            select(Organization).where(
+                Organization.slug == "default",
+                Organization.deleted_at.is_(None),
+            )
+        )
+        org_row = org.scalar_one_or_none()
+        organization_id = org_row.id if org_row is not None else None
+
     preset = BaseClass(
         slug=body.slug,
         name=body.name,
         version=body.version,
-        manifest=body.manifest,
+        manifest=_strip_manifest_mirror(body.manifest),
         display_name=body.display_name,
         description=body.description,
         tags=body.tags,
+        scope=body.scope,
+        organization_id=organization_id,
+        namespace_id=body.namespace_id,
     )
     db.add(preset)
     await db.commit()
     await db.refresh(preset)
 
     await registry.reload(db)
-    return preset
+    return await _base_class_out(db, preset)
 
 
 @router.patch("/{preset_id}", response_model=BaseClassOut)
@@ -266,8 +320,11 @@ async def update_base_class(
     body: BaseClassUpdate,
     db: DB,
     current_user: CurrentUserDep,
-) -> BaseClass:
-    """Partial-update an existing base class. Slug is immutable."""
+) -> BaseClassOut:
+    """Partial-update an existing base class. Slug and scope are immutable;
+    system-scoped presets are read-only (v4.0 D15)."""
+    from app.core.scope_guard import ensure_scope_mutable
+
     preset = await db.get(BaseClass, preset_id)
     if preset is None or preset.deleted_at is not None:
         raise NotFoundError(
@@ -275,15 +332,18 @@ async def update_base_class(
             "errors.base_class.not_found",
             f"BaseClass '{preset_id}' not found",
         )
+    ensure_scope_mutable(preset.scope, resource="base_class", row_id=preset_id)
 
     for field, value in body.model_dump(exclude_unset=True).items():
+        if field == "manifest":
+            value = _strip_manifest_mirror(value)
         setattr(preset, field, value)
 
     await db.commit()
     await db.refresh(preset)
 
     await registry.reload(db)
-    return preset
+    return await _base_class_out(db, preset)
 
 
 @router.delete("/{preset_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -292,7 +352,9 @@ async def delete_base_class(
     db: DB,
     current_user: CurrentUserDep,
 ) -> None:
-    """Soft-delete a base class."""
+    """Soft-delete a base class. System-scoped presets are read-only (D15)."""
+    from app.core.scope_guard import ensure_scope_mutable
+
     preset = await db.get(BaseClass, preset_id)
     if preset is None or preset.deleted_at is not None:
         raise NotFoundError(
@@ -300,6 +362,7 @@ async def delete_base_class(
             "errors.base_class.not_found",
             f"BaseClass '{preset_id}' not found",
         )
+    ensure_scope_mutable(preset.scope, resource="base_class", row_id=preset_id)
 
     preset.soft_delete()
     await db.commit()

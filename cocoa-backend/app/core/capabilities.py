@@ -12,13 +12,13 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.ai_gene import AiGene
 from app.models.capability_market import CapabilityMarketEntry
 from app.models.junctions import (
     BaseClassCapability,
     EntityAiGene,
     EntityCapability,
 )
-from app.models.ai_gene import AiGene
 
 _MIRROR_TYPES = ("skill", "tool", "mcp", "lsp", "command")
 
