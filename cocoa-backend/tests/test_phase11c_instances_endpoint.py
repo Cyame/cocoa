@@ -39,7 +39,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.auth import router as auth_router
 from app.api.v1.instances import router as instances_router
-from app.models.workspace import Membership, MembershipRole
+from app.models.organization import Namespace
+from app.models.workspace import Membership
 
 
 @pytest_asyncio.fixture
@@ -88,18 +89,37 @@ async def _register_and_login(ac: AsyncClient, username: str) -> str:
 async def _link_user_to_workspace(
     session: AsyncSession, user_id: str, workspace_id: str
 ) -> None:
-    """Insert an editor-role Membership so ``require_workspace_role`` passes.
+    """Grant workspace atoms via OrgContract + role-less Membership (v4.0 M7).
 
-    The Membership's ``posx`` / ``posy`` are set to (0, 0) — only the
-    role matters for the endpoint under test.
+    Replaces the old editor-role Membership so ``require_workspace_permission``
+    passes for view/edit/operate-gated endpoints.
     """
+    from app.core.gene_atoms import ensure_atom_genes
+    from app.core.org_contract import ensure_org_contract, grant_atoms
+    from app.models.workspace import Workspace
+
+    workspace = await session.get(Workspace, workspace_id)
+    ns = await session.get(Namespace, workspace.namespace_id)
+    await ensure_atom_genes(session)
+    contract = await ensure_org_contract(
+        session, organization_id=ns.org_id, user_id=user_id
+    )
+    await grant_atoms(
+        session,
+        contract.id,
+        (
+            "can_view_workspace",
+            "can_edit_workspace",
+            "can_operate_workspace",
+            "can_manage_workspace",
+        ),
+    )
     session.add(
         Membership(
             user_id=user_id,
             workspace_id=workspace_id,
             posx=0,
             posy=0,
-            role=MembershipRole.editor.value,
         )
     )
     await session.commit()

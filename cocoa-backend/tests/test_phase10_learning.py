@@ -61,14 +61,11 @@ def _setup_workspace_and_membership(
     user_id: str,
     workspace_name: str = "Learning Workspace",
     workspace_slug: str = "learning-workspace",
-    role: str = "owner",
 ) -> str:
-    """Create an workspace. The creator is auto-added as owner (P14b-onboard2).
+    """Create an workspace. The creator is auto-granted workspace atoms (v4.0).
 
-    ``user_id`` and ``role`` parameters are kept for backward compatibility
-    with existing call sites; the auto-membership is always ``role='owner'``
-    attached to the workspace creator (the token holder).  Tests that need a
-    non-owner membership should add it explicitly for a *different* user.
+    ``user_id`` is kept for backward compatibility with existing call sites;
+    the grant always targets the workspace creator (the token holder).
     """
     h = _auth(token)
     resp = client.post("/api/v1/workspaces", headers=h, json={
@@ -392,7 +389,6 @@ class TestDistill:
         workspace_id = _setup_workspace_and_membership(
             client, auth_token, auth_user_id,
             workspace_name="Viewer Workspace", workspace_slug=f"viewer-workspace-{uuid.uuid4().hex[:6]}",
-            role="owner",
         )
         entity_id = _create_entity(
             client, auth_token, f"viewer-emp-{uuid.uuid4().hex[:6]}", "Viewer Entity",
@@ -421,7 +417,6 @@ class TestDistill:
         client.post("/api/v1/messaging/memberships", headers=h_owner, json={
             "workspace_id": workspace_id,
             "user_id": viewer_user.id,
-            "role": "viewer",
         })
 
         resp = client.post(

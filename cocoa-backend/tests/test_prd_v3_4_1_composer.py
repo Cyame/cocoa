@@ -86,7 +86,7 @@ async def test_user_without_passage_routes_to_cerebellum(
     from app.models.composer_message import ComposerMessage
     from app.models.instance import InstanceStatus
     from app.models.user import User
-    from app.models.workspace import Membership, MembershipRole, Passage
+    from app.models.workspace import Membership, Passage
     from app.schemas.slash import Directive
 
     async def fake_emit(*_a, **_k):
@@ -126,7 +126,6 @@ async def test_user_without_passage_routes_to_cerebellum(
         instance_id=None,
         posx=0,
         posy=0,
-        role=MembershipRole.owner.value,
     )
     inst_mem = Membership(
         workspace_id=workspace.id,
@@ -134,7 +133,6 @@ async def test_user_without_passage_routes_to_cerebellum(
         instance_id=instance.id,
         posx=120,
         posy=0,
-        role=MembershipRole.viewer.value,
     )
     session.add_all([user_mem, inst_mem])
     await session.flush()
@@ -189,7 +187,7 @@ async def test_user_with_passage_proxies_to_instance(
     from app.core.message_router import route_message
     from app.models.instance import InstanceStatus
     from app.models.user import User
-    from app.models.workspace import Membership, MembershipRole, Passage
+    from app.models.workspace import Membership, Passage
     from app.schemas.slash import Directive
 
     async def fake_emit(*_a, **_k):
@@ -229,7 +227,6 @@ async def test_user_with_passage_proxies_to_instance(
         instance_id=None,
         posx=0,
         posy=0,
-        role=MembershipRole.owner.value,
     )
     inst_mem = Membership(
         workspace_id=workspace.id,
@@ -237,7 +234,6 @@ async def test_user_with_passage_proxies_to_instance(
         instance_id=instance.id,
         posx=120,
         posy=0,
-        role=MembershipRole.viewer.value,
     )
     session.add_all([user_mem, inst_mem])
     await session.flush()
@@ -278,7 +274,7 @@ async def test_reverse_passage_still_proxies_to_instance(
     from app.core.message_router import route_message
     from app.models.instance import InstanceStatus
     from app.models.user import User
-    from app.models.workspace import Membership, MembershipRole, Passage
+    from app.models.workspace import Membership, Passage
     from app.schemas.slash import Directive
 
     async def fake_emit(*_a, **_k):
@@ -318,7 +314,6 @@ async def test_reverse_passage_still_proxies_to_instance(
         instance_id=None,
         posx=0,
         posy=0,
-        role=MembershipRole.owner.value,
     )
     inst_mem = Membership(
         workspace_id=workspace.id,
@@ -326,7 +321,6 @@ async def test_reverse_passage_still_proxies_to_instance(
         instance_id=instance.id,
         posx=120,
         posy=0,
-        role=MembershipRole.viewer.value,
     )
     session.add_all([user_mem, inst_mem])
     await session.flush()

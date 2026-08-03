@@ -9,7 +9,7 @@ from sqlalchemy import select
 
 from app.models.composer_message import ComposerMessage
 from app.models.user import User
-from app.models.workspace import Membership, MembershipRole
+from app.models.workspace import Membership
 from app.services.composer_transcript import append_composer_message, list_composer_messages
 
 
@@ -224,7 +224,6 @@ async def test_messaging_send_commits_composer_rows(
         instance_id=None,
         posx=0,
         posy=0,
-        role=MembershipRole.owner.value,
     )
     inst_mem = Membership(
         workspace_id=workspace.id,
@@ -232,7 +231,6 @@ async def test_messaging_send_commits_composer_rows(
         instance_id=instance.id,
         posx=120,
         posy=0,
-        role=MembershipRole.viewer.value,
     )
     session.add_all([user_mem, inst_mem])
     await session.commit()

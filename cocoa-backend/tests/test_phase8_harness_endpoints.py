@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.testclient import TestClient
 
 from app.models.instance import Instance
-from app.models.workspace import Membership, MembershipRole
+from app.models.workspace import Membership
 from app.models.user import User
 
 
@@ -216,7 +216,6 @@ async def test_p5_route_turn_unaffected_by_p8_changes(
         workspace_id=workspace.id,
         posx=0,
         posy=0,
-        role=MembershipRole.editor.value,
     )
     session.add(membership)
     await session.flush()

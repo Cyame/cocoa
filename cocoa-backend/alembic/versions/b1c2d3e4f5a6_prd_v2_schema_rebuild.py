@@ -142,7 +142,15 @@ def upgrade() -> None:
     ]
     import json
 
-    for slug, name, keys in genes:
+    # v4.0 note: when this rebuild runs with post-v4.0 model metadata,
+    # ``user_genes.permission_keys`` no longer exists (atoms replace packs).
+    # Skip the legacy pack seeds in that case — the v4.0 revision seeds the
+    # atomic catalog instead.
+    _has_permission_keys = "permission_keys" in {
+        c["name"] for c in sa.inspect(bind).get_columns("user_genes")
+    }
+
+    for slug, name, keys in genes if _has_permission_keys else ():
         op.execute(
             sa.text(
                 """

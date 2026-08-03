@@ -115,13 +115,14 @@ class TestUserGenes:
     def test_list_and_get_by_slug(self, client: TestClient, auth_token: str) -> None:
         listing = client.get("/api/v1/user-genes", headers=_h(auth_token))
         assert listing.status_code == 200
-        assert listing.json()["total"] >= 5
+        assert listing.json()["total"] >= 16  # v4.0 atomic catalog
         resp = client.get(
-            "/api/v1/user-genes/by-slug/identity-workspace",
+            "/api/v1/user-genes/by-slug/can_view_workspace",
             headers=_h(auth_token),
         )
         assert resp.status_code == 200
-        assert resp.json()["slug"] == "identity-workspace"
+        assert resp.json()["slug"] == "can_view_workspace"
+        assert resp.json()["effect_scope"] == "workspace"
 
     def test_create_attach_detach(self, client: TestClient, auth_token: str) -> None:
         from app.core.config import settings
@@ -131,9 +132,9 @@ class TestUserGenes:
             "/api/v1/user-genes",
             headers=_h(auth_token),
             json={
-                "slug": "custom-gene",
+                "slug": "can_custom_flag",
                 "name": "Custom",
-                "permission_keys": ["can_view_workspace"],
+                "effect_scope": "org",
             },
         )
         assert create.status_code == 201

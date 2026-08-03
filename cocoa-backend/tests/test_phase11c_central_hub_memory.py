@@ -78,7 +78,6 @@ async def _seed_running_instance(
         instance_id=instance.id,
         posx=0,
         posy=0,
-        role="member",
     )
     session.add(membership)
     await loop_state_factory(instance, loop_status=loop_status)

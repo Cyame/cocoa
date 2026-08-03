@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.entity import Entity, EntityRank
 from app.models.base_class import BaseClass
 from app.models.instance import Instance
-from app.models.workspace import Membership, MembershipRole, Workspace
+from app.models.workspace import Membership, Workspace
 from app.models.user import User
 
 
@@ -128,7 +128,6 @@ class TestMembershipExclusiveFK:
             instance_id=None,
             posx=0,
             posy=0,
-            role=MembershipRole.viewer.value,
         )
         session.add(member)
         with pytest.raises(IntegrityError):
@@ -152,7 +151,6 @@ class TestMembershipExclusiveFK:
             instance_id=None,
             posx=0,
             posy=0,
-            role=MembershipRole.viewer.value,
         )
         session.add(member)
         await session.commit()
@@ -187,7 +185,6 @@ class TestMembershipExclusiveFK:
             instance_id=inst.id,
             posx=0,
             posy=0,
-            role=MembershipRole.editor.value,
         )
         session.add(member)
         await session.commit()

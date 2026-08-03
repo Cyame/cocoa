@@ -97,7 +97,7 @@ async def test_proxy_token_in_emit_payload(
     session.add(
         Membership(
             workspace_id=workspace.id, instance_id=instance.id,
-            posx=0, posy=0, role="member",
+            posx=0, posy=0,
         )
     )
     await loop_state_factory(instance)

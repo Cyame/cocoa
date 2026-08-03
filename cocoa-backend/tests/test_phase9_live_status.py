@@ -67,7 +67,6 @@ async def _create_membership(
         instance_id=instance_id,
         posx=posx,
         posy=posy,
-        role="owner" if user_id is not None else "viewer",
     )
     session.add(membership)
     await session.flush()

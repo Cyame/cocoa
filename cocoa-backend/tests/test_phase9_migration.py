@@ -29,7 +29,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.testclient import TestClient
 
-from app.models.workspace import Membership, MembershipRole, Workspace
+from app.models.workspace import Membership, Workspace
 from app.models.user import User
 
 # ---------------------------------------------------------------------------
@@ -218,7 +218,6 @@ async def test_unique_pos_constraint_blocks_duplicate_active(
         instance_id=None,
         posx=42,
         posy=-17,
-        role=MembershipRole.viewer.value,
     )
     session.add(member_a)
     await session.commit()
@@ -229,7 +228,6 @@ async def test_unique_pos_constraint_blocks_duplicate_active(
         instance_id=None,
         posx=42,  # same as member_a
         posy=-17,  # same as member_a
-        role=MembershipRole.viewer.value,
     )
     session.add(member_b)
     with pytest.raises(IntegrityError):
@@ -261,7 +259,6 @@ async def test_unique_pos_constraint_allows_soft_deleted_overlap(
         instance_id=None,
         posx=5,
         posy=5,
-        role=MembershipRole.viewer.value,
     )
     session.add(old)
     await session.commit()
@@ -274,7 +271,6 @@ async def test_unique_pos_constraint_allows_soft_deleted_overlap(
         instance_id=None,
         posx=5,
         posy=5,
-        role=MembershipRole.viewer.value,
     )
     session.add(new)
     # Should commit cleanly — partial unique index excludes soft-deleted.

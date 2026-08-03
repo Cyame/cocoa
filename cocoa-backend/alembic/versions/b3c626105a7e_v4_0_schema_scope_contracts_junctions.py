@@ -109,180 +109,240 @@ def _new_id() -> str:
     return str(uuid.uuid4())
 
 
+# ---------------------------------------------------------------------------
+# Existence guards — this revision must run on BOTH paths:
+#   A) an old database at ad997e162ee8 (columns/tables do not exist yet), and
+#   B) a fresh database where b1c2d3e4f5a6 already rebuilt the full v4.0
+#      schema from live model metadata (Base.metadata.create_all).
+# ---------------------------------------------------------------------------
+
+
+def _has_table(bind, table: str) -> bool:
+    return table in set(sa.inspect(bind).get_table_names())
+
+
+def _has_column(bind, table: str, column: str) -> bool:
+    if not _has_table(bind, table):
+        return False
+    return column in {c["name"] for c in sa.inspect(bind).get_columns(table)}
+
+
+def _has_index(bind, table: str, index: str) -> bool:
+    if not _has_table(bind, table):
+        return False
+    return index in {ix["name"] for ix in sa.inspect(bind).get_indexes(table)}
+
+
+def _has_fk_on(bind, table: str, column: str) -> bool:
+    if not _has_table(bind, table):
+        return False
+    for fk in sa.inspect(bind).get_foreign_keys(table):
+        if column in fk.get("constrained_columns", []):
+            return True
+    return False
+
+
+def _has_check(bind, table: str, name: str) -> bool:
+    if not _has_table(bind, table):
+        return False
+    return name in {c["name"] for c in sa.inspect(bind).get_check_constraints(table)}
+
+
+def _create_index_if_missing(name, table, columns, *, unique=False, where=None):
+    bind = op.get_bind()
+    if _has_index(bind, table, name):
+        return
+    op.create_index(
+        name, table, columns, unique=unique,
+        postgresql_where=sa.text(where) if where else None,
+    )
+
+
+def _add_column_if_missing(table, column: sa.Column):
+    bind = op.get_bind()
+    if _has_column(bind, table, column.name):
+        return
+    op.add_column(table, column)
+
+
+def _drop_column_if_present(table: str, column: str):
+    bind = op.get_bind()
+    if _has_column(bind, table, column):
+        op.drop_column(table, column)
+
+
+def _contract_tables_ddl() -> None:
+    """Create contract + junction tables (skipped when metadata already did)."""
+    bind = op.get_bind()
+    if not _has_table(bind, "organization_contracts"):
+        op.create_table(
+            "organization_contracts",
+            sa.Column("organization_id", sa.String(length=36), nullable=False),
+            sa.Column("user_id", sa.String(length=36), nullable=False),
+            sa.Column("source_pack", sa.String(length=255), nullable=True),
+            sa.Column("id", sa.String(length=36), nullable=False),
+            sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+            sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+            sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
+            sa.ForeignKeyConstraint(["organization_id"], ["organizations.id"]),
+            sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
+            sa.PrimaryKeyConstraint("id"),
+        )
+    if not _has_table(bind, "organization_contract_genes"):
+        op.create_table(
+            "organization_contract_genes",
+            sa.Column("contract_id", sa.String(length=36), nullable=False),
+            sa.Column("user_gene_id", sa.String(length=36), nullable=False),
+            sa.Column("id", sa.String(length=36), nullable=False),
+            sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+            sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+            sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
+            sa.ForeignKeyConstraint(["contract_id"], ["organization_contracts.id"]),
+            sa.ForeignKeyConstraint(["user_gene_id"], ["user_genes.id"]),
+            sa.PrimaryKeyConstraint("id"),
+        )
+    if not _has_table(bind, "base_class_capabilities"):
+        op.create_table(
+            "base_class_capabilities",
+            sa.Column("base_class_id", sa.String(length=36), nullable=False),
+            sa.Column("capability_id", sa.String(length=36), nullable=False),
+            sa.Column("id", sa.String(length=36), nullable=False),
+            sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+            sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+            sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
+            sa.ForeignKeyConstraint(["base_class_id"], ["base_classes.id"]),
+            sa.ForeignKeyConstraint(["capability_id"], ["capability_market.id"]),
+            sa.PrimaryKeyConstraint("id"),
+        )
+    if not _has_table(bind, "entity_ai_genes"):
+        op.create_table(
+            "entity_ai_genes",
+            sa.Column("entity_id", sa.String(length=36), nullable=False),
+            sa.Column("ai_gene_id", sa.String(length=36), nullable=False),
+            sa.Column("id", sa.String(length=36), nullable=False),
+            sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+            sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+            sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
+            sa.ForeignKeyConstraint(["ai_gene_id"], ["ai_genes.id"]),
+            sa.ForeignKeyConstraint(["entity_id"], ["entities.id"]),
+            sa.PrimaryKeyConstraint("id"),
+        )
+    if not _has_table(bind, "entity_capabilities"):
+        op.create_table(
+            "entity_capabilities",
+            sa.Column("entity_id", sa.String(length=36), nullable=False),
+            sa.Column("capability_id", sa.String(length=36), nullable=False),
+            sa.Column("id", sa.String(length=36), nullable=False),
+            sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+            sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+            sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
+            sa.ForeignKeyConstraint(["capability_id"], ["capability_market.id"]),
+            sa.ForeignKeyConstraint(["entity_id"], ["entities.id"]),
+            sa.PrimaryKeyConstraint("id"),
+        )
+    if not _has_table(bind, "namespace_contract_genes"):
+        op.create_table(
+            "namespace_contract_genes",
+            sa.Column("contract_id", sa.String(length=36), nullable=False),
+            sa.Column("user_gene_id", sa.String(length=36), nullable=False),
+            sa.Column("id", sa.String(length=36), nullable=False),
+            sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+            sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+            sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
+            sa.ForeignKeyConstraint(["contract_id"], ["namespace_contracts.id"]),
+            sa.ForeignKeyConstraint(["user_gene_id"], ["user_genes.id"]),
+            sa.PrimaryKeyConstraint("id"),
+        )
+
+
+def _scoped_table_ddl(table: str) -> None:
+    """Scope triple + index/FK/check on one scoped table."""
+    bind = op.get_bind()
+    _add_column_if_missing(table, sa.Column("scope", sa.String(length=20), server_default="org", nullable=False))
+    _add_column_if_missing(table, sa.Column("organization_id", sa.String(length=36), nullable=True))
+    _add_column_if_missing(table, sa.Column("namespace_id", sa.String(length=36), nullable=True))
+    _create_index_if_missing(
+        f"ix_{table}_org", table, ["organization_id"],
+        where="deleted_at IS NULL",
+    )
+    if not _has_fk_on(bind, table, "organization_id"):
+        op.create_foreign_key(
+            f"fk_{table}_organization", table, "organizations", ["organization_id"], ["id"]
+        )
+    if not _has_fk_on(bind, table, "namespace_id"):
+        op.create_foreign_key(
+            f"fk_{table}_namespace", table, "namespaces", ["namespace_id"], ["id"]
+        )
+    if not _has_check(bind, table, f"ck_{table}_scope"):
+        op.create_check_constraint(
+            f"ck_{table}_scope", table, "scope IN ('system', 'org', 'namespace')"
+        )
+
+
 def upgrade() -> None:
     conn = op.get_bind()
 
     # ------------------------------------------------------------------
-    # Phase A — DDL (additives only)
+    # Phase A — DDL (additives only, existence-guarded)
     # ------------------------------------------------------------------
-    op.create_table(
-        "organization_contracts",
-        sa.Column("organization_id", sa.String(length=36), nullable=False),
-        sa.Column("user_id", sa.String(length=36), nullable=False),
-        sa.Column("source_pack", sa.String(length=255), nullable=True),
-        sa.Column("id", sa.String(length=36), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
-        sa.ForeignKeyConstraint(["organization_id"], ["organizations.id"]),
-        sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
-        sa.PrimaryKeyConstraint("id"),
+    _contract_tables_ddl()
+    _create_index_if_missing(
+        "uq_organization_contracts_org_user", "organization_contracts",
+        ["organization_id", "user_id"], unique=True, where="deleted_at IS NULL",
     )
-    op.create_index(
-        "uq_organization_contracts_org_user",
-        "organization_contracts",
-        ["organization_id", "user_id"],
-        unique=True,
-        postgresql_where=sa.text("deleted_at IS NULL"),
-    )
-    op.create_table(
-        "organization_contract_genes",
-        sa.Column("contract_id", sa.String(length=36), nullable=False),
-        sa.Column("user_gene_id", sa.String(length=36), nullable=False),
-        sa.Column("id", sa.String(length=36), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
-        sa.ForeignKeyConstraint(["contract_id"], ["organization_contracts.id"]),
-        sa.ForeignKeyConstraint(["user_gene_id"], ["user_genes.id"]),
-        sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_index(
-        "ix_organization_contract_genes_gene",
-        "organization_contract_genes",
+    _create_index_if_missing(
+        "ix_organization_contract_genes_gene", "organization_contract_genes",
         ["user_gene_id"],
-        unique=False,
     )
-    op.create_index(
-        "uq_organization_contract_genes",
-        "organization_contract_genes",
-        ["contract_id", "user_gene_id"],
-        unique=True,
-        postgresql_where=sa.text("deleted_at IS NULL"),
+    _create_index_if_missing(
+        "uq_organization_contract_genes", "organization_contract_genes",
+        ["contract_id", "user_gene_id"], unique=True, where="deleted_at IS NULL",
     )
-    op.create_table(
-        "base_class_capabilities",
-        sa.Column("base_class_id", sa.String(length=36), nullable=False),
-        sa.Column("capability_id", sa.String(length=36), nullable=False),
-        sa.Column("id", sa.String(length=36), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
-        sa.ForeignKeyConstraint(["base_class_id"], ["base_classes.id"]),
-        sa.ForeignKeyConstraint(["capability_id"], ["capability_market.id"]),
-        sa.PrimaryKeyConstraint("id"),
+    _create_index_if_missing(
+        "uq_base_class_capabilities", "base_class_capabilities",
+        ["base_class_id", "capability_id"], unique=True, where="deleted_at IS NULL",
     )
-    op.create_index(
-        "uq_base_class_capabilities",
-        "base_class_capabilities",
-        ["base_class_id", "capability_id"],
-        unique=True,
-        postgresql_where=sa.text("deleted_at IS NULL"),
+    _create_index_if_missing(
+        "uq_entity_ai_genes", "entity_ai_genes",
+        ["entity_id", "ai_gene_id"], unique=True, where="deleted_at IS NULL",
     )
-    op.create_table(
-        "entity_ai_genes",
-        sa.Column("entity_id", sa.String(length=36), nullable=False),
-        sa.Column("ai_gene_id", sa.String(length=36), nullable=False),
-        sa.Column("id", sa.String(length=36), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
-        sa.ForeignKeyConstraint(["ai_gene_id"], ["ai_genes.id"]),
-        sa.ForeignKeyConstraint(["entity_id"], ["entities.id"]),
-        sa.PrimaryKeyConstraint("id"),
+    _create_index_if_missing(
+        "uq_entity_capabilities", "entity_capabilities",
+        ["entity_id", "capability_id"], unique=True, where="deleted_at IS NULL",
     )
-    op.create_index(
-        "uq_entity_ai_genes",
-        "entity_ai_genes",
-        ["entity_id", "ai_gene_id"],
-        unique=True,
-        postgresql_where=sa.text("deleted_at IS NULL"),
-    )
-    op.create_table(
-        "entity_capabilities",
-        sa.Column("entity_id", sa.String(length=36), nullable=False),
-        sa.Column("capability_id", sa.String(length=36), nullable=False),
-        sa.Column("id", sa.String(length=36), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
-        sa.ForeignKeyConstraint(["capability_id"], ["capability_market.id"]),
-        sa.ForeignKeyConstraint(["entity_id"], ["entities.id"]),
-        sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_index(
-        "uq_entity_capabilities",
-        "entity_capabilities",
-        ["entity_id", "capability_id"],
-        unique=True,
-        postgresql_where=sa.text("deleted_at IS NULL"),
-    )
-    op.create_table(
-        "namespace_contract_genes",
-        sa.Column("contract_id", sa.String(length=36), nullable=False),
-        sa.Column("user_gene_id", sa.String(length=36), nullable=False),
-        sa.Column("id", sa.String(length=36), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
-        sa.ForeignKeyConstraint(["contract_id"], ["namespace_contracts.id"]),
-        sa.ForeignKeyConstraint(["user_gene_id"], ["user_genes.id"]),
-        sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_index(
-        "uq_namespace_contract_genes",
-        "namespace_contract_genes",
-        ["contract_id", "user_gene_id"],
-        unique=True,
-        postgresql_where=sa.text("deleted_at IS NULL"),
+    _create_index_if_missing(
+        "uq_namespace_contract_genes", "namespace_contract_genes",
+        ["contract_id", "user_gene_id"], unique=True, where="deleted_at IS NULL",
     )
 
-    op.add_column("ai_genes", sa.Column("scope", sa.String(length=20), server_default="org", nullable=False))
-    op.add_column("ai_genes", sa.Column("organization_id", sa.String(length=36), nullable=True))
-    op.add_column("ai_genes", sa.Column("namespace_id", sa.String(length=36), nullable=True))
-    op.create_index("ix_ai_genes_org", "ai_genes", ["organization_id"], unique=False, postgresql_where=sa.text("deleted_at IS NULL"))
-    op.create_foreign_key("fk_ai_genes_namespace", "ai_genes", "namespaces", ["namespace_id"], ["id"])
-    op.create_foreign_key("fk_ai_genes_organization", "ai_genes", "organizations", ["organization_id"], ["id"])
-    op.create_check_constraint("ck_ai_genes_scope", "ai_genes", "scope IN ('system', 'org', 'namespace')")
+    _scoped_table_ddl("ai_genes")
+    _scoped_table_ddl("base_classes")
+    _scoped_table_ddl("capability_market")
 
-    op.add_column("base_classes", sa.Column("scope", sa.String(length=20), server_default="org", nullable=False))
-    op.add_column("base_classes", sa.Column("organization_id", sa.String(length=36), nullable=True))
-    op.add_column("base_classes", sa.Column("namespace_id", sa.String(length=36), nullable=True))
-    op.create_index("ix_base_classes_org", "base_classes", ["organization_id"], unique=False, postgresql_where=sa.text("deleted_at IS NULL"))
-    op.create_foreign_key("fk_base_classes_organization", "base_classes", "organizations", ["organization_id"], ["id"])
-    op.create_foreign_key("fk_base_classes_namespace", "base_classes", "namespaces", ["namespace_id"], ["id"])
-    op.create_check_constraint("ck_base_classes_scope", "base_classes", "scope IN ('system', 'org', 'namespace')")
-
-    op.add_column("capability_market", sa.Column("scope", sa.String(length=20), server_default="org", nullable=False))
-    op.add_column("capability_market", sa.Column("organization_id", sa.String(length=36), nullable=True))
-    op.add_column("capability_market", sa.Column("namespace_id", sa.String(length=36), nullable=True))
-    op.create_index("ix_capability_market_org", "capability_market", ["organization_id"], unique=False, postgresql_where=sa.text("deleted_at IS NULL"))
-    op.create_foreign_key("fk_capability_market_organization", "capability_market", "organizations", ["organization_id"], ["id"])
-    op.create_foreign_key("fk_capability_market_namespace", "capability_market", "namespaces", ["namespace_id"], ["id"])
-    op.create_check_constraint("ck_capability_market_scope", "capability_market", "scope IN ('system', 'org', 'namespace')")
-
-    op.add_column("entities", sa.Column("is_cerebellum", sa.Boolean(), server_default="false", nullable=False))
-    op.create_index(
-        "uq_entities_cerebellum_per_ns",
+    _add_column_if_missing(
         "entities",
-        ["namespace_id"],
-        unique=True,
-        postgresql_where=sa.text("is_cerebellum IS TRUE AND deleted_at IS NULL"),
+        sa.Column("is_cerebellum", sa.Boolean(), server_default="false", nullable=False),
+    )
+    _create_index_if_missing(
+        "uq_entities_cerebellum_per_ns", "entities", ["namespace_id"],
+        unique=True, where="is_cerebellum IS TRUE AND deleted_at IS NULL",
     )
 
     # effect_scope starts nullable; backfilled + constrained in Phase C.
-    op.add_column("user_genes", sa.Column("effect_scope", sa.String(length=20), nullable=True))
-    op.create_check_constraint(
-        "ck_user_genes_effect_scope",
-        "user_genes",
-        "effect_scope IN ('platform', 'org', 'namespace', 'workspace')",
-    )
+    _add_column_if_missing("user_genes", sa.Column("effect_scope", sa.String(length=20), nullable=True))
+    if not _has_check(conn, "user_genes", "ck_user_genes_effect_scope"):
+        op.create_check_constraint(
+            "ck_user_genes_effect_scope",
+            "user_genes",
+            "effect_scope IN ('platform', 'org', 'namespace', 'workspace')",
+        )
 
     # ------------------------------------------------------------------
     # Phase B — data migration
     # ------------------------------------------------------------------
 
     # -- B1. Seed atomic UserGenes (idempotent upsert by slug) --
+    has_permission_keys_col = _has_column(conn, "user_genes", "permission_keys")
     atom_ids: dict[str, str] = {}
     for slug, scope in SEED_ATOMS:
         row = conn.execute(
@@ -291,33 +351,51 @@ def upgrade() -> None:
         ).fetchone()
         if row:
             atom_ids[slug] = row[0]
+            pk_clause = ", permission_keys = '[]'::jsonb" if has_permission_keys_col else ""
             conn.execute(
                 sa.text(
                     "UPDATE user_genes SET effect_scope = :sc, kind = 'builtin',"
-                    " name = :s, permission_keys = '[]'::jsonb,"
-                    " updated_at = now() WHERE id = :id"
+                    f" name = :s{pk_clause}, updated_at = now() WHERE id = :id"
                 ),
                 {"sc": scope, "s": slug, "id": row[0]},
             )
         else:
             gid = _new_id()
             atom_ids[slug] = gid
-            conn.execute(
-                sa.text(
-                    "INSERT INTO user_genes"
-                    " (id, slug, name, kind, effect_scope, permission_keys,"
-                    "  description, created_at, updated_at)"
-                    " VALUES (:id, :slug, :name, 'builtin', :sc, '[]'::jsonb,"
-                    " :desc, now(), now())"
-                ),
-                {
-                    "id": gid,
-                    "slug": slug,
-                    "name": slug,
-                    "sc": scope,
-                    "desc": f"Atomic permission: {slug}",
-                },
-            )
+            if has_permission_keys_col:
+                conn.execute(
+                    sa.text(
+                        "INSERT INTO user_genes"
+                        " (id, slug, name, kind, effect_scope, permission_keys,"
+                        "  description, created_at, updated_at)"
+                        " VALUES (:id, :slug, :name, 'builtin', :sc, '[]'::jsonb,"
+                        " :desc, now(), now())"
+                    ),
+                    {
+                        "id": gid,
+                        "slug": slug,
+                        "name": slug,
+                        "sc": scope,
+                        "desc": f"Atomic permission: {slug}",
+                    },
+                )
+            else:
+                conn.execute(
+                    sa.text(
+                        "INSERT INTO user_genes"
+                        " (id, slug, name, kind, effect_scope,"
+                        "  description, created_at, updated_at)"
+                        " VALUES (:id, :slug, :name, 'builtin', :sc,"
+                        " :desc, now(), now())"
+                    ),
+                    {
+                        "id": gid,
+                        "slug": slug,
+                        "name": slug,
+                        "sc": scope,
+                        "desc": f"Atomic permission: {slug}",
+                    },
+                )
 
     # -- B2. Builtin command verbs → cmd-* capabilities + BC junctions --
     cmd_cap_ids: dict[str, str] = {}
@@ -472,16 +550,18 @@ def upgrade() -> None:
                 {"id": _new_id(), "c": contract_id, "g": gene_id},
             )
 
-    membership_rows = conn.execute(
-        sa.text(
-            "SELECT m.user_id, m.role, n.org_id"
-            " FROM memberships m"
-            " JOIN workspaces w ON w.id = m.workspace_id AND w.deleted_at IS NULL"
-            " JOIN namespaces n ON n.id = w.namespace_id AND n.deleted_at IS NULL"
-            " JOIN users u ON u.id = m.user_id AND u.deleted_at IS NULL"
-            " WHERE m.deleted_at IS NULL AND m.user_id IS NOT NULL"
-        )
-    ).fetchall()
+    membership_rows = []
+    if _has_column(conn, "memberships", "role"):
+        membership_rows = conn.execute(
+            sa.text(
+                "SELECT m.user_id, m.role, n.org_id"
+                " FROM memberships m"
+                " JOIN workspaces w ON w.id = m.workspace_id AND w.deleted_at IS NULL"
+                " JOIN namespaces n ON n.id = w.namespace_id AND n.deleted_at IS NULL"
+                " JOIN users u ON u.id = m.user_id AND u.deleted_at IS NULL"
+                " WHERE m.deleted_at IS NULL AND m.user_id IS NOT NULL"
+            )
+        ).fetchall()
 
     # Highest known role per (org, user); unknown roles -> view fallback (§8.3).
     best: dict[tuple[str, str], tuple[int, str | None]] = {}
@@ -523,16 +603,18 @@ def upgrade() -> None:
                 grant_atom(contract_id, slug)
 
     # §8.1 step 3 — expand old pack permission_keys into existing contracts.
-    pack_rows = conn.execute(
-        sa.text(
-            "SELECT ug.id, ug.slug, ug.permission_keys, uug.user_id"
-            " FROM user_genes ug"
-            " JOIN user_user_genes uug ON uug.user_gene_id = ug.id"
-            "   AND uug.deleted_at IS NULL"
-            " JOIN users u ON u.id = uug.user_id AND u.deleted_at IS NULL"
-            " WHERE ug.deleted_at IS NULL"
-        )
-    ).fetchall()
+    pack_rows = []
+    if _has_column(conn, "user_genes", "permission_keys"):
+        pack_rows = conn.execute(
+            sa.text(
+                "SELECT ug.id, ug.slug, ug.permission_keys, uug.user_id"
+                " FROM user_genes ug"
+                " JOIN user_user_genes uug ON uug.user_gene_id = ug.id"
+                "   AND uug.deleted_at IS NULL"
+                " JOIN users u ON u.id = uug.user_id AND u.deleted_at IS NULL"
+                " WHERE ug.deleted_at IS NULL"
+            )
+        ).fetchall()
     for gene_id, slug, keys, user_id in pack_rows:
         key_list: list[str] = []
         if isinstance(keys, list):
@@ -563,15 +645,25 @@ def upgrade() -> None:
 
     # §8.1 step 4 — soft-delete all pack rows (permission_keys non-empty OR
     # slug not can_*) and deprecate the global user_user_genes tenant path.
-    conn.execute(
-        sa.text(
-            "UPDATE user_genes SET deleted_at = now(), updated_at = now()"
-            " WHERE deleted_at IS NULL AND ("
-            "   (permission_keys IS NOT NULL AND permission_keys != '[]'::jsonb)"
-            "   OR slug NOT LIKE 'can\\_%' ESCAPE '\\'"
-            " )"
+    if _has_column(conn, "user_genes", "permission_keys"):
+        conn.execute(
+            sa.text(
+                "UPDATE user_genes SET deleted_at = now(), updated_at = now()"
+                " WHERE deleted_at IS NULL AND ("
+                "   (permission_keys IS NOT NULL AND permission_keys != '[]'::jsonb)"
+                "   OR slug NOT LIKE 'can\\_%' ESCAPE '\\'"
+                " )"
+            )
         )
-    )
+    else:
+        # Fresh-rebuild path: permission_keys never existed; packs are any
+        # non-can_* rows (should not exist, but stay defensive).
+        conn.execute(
+            sa.text(
+                "UPDATE user_genes SET deleted_at = now(), updated_at = now()"
+                " WHERE deleted_at IS NULL AND slug NOT LIKE 'can\\_%' ESCAPE '\\'"
+            )
+        )
     conn.execute(
         sa.text(
             "UPDATE user_user_genes SET deleted_at = now(), updated_at = now()"
@@ -580,15 +672,17 @@ def upgrade() -> None:
     )
 
     # -- B5. entities.capabilities JSONB → entity_capabilities (§6.1/§8.10) --
-    entity_rows = conn.execute(
-        sa.text(
-            "SELECT e.id, e.capabilities, n.org_id"
-            " FROM entities e"
-            " JOIN namespaces n ON n.id = e.namespace_id AND n.deleted_at IS NULL"
-            " WHERE e.deleted_at IS NULL"
-            " AND e.capabilities IS NOT NULL AND e.capabilities != '[]'::jsonb"
-        )
-    ).fetchall()
+    entity_rows = []
+    if _has_column(conn, "entities", "capabilities"):
+        entity_rows = conn.execute(
+            sa.text(
+                "SELECT e.id, e.capabilities, n.org_id"
+                " FROM entities e"
+                " JOIN namespaces n ON n.id = e.namespace_id AND n.deleted_at IS NULL"
+                " WHERE e.deleted_at IS NULL"
+                " AND e.capabilities IS NOT NULL AND e.capabilities != '[]'::jsonb"
+            )
+        ).fetchall()
 
     def _normalize_caps(raw) -> list[dict]:
         if isinstance(raw, list):
@@ -668,15 +762,17 @@ def upgrade() -> None:
                 )
 
     # -- B6. namespace_contracts role/permissions → namespace_contract_genes --
-    ns_rows = conn.execute(
-        sa.text(
-            "SELECT nc.id, nc.user_id, nc.role, nc.permissions, n.org_id"
-            " FROM namespace_contracts nc"
-            " JOIN namespaces n ON n.id = nc.namespace_id AND n.deleted_at IS NULL"
-            " JOIN users u ON u.id = nc.user_id AND u.deleted_at IS NULL"
-            " WHERE nc.deleted_at IS NULL"
-        )
-    ).fetchall()
+    ns_rows = []
+    if _has_column(conn, "namespace_contracts", "role"):
+        ns_rows = conn.execute(
+            sa.text(
+                "SELECT nc.id, nc.user_id, nc.role, nc.permissions, n.org_id"
+                " FROM namespace_contracts nc"
+                " JOIN namespaces n ON n.id = nc.namespace_id AND n.deleted_at IS NULL"
+                " JOIN users u ON u.id = nc.user_id AND u.deleted_at IS NULL"
+                " WHERE nc.deleted_at IS NULL"
+            )
+        ).fetchall()
 
     def _perm_slugs(raw) -> list[str]:
         if isinstance(raw, list):
@@ -711,11 +807,11 @@ def upgrade() -> None:
     # ------------------------------------------------------------------
     # Phase C — DDL drops (after data is safely migrated)
     # ------------------------------------------------------------------
-    op.drop_column("entities", "capabilities")
-    op.drop_column("memberships", "role")
-    op.drop_column("namespace_contracts", "permissions")
-    op.drop_column("namespace_contracts", "role")
-    op.drop_column("user_genes", "permission_keys")
+    _drop_column_if_present("entities", "capabilities")
+    _drop_column_if_present("memberships", "role")
+    _drop_column_if_present("namespace_contracts", "permissions")
+    _drop_column_if_present("namespace_contracts", "role")
+    _drop_column_if_present("user_genes", "permission_keys")
 
     # All remaining active user_genes are atoms; default their scope to org
     # before enforcing NOT NULL.

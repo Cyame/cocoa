@@ -4,28 +4,8 @@ from sqlalchemy import CheckConstraint, Index
 
 from app.models.entity import Entity  # noqa: F401
 from app.models.instance import Instance  # noqa: F401
-from app.models.workspace import Passage, Membership, MembershipRole, Workspace
+from app.models.workspace import Passage, Membership, Workspace
 from app.models.user import User  # noqa: F401
-
-
-class TestMembershipRole:
-    """MembershipRole enum has exactly three values."""
-
-    def test_three_values(self) -> None:
-        members = list(MembershipRole)
-        assert len(members) == 3
-
-    def test_contains_owner(self) -> None:
-        assert MembershipRole.owner.value == "owner"
-
-    def test_contains_editor(self) -> None:
-        assert MembershipRole.editor.value == "editor"
-
-    def test_contains_viewer(self) -> None:
-        assert MembershipRole.viewer.value == "viewer"
-
-    def test_is_string_enum(self) -> None:
-        assert issubclass(MembershipRole, str)
 
 
 class TestWorkspaceModel:
@@ -78,8 +58,9 @@ class TestMembershipModel:
         assert hasattr(Membership, "posx")
         assert hasattr(Membership, "posy")
 
-    def test_role_and_permissions_exist(self) -> None:
-        assert hasattr(Membership, "role")
+    def test_role_dropped_and_permissions_exist(self) -> None:
+        # v4.0: the static role column was physically dropped (design §4.2).
+        assert not hasattr(Membership, "role")
         assert hasattr(Membership, "permissions")
 
     def test_exclusive_fk_check_constraint(self) -> None:

@@ -76,13 +76,18 @@ def upgrade() -> None:
             existing_nullable=False,
         )
 
+    # v4.0 note: skip legacy permission-gene seeding when the rebuilt schema
+    # no longer carries ``user_genes.permission_keys`` (atoms replace packs).
+    _has_permission_keys = "permission_keys" in {
+        c["name"] for c in sa.inspect(conn).get_columns("user_genes")
+    }
     existing = {
         row[0]
         for row in conn.execute(
             sa.text("SELECT slug FROM user_genes WHERE deleted_at IS NULL")
         ).fetchall()
     }
-    for key in _PERMISSION_KEYS:
+    for key in _PERMISSION_KEYS if _has_permission_keys else ():
         if key in existing:
             continue
         conn.execute(

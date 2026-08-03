@@ -105,9 +105,19 @@ _LEGACY_MAP = {
 def upgrade() -> None:
     conn = op.get_bind()
 
+    # v4.0 note: identity packs are dead once ``user_genes.permission_keys``
+    # is gone (atoms replace packs; the v4.0 revision seeds the atomic
+    # catalog and soft-deletes any pack rows). Skip the whole identity-pack
+    # section on fresh rebuilds that already use post-v4.0 metadata.
+    _has_permission_keys = "permission_keys" in {
+        c["name"] for c in sa.inspect(conn).get_columns("user_genes")
+    }
+
     # --- identity genes upsert ---
     gene_ids: dict[str, str] = {}
-    for slug, (name, description, keys) in _IDENTITY.items():
+    for slug, (name, description, keys) in (
+        _IDENTITY.items() if _has_permission_keys else ()
+    ):
         row = conn.execute(
             sa.text(
                 "SELECT id FROM user_genes WHERE slug = :slug AND deleted_at IS NULL"
@@ -222,32 +232,94 @@ def upgrade() -> None:
             {"id": legacy[0]},
         )
 
-    # Preserve prior super-admins before rewriting the flag from identity packs.
-    prior_super_admins = [
-        row[0]
-        for row in conn.execute(
+    if gene_ids:  # skipped entirely on post-v4.0 fresh rebuilds
+        # Preserve prior super-admins before rewriting the flag from identity packs.
+        prior_super_admins = [
+            row[0]
+            for row in conn.execute(
+                sa.text(
+                    """
+                    SELECT id FROM users
+                    WHERE deleted_at IS NULL AND is_super_admin = true
+                    """
+                )
+            ).fetchall()
+        ]
+
+        # --- sync is_super_admin from identity-system ---
+        system_id = gene_ids["identity-system"]
+        for user_id in prior_super_admins:
+            existing = conn.execute(
+                sa.text(
+                    """
+                    SELECT id FROM user_user_genes
+                    WHERE user_id = :uid AND user_gene_id = :gid AND deleted_at IS NULL
+                    """
+                ),
+                {"uid": user_id, "gid": system_id},
+            ).fetchone()
+            if existing is None:
+                conn.execute(
+                    sa.text(
+                        """
+                        INSERT INTO user_user_genes
+                            (id, user_id, user_gene_id, created_at, updated_at)
+                        VALUES (:id, :uid, :gid, now(), now())
+                        """
+                    ),
+                    {"id": str(uuid.uuid4()), "uid": user_id, "gid": system_id},
+                )
+                # Drop lower identity packs when promoting prior super-admins.
+                lower_ids = [gene_ids[s] for s in gene_ids if s != "identity-system"]
+                if lower_ids:
+                    conn.execute(
+                        sa.text(
+                            """
+                            UPDATE user_user_genes
+                            SET deleted_at = now(), updated_at = now()
+                            WHERE user_id = :uid
+                              AND user_gene_id IN :gids
+                              AND deleted_at IS NULL
+                            """
+                        ).bindparams(sa.bindparam("gids", expanding=True)),
+                        {"uid": user_id, "gids": lower_ids},
+                    )
+
+        conn.execute(
+            sa.text(
+                """
+                UPDATE users
+                SET is_super_admin = EXISTS (
+                    SELECT 1 FROM user_user_genes uug
+                    WHERE uug.user_id = users.id
+                      AND uug.user_gene_id = :gid
+                      AND uug.deleted_at IS NULL
+                ),
+                updated_at = now()
+                WHERE deleted_at IS NULL
+                """
+            ),
+            {"gid": system_id},
+        )
+
+        # Super-admins without identity-system get the pack attached.
+        orphans = conn.execute(
             sa.text(
                 """
                 SELECT id FROM users
-                WHERE deleted_at IS NULL AND is_super_admin = true
-                """
-            )
-        ).fetchall()
-    ]
-
-    # --- sync is_super_admin from identity-system ---
-    system_id = gene_ids["identity-system"]
-    for user_id in prior_super_admins:
-        existing = conn.execute(
-            sa.text(
-                """
-                SELECT id FROM user_user_genes
-                WHERE user_id = :uid AND user_gene_id = :gid AND deleted_at IS NULL
+                WHERE deleted_at IS NULL
+                  AND is_super_admin = true
+                  AND NOT EXISTS (
+                    SELECT 1 FROM user_user_genes uug
+                    WHERE uug.user_id = users.id
+                      AND uug.user_gene_id = :gid
+                      AND uug.deleted_at IS NULL
+                  )
                 """
             ),
-            {"uid": user_id, "gid": system_id},
-        ).fetchone()
-        if existing is None:
+            {"gid": system_id},
+        ).fetchall()
+        for (user_id,) in orphans:
             conn.execute(
                 sa.text(
                     """
@@ -258,95 +330,35 @@ def upgrade() -> None:
                 ),
                 {"id": str(uuid.uuid4()), "uid": user_id, "gid": system_id},
             )
-            # Drop lower identity packs when promoting prior super-admins.
-            lower_ids = [gene_ids[s] for s in gene_ids if s != "identity-system"]
-            if lower_ids:
-                conn.execute(
-                    sa.text(
-                        """
-                        UPDATE user_user_genes
-                        SET deleted_at = now(), updated_at = now()
-                        WHERE user_id = :uid
-                          AND user_gene_id IN :gids
-                          AND deleted_at IS NULL
-                        """
-                    ).bindparams(sa.bindparam("gids", expanding=True)),
-                    {"uid": user_id, "gids": lower_ids},
-                )
 
-    conn.execute(
-        sa.text(
-            """
-            UPDATE users
-            SET is_super_admin = EXISTS (
-                SELECT 1 FROM user_user_genes uug
-                WHERE uug.user_id = users.id
-                  AND uug.user_gene_id = :gid
-                  AND uug.deleted_at IS NULL
-            ),
-            updated_at = now()
-            WHERE deleted_at IS NULL
-            """
-        ),
-        {"gid": system_id},
-    )
-
-    # Super-admins without identity-system get the pack attached.
-    orphans = conn.execute(
-        sa.text(
+        # Members with no identity gene get identity-member.
+        member_id = gene_ids["identity-member"]
+        identity_ids = list(gene_ids.values())
+        bare_stmt = sa.text(
             """
             SELECT id FROM users
             WHERE deleted_at IS NULL
-              AND is_super_admin = true
               AND NOT EXISTS (
                 SELECT 1 FROM user_user_genes uug
                 WHERE uug.user_id = users.id
-                  AND uug.user_gene_id = :gid
+                  AND uug.user_gene_id IN :gids
                   AND uug.deleted_at IS NULL
               )
             """
-        ),
-        {"gid": system_id},
-    ).fetchall()
-    for (user_id,) in orphans:
-        conn.execute(
-            sa.text(
-                """
-                INSERT INTO user_user_genes
-                    (id, user_id, user_gene_id, created_at, updated_at)
-                VALUES (:id, :uid, :gid, now(), now())
-                """
-            ),
-            {"id": str(uuid.uuid4()), "uid": user_id, "gid": system_id},
-        )
+        ).bindparams(sa.bindparam("gids", expanding=True))
+        bare = conn.execute(bare_stmt, {"gids": identity_ids}).fetchall()
+        for (user_id,) in bare:
+            conn.execute(
+                sa.text(
+                    """
+                    INSERT INTO user_user_genes
+                        (id, user_id, user_gene_id, created_at, updated_at)
+                    VALUES (:id, :uid, :gid, now(), now())
+                    """
+                ),
+                {"id": str(uuid.uuid4()), "uid": user_id, "gid": member_id},
+            )
 
-    # Members with no identity gene get identity-member.
-    member_id = gene_ids["identity-member"]
-    identity_ids = list(gene_ids.values())
-    bare_stmt = sa.text(
-        """
-        SELECT id FROM users
-        WHERE deleted_at IS NULL
-          AND NOT EXISTS (
-            SELECT 1 FROM user_user_genes uug
-            WHERE uug.user_id = users.id
-              AND uug.user_gene_id IN :gids
-              AND uug.deleted_at IS NULL
-          )
-        """
-    ).bindparams(sa.bindparam("gids", expanding=True))
-    bare = conn.execute(bare_stmt, {"gids": identity_ids}).fetchall()
-    for (user_id,) in bare:
-        conn.execute(
-            sa.text(
-                """
-                INSERT INTO user_user_genes
-                    (id, user_id, user_gene_id, created_at, updated_at)
-                VALUES (:id, :uid, :gid, now(), now())
-                """
-            ),
-            {"id": str(uuid.uuid4()), "uid": user_id, "gid": member_id},
-        )
 
     # --- upsert 11 public 神职 + internal zong-jian ---
     from app.core.builtin_presets import ALL_BUILTIN_PRESETS

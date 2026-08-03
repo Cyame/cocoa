@@ -263,6 +263,93 @@ async def instance_factory(session: AsyncSession, entity_factory, workspace_fact
 
 
 @pytest_asyncio.fixture
+async def create_org_bundle(session: AsyncSession):
+    """v4.0 M7: Org + OrgContract + atom grants (+ optional role-less Membership).
+
+    Replaces the old "insert editor-role Membership" fixture pattern: tests
+    that exercise permission-gated endpoints grant contract atoms instead.
+    """
+
+    async def _make(
+        user_id: str | None = None,
+        *,
+        atoms: tuple[str, ...] = (
+            "can_view_workspace",
+            "can_edit_workspace",
+            "can_operate_workspace",
+            "can_manage_workspace",
+        ),
+        workspace=None,
+        namespace=None,
+        organization=None,
+        with_membership: bool = False,
+        posx: int = 0,
+        posy: int = 0,
+    ):
+        from types import SimpleNamespace
+
+        from sqlalchemy import select
+
+        from app.core.gene_atoms import ensure_atom_genes
+        from app.core.org_contract import ensure_org_contract, grant_atoms
+        from app.models.organization import Namespace, Organization
+        from app.models.workspace import Membership
+
+        org = organization
+        ns = namespace
+        if org is None:
+            if ns is not None:
+                org = await session.get(Organization, ns.org_id)
+            elif workspace is not None:
+                ns = await session.get(Namespace, workspace.namespace_id)
+                org = await session.get(Organization, ns.org_id)
+            else:
+                org = (
+                    await session.execute(
+                        select(Organization).where(
+                            Organization.slug == "default",
+                            Organization.deleted_at.is_(None),
+                        )
+                    )
+                ).scalar_one_or_none()
+                if org is None:
+                    org = Organization(slug="default", name="Default World")
+                    session.add(org)
+                    await session.flush()
+        if ns is None and workspace is not None:
+            ns = await session.get(Namespace, workspace.namespace_id)
+
+        await ensure_atom_genes(session)
+        contract = None
+        if user_id is not None and org is not None:
+            contract = await ensure_org_contract(
+                session, organization_id=org.id, user_id=user_id
+            )
+            await grant_atoms(session, contract.id, atoms)
+
+        membership = None
+        if with_membership and user_id is not None and workspace is not None:
+            membership = Membership(
+                workspace_id=workspace.id,
+                user_id=user_id,
+                posx=posx,
+                posy=posy,
+            )
+            session.add(membership)
+            await session.flush()
+
+        return SimpleNamespace(
+            org=org,
+            namespace=ns,
+            workspace=workspace,
+            contract=contract,
+            membership=membership,
+        )
+
+    return _make
+
+
+@pytest_asyncio.fixture
 async def client(db_url: str):
     """TestClient wired to the per-test cloned database."""
     import app.core.db as db_mod

@@ -471,7 +471,6 @@ class TestSchemaValidation:
                 workspace_id="test-workspace",
                 user_id=None,
                 instance_id=None,
-                role="viewer",
             )
         errors = exc_info.value.errors()
         assert any(
