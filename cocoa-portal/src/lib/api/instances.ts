@@ -130,7 +130,6 @@ export type MembershipCreatePayload = {
   readonly instance_id?: string | null;
   readonly posx?: number;
   readonly posy?: number;
-  readonly role?: 'owner' | 'editor' | 'viewer';
 };
 
 export function createMembership(payload: MembershipCreatePayload): Promise<Membership> {

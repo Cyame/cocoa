@@ -1,11 +1,16 @@
 import { api } from '@/lib/api';
 
+export type NamespaceContractGeneRef = {
+  readonly id: string;
+  readonly slug: string;
+};
+
 export type NamespaceContract = {
   readonly id: string;
   readonly namespace_id: string;
   readonly user_id: string;
-  readonly role: string;
-  readonly permissions: Record<string, unknown> | null;
+  // v4.0: no role — the grant is the atomic gene set.
+  readonly genes: readonly NamespaceContractGeneRef[];
   readonly created_at: string;
   readonly updated_at: string;
 };

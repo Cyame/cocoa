@@ -311,15 +311,12 @@ export default function WorkspaceIdePage() {
               emptyDetail={t('workspace.emptyMembershipsDetail')}
               items={memberships.map((m) => {
                 const isMe = currentUserId !== null && m.user_id === currentUserId;
-                const name =
-                  m.nickname?.trim() || m.username?.trim() || t('topology.userLabel');
+                const name = m.nickname?.trim() || m.username?.trim() || t('topology.userLabel');
                 const title = isMe ? t('topology.meLabel', { name }) : name;
                 return {
                   id: m.id,
                   title,
-                  subtitle: isMe
-                    ? `${m.role} · ${t('workspace.meBadge')}`
-                    : m.role,
+                  subtitle: isMe ? t('workspace.meBadge') : '',
                   removeLabel: t('workspace.removeAwakened'),
                   onRemove: () => {
                     void handleRemoveMembership(m.id, name);
@@ -458,7 +455,7 @@ function BrainRegionPanel({
         const raw: readonly Record<string, unknown>[] = Array.isArray(res)
           ? (res as readonly Record<string, unknown>[])
           : Array.isArray((res as { items?: unknown }).items)
-            ? ((res as { items: readonly Record<string, unknown>[] }).items)
+            ? (res as { items: readonly Record<string, unknown>[] }).items
             : [];
         setItems(
           raw.map((row: Record<string, unknown>, index: number) => ({

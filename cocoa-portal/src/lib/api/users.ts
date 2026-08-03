@@ -74,10 +74,7 @@ export async function updateUser(
   });
 }
 
-export async function setUserIdentity(
-  userId: string,
-  identity: IdentityKey,
-): Promise<AdminUser> {
+export async function setUserIdentity(userId: string, identity: IdentityKey): Promise<AdminUser> {
   return api<AdminUser>(`/users/${userId}/identity`, {
     method: 'POST',
     body: JSON.stringify({ identity }),
@@ -127,7 +124,8 @@ export type CatalogUserGene = {
   readonly slug: string;
   readonly name: string;
   readonly kind: string;
-  readonly permission_keys: readonly string[];
+  // v4.0: atomic permission — the layer at which it takes effect.
+  readonly effect_scope: 'platform' | 'org' | 'namespace' | 'workspace';
   readonly description: string | null;
 };
 
@@ -144,7 +142,7 @@ export async function updateUserGene(
   geneId: string,
   body: {
     readonly name?: string;
-    readonly permission_keys?: readonly string[];
+    readonly effect_scope?: CatalogUserGene['effect_scope'];
     readonly description?: string | null;
   },
 ): Promise<CatalogUserGene> {
@@ -157,7 +155,7 @@ export async function updateUserGene(
 export async function createUserGene(body: {
   readonly slug: string;
   readonly name: string;
-  readonly permission_keys?: readonly string[];
+  readonly effect_scope?: CatalogUserGene['effect_scope'];
   readonly description?: string | null;
 }): Promise<CatalogUserGene> {
   return api<CatalogUserGene>('/user-genes', {

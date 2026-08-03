@@ -19,8 +19,8 @@ import GlobalModals from '@/components/GlobalModals';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { api } from '@/lib/api';
 import type { AuthUserPayload } from '@/lib/types';
-import { APP_VERSION } from '@/lib/version';
 import { cn } from '@/lib/utils';
+import { APP_VERSION } from '@/lib/version';
 import { useSessionStore } from '@/stores/session';
 
 const TAB_IDS = [
@@ -48,8 +48,19 @@ const IDENTITY_LABEL_KEYS: Record<string, string> = {
 };
 
 type NavItem =
-  | { readonly kind: 'tab'; readonly id: NamespaceTabId; readonly labelKey: string; readonly Icon: typeof Building2 }
-  | { readonly kind: 'route'; readonly to: string; readonly labelKey: string; readonly Icon: typeof Building2; readonly match: (pathname: string, tab: string | null) => boolean };
+  | {
+      readonly kind: 'tab';
+      readonly id: NamespaceTabId;
+      readonly labelKey: string;
+      readonly Icon: typeof Building2;
+    }
+  | {
+      readonly kind: 'route';
+      readonly to: string;
+      readonly labelKey: string;
+      readonly Icon: typeof Building2;
+      readonly match: (pathname: string, tab: string | null) => boolean;
+    };
 
 const NAV_ITEMS: readonly NavItem[] = [
   {
@@ -133,9 +144,7 @@ export default function AppShell() {
     if (item.to.includes('tab=namespaces')) {
       return location.pathname.startsWith('/organization') && orgTab === 'namespaces';
     }
-    return (
-      location.pathname.startsWith('/organization') && orgTab !== 'namespaces'
-    );
+    return location.pathname.startsWith('/organization') && orgTab !== 'namespaces';
   }
 
   return (
@@ -206,6 +215,17 @@ export default function AppShell() {
                     t('common.authenticatedUser')}
                 </p>
                 <p className="text-xs text-slate-500">{t(identityLabelKey)}</p>
+                {(user?.extra_gene_slugs ?? []).length > 0 && (
+                  <p
+                    className="max-w-48 truncate font-mono text-[10px] text-slate-400"
+                    title={(user?.extra_gene_slugs ?? []).join(', ')}
+                  >
+                    {(user?.extra_gene_slugs ?? []).slice(0, 2).join(' · ')}
+                    {(user?.extra_gene_slugs ?? []).length > 2
+                      ? ` +${(user?.extra_gene_slugs ?? []).length - 2}`
+                      : ''}
+                  </p>
+                )}
               </div>
             </Link>
             <button

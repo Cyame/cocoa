@@ -672,7 +672,6 @@
     "contractsDetail": "次元内真人成员关系。加入空间时会自动确保契印。",
     "contractsEmpty": "暂无契印。创建空间或添加成员后会出现。",
     "contractsUser": "用户",
-    "contractsRole": "角色",
     "contractsJoined": "加入时间",
     "noEntities": "当前次元尚无眷族。",
     "entityActions": "操作",
@@ -728,7 +727,11 @@
       "multimodal": "多模态",
       "delegate": "委派",
       "untagged": "未分类"
-    }
+    },
+    "contractsGenes": "基因",
+    "genesSlug": "标识",
+    "genesScope": "作用域",
+    "genesDescription": "描述"
   },
   "workspace": {
     "idMissing": "缺少空间标识。",

@@ -835,7 +835,6 @@
     "contractsDetail": "Human seals in this namespace. Joining a workspace auto-ensures a contract.",
     "contractsEmpty": "No contracts yet. Creating a workspace or adding members will create them.",
     "contractsUser": "User",
-    "contractsRole": "Role",
     "contractsJoined": "Joined",
     "noEntities": "No entities in this namespace yet.",
     "entityActions": "Actions",
@@ -891,7 +890,11 @@
       "multimodal": "Multimodal",
       "delegate": "Delegate",
       "untagged": "Untagged"
-    }
+    },
+    "contractsGenes": "Genes",
+    "genesSlug": "Slug",
+    "genesScope": "Scope",
+    "genesDescription": "Description"
   },
   "workspace": {
     "idMissing": "Workspace identifier is missing.",

@@ -30,8 +30,6 @@ export type Namespace = {
   readonly updated_at: string;
 };
 
-export type WorkspaceRole = 'owner' | 'editor' | 'viewer';
-
 export type WorkspaceMember =
   | {
       readonly user_id: string;
@@ -47,7 +45,7 @@ export type WorkspaceMembership = WorkspaceMember & {
   readonly workspace_id: string;
   readonly posx: number;
   readonly posy: number;
-  readonly role: WorkspaceRole;
+  // v4.0: no static role — authorization is computed from Contract atoms.
   readonly permissions: JsonObject | null;
   readonly created_at: string;
   readonly updated_at: string;
@@ -58,9 +56,6 @@ export type WorkspaceMembership = WorkspaceMember & {
 };
 
 export type Membership = WorkspaceMembership;
-
-/** @deprecated Use WorkspaceRole */
-export type OfficeRole = WorkspaceRole;
 
 /** @deprecated Use WorkspaceMembership */
 export type OfficeMembership = WorkspaceMembership;
@@ -89,6 +84,8 @@ export type Employee = Entity;
 export type PresetManifest = {
   readonly model: string;
   readonly prompt: string;
+  /** v4.0: readonly mirror aggregated from junction rows by the backend —
+   * never a write truth (writes go through capability/gene junction APIs). */
   readonly skills: readonly string[];
   readonly tools: readonly string[];
   readonly commands: readonly string[];
@@ -228,7 +225,6 @@ export type TopologyNode = {
   readonly y: number;
   readonly label: string;
   readonly slug: string;
-  readonly role: string;
   readonly status: string;
   readonly fillColor: string;
   readonly glowColor: string;

@@ -1,4 +1,15 @@
-import { AlertCircle, Bot, Brain, Cpu, Link, LoaderCircle, Network, Trash, User, X } from 'lucide-react';
+import {
+  AlertCircle,
+  Bot,
+  Brain,
+  Cpu,
+  Link,
+  LoaderCircle,
+  Network,
+  Trash,
+  User,
+  X,
+} from 'lucide-react';
 import {
   type ReactElement,
   type MouseEvent as ReactMouseEvent,
@@ -368,7 +379,6 @@ export default function TopologyPage({
     const membershipNodes: NodeSummary[] = staticData.memberships.map((m) => {
       const status = statusByMembership.get(m.id);
       const isUser = m.user_id !== null;
-      const role = m.role;
       const fallbackStatus: LiveStatusItem = {
         membership_id: m.id,
         posx: m.posx,
@@ -398,7 +408,6 @@ export default function TopologyPage({
         y: m.posy,
         label,
         slug: isUser ? (username ?? m.user_id ?? '') : (m.entity_slug ?? ''),
-        role,
         status: effective.display_status ?? effective.instance_status ?? effective.glow.intensity,
         fillColor: isUser ? userFillColor() : instanceFillColor(),
         glowColor: effective.glow.color,
@@ -427,7 +436,6 @@ export default function TopologyPage({
       y: hubY,
       label: t('topology.hubLabel'),
       slug: 'hub',
-      role: 'hub',
       status: 'static',
       fillColor: HUB_FILL,
       glowColor: HUB_GLOW,
@@ -1104,7 +1112,7 @@ function NodeView({
   const haloOpacity = intensityOpacity(node.glowIntensity);
   const coreStrokeOpacity = intensityStrokeOpacity(node.glowIntensity);
   const isUser = node.fillColor === DEFAULT_USER_FILL;
-  const tooltip = `${node.label} | ${node.role} | ${node.status}`;
+  const tooltip = `${node.label} | ${node.status}`;
   const Icon = node.kind === 'hub' ? Brain : isUser ? User : node.instanceId !== null ? Cpu : Bot;
   const renderX = dragOverride !== null ? dragOverride.x : node.x;
   const renderY = dragOverride !== null ? dragOverride.y : node.y;
@@ -1233,14 +1241,7 @@ function NodeView({
           onMouseLeave={scheduleHideTooltip}
         >
           {/* Invisible hit bridge: fills the gap between node core and tooltip panel */}
-          <rect
-            x={-40}
-            y={-220}
-            width={80}
-            height={220}
-            fill="transparent"
-            pointerEvents="all"
-          />
+          <rect x={-40} y={-220} width={80} height={220} fill="transparent" pointerEvents="all" />
           <NodeTooltip
             node={node}
             onOpen={() => onClick(node)}
@@ -1292,10 +1293,6 @@ export function NodeDrawer({ node, isEditor, onClose, onDelete }: NodeDrawerProp
         <div className="flex justify-between gap-3">
           <dt className="text-slate-500">ID</dt>
           <dd className="truncate font-mono text-xs text-slate-800">{node.id}</dd>
-        </div>
-        <div className="flex justify-between gap-3">
-          <dt className="text-slate-500">Role</dt>
-          <dd className="text-slate-800">{node.role}</dd>
         </div>
         <div className="flex justify-between gap-3">
           <dt className="text-slate-500">Status</dt>

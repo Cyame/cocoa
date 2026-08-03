@@ -22,12 +22,7 @@ import { type EntityDetail, fetchEntity, promoteEntity } from '@/lib/api/entitie
 import { listMemberships } from '@/lib/api/instances';
 import type { NamespaceWithStats } from '@/lib/api/namespaces';
 import { fetchDefaultNamespace } from '@/lib/api/namespaces';
-import {
-  type CatalogUserGene,
-  listPermissionKeys,
-  listUserGenes,
-  updateUserGene,
-} from '@/lib/api/users';
+import { type CatalogUserGene, listUserGenes } from '@/lib/api/users';
 import { createWorkspace, fetchWorkspaces } from '@/lib/api/workspaces';
 import { translateBaseClassTag } from '@/lib/baseClassTags';
 import { toSlug } from '@/lib/slug';
@@ -35,7 +30,6 @@ import type { BaseClass, Entity, Instance, Workspace } from '@/lib/types';
 import DebugPage from '@/pages/DebugPage';
 import { useEntityModalStore } from '@/stores/entityModalStore';
 import { useOnboardingModalStore } from '@/stores/onboardingModalStore';
-import { useSessionStore } from '@/stores/session';
 
 type OffsetPage<T> = {
   readonly items: readonly T[];
@@ -581,13 +575,7 @@ function BaseClassesTab({
   );
 }
 
-function ContractsTab({
-  namespaceId,
-  t,
-}: {
-  readonly namespaceId: string;
-  readonly t: TFn;
-}) {
+function ContractsTab({ namespaceId, t }: { readonly namespaceId: string; readonly t: TFn }) {
   const [contracts, setContracts] = useState<readonly NamespaceContract[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -651,7 +639,7 @@ function ContractsTab({
         <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
           <tr>
             <th className="px-4 py-3">{t('namespaces.contractsUser')}</th>
-            <th className="px-4 py-3">{t('namespaces.contractsRole')}</th>
+            <th className="px-4 py-3">{t('namespaces.contractsGenes')}</th>
             <th className="px-4 py-3">{t('namespaces.contractsJoined')}</th>
           </tr>
         </thead>
@@ -659,7 +647,22 @@ function ContractsTab({
           {contracts.map((c) => (
             <tr key={c.id} className="border-b border-slate-100 last:border-0">
               <td className="px-4 py-3 font-mono text-xs text-slate-700">{c.user_id}</td>
-              <td className="px-4 py-3 capitalize text-slate-600">{c.role}</td>
+              <td className="px-4 py-3 text-slate-600">
+                {c.genes.length === 0 ? (
+                  <span className="text-slate-400">—</span>
+                ) : (
+                  <span className="flex flex-wrap gap-1">
+                    {c.genes.map((g) => (
+                      <span
+                        key={g.id}
+                        className="rounded-md bg-blue-50 px-1.5 py-0.5 font-mono text-xs text-blue-700"
+                      >
+                        {g.slug}
+                      </span>
+                    ))}
+                  </span>
+                )}
+              </td>
               <td className="px-4 py-3 text-slate-500">
                 {new Date(c.created_at).toLocaleString()}
               </td>
@@ -975,24 +978,18 @@ function DeepSeaGenesPanel({ t }: { readonly t: TFn }) {
 }
 
 function HumanGenesPanel({ t }: { readonly t: TFn }) {
-  const user = useSessionStore((state) => state.user);
-  const canWrite = user?.is_super_admin === true || user?.identity === 'system';
+  // v4.0: the UserGene catalog is atomic (can_*) and display-only here;
+  // grants are managed via Contracts, full CRUD lands in v4.1.
   const [genes, setGenes] = useState<readonly CatalogUserGene[]>([]);
-  const [permissionKeys, setPermissionKeys] = useState<readonly string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [draftKeys, setDraftKeys] = useState<ReadonlySet<string>>(new Set());
-  const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setIsLoading(true);
     setErrorMessage(null);
     try {
-      const [genePage, keys] = await Promise.all([listUserGenes(), listPermissionKeys()]);
+      const genePage = await listUserGenes();
       setGenes(genePage.items);
-      setPermissionKeys(keys);
     } catch (error) {
       setErrorMessage(error instanceof ApiError ? error.message : String(error));
     } finally {
@@ -1003,27 +1000,6 @@ function HumanGenesPanel({ t }: { readonly t: TFn }) {
   useEffect(() => {
     void load();
   }, [load]);
-
-  function startEdit(gene: CatalogUserGene) {
-    setEditingId(gene.id);
-    setDraftKeys(new Set(gene.permission_keys ?? []));
-    setNotice(null);
-  }
-
-  async function saveEdit(geneId: string) {
-    setBusy(true);
-    setErrorMessage(null);
-    try {
-      await updateUserGene(geneId, { permission_keys: Array.from(draftKeys) });
-      setEditingId(null);
-      setNotice(t('namespaces.genesSaved'));
-      await load();
-    } catch (error) {
-      setErrorMessage(error instanceof ApiError ? error.message : String(error));
-    } finally {
-      setBusy(false);
-    }
-  }
 
   if (isLoading) {
     return (
@@ -1045,105 +1021,34 @@ function HumanGenesPanel({ t }: { readonly t: TFn }) {
           {errorMessage}
         </p>
       ) : null}
-      {notice ? (
-        <p role="status" className="text-sm text-emerald-700">
-          {notice}
-        </p>
-      ) : null}
       {genes.length === 0 ? (
         <p className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center text-sm text-slate-500">
           {t('namespaces.genesEmpty')}
         </p>
       ) : (
-        <div className="space-y-3">
-          {genes.map((gene) => {
-            const editing = editingId === gene.id;
-            const isIdentity = gene.slug.startsWith('identity-');
-            return (
-              <article
-                key={gene.id}
-                className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div>
-                    <p className="font-medium text-slate-900">{gene.name}</p>
-                    <p className="font-mono text-xs text-slate-500">{gene.slug}</p>
-                    {gene.description ? (
-                      <p className="mt-1 text-xs text-slate-500">{gene.description}</p>
-                    ) : null}
-                  </div>
-                  {canWrite ? (
-                    editing ? (
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setEditingId(null)}
-                          className="rounded-md border border-slate-200 px-2 py-1 text-xs"
-                        >
-                          {t('common.cancel')}
-                        </button>
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => void saveEdit(gene.id)}
-                          className="rounded-md bg-blue-600 px-2 py-1 text-xs font-semibold text-white disabled:opacity-60"
-                        >
-                          {t('common.save')}
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => startEdit(gene)}
-                        className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
-                      >
-                        {t('namespaces.genesEdit')}
-                      </button>
-                    )
-                  ) : null}
-                </div>
-                <div className="mt-3">
-                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    {t('namespaces.genesPermissions')}
-                    {isIdentity ? (
-                      <span className="ml-2 font-normal normal-case tracking-normal text-slate-400">
-                        (identity)
-                      </span>
-                    ) : null}
-                  </p>
-                  {editing ? (
-                    <div className="grid max-h-48 gap-1 overflow-y-auto rounded-lg border border-slate-200 p-2 sm:grid-cols-2">
-                      {permissionKeys.map((key) => (
-                        <label
-                          key={key}
-                          className="flex items-center gap-2 rounded-md px-2 py-1 font-mono text-xs hover:bg-slate-50"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={draftKeys.has(key)}
-                            onChange={(e) => {
-                              setDraftKeys((prev) => {
-                                const next = new Set(prev);
-                                if (e.target.checked) next.add(key);
-                                else next.delete(key);
-                                return next;
-                              });
-                            }}
-                            className="size-3.5 accent-blue-600"
-                          />
-                          {key}
-                        </label>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="font-mono text-xs text-slate-700">
-                      {(gene.permission_keys ?? []).join(', ') || '—'}
-                    </p>
-                  )}
-                </div>
-              </article>
-            );
-          })}
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <table className="min-w-full text-sm">
+            <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+              <tr>
+                <th className="px-4 py-3">{t('namespaces.genesSlug')}</th>
+                <th className="px-4 py-3">{t('namespaces.genesScope')}</th>
+                <th className="px-4 py-3">{t('namespaces.genesDescription')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {genes.map((gene) => (
+                <tr key={gene.id} className="border-b border-slate-100 last:border-0">
+                  <td className="px-4 py-3 font-mono text-xs text-slate-700">{gene.slug}</td>
+                  <td className="px-4 py-3">
+                    <span className="rounded-md bg-blue-50 px-2 py-0.5 font-mono text-xs text-blue-700">
+                      {gene.effect_scope}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-slate-500">{gene.description ?? '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
