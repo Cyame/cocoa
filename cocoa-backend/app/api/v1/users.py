@@ -20,14 +20,7 @@ from sqlalchemy import select
 
 from app.api.deps import DB, CurrentUserDep
 from app.core.errors import ConflictError, ForbiddenError, NotFoundError
-from app.core.identity import (
-    ALL_IDENTITY_SLUGS,
-    IdentityKey,
-    identity_key_from_slug,
-    resolve_user_identity,
-    sync_identity_pack,
-    user_meets_identity,
-)
+from app.core.identity import resolve_user_identity
 from app.core.openapi import add_error_responses
 from app.core.pagination import OffsetPage, paginate_offset
 from app.core.security import hash_password
@@ -60,11 +53,11 @@ async def _require_user_admin(db: DB, current_user: CurrentUserDep) -> User:
             "errors.auth.user_not_found",
             "Authenticated user not found",
         )
-    if not await user_meets_identity(db, actor, "system"):
+    if not actor.is_super_admin:
         raise ForbiddenError(
             "auth.super_admin_required",
             "errors.auth.super_admin_required",
-            "System identity required to manage users",
+            "Super-admin privileges required to manage users",
             details={"user_id": current_user.user_id},
         )
     return actor
@@ -82,6 +75,8 @@ async def _get_active_user(db: DB, user_id: str) -> User:
 
 
 async def _to_out(db: DB, user: User) -> UserOut:
+    """Admin view: identity derived from flag; global extra links are legacy
+    platform tooling (tenant grants live on Contracts since v4.0)."""
     rows = (
         await db.execute(
             select(UserUserGene, UserGene)
@@ -94,23 +89,10 @@ async def _to_out(db: DB, user: User) -> UserOut:
             .order_by(UserGene.slug)
         )
     ).all()
-    locked: list[UserGeneRef] = []
-    extras: list[UserGeneRef] = []
-    identity_keys: set[IdentityKey] = set()
-    for _link, gene in rows:
-        key = identity_key_from_slug(gene.slug)
-        ref = UserGeneRef(
-            id=gene.id,
-            slug=gene.slug,
-            name=gene.name,
-            locked=key is not None or gene.slug in ALL_IDENTITY_SLUGS,
-        )
-        if ref.locked:
-            if key is not None:
-                identity_keys.add(key)
-            locked.append(ref)
-        else:
-            extras.append(ref)
+    extras = [
+        UserGeneRef(id=gene.id, slug=gene.slug, name=gene.name, locked=False)
+        for _link, gene in rows
+    ]
     identity, _, _ = await resolve_user_identity(db, user.id)
     return UserOut(
         id=user.id,
@@ -119,7 +101,7 @@ async def _to_out(db: DB, user: User) -> UserOut:
         email=user.email,
         is_super_admin=bool(user.is_super_admin),
         identity=identity,
-        locked_genes=locked,
+        locked_genes=[],
         extra_genes=extras,
         created_at=user.created_at,
         updated_at=user.updated_at,
@@ -171,11 +153,10 @@ async def create_user(
         nickname=body.nickname,
         email=body.email,
         password_hash=hash_password(temporary),
-        is_super_admin=False,
+        is_super_admin=body.identity == "system",
     )
     db.add(user)
     await db.flush()
-    await sync_identity_pack(db, user, body.identity)
     await db.commit()
     await db.refresh(user)
     out = await _to_out(db, user)
@@ -207,7 +188,7 @@ async def update_user(
     if "nickname" in body.model_fields_set:
         user.nickname = body.nickname
     if body.identity is not None:
-        await sync_identity_pack(db, user, body.identity)
+        user.is_super_admin = body.identity == "system"
     await db.commit()
     await db.refresh(user)
     return await _to_out(db, user)
@@ -248,9 +229,12 @@ async def set_user_identity(
     db: DB,
     current_user: CurrentUserDep,
 ) -> UserOut:
+    """Set platform identity. v4.0: only ``system`` is meaningful (maps to
+    ``is_super_admin``); any other value clears the flag. Tenant grants are
+    managed via Contracts, not identity packs."""
     await _require_user_admin(db, current_user)
     user = await _get_active_user(db, user_id)
-    await sync_identity_pack(db, user, body.identity)
+    user.is_super_admin = body.identity == "system"
     await db.commit()
     await db.refresh(user)
     return await _to_out(db, user)
@@ -263,7 +247,8 @@ async def set_user_extra_genes(
     db: DB,
     current_user: CurrentUserDep,
 ) -> UserOut:
-    """Replace extra (non-identity) genes; identity pack stays locked."""
+    """Replace globally-attached genes (legacy platform tooling only —
+    tenant grants are Contract-based since v4.0)."""
     await _require_user_admin(db, current_user)
     user = await _get_active_user(db, user_id)
 
@@ -285,13 +270,6 @@ async def set_user_extra_genes(
                 "errors.user_gene.not_found",
                 f"UserGene(s) not found: {', '.join(sorted(missing))}",
             )
-        for gene in found.values():
-            if gene.slug in ALL_IDENTITY_SLUGS or identity_key_from_slug(gene.slug):
-                raise ConflictError(
-                    "user_gene.identity_locked",
-                    "errors.user_gene.identity_locked",
-                    f"Cannot attach identity gene '{gene.slug}' as extra; use set identity",
-                )
 
     rows = (
         await db.execute(
@@ -307,8 +285,6 @@ async def set_user_extra_genes(
 
     current_extra_ids: set[str] = set()
     for link, gene in rows:
-        if gene.slug in ALL_IDENTITY_SLUGS or identity_key_from_slug(gene.slug):
-            continue
         current_extra_ids.add(gene.id)
         if gene.id not in desired_ids:
             link.soft_delete()

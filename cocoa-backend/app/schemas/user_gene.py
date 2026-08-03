@@ -11,13 +11,13 @@ class UserGeneCreate(BaseModel):
     slug: str
     name: str
     kind: str = "custom"
-    permission_keys: list[str] = []
+    effect_scope: str = "org"
     description: str | None = None
 
 
 class UserGeneUpdate(BaseModel):
     name: str | None = None
-    permission_keys: list[str] | None = None
+    effect_scope: str | None = None
     description: str | None = None
 
 
@@ -28,7 +28,7 @@ class UserGeneOut(BaseModel):
     slug: str
     name: str
     kind: str
-    permission_keys: list | None = None
+    effect_scope: str
     description: str | None = None
     created_at: datetime
     updated_at: datetime | None = None

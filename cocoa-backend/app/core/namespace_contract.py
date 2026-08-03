@@ -1,4 +1,4 @@
-"""Ensure NamespaceContract (契印) helpers — PRD-v3.4."""
+"""Ensure NamespaceContract (契印) helpers — PRD-v3.4 / v4.0."""
 
 from __future__ import annotations
 
@@ -13,9 +13,8 @@ async def ensure_namespace_contract(
     *,
     namespace_id: str,
     user_id: str,
-    role: str = "viewer",
 ) -> NamespaceContract:
-    """Return active contract, creating one if missing (no backfill era)."""
+    """Return active contract, creating one if missing (atoms granted separately)."""
     result = await db.execute(
         select(NamespaceContract).where(
             NamespaceContract.namespace_id == namespace_id,
@@ -30,7 +29,6 @@ async def ensure_namespace_contract(
     contract = NamespaceContract(
         namespace_id=namespace_id,
         user_id=user_id,
-        role=role,
     )
     db.add(contract)
     await db.flush()

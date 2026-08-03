@@ -13,15 +13,11 @@ from sqlalchemy import select
 
 from app.api.deps import DB, CurrentUserDep
 from app.core.errors import NotFoundError, UnauthorizedError
-from app.core.identity import (
-    ALL_IDENTITY_SLUGS,
-    identity_key_from_slug,
-    resolve_user_identity,
-)
+from app.core.identity import resolve_user_identity
 from app.core.openapi import add_error_responses
 from app.core.security import hash_password, verify_password
 from app.models.user import User
-from app.models.user_gene import UserGene, UserUserGene
+from app.models.user_gene import UserGene
 from app.schemas.users import (
     AccountOut,
     AccountPasswordChange,
@@ -45,33 +41,21 @@ async def _current_db_user(db: DB, current_user: CurrentUserDep) -> User:
 
 
 async def _to_account(db: DB, user: User) -> AccountOut:
-    rows = (
-        await db.execute(
-            select(UserUserGene, UserGene)
-            .join(UserGene, UserGene.id == UserUserGene.user_gene_id)
-            .where(
-                UserUserGene.user_id == user.id,
-                UserUserGene.deleted_at.is_(None),
-                UserGene.deleted_at.is_(None),
-            )
-            .order_by(UserGene.slug)
-        )
-    ).all()
-    locked: list[UserGeneRef] = []
+    """Self view: extras are the Contract-granted atom genes (v4.0 truth)."""
+    identity, _locked, atom_slugs = await resolve_user_identity(db, user.id)
     extras: list[UserGeneRef] = []
-    for _link, gene in rows:
-        key = identity_key_from_slug(gene.slug)
-        ref = UserGeneRef(
-            id=gene.id,
-            slug=gene.slug,
-            name=gene.name,
-            locked=key is not None or gene.slug in ALL_IDENTITY_SLUGS,
-        )
-        if ref.locked:
-            locked.append(ref)
-        else:
-            extras.append(ref)
-    identity, _, _ = await resolve_user_identity(db, user.id)
+    if atom_slugs:
+        rows = (
+            await db.execute(
+                select(UserGene)
+                .where(UserGene.slug.in_(atom_slugs), UserGene.deleted_at.is_(None))
+                .order_by(UserGene.slug)
+            )
+        ).scalars().all()
+        extras = [
+            UserGeneRef(id=gene.id, slug=gene.slug, name=gene.name, locked=False)
+            for gene in rows
+        ]
     return AccountOut(
         id=user.id,
         username=user.username,
@@ -79,7 +63,7 @@ async def _to_account(db: DB, user: User) -> AccountOut:
         email=user.email,
         is_super_admin=bool(user.is_super_admin),
         identity=identity,
-        locked_genes=locked,
+        locked_genes=[],
         extra_genes=extras,
     )
 

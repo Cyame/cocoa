@@ -46,7 +46,7 @@ from app.core.event_types import (
 from app.core.events import emit
 from app.core.openapi import add_error_responses
 from app.core.pagination import OffsetPage, paginate_offset
-from app.core.permissions import require_workspace_role
+from app.core.permissions import require_workspace_permission
 from app.models.central_hub import (
     BrainstemSchedule,
     CentralHub,
@@ -172,7 +172,7 @@ async def read_central_hub(
     db: DB,
     current_user: CurrentUserDep,
 ) -> CentralHub:
-    await require_workspace_role(db, current_user.user_id, workspace_id, "viewer")
+    await require_workspace_permission(db, current_user.user_id, workspace_id, "can_view_workspace")
     central_hub = await _get_or_create_central_hub(db, workspace_id)
     await _get_or_create_vault(db, workspace_id)
     await db.commit()
@@ -187,7 +187,7 @@ async def update_central_hub(
     db: DB,
     current_user: CurrentUserDep,
 ) -> CentralHub:
-    await require_workspace_role(db, current_user.user_id, workspace_id, "editor")
+    await require_workspace_permission(db, current_user.user_id, workspace_id, "can_edit_workspace")
     central_hub = await _get_or_create_central_hub(db, workspace_id)
     patch_data = body.model_dump(exclude_unset=True)
     for field, value in patch_data.items():
@@ -211,7 +211,7 @@ async def list_files(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ) -> OffsetPage:
-    await require_workspace_role(db, current_user.user_id, workspace_id, "viewer")
+    await require_workspace_permission(db, current_user.user_id, workspace_id, "can_view_workspace")
     stmt = (
         select(FornixFile)
         .where(
@@ -232,7 +232,7 @@ async def get_file(
     db: DB,
     current_user: CurrentUserDep,
 ) -> FornixFile:
-    await require_workspace_role(db, current_user.user_id, workspace_id, "viewer")
+    await require_workspace_permission(db, current_user.user_id, workspace_id, "can_view_workspace")
     result = await db.execute(
         select(FornixFile).where(
             FornixFile.id == file_id,
@@ -267,7 +267,7 @@ async def create_file(
     db: DB,
     current_user: CurrentUserDep,
 ) -> FornixFile:
-    await require_workspace_role(db, current_user.user_id, workspace_id, "editor")
+    await require_workspace_permission(db, current_user.user_id, workspace_id, "can_edit_workspace")
     await _validate_parent_directory(db, workspace_id, body.parent_path)
 
     if body.is_directory and (body.content_type is not None or body.file_size is not None):
@@ -350,7 +350,7 @@ async def update_file(
     db: DB,
     current_user: CurrentUserDep,
 ) -> FornixFile:
-    await require_workspace_role(db, current_user.user_id, workspace_id, "editor")
+    await require_workspace_permission(db, current_user.user_id, workspace_id, "can_edit_workspace")
 
     result = await db.execute(
         select(FornixFile).where(
@@ -397,7 +397,7 @@ async def delete_file(
     db: DB,
     current_user: CurrentUserDep,
 ) -> None:
-    await require_workspace_role(db, current_user.user_id, workspace_id, "editor")
+    await require_workspace_permission(db, current_user.user_id, workspace_id, "can_edit_workspace")
 
     result = await db.execute(
         select(FornixFile).where(
@@ -450,7 +450,7 @@ async def read_vault(
     db: DB,
     current_user: CurrentUserDep,
 ) -> Vault:
-    await require_workspace_role(db, current_user.user_id, workspace_id, "viewer")
+    await require_workspace_permission(db, current_user.user_id, workspace_id, "can_view_workspace")
     vault = await _get_or_create_vault(db, workspace_id)
     await db.commit()
     await db.refresh(vault)
@@ -466,7 +466,7 @@ async def list_vault_entries(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ) -> OffsetPage:
-    await require_workspace_role(db, current_user.user_id, workspace_id, "viewer")
+    await require_workspace_permission(db, current_user.user_id, workspace_id, "can_view_workspace")
     vault = await _get_or_create_vault(db, workspace_id)
     stmt = (
         select(VaultEntry)
@@ -492,7 +492,7 @@ async def archive_file_to_vault(
     db: DB,
     current_user: CurrentUserDep,
 ) -> VaultEntry:
-    await require_workspace_role(db, current_user.user_id, workspace_id, "editor")
+    await require_workspace_permission(db, current_user.user_id, workspace_id, "can_edit_workspace")
 
     result = await db.execute(
         select(FornixFile)
@@ -598,7 +598,7 @@ async def list_frontal_kanbans(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ) -> OffsetPage:
-    await require_workspace_role(db, current_user.user_id, workspace_id, "viewer")
+    await require_workspace_permission(db, current_user.user_id, workspace_id, "can_view_workspace")
     hub = await _get_or_create_central_hub(db, workspace_id)
     stmt = (
         select(FrontalLobeKanban)
@@ -622,7 +622,7 @@ async def create_frontal_kanban(
     db: DB,
     current_user: CurrentUserDep,
 ) -> FrontalLobeKanban:
-    await require_workspace_role(db, current_user.user_id, workspace_id, "editor")
+    await require_workspace_permission(db, current_user.user_id, workspace_id, "can_edit_workspace")
     hub = await _get_or_create_central_hub(db, workspace_id)
     card = FrontalLobeKanban(central_hub_id=hub.id, **body.model_dump())
     db.add(card)
@@ -642,7 +642,7 @@ async def update_frontal_kanban(
     db: DB,
     current_user: CurrentUserDep,
 ) -> FrontalLobeKanban:
-    await require_workspace_role(db, current_user.user_id, workspace_id, "editor")
+    await require_workspace_permission(db, current_user.user_id, workspace_id, "can_edit_workspace")
     hub = await _get_or_create_central_hub(db, workspace_id)
     result = await db.execute(
         select(FrontalLobeKanban).where(
@@ -675,7 +675,7 @@ async def delete_frontal_kanban(
     db: DB,
     current_user: CurrentUserDep,
 ) -> None:
-    await require_workspace_role(db, current_user.user_id, workspace_id, "editor")
+    await require_workspace_permission(db, current_user.user_id, workspace_id, "can_edit_workspace")
     hub = await _get_or_create_central_hub(db, workspace_id)
     result = await db.execute(
         select(FrontalLobeKanban).where(
@@ -711,7 +711,7 @@ async def list_brainstem_schedules(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ) -> OffsetPage:
-    await require_workspace_role(db, current_user.user_id, workspace_id, "viewer")
+    await require_workspace_permission(db, current_user.user_id, workspace_id, "can_view_workspace")
     hub = await _get_or_create_central_hub(db, workspace_id)
     stmt = (
         select(BrainstemSchedule)
@@ -735,7 +735,7 @@ async def create_brainstem_schedule(
     db: DB,
     current_user: CurrentUserDep,
 ) -> BrainstemSchedule:
-    await require_workspace_role(db, current_user.user_id, workspace_id, "editor")
+    await require_workspace_permission(db, current_user.user_id, workspace_id, "can_edit_workspace")
     hub = await _get_or_create_central_hub(db, workspace_id)
     schedule = BrainstemSchedule(central_hub_id=hub.id, **body.model_dump())
     db.add(schedule)
@@ -755,7 +755,7 @@ async def update_brainstem_schedule(
     db: DB,
     current_user: CurrentUserDep,
 ) -> BrainstemSchedule:
-    await require_workspace_role(db, current_user.user_id, workspace_id, "editor")
+    await require_workspace_permission(db, current_user.user_id, workspace_id, "can_edit_workspace")
     hub = await _get_or_create_central_hub(db, workspace_id)
     result = await db.execute(
         select(BrainstemSchedule).where(
@@ -788,7 +788,7 @@ async def delete_brainstem_schedule(
     db: DB,
     current_user: CurrentUserDep,
 ) -> None:
-    await require_workspace_role(db, current_user.user_id, workspace_id, "editor")
+    await require_workspace_permission(db, current_user.user_id, workspace_id, "can_edit_workspace")
     hub = await _get_or_create_central_hub(db, workspace_id)
     result = await db.execute(
         select(BrainstemSchedule).where(
@@ -819,7 +819,7 @@ async def read_cerebellum(
     db: DB,
     current_user: CurrentUserDep,
 ) -> CerebellumAgent:
-    await require_workspace_role(db, current_user.user_id, workspace_id, "viewer")
+    await require_workspace_permission(db, current_user.user_id, workspace_id, "can_view_workspace")
     cerebellum = await _get_cerebellum(db, workspace_id)
     await db.commit()
     await db.refresh(cerebellum)
@@ -833,7 +833,7 @@ async def update_cerebellum(
     db: DB,
     current_user: CurrentUserDep,
 ) -> CerebellumAgent:
-    await require_workspace_role(db, current_user.user_id, workspace_id, "editor")
+    await require_workspace_permission(db, current_user.user_id, workspace_id, "can_edit_workspace")
     cerebellum = await _get_cerebellum(db, workspace_id)
     for field, value in body.model_dump(exclude_unset=True).items():
         setattr(cerebellum, field, value)
@@ -849,7 +849,7 @@ async def restart_cerebellum(
     current_user: CurrentUserDep,
 ) -> CerebellumRestartOut:
     """Mark cerebellum loop as restarting then idle (control-plane stub)."""
-    await require_workspace_role(db, current_user.user_id, workspace_id, "operator")
+    await require_workspace_permission(db, current_user.user_id, workspace_id, "can_operate_workspace")
     cerebellum = await _get_cerebellum(db, workspace_id)
     cerebellum.loop_status = "restarting"
     await db.flush()

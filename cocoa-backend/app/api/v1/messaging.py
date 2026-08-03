@@ -12,7 +12,7 @@ from app.core.errors import ConflictError, ForbiddenError, NotFoundError
 from app.core.openapi import add_error_responses
 from app.core.pagination import OffsetPage, paginate_offset
 from app.core.topology_cleanup import soft_delete_passages_touching
-from app.models.workspace import Membership, MembershipRole, Passage, Workspace
+from app.models.workspace import Membership, Passage, Workspace
 from app.schemas.membership import MembershipCreate, MembershipOut, MembershipUpdate
 
 router = APIRouter(prefix="/messaging", tags=["Messaging"])
@@ -112,7 +112,6 @@ async def create_membership(
             )
         # Undelete — reactivate a soft-deleted membership
         existing.deleted_at = None
-        existing.role = body.role
         existing.posx = body.posx
         existing.posy = body.posy
         if body.user_id is not None:
@@ -122,7 +121,6 @@ async def create_membership(
                 db,
                 namespace_id=workspace.namespace_id,
                 user_id=body.user_id,
-                role=body.role,
             )
         await db.commit()
         await db.refresh(existing)
@@ -135,7 +133,6 @@ async def create_membership(
             db,
             namespace_id=workspace.namespace_id,
             user_id=body.user_id,
-            role=body.role,
         )
 
     membership = Membership(
@@ -144,7 +141,6 @@ async def create_membership(
         instance_id=body.instance_id,
         posx=body.posx,
         posy=body.posy,
-        role=body.role,
     )
     db.add(membership)
     try:
@@ -184,22 +180,6 @@ async def update_membership(
             "errors.membership.not_found",
             f"Membership '{membership_id}' not found",
         )
-
-    if body.role == "owner" and body.role != membership.role:
-        owner_result = await db.execute(
-            select(Membership).where(
-                Membership.workspace_id == membership.workspace_id,
-                Membership.user_id == current_user.user_id,
-                Membership.role == MembershipRole.owner,
-                Membership.deleted_at.is_(None),
-            )
-        )
-        if owner_result.scalar_one_or_none() is None:
-            raise ForbiddenError(
-                "membership.not_owner",
-                "errors.membership.not_owner",
-                "Only existing owners can promote members to owner role",
-            )
 
     update_data = body.model_dump(exclude_unset=True)
     for key, value in update_data.items():
@@ -249,25 +229,6 @@ async def delete_membership(
             "errors.membership.not_found",
             f"Membership '{membership_id}' not found",
         )
-
-    # Prevent removal of the last owner
-    if membership.role == MembershipRole.owner:
-        result = await db.execute(
-            select(func.count())
-            .select_from(Membership)
-            .where(
-                Membership.workspace_id == membership.workspace_id,
-                Membership.role == MembershipRole.owner,
-                Membership.deleted_at.is_(None),
-            )
-        )
-        owner_count: int = result.scalar_one()
-        if owner_count <= 1:
-            raise ConflictError(
-                "membership.last_owner",
-                "errors.membership.last_owner",
-                "Cannot remove the last owner of an workspace",
-            )
 
     linked_instance_id = membership.instance_id
     if linked_instance_id is not None:

@@ -23,7 +23,7 @@ from app.core.namespace_contract import ensure_namespace_contract
 from app.core.openapi import add_error_responses
 from app.core.pagination import OffsetPage, paginate_offset
 from app.core.tenant import resolve_namespace_id
-from app.models.workspace import Membership, MembershipRole, Workspace
+from app.models.workspace import Membership, Workspace
 from app.schemas.instance import InstanceOutWithToken
 from app.schemas.introduce import IntroduceEntityRequest
 from app.schemas.workspace import WorkspaceCreate, WorkspaceOut, WorkspaceUpdate
@@ -79,11 +79,15 @@ async def create_workspace(
 ) -> Workspace:
     """Create a new workspace.
 
-    The authenticated creator is automatically added as a :class:`Membership`
-    with ``role='owner'`` so that the workspace is immediately usable by the
-    creator (P14b-onboard2 onboarding fix).  Without this, the creator
-    would hit "not a member of workspace" when fetching the workspace detail
-    view.
+    The authenticated creator is automatically (v4.0, transitional until the
+    v4.3 org-member flow):
+
+    - granted an :class:`OrganizationContract` on the workspace's org with the
+      four workspace-scope atoms (view/edit/operate/manage) — the replacement
+      for the old ``role='owner'`` Membership, and
+    - added as a :class:`Membership` (presence record, no role),
+
+    so the workspace is immediately usable by the creator.
 
     Raises 409 if an workspace with the same slug already exists (active).
     """
@@ -129,18 +133,37 @@ async def create_workspace(
         db,
         namespace_id=namespace_id,
         user_id=current_user.user_id,
-        role="owner",
     )
 
-    # P14b-onboard2: auto-create the creator as owner so the workspace is
-    # immediately navigable. (0, 0) is fine because the owner is the first
-    # membership in a fresh workspace.
+    # v4.0 transitional: grant the creator workspace-scope atoms on the org
+    # so require_workspace_permission passes (replaces role='owner').
+    from app.core.org_contract import ensure_org_contract, grant_atoms
+    from app.models.organization import Namespace
+
+    ns = await db.get(Namespace, namespace_id)
+    if ns is not None:
+        contract = await ensure_org_contract(
+            db, organization_id=ns.org_id, user_id=current_user.user_id
+        )
+        await grant_atoms(
+            db,
+            contract.id,
+            (
+                "can_view_workspace",
+                "can_edit_workspace",
+                "can_operate_workspace",
+                "can_manage_workspace",
+            ),
+        )
+
+    # P14b-onboard2: auto-add the creator as a presence membership so the
+    # workspace is immediately navigable. (0, 0) is fine because the creator
+    # is the first membership in a fresh workspace.
     owner_membership = Membership(
         workspace_id=workspace.id,
         user_id=current_user.user_id,
         posx=0,
         posy=0,
-        role=MembershipRole.owner.value,
     )
     db.add(owner_membership)
 
@@ -330,12 +353,12 @@ async def introduce_entity(
     from app.core.events import emit
     from app.core.migration_hash import compute_entity_migration_hash
     from app.core.overlay import resolve_instance_agent_config
-    from app.core.permissions import require_workspace_role
+    from app.core.permissions import require_workspace_permission
     from app.core.workspace import generate_workspace_path
     from app.models.entity import Entity
     from app.models.instance import Instance, InstanceStatus
 
-    await require_workspace_role(db, current_user.user_id, workspace_id, "editor")
+    await require_workspace_permission(db, current_user.user_id, workspace_id, "can_edit_workspace")
 
     workspace = await db.get(Workspace, workspace_id)
     if workspace is None or workspace.deleted_at is not None:
@@ -420,7 +443,6 @@ async def introduce_entity(
         user_id=None,
         posx=posx,
         posy=posy,
-        role=MembershipRole.viewer.value,
     )
     db.add(instance_membership)
     await emit(

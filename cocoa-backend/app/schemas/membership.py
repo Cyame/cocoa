@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, model_validator
 
 
 class MembershipCreate(BaseModel):
@@ -23,14 +23,6 @@ class MembershipCreate(BaseModel):
     instance_id: str | None = None
     posx: int = 0
     posy: int = 0
-    role: str = "viewer"
-
-    @field_validator("role")
-    @classmethod
-    def validate_role(cls, v: str) -> str:
-        if v not in ("owner", "editor", "viewer"):
-            raise ValueError("role must be owner, editor, or viewer")
-        return v
 
     @model_validator(mode="after")
     def check_exclusive_fk(self) -> MembershipCreate:
@@ -49,14 +41,6 @@ class MembershipUpdate(BaseModel):
 
     posx: int | None = None
     posy: int | None = None
-    role: str | None = None
-
-    @field_validator("role")
-    @classmethod
-    def validate_role(cls, v: str | None) -> str | None:
-        if v is not None and v not in ("owner", "editor", "viewer"):
-            raise ValueError("role must be owner, editor, or viewer")
-        return v
 
 
 class MembershipOut(BaseModel):
@@ -70,7 +54,6 @@ class MembershipOut(BaseModel):
     instance_id: str | None
     posx: int
     posy: int
-    role: str
     permissions: dict | None
     created_at: datetime
     updated_at: datetime

@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from app.api.deps import DB, CurrentUserDep
 from app.core.config import settings
 from app.core.errors import ConflictError, NotFoundError, UnauthorizedError
-from app.core.identity import resolve_user_identity, sync_identity_pack
+from app.core.identity import resolve_user_identity
 from app.core.openapi import add_error_responses
 from app.core.security import create_access_token, hash_password, verify_password
 from app.models.user import User
@@ -85,12 +85,6 @@ async def register(body: RegisterRequest, db: DB) -> TokenResponse:
     )
     db.add(user)
     await db.flush()
-
-    # First registrant receives identity-system pack (PRD-v3-post).
-    if is_first_user:
-        await sync_identity_pack(db, user, "system")
-    else:
-        await sync_identity_pack(db, user, "member")
 
     await db.commit()
     await db.refresh(user)

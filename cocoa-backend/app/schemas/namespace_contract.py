@@ -1,30 +1,32 @@
-"""NamespaceContract (契印) schemas — PRD-v3.4."""
+"""NamespaceContract (契印) schemas — v4.0 (atomic genes, no role)."""
 
 from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
+
+
+class NamespaceContractGeneRef(BaseModel):
+    id: str
+    slug: str
 
 
 class NamespaceContractCreate(BaseModel):
     user_id: str = Field(..., min_length=1, max_length=36)
-    role: str = Field(default="viewer", pattern="^(owner|editor|viewer)$")
-    permissions: dict | None = None
+    gene_slugs: list[str] = Field(default_factory=list)
 
 
 class NamespaceContractUpdate(BaseModel):
-    role: str | None = Field(default=None, pattern="^(owner|editor|viewer)$")
-    permissions: dict | None = None
+    """Full replace of the granted atom set when ``gene_slugs`` is provided."""
+
+    gene_slugs: list[str] | None = None
 
 
 class NamespaceContractOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
     id: str
     namespace_id: str
     user_id: str
-    role: str
-    permissions: dict | None
+    genes: list[NamespaceContractGeneRef] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime

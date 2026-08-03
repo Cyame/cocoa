@@ -14,7 +14,7 @@ from app.core.glow import (
 )
 from app.core.migration_hash import compute_entity_migration_hash
 from app.core.openapi import add_error_responses
-from app.core.permissions import require_workspace_role
+from app.core.permissions import require_workspace_permission
 from app.models.entity import Entity
 from app.models.instance import Instance
 from app.models.workspace import Membership
@@ -45,7 +45,7 @@ async def get_workspace_live_status(
     ``Entity.migration_hash`` (or the instance has no
     ``active_hash`` yet — first-time spawn caveat).
     """
-    await require_workspace_role(db, current_user.user_id, workspace_id, "viewer")
+    await require_workspace_permission(db, current_user.user_id, workspace_id, "can_view_workspace")
 
     memberships = (
         await db.execute(

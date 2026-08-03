@@ -37,7 +37,7 @@ from app.core.migration_hash import (
 )
 from app.core.openapi import add_error_responses
 from app.core.pagination import OffsetPage, paginate_offset
-from app.core.permissions import require_workspace_role
+from app.core.permissions import require_workspace_permission
 from app.models.ai_gene import AiGene
 from app.models.base_class import BaseClass
 from app.models.capability_market import (
@@ -161,7 +161,7 @@ async def get_memory_summary(
 
     # 2. Get workspace_id from entity's instance → check permission.
     workspace_id = await _get_workspace_id_for_entity(db, entity_id)
-    await require_workspace_role(db, current_user.user_id, workspace_id, "viewer")
+    await require_workspace_permission(db, current_user.user_id, workspace_id, "can_view_workspace")
 
     # 3. Aggregate counts by kind (direct SQL).
     count_q = (
@@ -272,7 +272,7 @@ async def distill_entity(
 
     # 2. Permission check — editor in the entity's workspace.
     workspace_id = await _get_workspace_id_for_entity(db, entity_id)
-    await require_workspace_role(db, current_user.user_id, workspace_id, "editor")
+    await require_workspace_permission(db, current_user.user_id, workspace_id, "can_edit_workspace")
 
     # 3. Run distillation.
     try:
@@ -456,7 +456,7 @@ async def reap_instance(
             f"Entity {instance.entity_id!r} not found",
         )
 
-    await require_workspace_role(db, current_user.user_id, instance.workspace_id, "viewer")
+    await require_workspace_permission(db, current_user.user_id, instance.workspace_id, "can_view_workspace")
 
     # 1. Pull memory entries visible to this instance.
     mem_q = (
@@ -642,7 +642,7 @@ async def promote_entity(
                 f"Entity {entity_id!r} has no active instance",
             )
 
-    await require_workspace_role(db, current_user.user_id, instance.workspace_id, "editor")
+    await require_workspace_permission(db, current_user.user_id, instance.workspace_id, "can_edit_workspace")
 
     # 2. Compute instance's effective capability set.
     instance_runtime = instance.runtime_config or {}
@@ -837,7 +837,7 @@ async def transmute_entity(
             f"Entity {entity_id!r} is not associated with any workspace",
         )
 
-    await require_workspace_role(db, current_user.user_id, workspace_id, "editor")
+    await require_workspace_permission(db, current_user.user_id, workspace_id, "can_edit_workspace")
 
     # 1. Build the new manifest.
     manifest = {

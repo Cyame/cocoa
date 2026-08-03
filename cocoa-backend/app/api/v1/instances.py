@@ -41,12 +41,12 @@ from app.core.migration_hash import compute_entity_migration_hash
 from app.core.openapi import add_error_responses
 from app.core.overlay import resolve_instance_agent_config
 from app.core.pagination import OffsetPage, paginate_offset
-from app.core.permissions import require_workspace_role
+from app.core.permissions import require_workspace_permission
 from app.core.topology_cleanup import soft_delete_passages_touching
 from app.core.workspace import generate_workspace_path
 from app.models.entity import Entity
 from app.models.instance import Instance, InstanceStatus
-from app.models.workspace import Membership, MembershipRole, Workspace
+from app.models.workspace import Membership, Workspace
 from app.schemas.instance import (
     InstanceCreate,
     InstanceOut,
@@ -172,7 +172,7 @@ async def list_instances(
     if entity_id is not None:
         stmt = stmt.where(Instance.entity_id == entity_id)
     if workspace_id is not None:
-        await require_workspace_role(db, current_user.user_id, workspace_id, "viewer")
+        await require_workspace_permission(db, current_user.user_id, workspace_id, "can_view_workspace")
         stmt = stmt.where(Instance.workspace_id == workspace_id)
     else:
         stmt = stmt.where(
@@ -213,7 +213,7 @@ async def get_instance(
             "errors.instance.not_found",
             f"Instance '{instance_id}' not found",
         )
-    await require_workspace_role(db, current_user.user_id, instance.workspace_id, "editor")
+    await require_workspace_permission(db, current_user.user_id, instance.workspace_id, "can_view_workspace")
     return _instance_out(instance)
 
 
@@ -254,7 +254,7 @@ async def create_instance(
             f"Workspace '{body.workspace_id}' not found",
         )
 
-    await require_workspace_role(db, current_user.user_id, body.workspace_id, "editor")
+    await require_workspace_permission(db, current_user.user_id, body.workspace_id, "can_edit_workspace")
 
     workspace_path = body.workspace_path or generate_workspace_path(
         entity.slug, str(uuid4())
@@ -306,7 +306,6 @@ async def create_instance(
             user_id=None,
             posx=posx,
             posy=posy,
-            role=MembershipRole.viewer.value,
         )
     )
 
@@ -353,7 +352,7 @@ async def update_instance(
             f"Instance '{instance_id}' not found",
         )
 
-    await require_workspace_role(db, current_user.user_id, instance.workspace_id, "editor")
+    await require_workspace_permission(db, current_user.user_id, instance.workspace_id, "can_edit_workspace")
 
     patch_data = body.model_dump(exclude_unset=True)
     for field, value in patch_data.items():
@@ -393,7 +392,7 @@ async def delete_instance(
             f"Instance '{instance_id}' not found",
         )
 
-    await require_workspace_role(db, current_user.user_id, instance.workspace_id, "editor")
+    await require_workspace_permission(db, current_user.user_id, instance.workspace_id, "can_edit_workspace")
 
     if instance.status == InstanceStatus.deleting.value:
         return
@@ -470,7 +469,7 @@ async def _transition(
             f"Instance '{instance_id}' not found",
         )
 
-    await require_workspace_role(db, current_user.user_id, instance.workspace_id, "editor")
+    await require_workspace_permission(db, current_user.user_id, instance.workspace_id, "can_edit_workspace")
 
     if instance.status not in allowed:
         raise ConflictError(
@@ -526,8 +525,8 @@ async def deploy_instance(
                 "errors.instance.not_found",
                 f"Instance '{instance_id}' not found",
             )
-        await require_workspace_role(
-            db, current_user.user_id, instance.workspace_id, "editor"
+        await require_workspace_permission(
+            db, current_user.user_id, instance.workspace_id, "can_edit_workspace"
         )
         await _refresh_instance_agent_config(db, instance)
         await db.flush()
@@ -552,7 +551,7 @@ async def deploy_instance(
             f"Instance '{instance_id}' not found",
         )
 
-    await require_workspace_role(db, current_user.user_id, instance.workspace_id, "editor")
+    await require_workspace_permission(db, current_user.user_id, instance.workspace_id, "can_edit_workspace")
 
     await _refresh_instance_agent_config(db, instance)
 
@@ -626,7 +625,7 @@ async def restart_instance(
             f"Entity '{instance.entity_id}' not found",
         )
 
-    await require_workspace_role(db, current_user.user_id, instance.workspace_id, "operator")
+    await require_workspace_permission(db, current_user.user_id, instance.workspace_id, "can_operate_workspace")
 
     was_running = instance.status == InstanceStatus.running.value
     if was_running:
@@ -721,7 +720,7 @@ async def batch_restart_instances(
     # 2. Auth: operator role in the first instance's workspace (the batch
     # is implicitly same-workspace — if not, the permission check fails).
     first_workspace = instances[0].workspace_id
-    await require_workspace_role(db, current_user.user_id, first_workspace, "operator")
+    await require_workspace_permission(db, current_user.user_id, first_workspace, "can_operate_workspace")
 
     # 3. Reject batch if any instance is running.
     running = [i.id for i in instances if i.status == InstanceStatus.running.value]
@@ -794,7 +793,7 @@ async def instance_tunnel_status(
             "errors.instance.not_found",
             f"Instance '{instance_id}' not found",
         )
-    await require_workspace_role(db, current_user.user_id, inst.workspace_id, "viewer")
+    await require_workspace_permission(db, current_user.user_id, inst.workspace_id, "can_view_workspace")
     from app.services.tunnel.tunnel_hub import tunnel_hub
 
     connected = tunnel_hub.is_connected(instance_id)
