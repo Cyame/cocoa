@@ -5,7 +5,7 @@ Namespace is a **scenario** partition (e.g. coding / social-media), not env.
 
 from __future__ import annotations
 
-from sqlalchemy import ForeignKey, Index, String, Text, text
+from sqlalchemy import Boolean, ForeignKey, Index, Integer, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -41,6 +41,16 @@ class Organization(BaseModel, Base):
     cerebellum_default_model: Mapped[str | None] = mapped_column(
         String(255), nullable=True
     )
+    # World-level egress proxy (v4-3 M2): use_proxy + host/port/credentials.
+    # Host 可读 — these live on the Organization so the portal can configure
+    # and the agent runtime (Host) can consume them for outbound calls.
+    use_proxy: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    proxy_host: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    proxy_port: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    proxy_username: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    proxy_password: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     def __repr__(self) -> str:
         cls = type(self).__name__
