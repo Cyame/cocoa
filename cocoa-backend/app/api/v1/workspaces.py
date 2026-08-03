@@ -92,6 +92,18 @@ async def create_workspace(
     Raises 409 if an workspace with the same slug already exists (active).
     """
     namespace_id = await resolve_namespace_id(db, body.namespace_id)
+    # v4.0 audit fix: creating a workspace in a namespace requires the
+    # can_manage_workspace atom (org- or namespace-grant) — without this gate
+    # any authenticated user could create workspaces in any org and self-grant
+    # workspace atoms via the auto-grant below.
+    from app.core.permissions import require_permission
+
+    await require_permission(
+        db,
+        current_user.user_id,
+        "can_manage_workspace",
+        namespace_id=namespace_id,
+    )
     existing = await db.execute(
         select(Workspace).where(
             Workspace.namespace_id == namespace_id,

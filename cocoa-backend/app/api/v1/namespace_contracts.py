@@ -10,6 +10,7 @@ from app.core.errors import ConflictError, NotFoundError
 from app.core.gene_atoms import ATOM_CATALOG
 from app.core.openapi import add_error_responses
 from app.core.pagination import OffsetPage, paginate_offset
+from app.core.permissions import require_permission
 from app.models.namespace_contract import NamespaceContract, NamespaceContractGene
 from app.models.organization import Namespace
 from app.models.organization_contract import (
@@ -169,6 +170,14 @@ async def list_contracts(
     offset: int = 0,
 ) -> OffsetPage:
     await _get_namespace(db, namespace_id)
+    # v4.0 audit fix: reading the contract ledger requires at least view-level
+    # access to the namespace (org or namespace grant).
+    await require_permission(
+        db,
+        current_user.user_id,
+        "can_view_workspace",
+        namespace_id=namespace_id,
+    )
     stmt = (
         select(NamespaceContract)
         .where(
@@ -199,6 +208,14 @@ async def create_contract(
     current_user: CurrentUserDep,
 ) -> NamespaceContractOut:
     ns = await _get_namespace(db, namespace_id)
+    # v4.0 audit fix: granting namespace atoms is a privileged operation —
+    # without this gate any authenticated user could self-grant workspace atoms.
+    await require_permission(
+        db,
+        current_user.user_id,
+        "can_manage_namespace",
+        namespace_id=namespace_id,
+    )
     user = await db.get(User, body.user_id)
     if user is None or user.deleted_at is not None:
         raise NotFoundError(
@@ -245,6 +262,12 @@ async def update_contract(
     current_user: CurrentUserDep,
 ) -> NamespaceContractOut:
     await _get_namespace(db, namespace_id)
+    await require_permission(
+        db,
+        current_user.user_id,
+        "can_manage_namespace",
+        namespace_id=namespace_id,
+    )
     contract = await db.get(NamespaceContract, contract_id)
     if (
         contract is None
@@ -274,6 +297,12 @@ async def delete_contract(
     current_user: CurrentUserDep,
 ) -> None:
     await _get_namespace(db, namespace_id)
+    await require_permission(
+        db,
+        current_user.user_id,
+        "can_manage_namespace",
+        namespace_id=namespace_id,
+    )
     contract = await db.get(NamespaceContract, contract_id)
     if (
         contract is None
