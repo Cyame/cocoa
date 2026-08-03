@@ -9,6 +9,7 @@ import {
   type NamespaceWithStats,
   updateNamespace,
 } from '@/lib/api/namespaces';
+import { fetchOrganization, updateOrganization } from '@/lib/api/organizations';
 import {
   fetchDefaultOrganization,
   generateDescription,
@@ -19,9 +20,10 @@ import { toSlug } from '@/lib/slug';
 
 type WorldProps = {
   readonly canWrite: boolean;
+  readonly orgId?: string;
 };
 
-export function OrganizationWorldPanel({ canWrite }: WorldProps) {
+export function OrganizationWorldPanel({ canWrite, orgId }: WorldProps) {
   const { t } = useTranslation();
   const [org, setOrg] = useState<Organization | null>(null);
   const [name, setName] = useState('');
@@ -36,7 +38,8 @@ export function OrganizationWorldPanel({ canWrite }: WorldProps) {
     setIsLoading(true);
     setErrorMessage(null);
     try {
-      const data = await fetchDefaultOrganization();
+      const data =
+        orgId !== undefined ? await fetchOrganization(orgId) : await fetchDefaultOrganization();
       setOrg(data);
       setName(data.name);
       setDescription(data.description ?? '');
@@ -45,7 +48,7 @@ export function OrganizationWorldPanel({ canWrite }: WorldProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [t]);
+  }, [orgId, t]);
 
   useEffect(() => {
     void load();
@@ -57,10 +60,16 @@ export function OrganizationWorldPanel({ canWrite }: WorldProps) {
     setErrorMessage(null);
     setNotice(null);
     try {
-      const next = await updateDefaultOrganization({
-        name,
-        description: description.trim() || null,
-      });
+      const next =
+        orgId !== undefined
+          ? await updateOrganization(orgId, {
+              name,
+              description: description.trim() || null,
+            })
+          : await updateDefaultOrganization({
+              name,
+              description: description.trim() || null,
+            });
       setOrg(next);
       setNotice(t('organization.world.saved'));
     } catch (error) {
@@ -111,7 +120,9 @@ export function OrganizationWorldPanel({ canWrite }: WorldProps) {
         </p>
       ) : null}
       <label className="block text-sm">
-        <span className="mb-1 block font-medium text-slate-700">{t('organization.world.name')}</span>
+        <span className="mb-1 block font-medium text-slate-700">
+          {t('organization.world.name')}
+        </span>
         <input
           value={name}
           disabled={!canWrite}
@@ -120,7 +131,9 @@ export function OrganizationWorldPanel({ canWrite }: WorldProps) {
         />
       </label>
       <label className="block text-sm">
-        <span className="mb-1 block font-medium text-slate-700">{t('organization.world.slug')}</span>
+        <span className="mb-1 block font-medium text-slate-700">
+          {t('organization.world.slug')}
+        </span>
         <input
           value={org?.slug ?? ''}
           disabled
@@ -172,6 +185,8 @@ export function OrganizationWorldPanel({ canWrite }: WorldProps) {
 
 type NsProps = {
   readonly canWrite: boolean;
+  readonly orgId?: string;
+  readonly onOpenNamespace?: (ns: NamespaceWithStats) => void;
 };
 
 type NsDraft = {
@@ -181,7 +196,7 @@ type NsDraft = {
   description: string;
 };
 
-export function OrganizationNamespacesPanel({ canWrite }: NsProps) {
+export function OrganizationNamespacesPanel({ canWrite, orgId, onOpenNamespace }: NsProps) {
   const { t } = useTranslation();
   const [items, setItems] = useState<readonly NamespaceWithStats[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -255,6 +270,7 @@ export function OrganizationNamespacesPanel({ canWrite }: NsProps) {
           name: draft.name.trim(),
           slug: (draft.slug.trim() || slugify(draft.name)).slice(0, 48),
           description: draft.description.trim() || null,
+          org_id: orgId ?? null,
         });
       }
       setDraft(null);
@@ -338,9 +354,7 @@ export function OrganizationNamespacesPanel({ canWrite }: NsProps) {
                 value={draft.slug}
                 disabled={draft.id !== null}
                 onChange={(e) =>
-                  setDraft((prev) =>
-                    prev ? { ...prev, slug: slugify(e.target.value) } : prev,
-                  )
+                  setDraft((prev) => (prev ? { ...prev, slug: slugify(e.target.value) } : prev))
                 }
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 font-mono text-sm disabled:bg-slate-50"
               />
@@ -368,9 +382,7 @@ export function OrganizationNamespacesPanel({ canWrite }: NsProps) {
             <textarea
               value={draft.description}
               onChange={(e) =>
-                setDraft((prev) =>
-                  prev ? { ...prev, description: e.target.value } : prev,
-                )
+                setDraft((prev) => (prev ? { ...prev, description: e.target.value } : prev))
               }
               rows={3}
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
@@ -390,9 +402,7 @@ export function OrganizationNamespacesPanel({ canWrite }: NsProps) {
               onClick={() => void handleSave()}
               className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
             >
-              {draft.id
-                ? t('common.save')
-                : t('organization.namespacesAdmin.create')}
+              {draft.id ? t('common.save') : t('organization.namespacesAdmin.create')}
             </button>
           </div>
         </div>
@@ -417,7 +427,13 @@ export function OrganizationNamespacesPanel({ canWrite }: NsProps) {
             </thead>
             <tbody>
               {items.map((ns) => (
-                <tr key={ns.id} className="border-b border-slate-100 last:border-0">
+                <tr
+                  key={ns.id}
+                  onClick={onOpenNamespace ? () => onOpenNamespace(ns) : undefined}
+                  className={`border-b border-slate-100 last:border-0 ${
+                    onOpenNamespace ? 'cursor-pointer hover:bg-slate-50' : ''
+                  }`}
+                >
                   <td className="px-4 py-3 font-medium text-slate-900">{ns.name}</td>
                   <td className="px-4 py-3 font-mono text-xs text-slate-500">{ns.slug}</td>
                   <td className="max-w-xs truncate px-4 py-3 text-slate-600">

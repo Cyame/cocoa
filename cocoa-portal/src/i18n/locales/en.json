@@ -20,7 +20,8 @@
     "authenticatedUser": "Authenticated user",
     "superAdmin": "System admin",
     "operator": "Operator",
-    "member": "Member"
+    "member": "Member",
+    "none": "None"
   },
   "nav": {
     "organization": "World",
@@ -81,6 +82,32 @@
     "emptyMembersDetail": "Invite or add members so they can collaborate in this world.",
     "recentNamespacesTitle": "Recent namespaces"
   },
+  "worldMembers": {
+    "title": "World contracts",
+    "searchPlaceholder": "Search users by username or email",
+    "searchEmpty": "Type to search for a user to add to this world.",
+    "noResults": "No matching users found.",
+    "addMember": "Add member",
+    "addMemberTitle": "Add a member to this world",
+    "atomSelect": "Grant atoms",
+    "removeMember": "Remove",
+    "removeConfirm": "Remove {{name}} from this world? Their grants will be revoked.",
+    "selfLockError": "Cannot remove your own world-management permission.",
+    "empty": "No members yet",
+    "loading": "Loading members…",
+    "memberCount": "{{count}} members"
+  },
+  "namespaceContracts": {
+    "title": "Namespace contracts",
+    "inheritedTooltip": "Inherited from the world contract",
+    "inheritedLabel": "Inherited from world",
+    "namespaceLabel": "Namespace atoms",
+    "empty": "No contracts in this namespace yet.",
+    "loading": "Loading contracts…",
+    "addAtom": "Add atom",
+    "removeAtom": "Remove atom",
+    "contractCount": "{{count}} contracts"
+  },
   "statusBar": {
     "atomsLabel": "World atoms",
     "role": {
@@ -92,6 +119,9 @@
   },
   "legacyRedirect": {
     "redirecting": "Redirecting…"
+  },
+  "migration": {
+    "notAvailable": "This area is still being migrated to the new world layout."
   },
   "login": {
     "signInHeading": "Sign in",
@@ -186,6 +216,7 @@
     "slug": "Slug",
     "providerHint": "Register world intelligence providers, then set defaults for the system hub and main brain.",
     "notAvailable": "World API is not available yet.",
+    "cannot_lock_self": "Cannot remove your own world-management permission.",
     "readOnlyHint": "Read-only. System admins can edit intelligence providers and default bindings.",
     "save": "Save",
     "saving": "Saving…",
@@ -474,6 +505,25 @@
     "distillSubmit": "Distill",
     "distillFailed": "Failed to distill skill",
     "loadFailed": "Failed to load memory summary"
+  },
+  "knowledge": {
+    "title": "Knowledge",
+    "empty": "No knowledge entries yet.",
+    "loading": "Loading knowledge…",
+    "keyLabel": "Key",
+    "scopeLabel": "Scope",
+    "bodyLabel": "Body",
+    "dimensionLabel": "Dimension",
+    "add": "Add",
+    "create": "Create",
+    "delete": "Delete",
+    "deleteConfirm": "Delete this knowledge entry?",
+    "scopeOptions": {
+      "system": "System",
+      "org": "World",
+      "namespace": "Namespace",
+      "workspace": "Workspace"
+    }
   },
   "employees": {
     "eyebrow": "Workforce",

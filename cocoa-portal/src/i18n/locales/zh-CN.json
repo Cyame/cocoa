@@ -20,7 +20,8 @@
     "authenticatedUser": "已登录用户",
     "superAdmin": "超管",
     "operator": "操作员",
-    "member": "成员"
+    "member": "成员",
+    "none": "无"
   },
   "nav": {
     "organization": "世界",
@@ -81,6 +82,32 @@
     "emptyMembersDetail": "邀请或添加成员，让他们一起在这个世界协作。",
     "recentNamespacesTitle": "最近次元"
   },
+  "worldMembers": {
+    "title": "世界契印",
+    "searchPlaceholder": "按用户名或邮箱搜索用户",
+    "searchEmpty": "输入关键字搜索要添加到本世界的用户。",
+    "noResults": "未找到匹配的用户。",
+    "addMember": "添加成员",
+    "addMemberTitle": "向本世界添加成员",
+    "atomSelect": "授予原子权限",
+    "removeMember": "移除",
+    "removeConfirm": "从本世界移除 {{name}}？其权限将被撤销。",
+    "selfLockError": "不能移除自己的世界管理权限。",
+    "empty": "还没有成员",
+    "loading": "正在加载成员…",
+    "memberCount": "{{count}} 名成员"
+  },
+  "namespaceContracts": {
+    "title": "次元契印",
+    "inheritedTooltip": "世界契印继承",
+    "inheritedLabel": "世界契印继承",
+    "namespaceLabel": "次元原子",
+    "empty": "次元内还没有契印。",
+    "loading": "正在加载契印…",
+    "addAtom": "添加原子",
+    "removeAtom": "移除原子",
+    "contractCount": "{{count}} 份契印"
+  },
   "statusBar": {
     "atomsLabel": "世界原子",
     "role": {
@@ -92,6 +119,9 @@
   },
   "legacyRedirect": {
     "redirecting": "正在跳转…"
+  },
+  "migration": {
+    "notAvailable": "该区域仍在迁移至新的世界布局。"
   },
   "login": {
     "signInHeading": "登录",
@@ -311,6 +341,25 @@
     "distillSubmit": "提炼",
     "distillFailed": "提炼技能失败",
     "loadFailed": "加载记忆摘要失败"
+  },
+  "knowledge": {
+    "title": "知识",
+    "empty": "还没有知识条目。",
+    "loading": "正在加载知识…",
+    "keyLabel": "键",
+    "scopeLabel": "作用域",
+    "bodyLabel": "内容",
+    "dimensionLabel": "维度",
+    "add": "添加",
+    "create": "创建",
+    "delete": "删除",
+    "deleteConfirm": "删除这条知识条目？",
+    "scopeOptions": {
+      "system": "系统",
+      "org": "世界",
+      "namespace": "次元",
+      "workspace": "空间"
+    }
   },
   "employees": {
     "eyebrow": "员工",
@@ -896,6 +945,7 @@
     "slug": "标识",
     "providerHint": "配置世界智能供者，并设定系统中枢与主脑的默认模型。",
     "notAvailable": "世界接口暂不可用。",
+    "cannot_lock_self": "不能移除自己的世界管理权限。",
     "readOnlyHint": "当前为只读。超管身份可编辑智能供者与默认绑定。",
     "save": "保存",
     "saving": "保存中…",

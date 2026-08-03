@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, api } from '@/lib/api';
-import NamespacesPage from '@/pages/NamespacesPage';
+import NamespaceWorkspacesPage from '@/pages/NamespaceWorkspacesPage';
 
 vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api')>();
@@ -11,12 +11,15 @@ vi.mock('@/lib/api', async (importOriginal) => {
 
 const mockedApi = vi.mocked(api);
 
-function renderNamespacesPage() {
+function renderPage() {
   return render(
-    <MemoryRouter initialEntries={['/namespaces?tab=workspace']}>
+    <MemoryRouter initialEntries={['/orgs/org-1/namespaces/ns-1/workspaces']}>
       <Routes>
-        <Route path="/namespaces" element={<NamespacesPage />} />
-        <Route path="/workspaces/:id" element={<p>Workspace IDE destination</p>} />
+        <Route
+          path="/orgs/:orgId/namespaces/:nsId/workspaces"
+          element={<NamespaceWorkspacesPage />}
+        />
+        <Route path="/orgs/:orgId/workspaces/:id" element={<p>Workspace IDE destination</p>} />
         <Route path="/login" element={<p>Login destination</p>} />
       </Routes>
     </MemoryRouter>,
@@ -27,31 +30,10 @@ beforeEach(() => {
   mockedApi.mockReset();
 });
 
-describe('NamespacesPage', () => {
-  it('renders workspace cards with membership and instance counts', async () => {
+describe('NamespaceWorkspacesPage', () => {
+  it('renders namespace-scoped workspace cards with membership and instance counts', async () => {
     mockedApi.mockImplementation((path) => {
-      if (path === '/namespaces?limit=50&offset=0') {
-        return Promise.resolve({
-          items: [
-            {
-              id: 'ns-1',
-              org_id: 'org-1',
-              slug: 'default',
-              name: 'Default namespace',
-              description: null,
-              tags: null,
-              workspace_count: 1,
-              entity_count: 0,
-              created_at: '2026-07-01T00:00:00Z',
-              updated_at: '2026-07-01T00:00:00Z',
-            },
-          ],
-          offset: 0,
-          limit: 50,
-          total: 1,
-        });
-      }
-      if (path === '/workspaces?limit=50&offset=0') {
+      if (path === '/workspaces?limit=50&offset=0&namespace_id=ns-1') {
         return Promise.resolve({
           items: [
             {
@@ -79,7 +61,7 @@ describe('NamespacesPage', () => {
       return Promise.resolve({ items: [{ id: 'instance-1' }], total: 1 });
     });
 
-    renderNamespacesPage();
+    renderPage();
 
     expect(await screen.findByRole('heading', { name: 'Research Lab' })).toBeInTheDocument();
     expect(screen.getByText('research-lab')).toBeInTheDocument();
@@ -91,20 +73,15 @@ describe('NamespacesPage', () => {
   });
 
   it('renders an empty state when there are no workspaces', async () => {
-    mockedApi.mockImplementation((path) => {
-      if (path === '/namespaces?limit=50&offset=0') {
-        return Promise.resolve({ items: [], offset: 0, limit: 50, total: 0 });
-      }
-      return Promise.resolve({ items: [], offset: 0, limit: 50, total: 0 });
-    });
-    renderNamespacesPage();
+    mockedApi.mockResolvedValue({ items: [], offset: 0, limit: 50, total: 0 });
+    renderPage();
 
     expect(await screen.findByText('No workspaces yet')).toBeInTheDocument();
   });
 
   it('redirects to login after a 401 response', async () => {
     mockedApi.mockRejectedValue(new ApiError(401, { message: 'Session expired' }));
-    renderNamespacesPage();
+    renderPage();
 
     await waitFor(() => expect(screen.getByText('Login destination')).toBeInTheDocument());
   });

@@ -7,12 +7,25 @@ import { api } from '@/lib/api';
 import { fetchWorkspace } from '@/lib/api/workspaces';
 import type { Namespace } from '@/lib/types';
 import AccountPage from '@/pages/AccountPage';
+import BaseClassDetailPage from '@/pages/BaseClassDetailPage';
+import BaseClassesPage from '@/pages/BaseClassesPage';
+import CapabilitiesPage from '@/pages/CapabilitiesPage';
 import DashboardPage from '@/pages/DashboardPage';
+import DebugPage from '@/pages/DebugPage';
 import ForbiddenPage from '@/pages/ForbiddenPage';
+import GenesPage from '@/pages/GenesPage';
 import LoginPage from '@/pages/LoginPage';
+import NamespaceContractsPage from '@/pages/NamespaceContractsPage';
+import NamespaceEntitiesPage from '@/pages/NamespaceEntitiesPage';
+import NamespaceInstancesPage from '@/pages/NamespaceInstancesPage';
+import NamespaceOverviewPage from '@/pages/NamespaceOverviewPage';
+import NamespacesListPage from '@/pages/NamespacesListPage';
+import NamespaceWorkspacesPage from '@/pages/NamespaceWorkspacesPage';
 import OrgPickerPage from '@/pages/OrgPickerPage';
 import PagePlaceholder from '@/pages/PagePlaceholder';
 import WorkspaceIdePage from '@/pages/WorkspaceIdePage';
+import WorldMembersPage from '@/pages/WorldMembersPage';
+import WorldSettingsPage from '@/pages/WorldSettingsPage';
 import { useSessionStore } from '@/stores/session';
 
 function RootRedirect() {
@@ -168,25 +181,22 @@ const router = createBrowserRouter([
         index: true,
         Component: DashboardPage,
       },
-      { path: 'settings', element: <PagePlaceholder titleKey="nav.settings" /> },
-      { path: 'members', element: <PagePlaceholder titleKey="nav.members" /> },
-      { path: 'base-classes', element: <PagePlaceholder titleKey="nav.divinity" /> },
-      { path: 'base-classes/:slug', element: <PagePlaceholder titleKey="nav.divinity" /> },
-      { path: 'capabilities', element: <PagePlaceholder titleKey="nav.capabilities" /> },
-      { path: 'genes', element: <PagePlaceholder titleKey="nav.genes" /> },
+      { path: 'settings', Component: WorldSettingsPage },
+      { path: 'members', Component: WorldMembersPage },
+      { path: 'base-classes', Component: BaseClassesPage },
+      { path: 'base-classes/:slug', Component: BaseClassDetailPage },
+      { path: 'capabilities', Component: CapabilitiesPage },
+      { path: 'genes', Component: GenesPage },
       { path: 'knowledge', element: <PagePlaceholder titleKey="nav.knowledge" /> },
-      { path: 'namespaces', element: <PagePlaceholder titleKey="nav.namespaces" /> },
-      { path: 'namespaces/:nsId', element: <PagePlaceholder titleKey="nav.namespaces" /> },
-      {
-        path: 'namespaces/:nsId/workspaces',
-        element: <PagePlaceholder titleKey="nav.workspaces" />,
-      },
-      { path: 'namespaces/:nsId/entities', element: <PagePlaceholder titleKey="nav.entities" /> },
-      { path: 'namespaces/:nsId/instances', element: <PagePlaceholder titleKey="nav.instances" /> },
-      { path: 'namespaces/:nsId/contracts', element: <PagePlaceholder titleKey="nav.contracts" /> },
+      { path: 'namespaces', Component: NamespacesListPage },
+      { path: 'namespaces/:nsId', Component: NamespaceOverviewPage },
+      { path: 'namespaces/:nsId/workspaces', Component: NamespaceWorkspacesPage },
+      { path: 'namespaces/:nsId/entities', Component: NamespaceEntitiesPage },
+      { path: 'namespaces/:nsId/instances', Component: NamespaceInstancesPage },
+      { path: 'namespaces/:nsId/contracts', Component: NamespaceContractsPage },
       // Param named `id` on purpose: WorkspaceIdePage reads useParams<{ id }>.
       { path: 'workspaces/:id', Component: WorkspaceIdePage },
-      { path: 'debug', element: <PagePlaceholder titleKey="nav.debug" /> },
+      { path: 'debug', Component: DebugPage },
     ],
   },
   // Legacy URL redirects — nothing 404s (B1 compatibility).
