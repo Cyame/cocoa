@@ -36,7 +36,8 @@ class TestIdentityAndUsers:
         body = me.json()
         assert body["is_super_admin"] is True
         assert body["identity"] == "system"
-        assert "identity-system" in body["locked_gene_slugs"]
+        # v4.0: identity packs are gone — no locked gene rows.
+        assert body["locked_gene_slugs"] == []
 
     def test_account_and_list_users(self, client: TestClient, auth_token: str) -> None:
         account = client.get("/api/v1/account", headers=_h(auth_token))
@@ -61,19 +62,26 @@ class TestIdentityAndUsers:
         )
         assert created.status_code == 201, created.text
         body = created.json()
-        assert body["identity"] == "member"
+        # v4.0: non-system identities derive to None (flag is False).
+        assert body["identity"] is None
         assert body["is_super_admin"] is False
         assert body["temporary_password"]
-        assert any(g["slug"] == "identity-member" for g in body["locked_genes"])
+        assert body["locked_genes"] == []
 
         set_id = client.post(
             f"/api/v1/users/{body['id']}/identity",
             headers=_h(auth_token),
-            json={"identity": "org"},
+            json={"identity": "system"},
         )
         assert set_id.status_code == 200
-        assert set_id.json()["identity"] == "org"
-        assert set_id.json()["is_super_admin"] is False
-        locked = {g["slug"] for g in set_id.json()["locked_genes"]}
-        assert "identity-org" in locked
-        assert "identity-member" not in locked
+        assert set_id.json()["identity"] == "system"
+        assert set_id.json()["is_super_admin"] is True
+
+        unset = client.post(
+            f"/api/v1/users/{body['id']}/identity",
+            headers=_h(auth_token),
+            json={"identity": "member"},
+        )
+        assert unset.status_code == 200
+        assert unset.json()["identity"] is None
+        assert unset.json()["is_super_admin"] is False

@@ -92,7 +92,7 @@ class TestMembershipCrud:
         body = items[0]
         assert body["workspace_id"] == workspace_id
         assert body["user_id"] == auth_user_id
-        assert body["role"] == "owner"
+        assert "role" not in body  # v4.0: no static role on memberships
         assert "id" in body
 
     def test_join_workspace_duplicate(
@@ -114,7 +114,6 @@ class TestMembershipCrud:
         payload = {
             "workspace_id": workspace_id,
             "user_id": auth_user_id,
-            "role": "owner",
         }
 
         resp_duplicate = client.post(
@@ -125,21 +124,21 @@ class TestMembershipCrud:
         assert resp_duplicate.status_code == 409
         assert resp_duplicate.json()["error_code"] == "membership.duplicate"
 
-    def test_change_role(
+    def test_change_position(
         self, client: TestClient, auth_token: str, auth_user_id: str,
     ) -> None:
-        """PATCH membership role returns 200 with updated role."""
+        """PATCH membership position returns 200 with updated coords (v4.0:
+        role updates are gone — memberships carry no static role)."""
         h = _auth(auth_token)
 
         resp = client.post(
             "/api/v1/workspaces",
             headers=h,
-            json={"name": "Role Workspace", "slug": "role-workspace"},
+            json={"name": "Position Workspace", "slug": "position-workspace"},
         )
         assert resp.status_code == 201
         workspace_id = resp.json()["id"]
 
-        # The creator is auto-added as owner.  Verify role change on that row.
         list_resp = client.get(
             f"/api/v1/messaging/memberships?workspace_id={workspace_id}",
             headers=h,
@@ -147,20 +146,22 @@ class TestMembershipCrud:
         items = list_resp.json()["items"]
         assert len(items) == 1
         membership_id = items[0]["id"]
-        assert items[0]["role"] == "owner"
+        assert "role" not in items[0]
 
         resp = client.patch(
             f"/api/v1/messaging/memberships/{membership_id}",
             headers=h,
-            json={"role": "editor"},
+            json={"posx": 240, "posy": 120},
         )
         assert resp.status_code == 200
-        assert resp.json()["role"] == "editor"
+        assert resp.json()["posx"] == 240
+        assert resp.json()["posy"] == 120
 
-    def test_delete_last_owner_refused(
+    def test_delete_membership_succeeds(
         self, client: TestClient, auth_token: str, auth_user_id: str,
     ) -> None:
-        """Deleting the only owner returns 409."""
+        """Deleting a membership returns 204 (v4.0: no last-owner guard —
+        there is no static owner role anymore)."""
         h = _auth(auth_token)
 
         resp = client.post(
@@ -171,7 +172,6 @@ class TestMembershipCrud:
         assert resp.status_code == 201
         workspace_id = resp.json()["id"]
 
-        # The creator is auto-added as the sole owner (P14b-onboard2).
         list_resp = client.get(
             f"/api/v1/messaging/memberships?workspace_id={workspace_id}",
             headers=h,
@@ -184,8 +184,14 @@ class TestMembershipCrud:
             f"/api/v1/messaging/memberships/{membership_id}",
             headers=h,
         )
-        assert resp.status_code == 409
-        assert resp.json()["error_code"] == "membership.last_owner"
+        assert resp.status_code == 204
+
+        after = client.get(
+            f"/api/v1/messaging/memberships?workspace_id={workspace_id}",
+            headers=h,
+        )
+        assert after.status_code == 200
+        assert after.json()["items"] == []
 
 
 # =========================================================================

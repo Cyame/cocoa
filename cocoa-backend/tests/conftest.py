@@ -338,6 +338,9 @@ async def create_org_bundle(session: AsyncSession):
             session.add(membership)
             await session.flush()
 
+        # Commit so grants are visible to the API client's separate session.
+        await session.commit()
+
         return SimpleNamespace(
             org=org,
             namespace=ns,

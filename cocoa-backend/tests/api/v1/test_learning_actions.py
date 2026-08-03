@@ -212,9 +212,18 @@ class TestReap:
         )
         assert resp.status_code == 200, resp.text
 
-        emp = await session.get(Entity, entity_id)
-        assert emp is not None
-        assert emp.capabilities in (None, [])
+        # v4.0: reap must not touch the entity_capabilities junction.
+        from app.models.junctions import EntityCapability
+
+        junction_rows = (
+            await session.execute(
+                select(EntityCapability).where(
+                    EntityCapability.entity_id == entity_id,
+                    EntityCapability.deleted_at.is_(None),
+                )
+            )
+        ).scalars().all()
+        assert junction_rows == []
 
     async def test_reap_snapshot_only_skips_writes(
         self, client: TestClient, auth_token: str, auth_user_id: str,
@@ -242,9 +251,12 @@ class TestReap:
         assert body["capability_market_uploaded"] == 0
         assert body["instance_local_added"] == 0
 
+        # snapshot_only must not persist reaped rows (builtin cmd-* seed
+        # rows from the v4.0 migration are expected and unrelated).
         market_result = await session.execute(
             select(CapabilityMarketEntry).where(
-                CapabilityMarketEntry.deleted_at.is_(None)
+                CapabilityMarketEntry.created_via == "reap",
+                CapabilityMarketEntry.deleted_at.is_(None),
             )
         )
         assert market_result.scalars().first() is None
@@ -335,15 +347,33 @@ class TestPromote:
 
         emp = await session.get(Entity, entity_id)
         assert emp is not None
-        assert emp.capabilities is not None and len(emp.capabilities) >= 1
+        # v4.0 §6.4: promote writes market rows + entity_capabilities junction.
+        from app.models.junctions import EntityCapability
+
+        junction_rows = (
+            await session.execute(
+                select(CapabilityMarketEntry.name)
+                .join(
+                    EntityCapability,
+                    EntityCapability.capability_id == CapabilityMarketEntry.id,
+                )
+                .where(
+                    EntityCapability.entity_id == entity_id,
+                    EntityCapability.deleted_at.is_(None),
+                    CapabilityMarketEntry.deleted_at.is_(None),
+                )
+            )
+        ).scalars().all()
+        assert len(junction_rows) >= 1
         assert emp.migration_hash == body["entity_promotion_migration_hash"]
         assert emp.system_prompt is not None
 
-    async def test_promote_does_not_write_capability_market(
+    async def test_promote_writes_capability_market_and_junction(
         self, client: TestClient, auth_token: str, auth_user_id: str,
         session: AsyncSession,
     ) -> None:
-        """Promote is Chain B — Entity only; never writes capability_market."""
+        """v4.0 §6.4: promote upserts capability_market (created_via=promote)
+        and links via the entity_capabilities junction."""
         h = _auth(auth_token)
         workspace_id = _setup_workspace(client, auth_token)
         entity_id = _create_entity(client, auth_token)
@@ -361,38 +391,39 @@ class TestPromote:
         }
         await session.commit()
 
-        before = (
-            await session.execute(
-                select(CapabilityMarketEntry).where(
-                    CapabilityMarketEntry.deleted_at.is_(None),
-                )
-            )
-        ).scalars().all()
-        before_count = len(before)
-
         resp = client.post(
             f"/api/v1/learning/entities/{entity_id}/promote",
             headers=h, json={"from_instance_id": instance_id},
         )
         assert resp.status_code == 200, resp.text
-        body = resp.json()
-        assert body["capability_market_uploaded"] == 0
 
-        after = (
-            await session.execute(
-                select(CapabilityMarketEntry).where(
-                    CapabilityMarketEntry.deleted_at.is_(None),
-                )
-            )
-        ).scalars().all()
-        assert len(after) == before_count
         market_result = await session.execute(
             select(CapabilityMarketEntry).where(
                 CapabilityMarketEntry.created_via == "promote",
                 CapabilityMarketEntry.deleted_at.is_(None),
             )
         )
-        assert list(market_result.scalars().all()) == []
+        promoted = {row.name for row in market_result.scalars().all()}
+        assert "promote-exclusive" in promoted
+
+        # …and the junction links the entity to the promoted capability.
+        from app.models.junctions import EntityCapability
+
+        link_rows = (
+            await session.execute(
+                select(CapabilityMarketEntry.name)
+                .join(
+                    EntityCapability,
+                    EntityCapability.capability_id == CapabilityMarketEntry.id,
+                )
+                .where(
+                    EntityCapability.entity_id == entity_id,
+                    EntityCapability.deleted_at.is_(None),
+                    CapabilityMarketEntry.deleted_at.is_(None),
+                )
+            )
+        ).scalars().all()
+        assert "promote-exclusive" in set(link_rows)
 
     async def test_promote_skips_market_when_name_already_exists(
         self, client: TestClient, auth_token: str, auth_user_id: str,

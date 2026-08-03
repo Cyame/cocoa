@@ -417,6 +417,7 @@ class TestPermissions:
         auth_token: str,
         auth_user_id: str,
         session: AsyncSession,
+        create_org_bundle,
     ) -> None:
         h = _auth(auth_token)
         workspace_id = _setup_workspace_and_membership(
@@ -432,10 +433,19 @@ class TestPermissions:
         viewer = result.scalars().first()
         assert viewer is not None
 
+        from app.models.workspace import Workspace
+
+        workspace = await session.get(Workspace, workspace_id)
+        # v4.0: grant the viewer the view atom via OrgContract (replaces the
+        # old viewer-role membership) + a role-less presence membership.
+        await create_org_bundle(
+            viewer.id,
+            atoms=("can_view_workspace",),
+            workspace=workspace,
+        )
         resp = client.post("/api/v1/messaging/memberships", headers=h, json={
             "workspace_id": workspace_id,
             "user_id": viewer.id,
-            "role": "viewer",
             "posx": 500,
             "posy": 500,
         })
@@ -447,13 +457,21 @@ class TestPermissions:
         }).json()["access_token"]
         viewer_h = _auth(viewer_token)
 
+        # Read access passes (can_view_workspace held)…
+        read_resp = client.get(
+            f"/api/v1/central-hubs/{workspace_id}",
+            headers=viewer_h,
+        )
+        assert read_resp.status_code == 200, read_resp.text
+
+        # …but a write (can_edit_workspace required) is denied.
         resp = client.post(
             f"/api/v1/central-hubs/{workspace_id}/files",
             headers=viewer_h,
             json={"workspace_id": workspace_id, "name": "should_fail.txt"},
         )
         assert resp.status_code == 403
-        assert resp.json()["error_code"] == "workspace.insufficient_role"
+        assert resp.json()["error_code"] == "permission.denied"
 
     def test_nonmember_access_denied(
         self,
@@ -474,4 +492,4 @@ class TestPermissions:
             headers=nonmember_h,
         )
         assert resp.status_code == 403
-        assert resp.json()["error_code"] == "workspace.not_member"
+        assert resp.json()["error_code"] == "permission.denied"

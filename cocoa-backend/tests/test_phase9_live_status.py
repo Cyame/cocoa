@@ -128,17 +128,38 @@ async def test_live_status_rejects_non_member_workspace(
     client: TestClient,
     phase9_auth_token: str,
     workspace_factory,
+    session: AsyncSession,
 ) -> None:
-    """An authenticated user without workspace membership receives 403."""
+    """An authenticated user without any contract grant receives 403.
+
+    (The default fixture user is the DB's first registrant — a super-admin
+    who bypasses checks — so this test registers a second, grant-less user.)
+    """
     workspace = await workspace_factory()
+    # Commit so the API client's separate session can resolve the workspace.
+    await session.commit()
+
+    client.post(
+        "/api/v1/auth/register",
+        json={
+            "username": "phase9-nonmember",
+            "email": "phase9-nonmember@test.com",
+            "password": "password123",
+        },
+    )
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"username": "phase9-nonmember", "password": "password123"},
+    )
+    outsider_token = login.json()["access_token"]
 
     response = client.get(
         f"/api/v1/workspaces/{workspace.id}/live-status",
-        headers=_auth(phase9_auth_token),
+        headers=_auth(outsider_token),
     )
 
     assert response.status_code == 403
-    assert response.json()["error_code"] == "workspace.not_member"
+    assert response.json()["error_code"] == "permission.denied"
 
 
 @pytest.mark.asyncio
@@ -151,13 +172,8 @@ async def test_live_status_returns_empty_for_empty_workspace(
     """An workspace with no active memberships returns an empty list."""
     workspace = await workspace_factory()
 
-    async def allow_workspace_role(*_args: object, **_kwargs: object) -> None:
-        return None
-
-    monkeypatch.setattr(
-        "app.api.v1.workspace_live_status.require_workspace_role",
-        allow_workspace_role,
-    )
+    # The fixture user is the DB's first registrant (super-admin), which
+    # passes the v4.0 permission check without any contract grant.
     response = client.get(
         f"/api/v1/workspaces/{workspace.id}/live-status",
         headers=_auth(phase9_auth_token),

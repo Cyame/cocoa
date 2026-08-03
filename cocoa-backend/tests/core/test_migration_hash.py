@@ -21,7 +21,6 @@ from app.core.migration_hash import (
     compute_entity_migration_hash,
     compute_migration_hash,
 )
-from app.models.entity import Entity
 
 
 def _caps(*names: str) -> list[dict]:
@@ -111,27 +110,39 @@ class TestComputeMigrationHash:
 
 
 class TestComputeEntityMigrationHash:
-    """Wrapper that reads fields off an Entity ORM model."""
+    """Async wrapper that reads the junction capability surface (v4.0)."""
 
-    def test_wrapper_uses_entity_fields(self) -> None:
-        """The wrapper reads ``capabilities`` and ``system_prompt``."""
-        emp = Entity(
-            name="test",
-            slug="test-emp",
-            capabilities=_caps("foo", "bar"),
-            system_prompt="hello",
+    @pytest.mark.asyncio
+    async def test_wrapper_uses_junction_capabilities(
+        self, session, entity_factory
+    ) -> None:
+        """The wrapper reads capabilities from the ``entity_capabilities``
+        junction plus ``system_prompt``."""
+        from app.core.capabilities import (
+            attach_entity_capability,
+            upsert_capability,
         )
-        direct = compute_migration_hash(_caps("foo", "bar"), "hello")
-        wrapped = compute_entity_migration_hash(emp)
+
+        emp = await entity_factory(system_prompt="hello")
+        for name in ("bar", "foo"):
+            cap = await upsert_capability(
+                session, name=name, cap_type="skill", description=name
+            )
+            await attach_entity_capability(
+                session, entity_id=emp.id, capability_id=cap.id
+            )
+        junction_caps = [
+            {"name": n, "type": "skill", "description": n} for n in ("bar", "foo")
+        ]
+        direct = compute_migration_hash(junction_caps, "hello")
+        wrapped = await compute_entity_migration_hash(session, emp)
         assert direct == wrapped
 
-    def test_wrapper_handles_null_capabilities(self) -> None:
-        """Legacy rows with ``capabilities=NULL`` hash the same as ``[]``."""
-        emp = Entity(
-            name="legacy",
-            slug="legacy-emp",
-            capabilities=None,
-            system_prompt=None,
-        )
+    @pytest.mark.asyncio
+    async def test_wrapper_handles_empty_capabilities(
+        self, session, entity_factory
+    ) -> None:
+        """Entities with no junction rows hash the same as ``[]``."""
+        emp = await entity_factory()
         empty = compute_migration_hash([], None)
-        assert compute_entity_migration_hash(emp) == empty
+        assert await compute_entity_migration_hash(session, emp) == empty

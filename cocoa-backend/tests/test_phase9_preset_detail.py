@@ -136,10 +136,11 @@ class TestGetPresetBySlug:
 class TestGetPresetManifestExpansion:
     """Manifest expansion behaviour."""
 
-    def test_preset_without_manifest_still_returns_5_fields(
+    def test_preset_without_manifest_returns_mirror_arrays(
         self, client: TestClient, auth_token: str,
     ) -> None:
-        """A preset with ``manifest=None`` still serialises 5 manifest fields via defaults."""
+        """v4.0: the response manifest carries junction-filled mirror arrays
+        (``skills``/``tools``/``commands``) even when ``manifest=None``."""
         # Create a preset with no manifest.
         client.post(
             "/api/v1/base-classes",
@@ -153,19 +154,15 @@ class TestGetPresetManifestExpansion:
         )
         assert resp.status_code == 200
         manifest = resp.json()["manifest"]
-        for field in _MANIFEST_FIELDS:
-            assert field in manifest
-        # Defaults from PresetManifest.
-        assert manifest["model"] == "tbd"
-        assert manifest["prompt"] == "TODO P8"
         assert manifest["skills"] == []
         assert manifest["tools"] == []
         assert manifest["commands"] == []
 
-    def test_preset_with_partial_manifest_fills_defaults(
+    def test_preset_with_partial_manifest_mirror_from_junction(
         self, client: TestClient, auth_token: str,
     ) -> None:
-        """A manifest with only some keys fills the rest from defaults."""
+        """v4.0: other manifest keys pass through; mirror arrays come from
+        junction rows (``commands`` in the write payload is stripped)."""
         client.post(
             "/api/v1/base-classes",
             headers=_auth_headers(auth_token),
@@ -183,11 +180,22 @@ class TestGetPresetManifestExpansion:
         assert resp.status_code == 200
         manifest = resp.json()["manifest"]
         assert manifest["model"] == "claude-3"
-        assert manifest["commands"] == ["run"]
-        # Defaults for unfilled fields.
-        assert manifest["prompt"] == "TODO P8"
+        # Write-path strip + empty junction → empty mirror.
+        assert manifest["commands"] == []
         assert manifest["skills"] == []
         assert manifest["tools"] == []
+
+    def test_builtin_preset_commands_mirrored_from_junction(
+        self, client: TestClient, auth_token: str,
+    ) -> None:
+        """v4.0: builtin presets expose their commands via the cmd-* junction."""
+        resp = client.get(
+            "/api/v1/base-classes/mi-shi",
+            headers=_auth_headers(auth_token),
+        )
+        assert resp.status_code == 200
+        manifest = resp.json()["manifest"]
+        assert sorted(manifest["commands"]) == ["decompose", "plan", "prioritize"]
 
     def test_unauthenticated_request_returns_401(
         self, client: TestClient,

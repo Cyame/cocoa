@@ -150,9 +150,18 @@ class TestCreateWorkspaceAutoMembership:
             f"expected exactly 1 owner membership, got {len(items)}: {items}"
         )
         only = items[0]
-        assert only["role"] == "owner"
+        # v4.0: memberships carry no role; the creator's grant lives on the
+        # OrganizationContract atoms instead.
+        assert "role" not in only
         assert only["user_id"] == creator_user_id
         assert only["workspace_id"] == workspace_id
+
+        # v4.0: the creator was granted workspace atoms — a gated endpoint
+        # (live-status requires can_view_workspace) must succeed immediately.
+        live = client.get(
+            f"/api/v1/workspaces/{workspace_id}/live-status", headers=h
+        )
+        assert live.status_code == 200, live.text
 
     def test_create_workspace_duplicate_slug_returns_409(
         self, client: TestClient, auth_token: str,
@@ -231,7 +240,7 @@ class TestCreateWorkspaceAutoMembership:
         items = members.json()["items"]
         assert len(items) == 1
         item = items[0]
-        assert item["role"] == "owner"
+        assert "role" not in item
         assert item["user_id"] == creator_user_id
         assert item["posx"] == 0
         assert item["posy"] == 0
@@ -264,7 +273,7 @@ class TestCreateWorkspaceAutoMembership:
             assert members.status_code == 200
             items = members.json()["items"]
             assert len(items) == 1
-            assert items[0]["role"] == "owner"
+            assert "role" not in items[0]
             assert items[0]["user_id"] == creator_user_id
 
 
@@ -294,7 +303,7 @@ class TestDirectMembershipCreation:
         assert create.status_code == 201
         workspace_id = create.json()["id"]
 
-        # Add the editor as an editor-role membership
+        # Add the second user as a role-less presence membership (v4.0)
         resp = client.post(
             "/api/v1/messaging/memberships",
             headers=h,
@@ -303,12 +312,11 @@ class TestDirectMembershipCreation:
                 "user_id": second_user_id,
                 "posx": 1,
                 "posy": 0,
-                "role": "editor",
             },
         )
         assert resp.status_code == 201
         body = resp.json()
-        assert body["role"] == "editor"
+        assert "role" not in body
         assert body["user_id"] == second_user_id
         assert body["workspace_id"] == workspace_id
         assert body["posx"] == 1
@@ -322,8 +330,8 @@ class TestDirectMembershipCreation:
         assert members.status_code == 200
         items = members.json()["items"]
         assert len(items) == 2
-        roles = {item["role"] for item in items}
-        assert roles == {"owner", "editor"}
+        user_ids = {item["user_id"] for item in items}
+        assert user_ids == {creator_user_id, second_user_id}
         # The two users are distinct
         assert creator_user_id != second_user_id
 
