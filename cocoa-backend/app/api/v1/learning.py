@@ -36,7 +36,6 @@ from app.core.migration_hash import (
     compute_migration_hash,
 )
 from app.core.openapi import add_error_responses
-from app.core.pagination import OffsetPage, paginate_offset
 from app.core.permissions import require_workspace_permission
 from app.models.ai_gene import AiGene
 from app.models.base_class import BaseClass
