@@ -25,15 +25,18 @@ export class ApiError extends Error {
 export function api(path: string, init?: RequestInit): Promise<void>;
 export function api<T>(path: string, init?: RequestInit): Promise<T>;
 export async function api(path: string, init?: RequestInit): Promise<unknown> {
-  const token = useSessionStore.getState().token;
+  const state = useSessionStore.getState();
   const headers = new Headers(init?.headers);
 
   headers.set('Accept', 'application/json');
   if (typeof init?.body === 'string' && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
-  if (token !== null) {
-    headers.set('Authorization', `Bearer ${token}`);
+  if (state.token !== null) {
+    headers.set('Authorization', `Bearer ${state.token}`);
+  }
+  if (state.currentOrgId !== null) {
+    headers.set('X-Organization-Id', state.currentOrgId);
   }
 
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;

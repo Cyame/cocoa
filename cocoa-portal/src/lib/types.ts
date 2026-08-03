@@ -428,3 +428,49 @@ export type OnboardingPayload = {
 };
 
 export type KnowledgeScope = 'instance' | 'entity' | 'workspace';
+
+export type UserBrief = {
+  readonly id: string;
+  readonly username: string;
+  readonly email: string;
+  readonly nickname: string | null;
+};
+
+export type GeneBrief = {
+  readonly id: string;
+  readonly slug: string;
+  readonly name: string;
+};
+
+export type Organization = {
+  readonly id: string;
+  readonly slug: string;
+  readonly name: string;
+  readonly description: string | null;
+  readonly system_hub_provider_id: string | null;
+  readonly system_hub_model: string | null;
+  readonly cerebellum_default_provider_id: string | null;
+  readonly cerebellum_default_model: string | null;
+  // v4.3 world proxy (设计 SoT §11): enable flag + 4 proxy fields.
+  // Field names are the portal-side contract; backend lane lands them.
+  readonly use_proxy: boolean;
+  readonly proxy_scheme: 'http' | 'https' | 'all' | 'no' | null;
+  readonly proxy_url: string | null;
+  readonly proxy_api_key_ref: string | null;
+  readonly proxy_default_model: string | null;
+  readonly created_at: string;
+  readonly updated_at: string | null;
+};
+
+export type OrgMember = {
+  readonly id: string;
+  readonly user: UserBrief;
+  readonly atoms: readonly GeneBrief[];
+  readonly created_at: string;
+};
+
+export type OrgIdentity = {
+  readonly organization_id: string;
+  readonly atoms: readonly string[];
+  readonly display_label: string;
+};
