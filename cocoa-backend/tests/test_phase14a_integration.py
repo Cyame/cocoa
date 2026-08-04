@@ -29,7 +29,7 @@ import pytest_asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.builtin_presets import ALL_BUILTIN_PRESETS, BUILTIN_PRESETS
+from app.core.builtin_presets import ALL_BUILTIN_PRESETS
 from app.core.event_types import (
     HARNESS_BREAKER_TRIPPED,
     HARNESS_CHECKPOINT,
@@ -505,10 +505,10 @@ async def test_agent_runtime_k8s_mode_emits_real_token_counts_via_http(
     )
     monkeypatch.setattr(mod, "get_proxy_token", lambda: "int-proxy-tok")
 
-    async def fake_poll_control(_last_seen_id: int):
-        return [{"id": 1, "payload": {"action": "kill"}}]
+    async def fake_poll_control_full(_last_seen_id: int):
+        return {"events": [{"id": 1, "payload": {"action": "kill"}}], "injects": []}
 
-    monkeypatch.setattr(mod, "poll_control", fake_poll_control)
+    monkeypatch.setattr(mod, "poll_control_full", fake_poll_control_full)
     monkeypatch.setattr(mod, "_write_checkpoint_memory", AsyncMock(return_value=None))
 
     fake = _make_fake_llm_client(
