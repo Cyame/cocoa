@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import DB, CurrentUserDep
 from app.core.errors import ConflictError, NotFoundError, ValidationError
@@ -363,16 +364,27 @@ async def create_contract(
             "errors.namespace_contract.exists",
             "Contract already exists for this user in the namespace",
         )
-    await _ensure_org_contract(db, organization_id=ns.org_id, user_id=body.user_id)
-    contract = NamespaceContract(
-        namespace_id=namespace_id,
-        user_id=body.user_id,
-    )
-    db.add(contract)
-    await db.flush()
-    if body.gene_slugs:
-        await _replace_genes(db, contract, body.gene_slugs)
-    await db.commit()
+    try:
+        await _ensure_org_contract(db, organization_id=ns.org_id, user_id=body.user_id)
+        contract = NamespaceContract(
+            namespace_id=namespace_id,
+            user_id=body.user_id,
+        )
+        db.add(contract)
+        await db.flush()
+        if body.gene_slugs:
+            await _replace_genes(db, contract, body.gene_slugs)
+        await db.commit()
+    except IntegrityError:
+        # Race: a concurrent request created the parent OrgContract or the
+        # namespace contract after our pre-check; the partial unique index
+        # fired. Map to the same 409 as the sequential duplicate path.
+        await db.rollback()
+        raise ConflictError(
+            "namespace_contract.exists",
+            "errors.namespace_contract.exists",
+            "Contract already exists for this user in the namespace",
+        ) from None
     await db.refresh(contract)
     return await _contract_out(db, contract)
 

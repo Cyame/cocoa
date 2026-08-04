@@ -18,7 +18,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.errors import ForbiddenError, NotFoundError, ValidationError
 from app.core.scope_guard import VALID_SCOPES
 from app.models.organization import Organization
-from app.models.organization_contract import OrganizationContract
+from app.models.organization_contract import (
+    OrganizationContract,
+    OrganizationContractGene,
+)
 from app.models.user import User
 
 
@@ -58,6 +61,29 @@ async def resolve_current_org_id(
                 )
             )
             if contract.scalar_one_or_none() is None:
+                raise ForbiddenError(
+                    "organization.not_a_member",
+                    "errors.organization.not_a_member",
+                    f"User '{user_id}' is not a member of organization '{org.id}'",
+                    details={"user_id": user_id, "organization_id": org.id},
+                )
+            # Design §3.6: a contract with zero active gene atoms is treated
+            # as non-member for org-level access.
+            atom = await db.execute(
+                select(OrganizationContractGene.id)
+                .join(
+                    OrganizationContract,
+                    OrganizationContract.id == OrganizationContractGene.contract_id,
+                )
+                .where(
+                    OrganizationContract.organization_id == org.id,
+                    OrganizationContract.user_id == user_id,
+                    OrganizationContract.deleted_at.is_(None),
+                    OrganizationContractGene.deleted_at.is_(None),
+                )
+                .limit(1)
+            )
+            if atom.scalar_one_or_none() is None:
                 raise ForbiddenError(
                     "organization.not_a_member",
                     "errors.organization.not_a_member",

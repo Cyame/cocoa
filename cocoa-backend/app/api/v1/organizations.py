@@ -2,11 +2,12 @@
 
 Routes:
     GET/PATCH /organizations/default
-    CRUD      /organizations/default/providers
-    POST      /organizations/default/providers/{id}/test
-    POST      /organizations/default/providers/{id}/set-default
-    GET/PATCH /organizations/default/system-hub
-    GET/PATCH /organizations/default/cerebellum-defaults
+    CRUD      /organizations/default/providers (+ test/set-default/
+               preview-models/refresh-models, system-hub, cerebellum-defaults)
+    CRUD      /organizations/{org_id}/providers — org-scoped twins of the
+               default-org provider lanes (v4.3 review; writes require
+               can_manage_organization, reads require membership)
+    CRUD      /organizations/{org_id}/members — world contracts (世界契印)
 """
 
 from __future__ import annotations
@@ -16,7 +17,8 @@ from datetime import datetime, timezone
 from typing import NoReturn
 
 from fastapi import APIRouter, Query, Response, status
-from sqlalchemy import func, or_, select
+from sqlalchemy import exists, or_, select
+from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import DB, CurrentUserDep
 from app.core.errors import (
@@ -40,6 +42,7 @@ from app.models.base_class_provider_default import BaseClassProviderDefault
 from app.models.entity import Entity
 from app.models.instance import Instance
 from app.models.junctions import EntityAiGene, EntityCapability
+from app.models.knowledge import KnowledgeDimension, KnowledgeEntry
 from app.models.namespace_contract import NamespaceContract, NamespaceContractGene
 from app.models.organization import Namespace, Organization
 from app.models.organization_contract import (
@@ -202,13 +205,14 @@ async def update_default_organization(
     return org
 
 
-@router.get("/default/providers", response_model=list[OrganizationProviderOut])
-async def list_providers(
-    db: DB,
-    current_user: CurrentUserDep,
-    enabled: bool | None = Query(default=None),
+# Shared handler bodies for both route families. The `/default/*` routes
+# below are super-admin-gated aliases; `/organizations/{org_id}/...` twins
+# gate writes on can_manage_organization.
+
+
+async def _list_providers(
+    db: DB, org: Organization, enabled: bool | None
 ) -> list[OrganizationProvider]:
-    org = await _get_default_org(db)
     stmt = select(OrganizationProvider).where(
         OrganizationProvider.organization_id == org.id,
         OrganizationProvider.deleted_at.is_(None),
@@ -220,19 +224,9 @@ async def list_providers(
     return list(result.scalars().all())
 
 
-@router.post(
-    "/default/providers",
-    response_model=OrganizationProviderOut,
-    status_code=status.HTTP_201_CREATED,
-)
-async def create_provider(
-    body: OrganizationProviderCreate,
-    db: DB,
-    current_user: CurrentUserDep,
+async def _create_provider(
+    db: DB, org: Organization, body: OrganizationProviderCreate
 ) -> OrganizationProvider:
-    require_super_admin(current_user)
-    org = await _get_default_org(db)
-
     if body.origin == ProviderOrigin.catalog:
         assert body.catalog_provider_id is not None
         existing = await db.execute(
@@ -336,31 +330,9 @@ async def create_provider(
     return row
 
 
-@router.get(
-    "/default/providers/{provider_id}",
-    response_model=OrganizationProviderOut,
-)
-async def get_provider(
-    provider_id: str,
-    db: DB,
-    current_user: CurrentUserDep,
+async def _update_provider(
+    db: DB, org: Organization, provider_id: str, body: OrganizationProviderUpdate
 ) -> OrganizationProvider:
-    org = await _get_default_org(db)
-    return await _get_provider(db, org.id, provider_id)
-
-
-@router.patch(
-    "/default/providers/{provider_id}",
-    response_model=OrganizationProviderOut,
-)
-async def update_provider(
-    provider_id: str,
-    body: OrganizationProviderUpdate,
-    db: DB,
-    current_user: CurrentUserDep,
-) -> OrganizationProvider:
-    require_super_admin(current_user)
-    org = await _get_default_org(db)
     row = await _get_provider(db, org.id, provider_id)
     data = body.model_dump(exclude_unset=True)
     if "request_format" in data and data["request_format"] is not None:
@@ -374,36 +346,16 @@ async def update_provider(
     return row
 
 
-@router.delete(
-    "/default/providers/{provider_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
-async def delete_provider(
-    provider_id: str,
-    db: DB,
-    current_user: CurrentUserDep,
-) -> Response:
-    require_super_admin(current_user)
-    org = await _get_default_org(db)
+async def _delete_provider(db: DB, org: Organization, provider_id: str) -> None:
     row = await _get_provider(db, org.id, provider_id)
     row.soft_delete()
     await db.commit()
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.post(
-    "/default/providers/preview-models",
-    response_model=CatalogModelsOut,
-)
-async def preview_provider_models(
-    body: PreviewModelsRequest,
-    db: DB,
-    current_user: CurrentUserDep,
+async def _preview_provider_models(
+    db: DB, body: PreviewModelsRequest
 ) -> CatalogModelsOut:
     """Call the provider /models endpoint (or models.dev for catalog) before save."""
-    require_super_admin(current_user)
-    await _get_default_org(db)
-
     if body.catalog_provider_id and not body.base_url:
         models, degraded = await model_catalog.list_models_for_catalog_provider(
             body.catalog_provider_id
@@ -473,18 +425,10 @@ async def preview_provider_models(
     )
 
 
-@router.post(
-    "/default/providers/{provider_id}/refresh-models",
-    response_model=CatalogModelsOut,
-)
-async def refresh_provider_models(
-    provider_id: str,
-    db: DB,
-    current_user: CurrentUserDep,
+async def _refresh_provider_models(
+    db: DB, org: Organization, provider_id: str
 ) -> CatalogModelsOut:
     """Re-fetch models and persist ids onto models_allowlist."""
-    require_super_admin(current_user)
-    org = await _get_default_org(db)
     row = await _get_provider(db, org.id, provider_id)
 
     error: str | None = None
@@ -546,17 +490,9 @@ async def refresh_provider_models(
     )
 
 
-@router.post(
-    "/default/providers/{provider_id}/test",
-    response_model=ProviderTestOut,
-)
-async def test_provider(
-    provider_id: str,
-    db: DB,
-    current_user: CurrentUserDep,
+async def _test_provider(
+    db: DB, org: Organization, provider_id: str
 ) -> ProviderTestOut:
-    require_super_admin(current_user)
-    org = await _get_default_org(db)
     row = await _get_provider(db, org.id, provider_id)
     started = time.monotonic()
     try:
@@ -587,18 +523,9 @@ async def test_provider(
         return ProviderTestOut(status="error", detail=detail)
 
 
-@router.post(
-    "/default/providers/{provider_id}/set-default",
-    response_model=SetDefaultOut,
-)
-async def set_default(
-    provider_id: str,
-    body: SetDefaultRequest,
-    db: DB,
-    current_user: CurrentUserDep,
+async def _set_default(
+    db: DB, org: Organization, provider_id: str, body: SetDefaultRequest
 ) -> SetDefaultOut:
-    require_super_admin(current_user)
-    org = await _get_default_org(db)
     row = await _get_provider(db, org.id, provider_id)
 
     if body.target == SetDefaultTarget.system_hub:
@@ -663,12 +590,7 @@ async def set_default(
     )
 
 
-@router.get("/default/system-hub", response_model=SystemHubOut)
-async def get_system_hub(
-    db: DB,
-    current_user: CurrentUserDep,
-) -> SystemHubOut:
-    org = await _get_default_org(db)
+def _system_hub_out(org: Organization) -> SystemHubOut:
     return SystemHubOut(
         provider_id=org.system_hub_provider_id,
         model=org.system_hub_model,
@@ -676,14 +598,9 @@ async def get_system_hub(
     )
 
 
-@router.patch("/default/system-hub", response_model=SystemHubOut)
-async def update_system_hub(
-    body: SystemHubUpdate,
-    db: DB,
-    current_user: CurrentUserDep,
+async def _update_system_hub(
+    db: DB, org: Organization, body: SystemHubUpdate
 ) -> SystemHubOut:
-    require_super_admin(current_user)
-    org = await _get_default_org(db)
     data = body.model_dump(exclude_unset=True)
     if "provider_id" in data:
         pid = data["provider_id"]
@@ -694,33 +611,19 @@ async def update_system_hub(
         org.system_hub_model = data["model"]
     await db.commit()
     await db.refresh(org)
-    return SystemHubOut(
-        provider_id=org.system_hub_provider_id,
-        model=org.system_hub_model,
-        configured=bool(org.system_hub_provider_id and org.system_hub_model),
-    )
+    return _system_hub_out(org)
 
 
-@router.get("/default/cerebellum-defaults", response_model=CerebellumDefaultsOut)
-async def get_cerebellum_defaults(
-    db: DB,
-    current_user: CurrentUserDep,
-) -> CerebellumDefaultsOut:
-    org = await _get_default_org(db)
+def _cerebellum_defaults_out(org: Organization) -> CerebellumDefaultsOut:
     return CerebellumDefaultsOut(
         provider_id=org.cerebellum_default_provider_id,
         model=org.cerebellum_default_model,
     )
 
 
-@router.patch("/default/cerebellum-defaults", response_model=CerebellumDefaultsOut)
-async def update_cerebellum_defaults(
-    body: CerebellumDefaultsUpdate,
-    db: DB,
-    current_user: CurrentUserDep,
+async def _update_cerebellum_defaults(
+    db: DB, org: Organization, body: CerebellumDefaultsUpdate
 ) -> CerebellumDefaultsOut:
-    require_super_admin(current_user)
-    org = await _get_default_org(db)
     data = body.model_dump(exclude_unset=True)
     if "provider_id" in data:
         pid = data["provider_id"]
@@ -731,10 +634,405 @@ async def update_cerebellum_defaults(
         org.cerebellum_default_model = data["model"]
     await db.commit()
     await db.refresh(org)
-    return CerebellumDefaultsOut(
-        provider_id=org.cerebellum_default_provider_id,
-        model=org.cerebellum_default_model,
+    return _cerebellum_defaults_out(org)
+
+
+# default-org aliases (legacy; super-admin gated on writes)
+
+
+@router.get("/default/providers", response_model=list[OrganizationProviderOut])
+async def list_providers(
+    db: DB,
+    current_user: CurrentUserDep,
+    enabled: bool | None = Query(default=None),
+) -> list[OrganizationProvider]:
+    org = await _get_default_org(db)
+    return await _list_providers(db, org, enabled)
+
+
+@router.post(
+    "/default/providers",
+    response_model=OrganizationProviderOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_provider(
+    body: OrganizationProviderCreate,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> OrganizationProvider:
+    require_super_admin(current_user)
+    org = await _get_default_org(db)
+    return await _create_provider(db, org, body)
+
+
+@router.get(
+    "/default/providers/{provider_id}",
+    response_model=OrganizationProviderOut,
+)
+async def get_provider(
+    provider_id: str,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> OrganizationProvider:
+    org = await _get_default_org(db)
+    return await _get_provider(db, org.id, provider_id)
+
+
+@router.patch(
+    "/default/providers/{provider_id}",
+    response_model=OrganizationProviderOut,
+)
+async def update_provider(
+    provider_id: str,
+    body: OrganizationProviderUpdate,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> OrganizationProvider:
+    require_super_admin(current_user)
+    org = await _get_default_org(db)
+    return await _update_provider(db, org, provider_id, body)
+
+
+@router.delete(
+    "/default/providers/{provider_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_provider(
+    provider_id: str,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> Response:
+    require_super_admin(current_user)
+    org = await _get_default_org(db)
+    await _delete_provider(db, org, provider_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/default/providers/preview-models",
+    response_model=CatalogModelsOut,
+)
+async def preview_provider_models(
+    body: PreviewModelsRequest,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> CatalogModelsOut:
+    """Call the provider /models endpoint (or models.dev for catalog) before save."""
+    require_super_admin(current_user)
+    await _get_default_org(db)
+    return await _preview_provider_models(db, body)
+
+
+@router.post(
+    "/default/providers/{provider_id}/refresh-models",
+    response_model=CatalogModelsOut,
+)
+async def refresh_provider_models(
+    provider_id: str,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> CatalogModelsOut:
+    """Re-fetch models and persist ids onto models_allowlist."""
+    require_super_admin(current_user)
+    org = await _get_default_org(db)
+    return await _refresh_provider_models(db, org, provider_id)
+
+
+@router.post(
+    "/default/providers/{provider_id}/test",
+    response_model=ProviderTestOut,
+)
+async def test_provider(
+    provider_id: str,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> ProviderTestOut:
+    require_super_admin(current_user)
+    org = await _get_default_org(db)
+    return await _test_provider(db, org, provider_id)
+
+
+@router.post(
+    "/default/providers/{provider_id}/set-default",
+    response_model=SetDefaultOut,
+)
+async def set_default(
+    provider_id: str,
+    body: SetDefaultRequest,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> SetDefaultOut:
+    require_super_admin(current_user)
+    org = await _get_default_org(db)
+    return await _set_default(db, org, provider_id, body)
+
+
+@router.get("/default/system-hub", response_model=SystemHubOut)
+async def get_system_hub(
+    db: DB,
+    current_user: CurrentUserDep,
+) -> SystemHubOut:
+    org = await _get_default_org(db)
+    return _system_hub_out(org)
+
+
+@router.patch("/default/system-hub", response_model=SystemHubOut)
+async def update_system_hub(
+    body: SystemHubUpdate,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> SystemHubOut:
+    require_super_admin(current_user)
+    org = await _get_default_org(db)
+    return await _update_system_hub(db, org, body)
+
+
+@router.get("/default/cerebellum-defaults", response_model=CerebellumDefaultsOut)
+async def get_cerebellum_defaults(
+    db: DB,
+    current_user: CurrentUserDep,
+) -> CerebellumDefaultsOut:
+    org = await _get_default_org(db)
+    return _cerebellum_defaults_out(org)
+
+
+@router.patch("/default/cerebellum-defaults", response_model=CerebellumDefaultsOut)
+async def update_cerebellum_defaults(
+    body: CerebellumDefaultsUpdate,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> CerebellumDefaultsOut:
+    require_super_admin(current_user)
+    org = await _get_default_org(db)
+    return await _update_cerebellum_defaults(db, org, body)
+
+
+# org-scoped twins: reads = membership; writes = can_manage_organization
+
+
+@router.get("/{org_id}/providers", response_model=list[OrganizationProviderOut])
+async def list_org_providers(
+    org_id: str,
+    db: DB,
+    current_user: CurrentUserDep,
+    enabled: bool | None = Query(default=None),
+) -> list[OrganizationProvider]:
+    org = await _get_org_for_user(db, current_user, org_id)
+    return await _list_providers(db, org, enabled)
+
+
+@router.post(
+    "/{org_id}/providers",
+    response_model=OrganizationProviderOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_org_provider(
+    org_id: str,
+    body: OrganizationProviderCreate,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> OrganizationProvider:
+    org = await _get_org_for_user(db, current_user, org_id)
+    await require_permission(
+        db,
+        current_user.user_id,
+        "can_manage_organization",
+        organization_id=org.id,
     )
+    return await _create_provider(db, org, body)
+
+
+@router.get(
+    "/{org_id}/providers/{provider_id}",
+    response_model=OrganizationProviderOut,
+)
+async def get_org_provider(
+    org_id: str,
+    provider_id: str,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> OrganizationProvider:
+    org = await _get_org_for_user(db, current_user, org_id)
+    return await _get_provider(db, org.id, provider_id)
+
+
+@router.patch(
+    "/{org_id}/providers/{provider_id}",
+    response_model=OrganizationProviderOut,
+)
+async def update_org_provider(
+    org_id: str,
+    provider_id: str,
+    body: OrganizationProviderUpdate,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> OrganizationProvider:
+    org = await _get_org_for_user(db, current_user, org_id)
+    await require_permission(
+        db,
+        current_user.user_id,
+        "can_manage_organization",
+        organization_id=org.id,
+    )
+    return await _update_provider(db, org, provider_id, body)
+
+
+@router.delete(
+    "/{org_id}/providers/{provider_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_org_provider(
+    org_id: str,
+    provider_id: str,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> Response:
+    org = await _get_org_for_user(db, current_user, org_id)
+    await require_permission(
+        db,
+        current_user.user_id,
+        "can_manage_organization",
+        organization_id=org.id,
+    )
+    await _delete_provider(db, org, provider_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/{org_id}/providers/preview-models",
+    response_model=CatalogModelsOut,
+)
+async def preview_org_provider_models(
+    org_id: str,
+    body: PreviewModelsRequest,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> CatalogModelsOut:
+    """Call the provider /models endpoint (or models.dev for catalog) before save."""
+    org = await _get_org_for_user(db, current_user, org_id)
+    await require_permission(
+        db,
+        current_user.user_id,
+        "can_manage_organization",
+        organization_id=org.id,
+    )
+    return await _preview_provider_models(db, body)
+
+
+@router.post(
+    "/{org_id}/providers/{provider_id}/refresh-models",
+    response_model=CatalogModelsOut,
+)
+async def refresh_org_provider_models(
+    org_id: str,
+    provider_id: str,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> CatalogModelsOut:
+    """Re-fetch models and persist ids onto models_allowlist."""
+    org = await _get_org_for_user(db, current_user, org_id)
+    await require_permission(
+        db,
+        current_user.user_id,
+        "can_manage_organization",
+        organization_id=org.id,
+    )
+    return await _refresh_provider_models(db, org, provider_id)
+
+
+@router.post(
+    "/{org_id}/providers/{provider_id}/test",
+    response_model=ProviderTestOut,
+)
+async def test_org_provider(
+    org_id: str,
+    provider_id: str,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> ProviderTestOut:
+    org = await _get_org_for_user(db, current_user, org_id)
+    await require_permission(
+        db,
+        current_user.user_id,
+        "can_manage_organization",
+        organization_id=org.id,
+    )
+    return await _test_provider(db, org, provider_id)
+
+
+@router.post(
+    "/{org_id}/providers/{provider_id}/set-default",
+    response_model=SetDefaultOut,
+)
+async def set_org_provider_default(
+    org_id: str,
+    provider_id: str,
+    body: SetDefaultRequest,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> SetDefaultOut:
+    org = await _get_org_for_user(db, current_user, org_id)
+    await require_permission(
+        db,
+        current_user.user_id,
+        "can_manage_organization",
+        organization_id=org.id,
+    )
+    return await _set_default(db, org, provider_id, body)
+
+
+@router.get("/{org_id}/system-hub", response_model=SystemHubOut)
+async def get_org_system_hub(
+    org_id: str,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> SystemHubOut:
+    org = await _get_org_for_user(db, current_user, org_id)
+    return _system_hub_out(org)
+
+
+@router.patch("/{org_id}/system-hub", response_model=SystemHubOut)
+async def update_org_system_hub(
+    org_id: str,
+    body: SystemHubUpdate,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> SystemHubOut:
+    org = await _get_org_for_user(db, current_user, org_id)
+    await require_permission(
+        db,
+        current_user.user_id,
+        "can_manage_organization",
+        organization_id=org.id,
+    )
+    return await _update_system_hub(db, org, body)
+
+
+@router.get("/{org_id}/cerebellum-defaults", response_model=CerebellumDefaultsOut)
+async def get_org_cerebellum_defaults(
+    org_id: str,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> CerebellumDefaultsOut:
+    org = await _get_org_for_user(db, current_user, org_id)
+    return _cerebellum_defaults_out(org)
+
+
+@router.patch("/{org_id}/cerebellum-defaults", response_model=CerebellumDefaultsOut)
+async def update_org_cerebellum_defaults(
+    org_id: str,
+    body: CerebellumDefaultsUpdate,
+    db: DB,
+    current_user: CurrentUserDep,
+) -> CerebellumDefaultsOut:
+    org = await _get_org_for_user(db, current_user, org_id)
+    await require_permission(
+        db,
+        current_user.user_id,
+        "can_manage_organization",
+        organization_id=org.id,
+    )
+    return await _update_cerebellum_defaults(db, org, body)
 
 
 def _org_out(org: Organization) -> OrganizationOut:
@@ -747,7 +1045,11 @@ async def _get_org_for_user(
 ) -> Organization:
     """Fetch an org by id; 404 when missing/deleted or the caller is not a
     member (super-admin bypasses). Non-members get 404, not 403, so org
-    existence is not leaked (permission_bypass adversarial class)."""
+    existence is not leaked (permission_bypass adversarial class).
+
+    Design §3.6: a contract whose effective atom set is empty is treated as
+    "no access" — the caller is not a member for org-level access.
+    """
     org = await db.get(Organization, org_id)
     if org is None or org.deleted_at is not None:
         raise NotFoundError(
@@ -770,6 +1072,26 @@ async def _get_org_for_user(
             "errors.organization.not_found",
             f"Organization '{org_id}' not found",
         )
+    has_atom = await db.execute(
+        select(OrganizationContractGene.id)
+        .join(
+            OrganizationContract,
+            OrganizationContract.id == OrganizationContractGene.contract_id,
+        )
+        .where(
+            OrganizationContract.organization_id == org.id,
+            OrganizationContract.user_id == current_user.user_id,
+            OrganizationContract.deleted_at.is_(None),
+            OrganizationContractGene.deleted_at.is_(None),
+        )
+        .limit(1)
+    )
+    if has_atom.scalar_one_or_none() is None:
+        raise NotFoundError(
+            "organization.not_found",
+            "errors.organization.not_found",
+            f"Organization '{org_id}' not found",
+        )
     return org
 
 
@@ -783,6 +1105,8 @@ async def list_organizations(
     """List orgs the caller holds at least one valid OrganizationContract in.
 
     Powers the v4-3 OrgPicker. Sorted by creation order (oldest first).
+    Design §3.6: a contract with zero active gene atoms is not "valid" — the
+    org is excluded from the picker for that user.
     """
     stmt = (
         select(Organization)
@@ -794,6 +1118,13 @@ async def list_organizations(
             OrganizationContract.user_id == current_user.user_id,
             OrganizationContract.deleted_at.is_(None),
             Organization.deleted_at.is_(None),
+            exists(
+                select(OrganizationContractGene.id).where(
+                    OrganizationContractGene.contract_id
+                    == OrganizationContract.id,
+                    OrganizationContractGene.deleted_at.is_(None),
+                )
+            ),
         )
         .order_by(Organization.created_at)
     )
@@ -1019,6 +1350,27 @@ async def delete_organization(
     for provider in providers:
         provider.soft_delete()
 
+    knowledge_entries = (
+        await db.execute(
+            select(KnowledgeEntry).where(
+                KnowledgeEntry.organization_id == org.id,
+                KnowledgeEntry.deleted_at.is_(None),
+            )
+        )
+    ).scalars().all()
+    for row in knowledge_entries:
+        row.soft_delete()
+    knowledge_dimensions = (
+        await db.execute(
+            select(KnowledgeDimension).where(
+                KnowledgeDimension.organization_id == org.id,
+                KnowledgeDimension.deleted_at.is_(None),
+            )
+        )
+    ).scalars().all()
+    for row in knowledge_dimensions:
+        row.soft_delete()
+
     for ws in ws_rows:
         ws.soft_delete()
     for entity in entity_rows:
@@ -1189,6 +1541,39 @@ def _raise_cannot_lock_self() -> NoReturn:
     )
 
 
+async def _org_has_other_manage_holder(
+    db: DB, org_id: str, contract_id: str
+) -> bool:
+    """True when another active contract in the org holds a manage atom.
+
+    Manage atoms are ``can_manage_organization`` / ``can_manage_org_members``
+    — the two atoms whose loss would lock the org out of self-management.
+    """
+    rows = (
+        await db.execute(
+            select(OrganizationContractGene.contract_id)
+            .select_from(OrganizationContractGene)
+            .join(
+                OrganizationContract,
+                OrganizationContract.id == OrganizationContractGene.contract_id,
+            )
+            .join(UserGene, UserGene.id == OrganizationContractGene.user_gene_id)
+            .where(
+                OrganizationContract.organization_id == org_id,
+                OrganizationContractGene.contract_id != contract_id,
+                OrganizationContract.deleted_at.is_(None),
+                OrganizationContractGene.deleted_at.is_(None),
+                UserGene.deleted_at.is_(None),
+                UserGene.slug.in_(
+                    ("can_manage_organization", "can_manage_org_members")
+                ),
+            )
+            .limit(1)
+        )
+    ).scalars().all()
+    return len(rows) > 0
+
+
 async def _guard_cannot_lock_self(
     db: DB,
     current_user: CurrentUserDep,
@@ -1201,29 +1586,26 @@ async def _guard_cannot_lock_self(
     """H5 防自锁 guard on PATCH/DELETE of a member contract.
 
     Locked semantics: 不可剥自己最后一枚 manage_members（PATCH 自剥 → 400）；
-    org 仅一人时不可 DELETE 自己的 Contract（→ 400）。Super-admins bypass.
+    删除/自改后 org 若不再有任何 contract 持有
+    ``can_manage_organization`` / ``can_manage_org_members`` → 400
+    （v4.3 review: zero-atom 成员可被利用制造永久无管理人 org）。Super-admins
+    bypass.
     """
     if current_user.is_super_admin:
         return
     if contract.user_id != current_user.user_id:
         return
     if deleting:
-        total = (
-            await db.execute(
-                select(func.count())
-                .select_from(OrganizationContract)
-                .where(
-                    OrganizationContract.organization_id == org_id,
-                    OrganizationContract.deleted_at.is_(None),
-                )
-            )
-        ).scalar_one()
-        if total <= 1:
+        if not await _org_has_other_manage_holder(db, org_id, contract.id):
             _raise_cannot_lock_self()
         return
     current = await _contract_slugs(db, contract.id)
-    if "can_manage_org_members" in current and "can_manage_org_members" not in (
-        desired_slugs or set()
+    desired = desired_slugs or set()
+    if "can_manage_org_members" in current and "can_manage_org_members" not in desired:
+        _raise_cannot_lock_self()
+    post_change_holds_manage = bool({"can_manage_organization", "can_manage_org_members"} & desired)
+    if not post_change_holds_manage and not await _org_has_other_manage_holder(
+        db, org_id, contract.id
     ):
         _raise_cannot_lock_self()
 
@@ -1331,9 +1713,23 @@ async def create_org_member(
         )
 
     await _atom_genes(db, body.atom_slugs)  # validate slugs (422 on unknown)
-    contract = await ensure_org_contract(db, organization_id=org.id, user_id=user.id)
-    await grant_atoms(db, contract.id, body.atom_slugs)
-    await db.commit()
+    username = user.username  # materialized before rollback expires the row
+    try:
+        contract = await ensure_org_contract(
+            db, organization_id=org.id, user_id=user.id
+        )
+        await grant_atoms(db, contract.id, body.atom_slugs)
+        await db.commit()
+    except IntegrityError:
+        # Race: a concurrent request inserted the same (org, user) contract
+        # after our pre-check and the partial unique index fired. Map to the
+        # same 409 as the sequential duplicate path.
+        await db.rollback()
+        raise ConflictError(
+            "organization.member_exists",
+            "errors.organization.member_exists",
+            f"User '{username}' is already a member of this organization",
+        ) from None
     await db.refresh(contract)
     item = await _org_member_item(db, contract)
     if item is None:

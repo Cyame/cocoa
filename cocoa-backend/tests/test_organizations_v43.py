@@ -102,6 +102,43 @@ class TestListOrganizations:
         assert resp.json()["items"] == []
         assert resp.json()["total"] == 0
 
+    def test_zero_atom_contract_org_not_listed(self, client: TestClient) -> None:
+        """Design §3.6: 0 active atom genes = 无权访问 — OrgPicker excludes it.
+
+        A zero-atom contract must not surface the org; granting any atom
+        makes it visible again.
+        """
+        _register(client, "list-za-sa", "list-za-sa@test.com")
+        owner_token, _ = _register(client, "list-za-own", "list-za-own@test.com")
+        org = _create_org(
+            client, owner_token, f"list-za-{uuid.uuid4().hex[:6]}", "Org ZA"
+        )
+        zero_token, zero_id = _register(client, "list-za-z", "list-za-z@test.com")
+
+        resp = client.post(
+            f"/api/v1/organizations/{org['id']}/members",
+            headers=_auth(owner_token),
+            json={"user_id": zero_id, "atom_slugs": []},
+        )
+        assert resp.status_code == 201, resp.text
+        contract_id = resp.json()["id"]
+
+        resp = client.get("/api/v1/organizations", headers=_auth(zero_token))
+        assert resp.status_code == 200
+        assert resp.json()["items"] == []
+        assert resp.json()["total"] == 0
+
+        # Granting an atom flips the contract back to valid.
+        patched = client.patch(
+            f"/api/v1/organizations/{org['id']}/members/{contract_id}",
+            headers=_auth(owner_token),
+            json={"atom_slugs": ["can_view_workspace"]},
+        )
+        assert patched.status_code == 200, patched.text
+        resp = client.get("/api/v1/organizations", headers=_auth(zero_token))
+        assert resp.status_code == 200
+        assert [i["id"] for i in resp.json()["items"]] == [org["id"]]
+
 
 class TestGetOrganization:
     def test_member_can_get(self, client: TestClient) -> None:
@@ -131,6 +168,27 @@ class TestGetOrganization:
             headers=_auth(member_token),
         )
         assert resp.status_code == 404
+
+    def test_zero_atom_contract_holder_gets_404(self, client: TestClient) -> None:
+        """Design §3.6: zero-atom contract = no access (404, no existence leak)."""
+        _register(client, "get-za-sa", "get-za-sa@test.com")
+        owner_token, _ = _register(client, "get-za-own", "get-za-own@test.com")
+        org = _create_org(
+            client, owner_token, f"get-za-{uuid.uuid4().hex[:6]}", "Org"
+        )
+        zero_token, zero_id = _register(client, "get-za-z", "get-za-z@test.com")
+        resp = client.post(
+            f"/api/v1/organizations/{org['id']}/members",
+            headers=_auth(owner_token),
+            json={"user_id": zero_id, "atom_slugs": []},
+        )
+        assert resp.status_code == 201, resp.text
+
+        resp = client.get(
+            f"/api/v1/organizations/{org['id']}", headers=_auth(zero_token)
+        )
+        assert resp.status_code == 404
+        assert resp.json()["error_code"] == "organization.not_found"
 
 
 class TestPatchOrganization:
@@ -202,11 +260,13 @@ class TestDeleteOrganization:
         self, client: TestClient, session: AsyncSession, db_url: str
     ) -> None:
         """DELETE soft-deletes org + namespaces + workspaces + contracts +
-        memberships + entities + instances, and filters exclude them."""
+        memberships + entities + instances + knowledge rows, and filters
+        exclude them."""
         from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
         from app.models.entity import Entity
         from app.models.instance import Instance
+        from app.models.knowledge import KnowledgeDimension, KnowledgeEntry
         from app.models.organization import Namespace, Organization
         from app.models.organization_contract import OrganizationContract
         from app.models.workspace import Membership, Workspace
@@ -234,6 +294,23 @@ class TestDeleteOrganization:
         await session.flush()
         membership = Membership(workspace_id=ws.id, user_id=owner_id, posx=0, posy=0)
         session.add(membership)
+        dim = KnowledgeDimension(
+            organization_id=org["id"],
+            scope="org",
+            slug=f"dim-{uuid.uuid4().hex[:6]}",
+            name="Org Dimension",
+        )
+        session.add(dim)
+        await session.flush()
+        entry = KnowledgeEntry(
+            organization_id=org["id"],
+            scope="org",
+            key=f"key-{uuid.uuid4().hex[:6]}",
+            title="Org Entry",
+            body="body",
+            dimension_id=dim.id,
+        )
+        session.add(entry)
         await session.commit()
 
         resp = client.delete(
@@ -261,6 +338,11 @@ class TestDeleteOrganization:
                 assert inst_row is not None and inst_row.deleted_at is not None
                 mem_row = await verify.get(Membership, membership.id)
                 assert mem_row is not None and mem_row.deleted_at is not None
+
+                dim_row = await verify.get(KnowledgeDimension, dim.id)
+                assert dim_row is not None and dim_row.deleted_at is not None
+                entry_row = await verify.get(KnowledgeEntry, entry.id)
+                assert entry_row is not None and entry_row.deleted_at is not None
 
                 contracts = (
                     await verify.execute(
@@ -417,7 +499,32 @@ class TestCurrentOrgDependency:
         return user.id
 
     @pytest.mark.asyncio
+    async def test_header_org_zero_atom_contract_forbidden(
+        self, session: AsyncSession, create_org_bundle
+    ) -> None:
+        """Design §3.6: a zero-atom contract is not org access — 403.
+
+        (v4.3 review: this pins the new behavior; a zero-atom contract was
+        previously treated as a valid membership.)
+        """
+        from app.api.deps import get_current_org
+        from app.core.errors import ForbiddenError
+        from app.models.organization import Organization
+
+        user_id = await self._make_user(session)
+        member_org = Organization(slug=f"cd-za-{uuid.uuid4().hex[:6]}", name="Zero Atom Org")
+        session.add(member_org)
+        await session.flush()
+        await create_org_bundle(user_id, atoms=(), organization=member_org)
+        await session.commit()
+
+        cu = CurrentUser(user_id=user_id, is_super_admin=False, token="t")
+        with pytest.raises(ForbiddenError):
+            await get_current_org(session, cu, member_org.id)
+
+    @pytest.mark.asyncio
     async def test_header_org_resolves(self, session: AsyncSession, create_org_bundle) -> None:
+        """X-Organization-Id resolves when the contract holds >= 1 atom."""
         from app.api.deps import get_current_org
         from app.core.errors import ForbiddenError, NotFoundError
         from app.models.organization import Organization
@@ -426,7 +533,9 @@ class TestCurrentOrgDependency:
         member_org = Organization(slug=f"cd-m-{uuid.uuid4().hex[:6]}", name="Member Org")
         session.add(member_org)
         await session.flush()
-        await create_org_bundle(user_id, atoms=(), organization=member_org)
+        await create_org_bundle(
+            user_id, atoms=("can_view_workspace",), organization=member_org
+        )
         await session.commit()
 
         cu = CurrentUser(user_id=user_id, is_super_admin=False, token="t")
@@ -501,3 +610,223 @@ class TestCurrentOrgDependency:
             await get_current_org(session, cu, None)
         assert exc_info.value.status_code == 400
         assert exc_info.value.error_code == "organization.context_required"
+
+
+class TestOrgScopedProviders:
+    """v4.3 review: providers are org-scoped — a non-default org configures
+    its own LLM providers under /organizations/{id}/providers; the /default/*
+    routes stay as super-admin-gated aliases."""
+
+    def _provider_payload(self, slug: str) -> dict:
+        return {
+            "origin": "custom",
+            "name": f"Gateway {slug}",
+            "slug": slug,
+            "request_format": "completion",
+            "base_url": "https://llm.example.com/v1",
+            "api_key_ref": f"{slug.upper()}_KEY",
+            "default_model": "gpt-4o-mini",
+        }
+
+    def test_crud_round_trip_on_non_default_org(self, client: TestClient) -> None:
+        _register(client, "osp-sa", "osp-sa@t.co")
+        owner_token, _ = _register(client, "osp-own", "osp-own@t.co")
+        org = _create_org(client, owner_token, f"osp-{uuid.uuid4().hex[:6]}", "Scoped")
+
+        created = client.post(
+            f"/api/v1/organizations/{org['id']}/providers",
+            headers=_auth(owner_token),
+            json=self._provider_payload("scoped-gw"),
+        )
+        assert created.status_code == 201, created.text
+        pid = created.json()["id"]
+        assert created.json()["organization_id"] == org["id"]
+
+        listed = client.get(
+            f"/api/v1/organizations/{org['id']}/providers",
+            headers=_auth(owner_token),
+        )
+        assert listed.status_code == 200
+        assert [p["id"] for p in listed.json()] == [pid]
+
+        got = client.get(
+            f"/api/v1/organizations/{org['id']}/providers/{pid}",
+            headers=_auth(owner_token),
+        )
+        assert got.status_code == 200
+        assert got.json()["slug"] == "scoped-gw"
+
+        patched = client.patch(
+            f"/api/v1/organizations/{org['id']}/providers/{pid}",
+            headers=_auth(owner_token),
+            json={"enabled": False},
+        )
+        assert patched.status_code == 200, patched.text
+        assert patched.json()["enabled"] is False
+
+        deleted = client.delete(
+            f"/api/v1/organizations/{org['id']}/providers/{pid}",
+            headers=_auth(owner_token),
+        )
+        assert deleted.status_code == 204
+        gone = client.get(
+            f"/api/v1/organizations/{org['id']}/providers/{pid}",
+            headers=_auth(owner_token),
+        )
+        assert gone.status_code == 404
+
+    def test_providers_isolated_between_orgs(self, client: TestClient) -> None:
+        _register(client, "osp-iso-sa", "osp-iso-sa@t.co")
+        owner_token, _ = _register(client, "osp-iso-own", "osp-iso-own@t.co")
+        org_a = _create_org(client, owner_token, f"ospa-{uuid.uuid4().hex[:6]}", "A")
+        org_b = _create_org(client, owner_token, f"ospb-{uuid.uuid4().hex[:6]}", "B")
+
+        created = client.post(
+            f"/api/v1/organizations/{org_a['id']}/providers",
+            headers=_auth(owner_token),
+            json=self._provider_payload("iso-gw"),
+        )
+        assert created.status_code == 201, created.text
+
+        listed_b = client.get(
+            f"/api/v1/organizations/{org_b['id']}/providers",
+            headers=_auth(owner_token),
+        )
+        assert listed_b.status_code == 200
+        assert listed_b.json() == []
+
+    def test_system_hub_and_cerebellum_defaults_org_scoped(
+        self, client: TestClient
+    ) -> None:
+        _register(client, "osp-hub-sa", "osp-hub-sa@t.co")
+        owner_token, _ = _register(client, "osp-hub-own", "osp-hub-own@t.co")
+        org = _create_org(client, owner_token, f"osph-{uuid.uuid4().hex[:6]}", "Hub")
+
+        created = client.post(
+            f"/api/v1/organizations/{org['id']}/providers",
+            headers=_auth(owner_token),
+            json=self._provider_payload("hub-gw"),
+        )
+        assert created.status_code == 201, created.text
+        pid = created.json()["id"]
+
+        hub = client.post(
+            f"/api/v1/organizations/{org['id']}/providers/{pid}/set-default",
+            headers=_auth(owner_token),
+            json={"target": "system_hub", "model": "gpt-4o"},
+        )
+        assert hub.status_code == 200, hub.text
+        assert hub.json()["provider_id"] == pid
+
+        got_hub = client.get(
+            f"/api/v1/organizations/{org['id']}/system-hub",
+            headers=_auth(owner_token),
+        )
+        assert got_hub.status_code == 200
+        assert got_hub.json()["configured"] is True
+        assert got_hub.json()["provider_id"] == pid
+
+        cer = client.post(
+            f"/api/v1/organizations/{org['id']}/providers/{pid}/set-default",
+            headers=_auth(owner_token),
+            json={"target": "cerebellum", "model": "deepseek-r1"},
+        )
+        assert cer.status_code == 200, cer.text
+        got_cer = client.get(
+            f"/api/v1/organizations/{org['id']}/cerebellum-defaults",
+            headers=_auth(owner_token),
+        )
+        assert got_cer.json()["provider_id"] == pid
+        assert got_cer.json()["model"] == "deepseek-r1"
+
+        other = _create_org(
+            client, owner_token, f"osph2-{uuid.uuid4().hex[:6]}", "H2"
+        )
+        other_hub = client.get(
+            f"/api/v1/organizations/{other['id']}/system-hub",
+            headers=_auth(owner_token),
+        )
+        assert other_hub.json()["configured"] is False
+
+    def test_preview_models_org_scoped(self, client: TestClient) -> None:
+        from unittest.mock import AsyncMock, patch
+
+        _register(client, "osp-pv-sa", "osp-pv-sa@t.co")
+        owner_token, _ = _register(client, "osp-pv-own", "osp-pv-own@t.co")
+        org = _create_org(client, owner_token, f"ospv-{uuid.uuid4().hex[:6]}", "PV")
+
+        with patch(
+            "app.api.v1.organizations.fetch_models_from_endpoint",
+            new=AsyncMock(
+                return_value=([{"id": "m1", "name": "M1", "provider": "p"}], None)
+            ),
+        ):
+            resp = client.post(
+                f"/api/v1/organizations/{org['id']}/providers/preview-models",
+                headers=_auth(owner_token),
+                json={
+                    "api_key_ref": "K",
+                    "base_url": "https://llm.example.com/v1",
+                    "request_format": "completion",
+                },
+            )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["items"][0]["id"] == "m1"
+
+    def test_write_requires_can_manage_organization(self, client: TestClient) -> None:
+        _register(client, "osp-pm-sa", "osp-pm-sa@t.co")
+        owner_token, _ = _register(client, "osp-pm-own", "osp-pm-own@t.co")
+        org = _create_org(client, owner_token, f"ospp-{uuid.uuid4().hex[:6]}", "PM")
+        viewer_token, viewer_id = _register(client, "osp-pm-vw", "osp-pm-vw@t.co")
+
+        added = client.post(
+            f"/api/v1/organizations/{org['id']}/members",
+            headers=_auth(owner_token),
+            json={"user_id": viewer_id, "atom_slugs": ["can_view_workspace"]},
+        )
+        assert added.status_code == 201, added.text
+
+        resp = client.post(
+            f"/api/v1/organizations/{org['id']}/providers",
+            headers=_auth(viewer_token),
+            json=self._provider_payload("viewer-gw"),
+        )
+        assert resp.status_code == 403
+        assert resp.json()["error_code"] == "permission.denied"
+
+        listed = client.get(
+            f"/api/v1/organizations/{org['id']}/providers",
+            headers=_auth(viewer_token),
+        )
+        assert listed.status_code == 200
+
+    def test_non_member_gets_404(self, client: TestClient) -> None:
+        _register(client, "osp-nm-sa", "osp-nm-sa@t.co")
+        owner_token, _ = _register(client, "osp-nm-own", "osp-nm-own@t.co")
+        org = _create_org(client, owner_token, f"ospn-{uuid.uuid4().hex[:6]}", "NM")
+        outsider_token, _ = _register(client, "osp-nm-out", "osp-nm-out@t.co")
+
+        resp = client.get(
+            f"/api/v1/organizations/{org['id']}/providers",
+            headers=_auth(outsider_token),
+        )
+        assert resp.status_code == 404
+
+    def test_default_alias_still_works(self, client: TestClient) -> None:
+        """/default/* provider routes keep working: reads for any logged-in
+        user, writes super-admin only."""
+        _register(client, "osp-df-sa", "osp-df-sa@t.co")
+        owner_token, _ = _register(client, "osp-df-own", "osp-df-own@t.co")
+
+        listed = client.get(
+            "/api/v1/organizations/default/providers", headers=_auth(owner_token)
+        )
+        assert listed.status_code == 200
+
+        resp = client.post(
+            "/api/v1/organizations/default/providers",
+            headers=_auth(owner_token),
+            json=self._provider_payload("df-gw"),
+        )
+        assert resp.status_code == 403
+        assert resp.json()["error_code"] == "auth.super_admin_required"

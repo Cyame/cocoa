@@ -698,6 +698,144 @@ class TestCannotLockSelf:
         assert [a["slug"] for a in patch.json()["atoms"]] == ["can_view_workspace"]
 
 
+class TestCannotLockSelfV43Review:
+    """v4.3 review H5+: self-DELETE (and self-PATCH) must leave the org with
+    at least one contract holding can_manage_organization /
+    can_manage_org_members — a zero-atom member must not be exploitable to
+    permanently lock the org out of management."""
+
+    async def test_delete_self_blocked_when_other_member_is_zero_atom(
+        self, client: TestClient
+    ) -> None:
+        env = await _world(client)
+        _token, other_id = _register(
+            client, f"om-za-{uuid.uuid4().hex[:6]}", f"za-{uuid.uuid4().hex[:6]}@t.co"
+        )
+        _post_member(client, env, other_id, [])
+        resp = client.get(
+            f"/api/v1/organizations/{env['org']['id']}/members",
+            headers=_auth(env["owner_token"]),
+        )
+        own_contract_id = next(
+            i["id"] for i in resp.json()["items"] if i["user"]["id"] == env["owner_id"]
+        )
+
+        deleted = client.delete(
+            f"/api/v1/organizations/{env['org']['id']}/members/{own_contract_id}",
+            headers=_auth(env["owner_token"]),
+        )
+        assert deleted.status_code == 400
+        assert deleted.json()["error_code"] == "errors.org.cannot_lock_self"
+
+    async def test_delete_self_blocked_when_other_member_viewer_only(
+        self, client: TestClient
+    ) -> None:
+        env = await _world(client)
+        _token, other_id = _register(
+            client, f"om-vo-{uuid.uuid4().hex[:6]}", f"vo-{uuid.uuid4().hex[:6]}@t.co"
+        )
+        _post_member(client, env, other_id, ["can_view_workspace"])
+        resp = client.get(
+            f"/api/v1/organizations/{env['org']['id']}/members",
+            headers=_auth(env["owner_token"]),
+        )
+        own_contract_id = next(
+            i["id"] for i in resp.json()["items"] if i["user"]["id"] == env["owner_id"]
+        )
+
+        deleted = client.delete(
+            f"/api/v1/organizations/{env['org']['id']}/members/{own_contract_id}",
+            headers=_auth(env["owner_token"]),
+        )
+        assert deleted.status_code == 400
+        assert deleted.json()["error_code"] == "errors.org.cannot_lock_self"
+
+    async def test_delete_self_allowed_when_other_holds_manage_organization(
+        self, client: TestClient
+    ) -> None:
+        env = await _world(client)
+        _token, other_id = _register(
+            client, f"om-mo-{uuid.uuid4().hex[:6]}", f"mo-{uuid.uuid4().hex[:6]}@t.co"
+        )
+        _post_member(client, env, other_id, ["can_manage_organization"])
+        resp = client.get(
+            f"/api/v1/organizations/{env['org']['id']}/members",
+            headers=_auth(env["owner_token"]),
+        )
+        own_contract_id = next(
+            i["id"] for i in resp.json()["items"] if i["user"]["id"] == env["owner_id"]
+        )
+
+        deleted = client.delete(
+            f"/api/v1/organizations/{env['org']['id']}/members/{own_contract_id}",
+            headers=_auth(env["owner_token"]),
+        )
+        assert deleted.status_code == 204, deleted.text
+
+
+class TestConcurrentMemberAddRace:
+    """v4.3 review: a lost-update duplicate add (partial unique index firing
+    between the pre-check and the insert) must map to 409, not a 500."""
+
+    @pytest.mark.asyncio
+    async def test_integrity_error_maps_to_409(
+        self, client: TestClient, session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from sqlalchemy.exc import IntegrityError
+
+        from app.api.v1 import organizations as org_api
+        from app.core.errors import ConflictError
+        from app.schemas.auth import CurrentUser
+        from app.schemas.organization import OrganizationMemberCreate
+
+        _register(client, "om-race-sa", "om-race-sa@t.co")
+        owner_token, owner_id = _register(
+            client, f"om-race-own-{uuid.uuid4().hex[:6]}", "race-own@t.co"
+        )
+        org = _create_org(client, owner_token, f"race-{uuid.uuid4().hex[:6]}", "Race")
+        _target_token, target_id = _register(
+            client, f"om-race-tgt-{uuid.uuid4().hex[:6]}", "race-tgt@t.co"
+        )
+
+        async def racy_ensure(db, *, organization_id, user_id, source_pack=None):
+            raise IntegrityError(
+                "INSERT",
+                {},
+                Exception(
+                    "duplicate key value violates unique constraint "
+                    "uq_organization_contracts_org_user"
+                ),
+            )
+
+        monkeypatch.setattr(org_api, "ensure_org_contract", racy_ensure)
+
+        cu = CurrentUser(user_id=owner_id, is_super_admin=False, token="t")
+        with pytest.raises(ConflictError) as exc_info:
+            await org_api.create_org_member(
+                org["id"],
+                OrganizationMemberCreate(
+                    user_id=target_id, atom_slugs=["can_view_workspace"]
+                ),
+                db=session,
+                current_user=cu,
+            )
+        assert exc_info.value.status_code == 409
+        assert exc_info.value.error_code == "organization.member_exists"
+
+        # rollback was called — no orphan contract row remains.
+        from app.models.organization_contract import OrganizationContract
+
+        rows = (
+            await session.execute(
+                select(OrganizationContract).where(
+                    OrganizationContract.organization_id == org["id"],
+                    OrganizationContract.user_id == target_id,
+                )
+            )
+        ).scalars().all()
+        assert rows == []
+
+
 async def _user_gene_ids(db_url: str, slugs: list[str]) -> list[str]:
     """Resolve UserGene ids for slugs through a fresh connection."""
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
