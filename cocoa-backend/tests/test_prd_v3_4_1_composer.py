@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from app.core.composer_turns import _iter_tokens, get_turn, schedule_user_turn
+from app.core.event_types import MESSAGING_DELIVERY_BLOCKED
 from app.core.slash_parser import parse_turn
 
 
@@ -77,20 +78,28 @@ async def test_user_without_passage_routes_to_cerebellum(
     instance_factory,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """User → Lost One without Passage must NOT proxy; routes to cerebellum stub."""
+    """User → Lost One without Passage: template reply + notify-only enqueue.
+
+    V47-2 / V47-8: no silent proxy to the Host; the composer shows a real
+    template reply (not the legacy stub), a ``cerebellum_route`` inject row
+    with ``delivery_mode=notify`` is enqueued, and no turn is started.
+    """
     from uuid import uuid4
 
     from sqlalchemy import select
 
     from app.core.message_router import route_message
     from app.models.composer_message import ComposerMessage
+    from app.models.inject_queue import InstanceInjectQueue
     from app.models.instance import InstanceStatus
     from app.models.user import User
     from app.models.workspace import Membership, Passage
     from app.schemas.slash import Directive
 
-    async def fake_emit(*_a, **_k):
-        return None
+    emitted: list[dict] = []
+
+    async def fake_emit(event_type, **kwargs):
+        emitted.append({"event_type": event_type, **kwargs})
 
     monkeypatch.setattr("app.core.message_router.emit", fake_emit)
 
@@ -150,6 +159,12 @@ async def test_user_without_passage_routes_to_cerebellum(
     assert results[0].turn_id is None
     assert scheduled == []
 
+    # delivery_blocked audit event preserved with the routed_to_cerebellum detail.
+    blocked = [c for c in emitted if c["event_type"] == MESSAGING_DELIVERY_BLOCKED]
+    assert len(blocked) == 1
+    assert blocked[0]["payload"]["reason_detail"] == "routed_to_cerebellum"
+    assert blocked[0]["payload"]["target_entity"] == "ceshi"
+
     msgs = (
         await session.execute(
             select(ComposerMessage).where(
@@ -159,8 +174,31 @@ async def test_user_without_passage_routes_to_cerebellum(
         )
     ).scalars().all()
     roles = {m.role for m in msgs}
-    assert "user" in roles
-    assert "system" in roles
+    # V47-8: system stub replaced by an assistant template reply.
+    assert roles == {"user", "assistant"}
+    assistant = next(m for m in msgs if m.role == "assistant")
+    assert "尚未连接通道" in assistant.content
+    assert "请先在拓扑中连接通道后再试" in assistant.content
+    # notify-only: no turn is created for the cerebellum reply.
+    assert all(m.turn_id is None for m in msgs)
+
+    # V47-2: notify-only cerebellum collaboration row, no wake.
+    rows = (
+        await session.execute(
+            select(InstanceInjectQueue).where(
+                InstanceInjectQueue.deleted_at.is_(None),
+            )
+        )
+    ).scalars().all()
+    assert len(rows) == 1
+    assert rows[0].kind == "cerebellum_route"
+    assert rows[0].delivery_mode == "notify"
+    assert rows[0].instance_id == instance.id
+    assert rows[0].payload == {
+        "text": "你好",
+        "target_entity": "ceshi",
+        "from_membership_id": user_mem.id,
+    }
 
     passage = (
         await session.execute(
