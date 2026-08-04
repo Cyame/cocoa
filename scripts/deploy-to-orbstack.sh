@@ -157,18 +157,38 @@ kubectl apply -f "$MANIFEST_DIR/backend-rbac.yaml"
 kubectl apply -f "$MANIFEST_DIR/backend-deployment.yaml"
 kubectl apply -f "$MANIFEST_DIR/portal-deployment.yaml"
 
-log "Waiting for pods (timeout ${KUBECTL_TIMEOUT}s)"
-kubectl wait --for=condition=ready pod -l app=cocoa-backend -n "$NS" --timeout="${KUBECTL_TIMEOUT}s" || {
+# The image tag is fixed at `latest`, so `kubectl apply` does NOT create a new
+# pod when the image was rebuilt with the same tag. Force a rollout so alembic
+# and the smoke check always run against the NEW code, never the stale pod.
+log "Forcing rollout of rebuilt image (fixed latest tag)"
+kubectl rollout restart deployment/cocoa-backend -n "$NS"
+kubectl rollout restart deployment/cocoa-portal -n "$NS"
+
+log "Waiting for backend rollout (timeout ${KUBECTL_TIMEOUT}s)"
+kubectl rollout status deployment/cocoa-backend -n "$NS" --timeout="${KUBECTL_TIMEOUT}s" || {
   err "Backend pod was not Ready within ${KUBECTL_TIMEOUT}s"; exit 3;
 }
-kubectl wait --for=condition=ready pod -l app=cocoa-portal -n "$NS" --timeout="${KUBECTL_TIMEOUT}s" || {
+log "Waiting for portal rollout (timeout ${KUBECTL_TIMEOUT}s)"
+kubectl rollout status deployment/cocoa-portal -n "$NS" --timeout="${KUBECTL_TIMEOUT}s" || {
   err "Portal pod was not Ready within ${KUBECTL_TIMEOUT}s"; exit 3;
 }
 
 log "Running alembic upgrade head"
+# Re-fetch the pod name AFTER the rollout so it points at the NEW pod.
 BACKEND_POD="$(kubectl get pod -l app=cocoa-backend -n "$NS" -o jsonpath='{.items[0].metadata.name}')"
-if ! kubectl exec -n "$NS" "$BACKEND_POD" -- uv run alembic upgrade head; then
-  err "Alembic migration failed"
+ALEMBIC_OK=0
+for attempt in 1 2 3; do
+  if kubectl exec -n "$NS" "$BACKEND_POD" -- uv run alembic upgrade head; then
+    ALEMBIC_OK=1
+    break
+  fi
+  err "Alembic migration failed (attempt $attempt/3); retrying in 5s"
+  sleep 5
+  # The pod may have been replaced mid-retry; re-resolve the current name.
+  BACKEND_POD="$(kubectl get pod -l app=cocoa-backend -n "$NS" -o jsonpath='{.items[0].metadata.name}')"
+done
+if (( ALEMBIC_OK != 1 )); then
+  err "Alembic migration failed after 3 attempts"
   exit 4
 fi
 
