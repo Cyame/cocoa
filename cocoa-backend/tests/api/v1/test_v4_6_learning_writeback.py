@@ -206,6 +206,10 @@ class TestH4NotepadToMemory:
         workspace_id = _setup_workspace(client, auth_token)
         entity_id = _create_entity(client, auth_token)
         instance_id = _create_instance(client, auth_token, entity_id, workspace_id)
+        # The harness loop creates the loop_state; seed it so the H4 writer
+        # can maintain notepad_refs.
+        session.add(InstanceLoopState(instance_id=instance_id))
+        await session.commit()
 
         await self._run_write(
             db_url, instance_id, monkeypatch,
@@ -224,6 +228,17 @@ class TestH4NotepadToMemory:
         assert rows[0].entity_id == entity_id
         assert rows[0].content == "checkpoint 3: note"
         assert rows[0].key == "notepad/p14a-checkpoint/learnings"
+
+        loop_state = (
+            await session.execute(
+                select(InstanceLoopState).where(
+                    InstanceLoopState.instance_id == instance_id,
+                    InstanceLoopState.deleted_at.is_(None),
+                )
+            )
+        ).scalars().first()
+        assert loop_state is not None
+        assert loop_state.notepad_refs == {"learnings": rows[0].id}
 
     async def test_write_notepad_memory_skips_missing_instance(
         self, client: TestClient, session: AsyncSession,
@@ -458,6 +473,52 @@ class TestNotepadRefsMigration:
         assert loop_state.notepad_refs == {"learnings": existing_memory_id}
 
 
+    async def test_migration_skips_traversal_and_unparseable_refs(
+        self, client: TestClient, auth_token: str, session: AsyncSession,
+        tmp_path: Path,
+    ) -> None:
+        workspace_id = _setup_workspace(client, auth_token)
+        entity_id = _create_entity(client, auth_token)
+        instance_id = _create_instance(client, auth_token, entity_id, workspace_id)
+
+        safe_file = tmp_path / "safe.md"
+        safe_file.write_text("safe content", encoding="utf-8")
+
+        loop_state = InstanceLoopState(
+            instance_id=instance_id,
+            notepad_refs={
+                "traversal": "../etc/passwd",
+                "unparseable": 12345,
+                "safe": str(safe_file),
+            },
+        )
+        session.add(loop_state)
+        await session.commit()
+
+        conn = await session.connection()
+        report = await conn.run_sync(migrate_notepad_refs)
+
+        assert report["skipped_traversal"] == 1
+        assert report["unparseable"] == 1
+        assert report["memories_created"] == 1
+
+        memories = (
+            await session.execute(
+                select(Memory).where(
+                    Memory.entity_id == entity_id,
+                    Memory.kind == "notepad",
+                )
+            )
+        ).scalars().all()
+        assert len(memories) == 1
+        assert memories[0].content == "safe content"
+
+        await session.refresh(loop_state)
+        assert "traversal" not in loop_state.notepad_refs
+        assert "unparseable" not in loop_state.notepad_refs
+        assert loop_state.notepad_refs["safe"] == memories[0].id
+
+
 # =========================================================================
 # Combine — optional entity / base_class junction binding (v4.6 §6.4)
 # =========================================================================
@@ -472,8 +533,25 @@ class TestCombineJunctionBinding:
             ))
         await session.commit()
 
+    async def _grant_ai_gene_atom(
+        self, session: AsyncSession, entity_id: str, user_id: str,
+    ) -> None:
+        from app.core.org_contract import ensure_org_contract, grant_atoms
+        from app.models.organization import Namespace
+
+        entity = await session.get(Entity, entity_id)
+        assert entity is not None
+        ns = await session.get(Namespace, entity.namespace_id)
+        assert ns is not None
+        contract = await ensure_org_contract(
+            session, organization_id=ns.org_id, user_id=user_id
+        )
+        await grant_atoms(session, contract.id, ("can_manage_ai_genes",))
+        await session.commit()
+
     async def test_combine_binds_to_entity_and_base_class(
-        self, client: TestClient, auth_token: str, session: AsyncSession,
+        self, client: TestClient, auth_token: str, auth_user_id: str,
+        session: AsyncSession,
     ) -> None:
         h = _auth(auth_token)
         await self._seed_capabilities(session, ["alpha-cap", "beta-cap"])
@@ -485,6 +563,8 @@ class TestCombineJunctionBinding:
         bc = BaseClass(slug=f"v46-bc-{uuid.uuid4().hex[:6]}", name="V46 Base")
         session.add(bc)
         await session.commit()
+
+        await self._grant_ai_gene_atom(session, entity_id, auth_user_id)
 
         resp = client.post(
             "/api/v1/learning/capabilities/combine", headers=h,
@@ -552,3 +632,106 @@ class TestCombineJunctionBinding:
             },
         )
         assert resp.status_code == 404, resp.text
+
+    async def test_combine_404_for_unknown_base_class(
+        self, client: TestClient, auth_token: str, session: AsyncSession,
+    ) -> None:
+        h = _auth(auth_token)
+        await self._seed_capabilities(session, ["gamma-cap"])
+
+        resp = client.post(
+            "/api/v1/learning/capabilities/combine", headers=h,
+            json={
+                "capability_names": ["gamma-cap"],
+                "gene_slug": "v46-gene-404-bc",
+                "gene_name": "V46 Gene 404 BC",
+                "base_class_id": str(uuid.uuid4()),
+            },
+        )
+        assert resp.status_code == 404, resp.text
+
+    async def test_combine_forbids_binding_without_ai_gene_atom(
+        self, client: TestClient, auth_token: str, session: AsyncSession,
+    ) -> None:
+        await self._seed_capabilities(session, ["delta-cap"])
+
+        workspace_id = _setup_workspace(client, auth_token)
+        entity_id = _create_entity(client, auth_token)
+        _create_instance(client, auth_token, entity_id, workspace_id)
+
+        # The fixture's first user is auto-promoted to super_admin; register a
+        # second, unprivileged user whose binding must be refused.
+        plain = f"v46-plain-{uuid.uuid4().hex[:6]}"
+        client.post("/api/v1/auth/register", json={
+            "username": plain,
+            "email": f"{plain}@test.com",
+            "password": "password123",
+        })
+        login = client.post("/api/v1/auth/login", json={
+            "username": plain, "password": "password123",
+        })
+        assert login.status_code == 200, login.text
+        plain_token = login.json()["access_token"]
+
+        resp = client.post(
+            "/api/v1/learning/capabilities/combine",
+            headers=_auth(plain_token),
+            json={
+                "capability_names": ["delta-cap"],
+                "gene_slug": "v46-gene-403",
+                "gene_name": "V46 Gene 403",
+                "entity_id": entity_id,
+            },
+        )
+        assert resp.status_code == 403, resp.text
+        gene = (
+            await session.execute(
+                select(AiGene).where(AiGene.slug == "v46-gene-403")
+            )
+        ).scalar_one_or_none()
+        assert gene is None, "gene must not be created when binding is forbidden"
+
+    async def test_combine_snapshot_only_validates_binding(
+        self, client: TestClient, auth_token: str, auth_user_id: str,
+        session: AsyncSession,
+    ) -> None:
+        h = _auth(auth_token)
+        await self._seed_capabilities(session, ["epsilon-cap"])
+
+        workspace_id = _setup_workspace(client, auth_token)
+        entity_id = _create_entity(client, auth_token)
+        _create_instance(client, auth_token, entity_id, workspace_id)
+        await self._grant_ai_gene_atom(session, entity_id, auth_user_id)
+
+        # Valid target in preview mode: 200 + echoed ids + no junction written.
+        resp = client.post(
+            "/api/v1/learning/capabilities/combine", headers=h,
+            json={
+                "capability_names": ["epsilon-cap"],
+                "gene_slug": "v46-gene-preview",
+                "gene_name": "V46 Gene Preview",
+                "entity_id": entity_id,
+                "snapshot_only": True,
+            },
+        )
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["entity_id"] == entity_id
+        gene = (
+            await session.execute(
+                select(AiGene).where(AiGene.slug == "v46-gene-preview")
+            )
+        ).scalar_one_or_none()
+        assert gene is None, "preview must not create a gene"
+
+        # Bogus target in preview mode must 404 like the write path.
+        bad = client.post(
+            "/api/v1/learning/capabilities/combine", headers=h,
+            json={
+                "capability_names": ["epsilon-cap"],
+                "gene_slug": "v46-gene-preview-bad",
+                "gene_name": "V46 Gene Preview Bad",
+                "entity_id": str(uuid.uuid4()),
+                "snapshot_only": True,
+            },
+        )
+        assert bad.status_code == 404, bad.text

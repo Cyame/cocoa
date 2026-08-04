@@ -1007,12 +1007,19 @@ async def combine_capabilities(
     body: CombineRequest,
     db: DB,
     current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
 ) -> CombineResultOut:
     """Package N L1 capabilities into a single L2 Gene (AiGene).
 
     Per PRD §13.6.10.2.2: all referenced capability names must exist in
     the capability_market (otherwise 404). The new gene references them
     by name in its manifest.
+
+    v4.6 §6.4: optional ``entity_id`` / ``base_class_id`` binding writes
+    ``entity_ai_genes`` / ``base_class_ai_genes`` junctions. Both targets
+    are validated (existence + ``can_manage_ai_genes`` on their scope)
+    **before** the snapshot_only branch so preview and write modes behave
+    identically — no DB write precedes validation.
     """
     # 1. Validate all referenced capabilities exist.
     cap_q = await db.execute(
@@ -1060,16 +1067,57 @@ async def combine_capabilities(
             f"AiGene slug {body.gene_slug!r} is already taken",
         )
 
-    # 4. snapshot_only → preview without writing.
+    # 4. v4.6 review fix: validate binding targets exist + the caller holds
+    #    can_manage_ai_genes on the target scope (mirrors the v4.1 ai-genes /
+    #    entities / base-classes gene-attach endpoints) — before snapshot_only
+    #    so preview and write paths validate identically.
+    from app.core.permissions import require_permission
+
+    entity_target: Entity | None = None
+    base_class_target: BaseClass | None = None
+    if body.entity_id:
+        entity_target = await db.get(Entity, body.entity_id)
+        if entity_target is None or entity_target.deleted_at is not None:
+            raise NotFoundError(
+                "entity.not_found",
+                "errors.entity.not_found",
+                f"Entity {body.entity_id!r} not found",
+            )
+        await require_permission(
+            db,
+            current_user.user_id,
+            "can_manage_ai_genes",
+            namespace_id=entity_target.namespace_id,
+        )
+    if body.base_class_id:
+        base_class_target = await db.get(BaseClass, body.base_class_id)
+        if base_class_target is None or base_class_target.deleted_at is not None:
+            raise NotFoundError(
+                "base_class.not_found",
+                "errors.base_class.not_found",
+                f"BaseClass {body.base_class_id!r} not found",
+            )
+        if base_class_target.scope != "system":
+            await require_permission(
+                db,
+                current_user.user_id,
+                "can_manage_ai_genes",
+                organization_id=base_class_target.organization_id,
+                namespace_id=base_class_target.namespace_id,
+            )
+
+    # 5. snapshot_only → preview without writing.
     if body.snapshot_only:
         return CombineResultOut(
             new_gene_id="",
             new_gene_slug=body.gene_slug,
             referenced_capabilities=list(body.capability_names),
             manifest_preview=manifest,
+            entity_id=body.entity_id,
+            base_class_id=body.base_class_id,
         )
 
-    # 5. Create AiGene.
+    # 6. Create AiGene.
     new_gene = AiGene(
         slug=body.gene_slug,
         name=body.gene_name,
@@ -1079,36 +1127,22 @@ async def combine_capabilities(
     db.add(new_gene)
     await db.flush()
 
-    # 6. v4.6 §6.4: 组合后按产品选择绑定层 — entity_ai_genes / base_class_ai_genes。
+    # 7. v4.6 §6.4: 组合后按产品选择绑定层 — entity_ai_genes / base_class_ai_genes。
     from app.core.capabilities import (
         attach_base_class_ai_gene,
         attach_entity_ai_gene,
     )
 
-    if body.entity_id:
-        target = await db.get(Entity, body.entity_id)
-        if target is None or target.deleted_at is not None:
-            raise NotFoundError(
-                "entity.not_found",
-                "errors.entity.not_found",
-                f"Entity {body.entity_id!r} not found",
-            )
+    if entity_target is not None:
         await attach_entity_ai_gene(
-            db, entity_id=body.entity_id, ai_gene_id=new_gene.id
+            db, entity_id=entity_target.id, ai_gene_id=new_gene.id
         )
-    if body.base_class_id:
-        target = await db.get(BaseClass, body.base_class_id)
-        if target is None or target.deleted_at is not None:
-            raise NotFoundError(
-                "base_class.not_found",
-                "errors.base_class.not_found",
-                f"BaseClass {body.base_class_id!r} not found",
-            )
+    if base_class_target is not None:
         await attach_base_class_ai_gene(
-            db, base_class_id=body.base_class_id, ai_gene_id=new_gene.id
+            db, base_class_id=base_class_target.id, ai_gene_id=new_gene.id
         )
 
-    # 7. Emit event.
+    # 8. Emit event.
     await emit(
         LEARNING_COMPOSED,
         actor_type="user",

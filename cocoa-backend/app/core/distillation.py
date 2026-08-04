@@ -238,10 +238,14 @@ class AggregatingDistiller:
         if len(longest_lesson) >= _MIN_PROMPT_CHARS:
             prompt = _truncate_content(longest_lesson)
 
-        # 6. Key prefix dedup → skills.
+        # 6. Key prefix dedup → skills. v4.6: notepad mirror keys
+        #    (``notepad/<plan>/<name>``) are internal bookkeeping, not
+        #    distilled skills.
         skills: list[str] = []
         seen_skills: set[str] = set()
         for e in entries:
+            if e.kind == MemoryKind.notepad.value:
+                continue
             if e.key:
                 prefix = _extract_key_prefix(e.key)
                 if prefix and prefix not in seen_skills:

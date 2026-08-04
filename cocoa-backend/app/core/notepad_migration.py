@@ -30,6 +30,7 @@ import json
 import logging
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 import sqlalchemy as sa
@@ -48,6 +49,8 @@ EVENT = Event.__table__
 
 ORPHAN_EVENT_TYPE = "learning.notepad_migration_orphan"
 _NOTEPAD_KIND = "notepad"
+# Content cap consistent with the H4 runtime writer (agent_runtime.py).
+_MAX_CONTENT_CHARS = 2000
 
 
 def _is_uuid(value: str) -> bool:
@@ -59,12 +62,17 @@ def _is_uuid(value: str) -> bool:
 
 
 def _read_text(path: str) -> str | None:
-    """Read *path* as UTF-8 text; ``None`` when unreadable."""
+    """Read up to ``_MAX_CONTENT_CHARS`` chars of *path*; ``None`` when unreadable."""
     try:
         with open(path, "r", encoding="utf-8") as fp:
-            return fp.read()
+            return fp.read(_MAX_CONTENT_CHARS)
     except (OSError, UnicodeDecodeError):
         return None
+
+
+def _has_traversal(path: str) -> bool:
+    """True when *path* contains a ``..`` segment (path traversal)."""
+    return ".." in Path(path).parts
 
 
 def _iter_paths(value: Any) -> list[str]:
@@ -88,6 +96,8 @@ def migrate_notepad_refs(conn: sa.Connection) -> dict[str, int]:
         "refs_rewritten": 0,
         "orphaned": 0,
         "skipped_no_entity": 0,
+        "skipped_traversal": 0,
+        "unparseable": 0,
     }
 
     rows = conn.execute(
@@ -122,8 +132,24 @@ def migrate_notepad_refs(conn: sa.Connection) -> dict[str, int]:
                 new_refs[name] = value
                 continue
 
+            paths = _iter_paths(value)
+            if not paths:
+                report["unparseable"] += 1
+                logger.warning(
+                    "notepad migration: loop_state %s ref %r has unparseable value — dropped",
+                    ls["id"], name,
+                )
+                continue
+
             memory_id: str | None = None
-            for path in _iter_paths(value):
+            for path in paths:
+                if _has_traversal(path):
+                    report["skipped_traversal"] += 1
+                    logger.warning(
+                        "notepad migration: loop_state %s ref %r path %r has .. traversal — skipped",
+                        ls["id"], name, path,
+                    )
+                    continue
                 content = _read_text(path)
                 if content is None:
                     conn.execute(

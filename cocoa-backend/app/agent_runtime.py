@@ -153,13 +153,29 @@ async def _write_notepad_memory(
                 instance_id=instance_id,
             )
             return
-        session.add(Memory(
+        memory = Memory(
             entity_id=inst.entity_id,
             kind=MemoryKind.notepad.value,
             key=f"notepad/{plan_slug}/{notepad_name}",
             content=entry[:2000],
             source_instance_id=instance_id,
-        ))
+        )
+        session.add(memory)
+        await session.flush()
+        # v4.6: keep loop_state.notepad_refs as the memory-id pointer index
+        # (plan storage contract: refs → memories).
+        loop_state = (
+            await session.execute(
+                select(InstanceLoopState).where(
+                    InstanceLoopState.instance_id == instance_id,
+                    InstanceLoopState.deleted_at.is_(None),
+                )
+            )
+        ).scalars().first()
+        if loop_state is not None:
+            refs = dict(loop_state.notepad_refs or {})
+            refs[notepad_name] = memory.id
+            loop_state.notepad_refs = refs
         await session.commit()
 
 

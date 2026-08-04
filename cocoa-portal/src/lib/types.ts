@@ -394,6 +394,8 @@ export type CombineResult = {
   readonly new_gene_slug: string;
   readonly referenced_capabilities: readonly string[];
   readonly manifest_preview: JsonObject;
+  readonly entity_id?: string | null;
+  readonly base_class_id?: string | null;
 };
 
 export type KnowledgeEnvEntry = {

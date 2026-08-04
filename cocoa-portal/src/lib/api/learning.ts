@@ -24,8 +24,9 @@ export function combineCapabilities(
   capabilityNames: readonly string[],
   geneSlug: string,
   geneName: string,
-  kind = 'tool-gene',
   tags: readonly string[] | null = null,
+  entityId?: string | null,
+  baseClassId?: string | null,
 ): Promise<CombineResult> {
   return api<CombineResult>('/learning/capabilities/combine', {
     method: 'POST',
@@ -33,8 +34,9 @@ export function combineCapabilities(
       capability_names: capabilityNames,
       gene_slug: geneSlug,
       gene_name: geneName,
-      kind,
       tags,
+      entity_id: entityId ?? null,
+      base_class_id: baseClassId ?? null,
       snapshot_only: false,
     }),
   });
