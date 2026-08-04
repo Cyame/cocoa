@@ -1,8 +1,9 @@
-import { AlertCircle, Building2, Cpu, LoaderCircle, Plus, Users, X } from 'lucide-react';
+import { AlertCircle, Building2, Copy, Cpu, LoaderCircle, Plus, Users, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, Navigate, useParams } from 'react-router';
+import { Link, Navigate, useNavigate, useParams } from 'react-router';
 import { ApiError, api } from '@/lib/api';
+import { cloneWorkspace } from '@/lib/api/clone';
 import { listMemberships } from '@/lib/api/instances';
 import { createWorkspace, fetchWorkspaces } from '@/lib/api/workspaces';
 import { toSlug } from '@/lib/slug';
@@ -22,11 +23,13 @@ type CountPage = {
 export default function NamespaceWorkspacesPage() {
   const { t } = useTranslation();
   const { orgId, nsId } = useParams<{ orgId: string; nsId: string }>();
+  const navigate = useNavigate();
 
   const [workspaces, setWorkspaces] = useState<readonly WorkspaceSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isUnauthorized, setIsUnauthorized] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [cloningId, setCloningId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [createName, setCreateName] = useState('');
   const [createSlug, setCreateSlug] = useState('');
@@ -77,6 +80,22 @@ export default function NamespaceWorkspacesPage() {
   }, [refresh]);
 
   const slugify = (value: string): string => toSlug(value, 48);
+
+  const handleCloneWorkspace = async (workspace: Workspace) => {
+    const ok = window.confirm(
+      `${t('clone.confirmWorkspace', { name: workspace.name })} ${t('clone.instancesNotCopied')}`,
+    );
+    if (!ok) return;
+    setCloningId(workspace.id);
+    setErrorMessage(null);
+    try {
+      const cloned = await cloneWorkspace(workspace.id);
+      navigate(`/orgs/${orgId ?? ''}/workspaces/${cloned.id}`);
+    } catch (error) {
+      setErrorMessage(error instanceof ApiError ? error.message : t('clone.error'));
+      setCloningId(null);
+    }
+  };
 
   const handleCreateWorkspace = async () => {
     const name = createName.trim();
@@ -234,6 +253,8 @@ export default function NamespaceWorkspacesPage() {
         <WorkspaceList
           orgId={orgId ?? ''}
           workspaces={workspaces}
+          cloningId={cloningId}
+          onClone={(workspace) => void handleCloneWorkspace(workspace)}
           onCreate={() => {
             setCreateOpen(true);
             setCreateError(null);
@@ -250,11 +271,15 @@ type TFn = ReturnType<typeof useTranslation>['t'];
 function WorkspaceList({
   orgId,
   workspaces,
+  cloningId,
+  onClone,
   onCreate,
   t,
 }: {
   readonly orgId: string;
   readonly workspaces: readonly WorkspaceSummary[];
+  readonly cloningId: string | null;
+  readonly onClone: (workspace: Workspace) => void;
   readonly onCreate: () => void;
   readonly t: TFn;
 }) {
@@ -281,34 +306,50 @@ function WorkspaceList({
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
       {workspaces.map(({ workspace, memberCount, instanceCount }) => (
-        <Link
+        <div
           key={workspace.id}
-          to={`/orgs/${orgId}/workspaces/${workspace.id}`}
-          className="group rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-[border-color,box-shadow,transform] hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md"
+          className="group rounded-xl border border-slate-200 bg-white shadow-sm transition-[border-color,box-shadow,transform] hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md"
         >
-          <div className="flex items-start justify-between gap-4">
-            <span className="grid size-10 place-items-center rounded-lg bg-blue-50 text-blue-700 group-hover:bg-blue-100">
-              <Building2 className="size-5" aria-hidden="true" />
-            </span>
-            <span className="rounded-full bg-slate-100 px-2.5 py-1 font-mono text-xs text-slate-600">
-              {workspace.slug}
-            </span>
+          <Link to={`/orgs/${orgId}/workspaces/${workspace.id}`} className="block p-5">
+            <div className="flex items-start justify-between gap-4">
+              <span className="grid size-10 place-items-center rounded-lg bg-blue-50 text-blue-700 group-hover:bg-blue-100">
+                <Building2 className="size-5" aria-hidden="true" />
+              </span>
+              <span className="rounded-full bg-slate-100 px-2.5 py-1 font-mono text-xs text-slate-600">
+                {workspace.slug}
+              </span>
+            </div>
+            <h2 className="mt-5 text-lg font-semibold tracking-tight text-slate-950">
+              {workspace.name}
+            </h2>
+            <div className="mt-5 grid grid-cols-2 gap-3 border-t border-slate-100 pt-4 text-sm text-slate-600">
+              <span className="flex items-center gap-2">
+                <Users className="size-4 text-slate-400" aria-hidden="true" />
+                {memberCount} {t('workspace.directors')}
+              </span>
+              <span className="flex items-center gap-2">
+                <Cpu className="size-4 text-slate-400" aria-hidden="true" />
+                {instanceCount} {t('workspace.lostOnes')}
+              </span>
+            </div>
+            <p className="mt-4 text-sm font-medium text-blue-600">
+              {t('namespaces.enterWorkspace')}
+            </p>
+          </Link>
+          <div className="flex justify-end border-t border-slate-100 px-5 py-3">
+            <button
+              type="button"
+              disabled={cloningId !== null}
+              onClick={() => onClone(workspace)}
+              data-testid={`workspace-clone-${workspace.id}`}
+              title={t('clone.instancesNotCopied')}
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900 disabled:opacity-50"
+            >
+              <Copy className="size-3.5" aria-hidden="true" />
+              {cloningId === workspace.id ? t('clone.cloning') : t('clone.workspace')}
+            </button>
           </div>
-          <h2 className="mt-5 text-lg font-semibold tracking-tight text-slate-950">
-            {workspace.name}
-          </h2>
-          <div className="mt-5 grid grid-cols-2 gap-3 border-t border-slate-100 pt-4 text-sm text-slate-600">
-            <span className="flex items-center gap-2">
-              <Users className="size-4 text-slate-400" aria-hidden="true" />
-              {memberCount} {t('workspace.directors')}
-            </span>
-            <span className="flex items-center gap-2">
-              <Cpu className="size-4 text-slate-400" aria-hidden="true" />
-              {instanceCount} {t('workspace.lostOnes')}
-            </span>
-          </div>
-          <p className="mt-4 text-sm font-medium text-blue-600">{t('namespaces.enterWorkspace')}</p>
-        </Link>
+        </div>
       ))}
     </div>
   );

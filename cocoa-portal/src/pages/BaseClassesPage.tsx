@@ -1,9 +1,10 @@
-import { AlertCircle, Building2, LoaderCircle, Plus, Sparkles } from 'lucide-react';
+import { AlertCircle, Building2, Copy, LoaderCircle, Plus, Sparkles } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, Navigate, useParams } from 'react-router';
 import { ApiError } from '@/lib/api';
 import { fetchBaseClassesPage } from '@/lib/api/baseClasses';
+import { cloneBaseClass } from '@/lib/api/clone';
 import { translateBaseClassTag } from '@/lib/baseClassTags';
 import type { BaseClass } from '@/lib/types';
 import { useOnboardingModalStore } from '@/stores/onboardingModalStore';
@@ -16,6 +17,7 @@ export default function BaseClassesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isUnauthorized, setIsUnauthorized] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [cloningId, setCloningId] = useState<string | null>(null);
 
   const openOnboarding = useOnboardingModalStore((state) => state.open);
 
@@ -49,6 +51,22 @@ export default function BaseClassesPage() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  const handleClone = useCallback(
+    async (baseClass: BaseClass) => {
+      setCloningId(baseClass.id);
+      setErrorMessage(null);
+      try {
+        await cloneBaseClass(baseClass.id);
+        await refresh();
+      } catch (error) {
+        setErrorMessage(error instanceof ApiError ? error.message : t('clone.error'));
+      } finally {
+        setCloningId(null);
+      }
+    },
+    [refresh, t],
+  );
 
   if (isUnauthorized) {
     return <Navigate to="/login" replace />;
@@ -99,6 +117,8 @@ export default function BaseClassesPage() {
         <BaseClassGrid
           orgId={orgId ?? ''}
           baseClasses={baseClasses}
+          cloningId={cloningId}
+          onClone={(bc) => void handleClone(bc)}
           onSummon={(slug) => openOnboarding({ baseClassSlug: slug })}
           t={t}
         />
@@ -112,11 +132,15 @@ type TFn = ReturnType<typeof useTranslation>['t'];
 function BaseClassGrid({
   orgId,
   baseClasses,
+  cloningId,
+  onClone,
   onSummon,
   t,
 }: {
   readonly orgId: string;
   readonly baseClasses: readonly BaseClass[];
+  readonly cloningId: string | null;
+  readonly onClone: (baseClass: BaseClass) => void;
   readonly onSummon: (slug: string) => void;
   readonly t: TFn;
 }) {
@@ -147,14 +171,26 @@ function BaseClassGrid({
               </span>
             ))}
           </div>
-          <button
-            type="button"
-            onClick={() => onSummon(bc.slug)}
-            className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700"
-          >
-            <Plus className="size-3.5" aria-hidden="true" />
-            {t('namespaces.summonFromBaseClass')}
-          </button>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => onSummon(bc.slug)}
+              className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700"
+            >
+              <Plus className="size-3.5" aria-hidden="true" />
+              {t('namespaces.summonFromBaseClass')}
+            </button>
+            <button
+              type="button"
+              disabled={cloningId !== null}
+              onClick={() => onClone(bc)}
+              data-testid={`base-class-clone-${bc.id}`}
+              className="inline-flex items-center gap-1 text-sm font-medium text-slate-600 hover:text-slate-900 disabled:opacity-50"
+            >
+              <Copy className="size-3.5" aria-hidden="true" />
+              {cloningId === bc.id ? t('clone.cloning') : t('clone.baseClass')}
+            </button>
+          </div>
         </article>
       ))}
     </div>

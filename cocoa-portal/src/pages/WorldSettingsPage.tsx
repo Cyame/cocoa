@@ -1,9 +1,10 @@
-import { AlertCircle, LoaderCircle, Settings } from 'lucide-react';
+import { AlertCircle, Copy, LoaderCircle, Settings } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router';
+import { useNavigate, useParams } from 'react-router';
 import { ApiError, api } from '@/lib/api';
 import { fetchMe } from '@/lib/api/auth';
+import { cloneOrganization } from '@/lib/api/clone';
 import { fetchOrganization } from '@/lib/api/organizations';
 import type { Organization, OrgIdentity } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -11,16 +12,10 @@ import { OrganizationProvidersPanel } from '@/pages/organization/OrganizationPro
 import { OrganizationWorldPanel } from '@/pages/organization/OrganizationWorldPanels';
 import { useSessionStore } from '@/stores/session';
 
-type OrgWithProxy = Organization & {
-  readonly proxy_host: string | null;
-  readonly proxy_port: number | null;
-  readonly proxy_username: string | null;
-  readonly proxy_password: string | null;
-};
-
 export default function WorldSettingsPage() {
   const { t } = useTranslation();
   const { orgId } = useParams<{ orgId: string }>();
+  const navigate = useNavigate();
   const user = useSessionStore((state) => state.user);
   const isSuperAdmin = user?.is_super_admin ?? false;
   // H7: tenant gating reads org_identity.atoms from GET /auth/me (same pattern
@@ -29,6 +24,8 @@ export default function WorldSettingsPage() {
   const [orgIdentity, setOrgIdentity] = useState<OrgIdentity | null>(null);
   const canManageWorld =
     isSuperAdmin || (orgIdentity?.atoms.includes('can_manage_organization') ?? false);
+  const canCloneWorld =
+    isSuperAdmin || (orgIdentity?.atoms.includes('can_clone_organization') ?? false);
 
   useEffect(() => {
     if (orgId === undefined) {
@@ -48,7 +45,7 @@ export default function WorldSettingsPage() {
     };
   }, [orgId]);
 
-  const [org, setOrg] = useState<OrgWithProxy | null>(null);
+  const [org, setOrg] = useState<Organization | null>(null);
   const [useProxy, setUseProxy] = useState(false);
   const [proxyHost, setProxyHost] = useState('');
   const [proxyPort, setProxyPort] = useState('');
@@ -65,13 +62,12 @@ export default function WorldSettingsPage() {
     setErrorMessage(null);
     try {
       const data = await fetchOrganization(orgId);
-      const proxy = data as OrgWithProxy;
-      setOrg(proxy);
-      setUseProxy(proxy.use_proxy);
-      setProxyHost(proxy.proxy_host ?? '');
-      setProxyPort(proxy.proxy_port !== null ? String(proxy.proxy_port) : '');
-      setProxyUsername(proxy.proxy_username ?? '');
-      setProxyPassword(proxy.proxy_password ?? '');
+      setOrg(data);
+      setUseProxy(data.use_proxy);
+      setProxyHost(data.proxy_host ?? '');
+      setProxyPort(data.proxy_port !== null ? String(data.proxy_port) : '');
+      setProxyUsername(data.proxy_username ?? '');
+      setProxyPassword(data.proxy_password ?? '');
     } catch (error) {
       setErrorMessage(error instanceof ApiError ? error.message : t('errors.network'));
     } finally {
@@ -83,13 +79,30 @@ export default function WorldSettingsPage() {
     void load();
   }, [load]);
 
+  async function handleCloneWorld() {
+    if (!canCloneWorld || orgId === undefined || org === null) return;
+    const ok = window.confirm(t('clone.confirmOrganization', { name: org.name }));
+    if (!ok) return;
+    setBusy(true);
+    setErrorMessage(null);
+    setNotice(null);
+    try {
+      await cloneOrganization(orgId);
+      navigate('/orgs/picker');
+    } catch (error) {
+      setErrorMessage(error instanceof ApiError ? error.message : t('clone.error'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function handleSaveProxy() {
     if (!canManageWorld || orgId === undefined) return;
     setBusy(true);
     setErrorMessage(null);
     setNotice(null);
     try {
-      const next = await api<OrgWithProxy>(`/organizations/${encodeURIComponent(orgId)}`, {
+      const next = await api<Organization>(`/organizations/${encodeURIComponent(orgId)}`, {
         method: 'PATCH',
         body: JSON.stringify({
           use_proxy: useProxy,
@@ -245,6 +258,29 @@ export default function WorldSettingsPage() {
         ) : null}
 
         <OrganizationProvidersPanel canWrite={canManageWorld} orgId={orgId} />
+
+        {canCloneWorld && org !== null ? (
+          <section className="max-w-xl space-y-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="text-base font-semibold text-slate-900">{t('clone.organization')}</h2>
+            <p className="text-sm text-slate-500">{t('clone.instancesNotCopied')}</p>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void handleCloneWorld()}
+                data-testid="clone-organization"
+                className={cn(
+                  'inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white',
+                  'px-3 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50',
+                  'disabled:opacity-60',
+                )}
+              >
+                <Copy className="size-4" aria-hidden="true" />
+                {busy ? t('clone.cloning') : t('clone.organization')}
+              </button>
+            </div>
+          </section>
+        ) : null}
       </div>
     </section>
   );

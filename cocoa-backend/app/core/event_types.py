@@ -93,3 +93,13 @@ LEARNING_CAPABILITY_COMBINED = "learning.capability_combined"
 # Plural form distinct from the lifecycle INSTANCE_RESTARTED above; this
 # is the operator-initiated batch re-sync event payload.
 INSTANCE_BATCH_RESTARTED = "instance.batch_restarted"
+
+# ---------------------------------------------------------------------------
+# Clone operations (v4.4)
+# ---------------------------------------------------------------------------
+
+BASE_CLASS_CLONED = "base_class.cloned"
+ENTITY_CLONED = "entity.cloned"
+ORGANIZATION_CLONED = "organization.cloned"
+WORKSPACE_CLONED = "workspace.cloned"
+WORKSPACE_CLONE_PASSAGE_DROPPED = "workspace.clone_passage_dropped"

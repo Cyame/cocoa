@@ -1,5 +1,8 @@
 import { api } from '@/lib/api';
+import type { Organization } from '@/lib/types';
 import { getCurrentOrgId } from '@/stores/session';
+
+export type { Organization };
 
 /**
  * Org-scoped provider lanes live at /organizations/{org_id}/providers...
@@ -10,19 +13,6 @@ import { getCurrentOrgId } from '@/stores/session';
 function orgSegment(orgId?: string): string {
   return encodeURIComponent(orgId ?? getCurrentOrgId() ?? 'default');
 }
-
-export type Organization = {
-  readonly id: string;
-  readonly slug: string;
-  readonly name: string;
-  readonly description: string | null;
-  readonly system_hub_provider_id: string | null;
-  readonly system_hub_model: string | null;
-  readonly cerebellum_default_provider_id: string | null;
-  readonly cerebellum_default_model: string | null;
-  readonly created_at: string;
-  readonly updated_at: string | null;
-};
 
 export type OrganizationProvider = {
   readonly id: string;

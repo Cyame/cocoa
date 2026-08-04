@@ -1,8 +1,9 @@
-import { AlertCircle, Building2, FlaskConical, LoaderCircle, Sparkles } from 'lucide-react';
+import { AlertCircle, Building2, Copy, FlaskConical, LoaderCircle, Sparkles } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Navigate, useParams } from 'react-router';
 import { ApiError, api } from '@/lib/api';
+import { cloneEntity } from '@/lib/api/clone';
 import type { Entity } from '@/lib/types';
 import { useEntityModalStore } from '@/stores/entityModalStore';
 import { useOnboardingModalStore } from '@/stores/onboardingModalStore';
@@ -23,6 +24,7 @@ export default function NamespaceEntitiesPage() {
   const [isUnauthorized, setIsUnauthorized] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [selectedEntityId, setSelectedEntityId] = useState<string | null>(null);
+  const [cloningId, setCloningId] = useState<string | null>(null);
 
   const openOnboarding = useOnboardingModalStore((state) => state.open);
   const openEntityModal = useEntityModalStore((state) => state.open);
@@ -54,6 +56,22 @@ export default function NamespaceEntitiesPage() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  const handleClone = useCallback(
+    async (entity: Entity) => {
+      setCloningId(entity.id);
+      setErrorMessage(null);
+      try {
+        await cloneEntity(entity.id);
+        await refresh();
+      } catch (error) {
+        setErrorMessage(error instanceof ApiError ? error.message : t('clone.error'));
+      } finally {
+        setCloningId(null);
+      }
+    },
+    [refresh, t],
+  );
 
   if (isUnauthorized) {
     return <Navigate to="/login" replace />;
@@ -117,7 +135,9 @@ export default function NamespaceEntitiesPage() {
         <EntitiesList
           entities={entities}
           selectedId={selectedEntityId}
+          cloningId={cloningId}
           onSelect={setSelectedEntityId}
+          onClone={(entity) => void handleClone(entity)}
           onOpen={(id) => openEntityModal(id)}
           onOpenDistill={(id) => openEntityModal(id, 'distill')}
           t={t}
@@ -132,14 +152,18 @@ type TFn = ReturnType<typeof useTranslation>['t'];
 function EntitiesList({
   entities,
   selectedId,
+  cloningId,
   onSelect,
+  onClone,
   onOpen,
   onOpenDistill,
   t,
 }: {
   readonly entities: readonly Entity[];
   readonly selectedId: string | null;
+  readonly cloningId: string | null;
   readonly onSelect: (id: string) => void;
+  readonly onClone: (entity: Entity) => void;
   readonly onOpen: (id: string) => void;
   readonly onOpenDistill: (id: string) => void;
   readonly t: TFn;
@@ -200,6 +224,19 @@ function EntitiesList({
                   >
                     <FlaskConical className="size-3.5" aria-hidden="true" />
                     {t('transmuteModal.open')}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={cloningId !== null}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onClone(entity);
+                    }}
+                    className="inline-flex items-center gap-1 text-slate-600 hover:text-slate-900 disabled:opacity-50"
+                    data-testid={`entity-clone-${entity.id}`}
+                  >
+                    <Copy className="size-3.5" aria-hidden="true" />
+                    {cloningId === entity.id ? t('clone.cloning') : t('clone.entity')}
                   </button>
                 </div>
               </td>

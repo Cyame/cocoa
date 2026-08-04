@@ -82,6 +82,18 @@
     "emptyMembersDetail": "Invite or add members so they can collaborate in this world.",
     "recentNamespacesTitle": "Recent namespaces"
   },
+  "clone": {
+    "baseClass": "Clone base class",
+    "entity": "Clone entity",
+    "organization": "Clone world",
+    "workspace": "Clone workspace",
+    "cloning": "Cloning…",
+    "confirmOrganization": "Clone world \"{{name}}\"? Namespaces, workspace structure, and base classes are copied; member contracts are not.",
+    "confirmWorkspace": "Clone workspace \"{{name}}\"? Only awakened members and passages between them are copied.",
+    "instancesNotCopied": "Avatars (instances) are not copied.",
+    "success": "Clone completed.",
+    "error": "Clone failed. Please try again."
+  },
   "worldMembers": {
     "title": "World contracts",
     "searchPlaceholder": "Search users by username or email",

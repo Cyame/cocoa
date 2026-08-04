@@ -82,6 +82,18 @@
     "emptyMembersDetail": "邀请或添加成员，让他们一起在这个世界协作。",
     "recentNamespacesTitle": "最近次元"
   },
+  "clone": {
+    "baseClass": "克隆神职",
+    "entity": "克隆眷族",
+    "organization": "克隆世界",
+    "workspace": "克隆空间",
+    "cloning": "克隆中…",
+    "confirmOrganization": "克隆世界「{{name}}」？将复制次元、空间结构与神职，但不会复制任何成员契印。",
+    "confirmWorkspace": "克隆空间「{{name}}」？仅复制觉醒者及他们之间的通道。",
+    "instancesNotCopied": "化身不会被复制。",
+    "success": "克隆完成。",
+    "error": "克隆失败，请重试。"
+  },
   "worldMembers": {
     "title": "世界契印",
     "searchPlaceholder": "按用户名或邮箱搜索用户",
