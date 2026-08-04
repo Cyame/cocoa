@@ -5,7 +5,13 @@ import type { EntityDetail } from '@/lib/api/entities';
 import type { MemoryKind } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
-const KIND_ORDER: readonly MemoryKind[] = ['experience', 'lesson', 'decision', 'problem'];
+const KIND_ORDER: readonly MemoryKind[] = [
+  'experience',
+  'lesson',
+  'decision',
+  'problem',
+  'notepad',
+];
 
 type TransmuteModalProps = {
   readonly entity: EntityDetail;

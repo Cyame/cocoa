@@ -17,8 +17,10 @@ from pydantic import BaseModel, Field, field_validator
 # Pattern: lowercase-start, then any number of lowercase letters, digits, or hyphens.
 _SLUG_PATTERN = re.compile(r"^[a-z][a-z0-9-]*$")
 
-# Recognised memory kinds in the system.
-_VALID_MEMORY_KINDS = frozenset({"experience", "lesson", "decision", "problem"})
+# Recognised memory kinds in the system (v4.6: notepad 与 Memory 合一).
+_VALID_MEMORY_KINDS = frozenset(
+    {"experience", "lesson", "decision", "problem", "notepad"}
+)
 
 
 # ---------------------------------------------------------------------------
@@ -92,13 +94,15 @@ class AggregatedMemoryCount(BaseModel):
         lesson: Number of ``lesson`` memories.
         decision: Number of ``decision`` memories.
         problem: Number of ``problem`` memories.
-        total: Sum of all four counts.
+        notepad: Number of ``notepad`` memories (v4.6 Memory∪Notepad).
+        total: Sum of all kind counts.
     """
 
     experience: int = Field(default=0, ge=0)
     lesson: int = Field(default=0, ge=0)
     decision: int = Field(default=0, ge=0)
     problem: int = Field(default=0, ge=0)
+    notepad: int = Field(default=0, ge=0)
     total: int = Field(default=0, ge=0)
 
 
@@ -201,8 +205,10 @@ class DistillResultOut(BaseModel):
 # Phase-15f capability lifecycle (PRD §13.6.3–§13.6.5)
 # ---------------------------------------------------------------------------
 
-# Recognised 4 memory kinds — same set as the existing DistillRequest.
-_VALID_MEMORY_KINDS_LIFE = frozenset({"experience", "lesson", "decision", "problem"})
+# Recognised 5 memory kinds — same set as the existing DistillRequest.
+_VALID_MEMORY_KINDS_LIFE = frozenset(
+    {"experience", "lesson", "decision", "problem", "notepad"}
+)
 
 
 class ReapRequest(BaseModel):
@@ -385,6 +391,15 @@ class CombineRequest(BaseModel):
         default=None,
         description="Optional free-form tags for filtering.",
     )
+    # v4.6 §6.4: 组合后按产品选择绑定层（可同时挂 Entity + BaseClass）。
+    entity_id: str | None = Field(
+        default=None,
+        description="Optional Entity to bind the new AiGene to (entity_ai_genes junction).",
+    )
+    base_class_id: str | None = Field(
+        default=None,
+        description="Optional BaseClass to bind the new AiGene to (base_class_ai_genes junction).",
+    )
     snapshot_only: bool = Field(
         default=False,
         description="If true, return preview without writing.",
@@ -398,3 +413,5 @@ class CombineResultOut(BaseModel):
     new_gene_slug: str
     referenced_capabilities: list[str]
     manifest_preview: dict
+    entity_id: str | None = None
+    base_class_id: str | None = None

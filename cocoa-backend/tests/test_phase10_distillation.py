@@ -152,7 +152,8 @@ class TestAggregatingDistiller:
         assert result.aggregated_memory.lesson == 3
         assert result.aggregated_memory.decision == 3
         assert result.aggregated_memory.problem == 3
-        assert result.aggregated_memory.total == 12
+        assert result.aggregated_memory.notepad == 3
+        assert result.aggregated_memory.total == 15
 
     async def test_kind_filter_respects_filter(
         self, session: AsyncSession, entity_factory

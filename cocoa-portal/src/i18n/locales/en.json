@@ -531,6 +531,7 @@
     "lesson": "Lesson",
     "decision": "Decision",
     "problem": "Problem",
+    "notepad": "Notepad",
     "distillHeading": "Distill a skill",
     "skillSlugLabel": "Skill slug",
     "skillSlugPlaceholder": "kebab-case-skill-name",

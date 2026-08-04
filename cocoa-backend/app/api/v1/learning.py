@@ -24,11 +24,11 @@ from app.api.deps import DB, CurrentUserDep, XOrgIdHeader
 from app.core.distillation import AggregatingDistiller, DistillationError
 from app.core.errors import ConflictError, NotFoundError, ValidationError
 from app.core.event_types import (
-    LEARNING_CAPABILITY_COMBINED,
-    LEARNING_DISTILL_TRANSMUTED,
+    LEARNING_COMPOSED,
     LEARNING_DISTILLATION_COMPLETED,
-    LEARNING_PROMOTE_COMPLETED,
-    LEARNING_REAP_COMPLETED,
+    LEARNING_PROMOTED,
+    LEARNING_REAPED,
+    LEARNING_TRANSMUTED,
 )
 from app.core.events import emit
 from app.core.migration_hash import (
@@ -156,6 +156,7 @@ async def get_memory_summary(
         "lesson": 0,
         "decision": 0,
         "problem": 0,
+        "notepad": 0,
     }
     for row in count_result:
         kind_counter[row[0]] = row[1]
@@ -166,6 +167,7 @@ async def get_memory_summary(
         lesson=kind_counter["lesson"],
         decision=kind_counter["decision"],
         problem=kind_counter["problem"],
+        notepad=kind_counter["notepad"],
         total=total,
     )
 
@@ -314,6 +316,7 @@ async def distill_entity(
                 "lesson": result.aggregated_memory.lesson,
                 "decision": result.aggregated_memory.decision,
                 "problem": result.aggregated_memory.problem,
+                "notepad": result.aggregated_memory.notepad,
                 "total": result.aggregated_memory.total,
             },
         },
@@ -529,7 +532,7 @@ async def reap_instance(
 
     # 6. Emit event within transaction.
     await emit(
-        LEARNING_REAP_COMPLETED,
+        LEARNING_REAPED,
         actor_type="user",
         actor_id=current_user.user_id,
         resource_type="instance",
@@ -735,7 +738,7 @@ async def promote_entity(
         new_entity.migration_hash = new_migration_hash
 
         await emit(
-            LEARNING_PROMOTE_COMPLETED,
+            LEARNING_PROMOTED,
             actor_type="user",
             actor_id=current_user.user_id,
             resource_type="entity",
@@ -806,7 +809,7 @@ async def promote_entity(
 
     # 8. Emit event.
     await emit(
-        LEARNING_PROMOTE_COMPLETED,
+        LEARNING_PROMOTED,
         actor_type="user",
         actor_id=current_user.user_id,
         resource_type="entity",
@@ -965,7 +968,7 @@ async def transmute_entity(
 
     # 5. Emit event.
     await emit(
-        LEARNING_DISTILL_TRANSMUTED,
+        LEARNING_TRANSMUTED,
         actor_type="user",
         actor_id=current_user.user_id,
         resource_type="base_class",
@@ -1076,9 +1079,38 @@ async def combine_capabilities(
     db.add(new_gene)
     await db.flush()
 
-    # 6. Emit event.
+    # 6. v4.6 §6.4: 组合后按产品选择绑定层 — entity_ai_genes / base_class_ai_genes。
+    from app.core.capabilities import (
+        attach_base_class_ai_gene,
+        attach_entity_ai_gene,
+    )
+
+    if body.entity_id:
+        target = await db.get(Entity, body.entity_id)
+        if target is None or target.deleted_at is not None:
+            raise NotFoundError(
+                "entity.not_found",
+                "errors.entity.not_found",
+                f"Entity {body.entity_id!r} not found",
+            )
+        await attach_entity_ai_gene(
+            db, entity_id=body.entity_id, ai_gene_id=new_gene.id
+        )
+    if body.base_class_id:
+        target = await db.get(BaseClass, body.base_class_id)
+        if target is None or target.deleted_at is not None:
+            raise NotFoundError(
+                "base_class.not_found",
+                "errors.base_class.not_found",
+                f"BaseClass {body.base_class_id!r} not found",
+            )
+        await attach_base_class_ai_gene(
+            db, base_class_id=body.base_class_id, ai_gene_id=new_gene.id
+        )
+
+    # 7. Emit event.
     await emit(
-        LEARNING_CAPABILITY_COMBINED,
+        LEARNING_COMPOSED,
         actor_type="user",
         actor_id=current_user.user_id,
         resource_type="ai_gene",
@@ -1086,6 +1118,8 @@ async def combine_capabilities(
         payload={
             "gene_slug": body.gene_slug,
             "referenced_capabilities": list(body.capability_names),
+            "entity_id": body.entity_id,
+            "base_class_id": body.base_class_id,
         },
         session=db,
     )
@@ -1098,4 +1132,6 @@ async def combine_capabilities(
         new_gene_slug=new_gene.slug,
         referenced_capabilities=list(body.capability_names),
         manifest_preview=manifest,
+        entity_id=body.entity_id,
+        base_class_id=body.base_class_id,
     )

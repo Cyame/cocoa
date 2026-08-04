@@ -6,14 +6,14 @@ from app.models.memory import Memory, MemoryKind
 class TestMemoryKind:
     """Verify the MemoryKind enum."""
 
-    def test_has_four_values(self) -> None:
-        """MemoryKind must contain exactly 4 kinds."""
+    def test_has_five_values(self) -> None:
+        """MemoryKind must contain exactly 5 kinds (v4.6 adds notepad)."""
         members = list(MemoryKind)
-        assert len(members) == 4
+        assert len(members) == 5
 
     def test_expected_values_present(self) -> None:
         """All required memory kinds must be present."""
-        expected = {"experience", "lesson", "decision", "problem"}
+        expected = {"experience", "lesson", "decision", "problem", "notepad"}
         actual = {m.value for m in MemoryKind}
         assert actual == expected
 

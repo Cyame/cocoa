@@ -1,5 +1,6 @@
 > **Pre-v4 reference**: Conflict with `.omo/evidence/audit-product-design.md` → audit wins. Awaiting v4 PRD rewrite.
 >
+> **v4.6 旁注**（勿把本归档文当 SoT）：Learning 写回（promote/transmute/reap/compose 只写 junction）、Memory∪Notepad 合一（`MemoryKind.notepad`）、H4 entity_id 解析、`loop_state.notepad_refs` 存量迁移与学习审计事件对齐 —— 契约见 `.omo/evidence/v4-6-learning-writeback.md`，实现见 `.omo/plans/v4-6-learning-writeback.md`。
 
 # Cocoa Learning System
 

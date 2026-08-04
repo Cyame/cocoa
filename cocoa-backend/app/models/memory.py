@@ -14,6 +14,8 @@ class MemoryKind(str, Enum):
     lesson = "lesson"
     decision = "decision"
     problem = "problem"
+    # v4.6: Harness notepad 与 Memory 合一（audit-product-design.md §八）。
+    notepad = "notepad"
 
 
 class Memory(BaseModel, Base):

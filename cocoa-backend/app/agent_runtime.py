@@ -128,6 +128,41 @@ async def _write_checkpoint_memory(instance_id: str, summary: str) -> None:
         await session.commit()
 
 
+async def _write_notepad_memory(
+    instance_id: str, plan_slug: str, notepad_name: str, entry: str
+) -> None:
+    """v4.6 H4: mirror a notepad append as a DB ``Memory(kind=notepad)`` row.
+
+    The DB Memory is the product truth; the ``.omo/notepads/`` file is a
+    mirror. Resolves ``entity_id`` from the Instance; never writes
+    ``entity_id=NULL`` — missing instance/entity skips with a log line.
+    """
+    from app.models.memory import Memory, MemoryKind
+
+    async with get_session_factory()() as session:
+        inst = await session.get(Instance, instance_id)
+        if inst is None or inst.deleted_at is not None:
+            logger.warning(
+                "Notepad memory write skipped: instance missing",
+                instance_id=instance_id,
+            )
+            return
+        if not inst.entity_id:
+            logger.warning(
+                "Notepad memory write skipped: instance has no entity_id",
+                instance_id=instance_id,
+            )
+            return
+        session.add(Memory(
+            entity_id=inst.entity_id,
+            kind=MemoryKind.notepad.value,
+            key=f"notepad/{plan_slug}/{notepad_name}",
+            content=entry[:2000],
+            source_instance_id=instance_id,
+        ))
+        await session.commit()
+
+
 async def _resolve_workspace_path(instance_id: str) -> str | None:
     """Read ``Instance.workspace_path`` from DB."""
     async with get_session_factory()() as session:
@@ -276,6 +311,17 @@ async def run_agent_loop(instance_id: str) -> None:
                 except Exception:
                     logger.opt(exception=True).warning(
                         "Notepad append failed", instance_id=instance_id, iteration=i,
+                    )
+
+            if not k8s_mode:
+                try:
+                    await _write_notepad_memory(
+                        instance_id, "p14a-checkpoint", "learnings",
+                        f"Checkpoint {i}: {response.content[:120]}",
+                    )
+                except Exception:
+                    logger.opt(exception=True).warning(
+                        "Notepad memory write failed", instance_id=instance_id, iteration=i,
                     )
 
             await _emit(HARNESS_CHECKPOINT, {

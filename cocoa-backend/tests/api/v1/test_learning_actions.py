@@ -295,7 +295,7 @@ class TestReap:
         assert resp.status_code == 200, resp.text
 
         ev_result = await session.execute(
-            select(Event).where(Event.type == "learning.reap_completed")
+            select(Event).where(Event.type == "learning.reaped")
         )
         events = list(ev_result.scalars().all())
         assert len(events) == 1
@@ -566,7 +566,7 @@ class TestPromote:
         assert resp.status_code == 200, resp.text
 
         ev_result = await session.execute(
-            select(Event).where(Event.type == "learning.promote_completed")
+            select(Event).where(Event.type == "learning.promoted")
         )
         events = list(ev_result.scalars().all())
         assert len(events) == 1
@@ -863,7 +863,7 @@ class TestCombine:
         assert resp.status_code == 201, resp.text
 
         ev_result = await session.execute(
-            select(Event).where(Event.type == "learning.capability_combined")
+            select(Event).where(Event.type == "learning.composed")
         )
         events = list(ev_result.scalars().all())
         assert len(events) == 1

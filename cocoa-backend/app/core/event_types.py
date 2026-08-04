@@ -78,20 +78,31 @@ INSTANCE_FAILED = "instance.failed"
 INSTANCE_DELETED = "instance.deleted"
 
 # ---------------------------------------------------------------------------
-# Learning (emit points in P10)
+# Learning (emit points in P10 / v4.6)
 # ---------------------------------------------------------------------------
 
+# Legacy distill command (directive router `/distill`) — kept for the
+# historical slash-command flow; the v4.6 lifecycle events below are the
+# canonical audit set (v4-6-learning-writeback.md L3).
 LEARNING_DISTILLATION_COMPLETED = "learning.distillation_completed"
 
-# Phase-15f capability lifecycle (PRD §13.6.3–§13.6.5)
+# v4.6 learning write-back — canonical past-tense audit events.
 # reap:        Memory → Capability (instance-private, market entry)
 # promote:     Instance cap → Entity shared (+ market entry)
 # transmute:   Entity → BaseClass (new 神职)
-# combine:     N Capabilities → 1 Gene (L2 packaging)
-LEARNING_REAP_COMPLETED = "learning.reap_completed"
-LEARNING_PROMOTE_COMPLETED = "learning.promote_completed"
-LEARNING_DISTILL_TRANSMUTED = "learning.distill_transmuted"
-LEARNING_CAPABILITY_COMBINED = "learning.capability_combined"
+# compose:     N Capabilities → 1 Gene (L2 packaging)
+LEARNING_REAPED = "learning.reaped"
+LEARNING_PROMOTED = "learning.promoted"
+LEARNING_TRANSMUTED = "learning.transmuted"
+LEARNING_COMPOSED = "learning.composed"
+
+# v4.6 存量迁移：notepad_refs 指向的文件不可读，content 回落为路径字符串。
+LEARNING_NOTEPAD_MIGRATION_ORPHAN = "learning.notepad_migration_orphan"
+
+# v4.7 inject 发射点（本切片仅声明常量，emit 在 v4.7 harness-collab 落地）——
+# 注入入口与出口事件成对（audit-product-design.md §14）。
+LEARNING_CAPABILITY_INJECTED = "learning.capability_injected"
+LEARNING_GENE_INJECTED = "learning.gene_injected"
 
 # Phase-15f T4: instance re-sync after promote (PRD §13.6.7).
 # Plural form distinct from the lifecycle INSTANCE_RESTARTED above; this

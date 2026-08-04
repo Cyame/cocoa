@@ -165,7 +165,7 @@ export type Event = {
   readonly created_at: string;
 };
 
-export type MemoryKind = 'experience' | 'lesson' | 'decision' | 'problem';
+export type MemoryKind = 'experience' | 'lesson' | 'decision' | 'problem' | 'notepad';
 
 export type MemoryEntry = {
   readonly id: string;
@@ -259,6 +259,7 @@ export type AggregatedMemoryCount = {
   readonly lesson: number;
   readonly decision: number;
   readonly problem: number;
+  readonly notepad: number;
   readonly total: number;
 };
 

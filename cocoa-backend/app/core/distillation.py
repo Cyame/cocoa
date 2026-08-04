@@ -25,8 +25,8 @@ from typing import Any, Protocol
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.entity import Entity
 from app.models.base_class import BaseClass
+from app.models.entity import Entity
 from app.models.memory import Memory, MemoryKind
 from app.schemas.learning import AggregatedMemoryCount, DistillRequest, SkillManifestPreview
 
@@ -200,17 +200,19 @@ class AggregatingDistiller:
             "lesson": 0,
             "decision": 0,
             "problem": 0,
+            "notepad": 0,
         }
         for e in entries:
             if e.kind in kind_counts:
                 kind_counts[e.kind] += 1
 
-        total = kind_counts["experience"] + kind_counts["lesson"] + kind_counts["decision"] + kind_counts["problem"]
+        total = sum(kind_counts.values())
         aggregated = AggregatedMemoryCount(
             experience=kind_counts["experience"],
             lesson=kind_counts["lesson"],
             decision=kind_counts["decision"],
             problem=kind_counts["problem"],
+            notepad=kind_counts["notepad"],
             total=total,
         )
 
