@@ -991,6 +991,37 @@
     "manualNotes": "手动备注",
     "noManualNotes": "暂无手动备注。"
   },
+  "instanceDetail": {
+    "expand": "展开注入与上报事件",
+    "collapse": "收起注入与上报事件",
+    "events": {
+      "title": "最近注入 / 上报事件",
+      "empty": "暂无注入或上报事件。",
+      "loadFailed": "事件加载失败。"
+    },
+    "inject": {
+      "action": "注入",
+      "title": "注入到「{{name}}」",
+      "kind": "类型",
+      "kinds": {
+        "collab_inject": "协作注入",
+        "gene_inject": "基因注入",
+        "capability_inject": "能力注入",
+        "cerebellum_route": "小脑路由"
+      },
+      "deliveryMode": "投递模式",
+      "deliveryModes": {
+        "notify": "通知",
+        "soft_inject": "软注入",
+        "wake": "唤醒"
+      },
+      "tldr": "摘要（可选）",
+      "tldrPlaceholder": "给迷失者的简短摘要",
+      "submit": "发送注入",
+      "success": "注入已入队。",
+      "failed": "注入失败，请重试。"
+    }
+  },
   "ide": {
     "backToNamespaces": "返回次元枢纽",
     "sidebar": {

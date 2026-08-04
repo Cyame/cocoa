@@ -138,6 +138,33 @@ export type Instance = {
 
 export type LoopStatus = 'idle' | 'running' | 'paused' | 'interrupted' | 'completed' | 'failed';
 
+/**
+ * v4.7 harness-collab: payload kinds accepted by
+ * ``POST /api/v1/instances/{id}/inject`` (V47-5).
+ * ``file_touch`` exists in the plan but is out of this slice.
+ */
+export type InjectKind = 'collab_inject' | 'gene_inject' | 'capability_inject' | 'cerebellum_route';
+
+/** v4.7 delivery triad (plan §9): notify / soft_inject / wake. */
+export type InjectDeliveryMode = 'notify' | 'soft_inject' | 'wake';
+
+/** Typed handoff content reference (hub / instance scope). */
+export type InjectContentRef = {
+  readonly scope: string;
+  readonly path: string;
+  readonly label?: string | null;
+};
+
+/** Operator inject body for ``POST /api/v1/instances/{id}/inject``. */
+export type InjectPayload = {
+  readonly kind: InjectKind;
+  readonly delivery_mode: InjectDeliveryMode;
+  readonly tldr?: string | null;
+  readonly content_refs?: readonly InjectContentRef[];
+  readonly gene_ids?: readonly string[];
+  readonly capability_ids?: readonly string[];
+};
+
 export type InstanceLoopState = {
   readonly instance_id: string;
   readonly loop_status: LoopStatus;

@@ -1,5 +1,5 @@
 import { api } from '@/lib/api';
-import type { Instance, Membership } from '@/lib/types';
+import type { InjectPayload, Instance, Membership } from '@/lib/types';
 
 /**
  * Phase-15f T3 / T6: response shape for
@@ -115,6 +115,28 @@ export function restartInstance(
 export function deleteInstanceById(instanceId: string): Promise<void> {
   return api<void>(`/instances/${encodeURIComponent(instanceId)}`, {
     method: 'DELETE',
+  });
+}
+
+/**
+ * v4.7 harness-collab (V47-5): enqueue an inject payload for a live
+ * instance. The backend resolves the effective delivery mode
+ * (running -> soft_inject, idle -> wake) and emits
+ * ``harness.inject_requested`` (+ applied/failed) audit events.
+ */
+export type InjectEnqueueResult = {
+  readonly queue_id?: string | null;
+  readonly status?: string | null;
+  readonly delivery_mode?: string | null;
+};
+
+export function injectInstance(
+  instanceId: string,
+  payload: InjectPayload,
+): Promise<InjectEnqueueResult> {
+  return api<InjectEnqueueResult>(`/instances/${encodeURIComponent(instanceId)}/inject`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
   });
 }
 

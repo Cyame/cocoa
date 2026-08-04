@@ -1155,6 +1155,37 @@
     "manualNotes": "Manual notes",
     "noManualNotes": "No manual notes recorded."
   },
+  "instanceDetail": {
+    "expand": "Show inject and report events",
+    "collapse": "Hide inject and report events",
+    "events": {
+      "title": "Recent inject / report events",
+      "empty": "No inject or report events yet.",
+      "loadFailed": "Failed to load events."
+    },
+    "inject": {
+      "action": "Inject",
+      "title": "Inject into {{name}}",
+      "kind": "Kind",
+      "kinds": {
+        "collab_inject": "Collaboration inject",
+        "gene_inject": "Gene inject",
+        "capability_inject": "Capability inject",
+        "cerebellum_route": "Cerebellum route"
+      },
+      "deliveryMode": "Delivery mode",
+      "deliveryModes": {
+        "notify": "Notify",
+        "soft_inject": "Soft inject",
+        "wake": "Wake"
+      },
+      "tldr": "TL;DR (optional)",
+      "tldrPlaceholder": "Short summary for the Lost One",
+      "submit": "Send inject",
+      "success": "Inject enqueued.",
+      "failed": "Inject failed. Please retry."
+    }
+  },
   "ide": {
     "backToNamespaces": "Back to namespaces",
     "sidebar": {

@@ -20,6 +20,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 import IdeShell from '@/components/IdeShell';
+import InstancesPanel from '@/components/InstancesPanel';
 import IntroduceInstanceModal from '@/components/IntroduceInstanceModal';
 import { ModelInputCombobox } from '@/components/ModelInputCombobox';
 import { ApiError, api } from '@/lib/api';
@@ -361,24 +362,17 @@ export default function WorkspaceIdePage() {
           ) : null}
 
           {!isLoading && activeTab === 'instances' ? (
-            <PanelList
+            <InstancesPanel
+              instances={instances}
+              entities={entities}
               emptyTitle={t('workspace.emptyInstancesTitle')}
               emptyDetail={t('workspace.emptyInstancesDetail')}
-              items={instances.map((inst) => {
-                const entity = entities.find((e) => e.id === inst.entity_id);
-                const title = entity?.display_name ?? entity?.name ?? inst.entity_id;
-                return {
-                  id: inst.id,
-                  title,
-                  subtitle: inst.status,
-                  removeLabel: t('workspace.removeLostOne'),
-                  onRemove: () => {
-                    void handleRemoveInstance(inst.id, title);
-                  },
-                };
-              })}
               actionLabel={t('workspace.introduceInstance')}
               onAction={() => setIntroduceOpen(true)}
+              removeLabel={t('workspace.removeLostOne')}
+              onRemove={(instanceId, title) => {
+                void handleRemoveInstance(instanceId, title);
+              }}
             />
           ) : null}
 
