@@ -8,6 +8,18 @@ Semantics (see .omo/plans/v4-4-clone-ops.md):
   both endpoints are awakened); lost instance seats omitted; passages touching
   lost endpoints dropped with workspace.clone_passage_dropped event.
 - Instance: no clone endpoint (permanently closed).
+
+Permission scoping (D10, verified 2026-08-04):
+- BaseClass / Entity / Organization clone routes derive the authorization
+  scope from the SOURCE resource (require_permission with
+  source.organization_id / source.namespace_id / path org_id); the
+  X-Organization-Id header is accepted on the base-class and workspace routes
+  for cross-org context but never overrides the source resource's own
+  ancestry. Entity and organization routes omit the header entirely.
+- Org clone copies only org-scoped BCs (``scope != "system"``); system BCs are
+  global and never cloned. A direct single-BC clone of a system BC preserves
+  ``scope="system"`` — the portal hides system/internal-tagged BCs from the
+  clone button, so that path is API-only.
 """
 
 from __future__ import annotations
@@ -34,16 +46,24 @@ from app.models.central_hub import CentralHub, Vault
 from app.models.entity import Entity
 from app.models.junctions import BaseClassCapability, EntityAiGene, EntityCapability
 from app.models.organization import Namespace, Organization
+from app.models.organization_provider import OrganizationProvider
 from app.models.workspace import Membership, Passage, Workspace
 
 _LARGE_ORG_THRESHOLD = 5000
 _LARGE_ORG_TIMEOUT = "60s"
 
+# All clone target slug columns are String(255). ``-clone-`` + 8 hex chars
+# is a fixed 15-char suffix; the source part is truncated so a generated slug
+# never overflows the column (overflow would surface as a raw DB error instead
+# of the intended slug-taken ConflictError).
+_SLUG_MAX = 255
+
 
 def _new_slug(source_slug: str, override: str | None) -> str:
     if override is not None:
         return override
-    return f"{source_slug}-clone-{uuid.uuid4().hex[:8]}"
+    suffix = f"-clone-{uuid.uuid4().hex[:8]}"
+    return f"{source_slug[: _SLUG_MAX - len(suffix)]}{suffix}"
 
 
 def _new_name(source_name: str, override: str | None) -> str:
@@ -106,6 +126,10 @@ async def clone_entity(db: AsyncSession, *, source_id: str, actor_user_id: str,
     if clash.scalar_one_or_none() is not None:
         raise ConflictError("entity.slug_taken", "errors.entity.slug_taken",
                             f"Entity slug '{new_slug}' is already taken")
+    # is_cerebellum is deliberately forced False here: the cerebellum flag is a
+    # per-namespace singleton (uq_entities_cerebellum_per_ns), and an entity
+    # clone stays in the SOURCE namespace. clone_organization preserves the flag
+    # instead, because its entity copies land in fresh (empty) namespaces.
     new_entity = Entity(namespace_id=source.namespace_id, slug=new_slug,
                         name=_new_name(source.name, name), preset_slug=source.preset_slug,
                         rank=source.rank, display_name=source.display_name,
@@ -155,9 +179,41 @@ async def clone_organization(db: AsyncSession, *, source_id: str, actor_user_id:
     new_org = Organization(slug=new_slug, name=_new_name(source.name, name),
                            description=source.description, use_proxy=source.use_proxy,
                            proxy_host=source.proxy_host, proxy_port=source.proxy_port,
-                           proxy_username=source.proxy_username, proxy_password=source.proxy_password)
+                           proxy_username=source.proxy_username, proxy_password=source.proxy_password,
+                           system_hub_model=source.system_hub_model,
+                           cerebellum_default_model=source.cerebellum_default_model)
     db.add(new_org)
     await db.flush()
+
+    # D4: deep-copy the org's LLM provider bindings. The clone gets its OWN
+    # provider rows (independent copies, never a shared FK into the source
+    # org), and the binding columns point at the copied rows.
+    bound_provider_ids = {
+        pid for pid in (source.system_hub_provider_id, source.cerebellum_default_provider_id)
+        if pid is not None
+    }
+    provider_id_map: dict[str, str] = {}
+    if bound_provider_ids:
+        source_providers = (await db.execute(select(OrganizationProvider).where(
+            OrganizationProvider.id.in_(bound_provider_ids),
+            OrganizationProvider.deleted_at.is_(None)))).scalars().all()
+        for prov in source_providers:
+            new_prov = OrganizationProvider(
+                organization_id=new_org.id, origin=prov.origin,
+                catalog_provider_id=prov.catalog_provider_id, name=prov.name, slug=prov.slug,
+                request_format=prov.request_format, base_url=prov.base_url,
+                api_key_ref=prov.api_key_ref, default_model=prov.default_model,
+                models_allowlist=prov.models_allowlist, verify_ssl=prov.verify_ssl,
+                models_endpoint_mode=prov.models_endpoint_mode,
+                models_base_url=prov.models_base_url, enabled=prov.enabled,
+            )
+            db.add(new_prov)
+            await db.flush()
+            provider_id_map[prov.id] = new_prov.id
+    if source.system_hub_provider_id in provider_id_map:
+        new_org.system_hub_provider_id = provider_id_map[source.system_hub_provider_id]
+    if source.cerebellum_default_provider_id in provider_id_map:
+        new_org.cerebellum_default_provider_id = provider_id_map[source.cerebellum_default_provider_id]
 
     ns_map: dict[str, Namespace] = {}
     for ns in source_ns:
@@ -168,7 +224,14 @@ async def clone_organization(db: AsyncSession, *, source_id: str, actor_user_id:
         ns_map[ns.id] = new_ns
 
     for ws in source_ws:
-        db.add(Workspace(namespace_id=ns_map[ws.namespace_id].id, slug=ws.slug, name=ws.name))
+        new_ws = Workspace(namespace_id=ns_map[ws.namespace_id].id, slug=ws.slug, name=ws.name)
+        db.add(new_ws)
+        await db.flush()
+        # D3: every cloned workspace needs the same 1:1 hub/vault bootstrap
+        # that clone_workspace / create_workspace provide, or the portal
+        # brain tab renders empty for org-cloned workspaces.
+        db.add(CentralHub(workspace_id=new_ws.id))
+        db.add(Vault(workspace_id=new_ws.id))
         await db.flush()
 
     for entity in source_entities:
@@ -188,7 +251,11 @@ async def clone_organization(db: AsyncSession, *, source_id: str, actor_user_id:
         BaseClass.organization_id == source.id, BaseClass.scope != "system",
         BaseClass.deleted_at.is_(None)))).scalars().all()
     for bc in source_bcs:
-        new_ns_id = ns_map[bc.namespace_id].id if bc.namespace_id else None
+        # D2: a BC may reference a namespace not in the source org's active
+        # set (e.g. soft-deleted); degrade to org-level (None) instead of a
+        # raw KeyError -> 500.
+        mapped_ns = ns_map.get(bc.namespace_id) if bc.namespace_id else None
+        new_ns_id = mapped_ns.id if mapped_ns is not None else None
         nbc = BaseClass(slug=_new_slug(bc.slug, None), name=bc.name,
                         display_name=bc.display_name, description=bc.description,
                         manifest=bc.manifest, scope=bc.scope, organization_id=new_org.id,

@@ -141,6 +141,15 @@ class TestCloneBaseClass:
                     BaseClassAiGene.deleted_at.is_(None)
                 ))).scalars().all()
                 assert new_gene_links[0].id != source_gene_links[0].id
+
+                from app.models.event import Event
+
+                events = (await verify.execute(select(Event).where(
+                    Event.type == "base_class.cloned"
+                ))).scalars().all()
+                assert len(events) == 1
+                assert events[0].payload["source_id"] == bc_id
+                assert events[0].payload["new_id"] == new_id
         finally:
             await engine.dispose()
 
@@ -245,6 +254,15 @@ class TestCloneEntity:
                     EntityCapability.entity_id == new_id, EntityCapability.deleted_at.is_(None)
                 ))).scalars().all()
                 assert len(new_caps) == 1
+
+                from app.models.event import Event
+
+                events = (await verify.execute(select(Event).where(
+                    Event.type == "entity.cloned"
+                ))).scalars().all()
+                assert len(events) == 1
+                assert events[0].payload["source_id"] == entity.id
+                assert events[0].payload["new_id"] == new_id
         finally:
             await engine.dispose()
 
@@ -369,6 +387,15 @@ class TestCloneOrganization:
                     Instance.workspace_id == new_ws[0].id, Instance.deleted_at.is_(None)
                 ))).scalars().all()
                 assert new_instances == []
+
+                from app.models.event import Event
+
+                events = (await verify.execute(select(Event).where(
+                    Event.type == "organization.cloned"
+                ))).scalars().all()
+                assert len(events) == 1
+                assert events[0].payload["source_id"] == bundle.org.id
+                assert events[0].payload["new_id"] == new_org_id
         finally:
             await engine.dispose()
 
@@ -567,6 +594,214 @@ class TestCloneOrganization:
         assert resp.status_code == 403
         assert resp.json()["error_code"] == "permission.denied"
 
+    @pytest.mark.asyncio
+    async def test_clone_copies_org_base_classes_with_junctions(
+        self, client: TestClient, session: AsyncSession, create_org_bundle, db_url: str
+    ) -> None:
+        from app.models.ai_gene import AiGene
+        from app.models.base_class import BaseClass
+        from app.models.capability_market import CapabilityMarketEntry
+
+        _register(client, f"og-bc-sa-{_uid()}", f"og-bc-sa-{_uid()}@t.co")
+        token, member_id = _register(client, f"og-bc-m-{_uid()}", f"og-bc-m-{_uid()}@t.co")
+        bundle = await create_org_bundle(
+            member_id, atoms=("can_clone_organization", "can_manage_organization")
+        )
+        headers = {**_auth(token), "X-Organization-Id": bundle.org.id}
+
+        bc = BaseClass(slug=f"bc-{_uid()}", name="Org BC", scope="org",
+                       organization_id=bundle.org.id)
+        session.add(bc)
+        await session.flush()
+        gene = AiGene(slug=f"gene-{_uid()}", name="G", scope="org", organization_id=bundle.org.id)
+        session.add(gene)
+        await session.flush()
+        cap = CapabilityMarketEntry(
+            name=f"cap-{_uid()}", type="skill", scope="org",
+            organization_id=bundle.org.id, created_via="manual",
+        )
+        session.add(cap)
+        await session.flush()
+        session.add(BaseClassAiGene(base_class_id=bc.id, ai_gene_id=gene.id))
+        session.add(BaseClassCapability(base_class_id=bc.id, capability_id=cap.id))
+        await session.commit()
+
+        resp = client.post(
+            f"/api/v1/organizations/{bundle.org.id}/clone", headers=headers, json={}
+        )
+        assert resp.status_code == 201, resp.text
+        new_org_id = resp.json()["id"]
+
+        engine, factory = await _verify_session(db_url)
+        try:
+            async with factory() as verify:
+                new_bcs = (await verify.execute(select(BaseClass).where(
+                    BaseClass.organization_id == new_org_id,
+                    BaseClass.deleted_at.is_(None),
+                ))).scalars().all()
+                assert len(new_bcs) == 1
+                new_bc = new_bcs[0]
+                assert new_bc.slug != bc.slug
+
+                new_gene_links = (await verify.execute(select(BaseClassAiGene).where(
+                    BaseClassAiGene.base_class_id == new_bc.id,
+                    BaseClassAiGene.deleted_at.is_(None),
+                ))).scalars().all()
+                assert len(new_gene_links) == 1
+                src_gene_links = (await verify.execute(select(BaseClassAiGene).where(
+                    BaseClassAiGene.base_class_id == bc.id,
+                    BaseClassAiGene.deleted_at.is_(None),
+                ))).scalars().all()
+                assert new_gene_links[0].id != src_gene_links[0].id
+                assert new_gene_links[0].ai_gene_id == src_gene_links[0].ai_gene_id
+
+                new_cap_links = (await verify.execute(select(BaseClassCapability).where(
+                    BaseClassCapability.base_class_id == new_bc.id,
+                    BaseClassCapability.deleted_at.is_(None),
+                ))).scalars().all()
+                assert len(new_cap_links) == 1
+        finally:
+            await engine.dispose()
+
+    @pytest.mark.asyncio
+    async def test_clone_large_org_sets_statement_timeout(
+        self, client: TestClient, session: AsyncSession, create_org_bundle,
+        monkeypatch: pytest.MonkeyPatch, db_url: str
+    ) -> None:
+        import app.services.clone as clone_mod
+        from app.core.security import hash_password
+        from app.models.user import User
+
+        _register(client, f"og-to-sa-{_uid()}", f"og-to-sa-{_uid()}@t.co")
+        token, member_id = _register(client, f"og-to-m-{_uid()}", f"og-to-m-{_uid()}@t.co")
+        bundle = await create_org_bundle(
+            member_id, atoms=("can_clone_organization", "can_manage_organization")
+        )
+        headers = {**_auth(token), "X-Organization-Id": bundle.org.id}
+
+        ns = Namespace(org_id=bundle.org.id, slug=f"ns-to-{_uid()}", name="NS")
+        session.add(ns)
+        await session.flush()
+        ws = Workspace(namespace_id=ns.id, slug=f"ws-to-{_uid()}", name="WS")
+        session.add(ws)
+        await session.flush()
+
+        # Lower the threshold so a small org trips the SET LOCAL branch.
+        monkeypatch.setattr(clone_mod, "_LARGE_ORG_THRESHOLD", 1)
+        b_user = User(username=f"og-to-b-{_uid()}", email=f"og-to-b-{_uid()}@t.co",
+                      password_hash=hash_password("p"))
+        session.add(b_user)
+        await session.flush()
+        mem_a = Membership(workspace_id=ws.id, user_id=member_id, posx=0, posy=0)
+        mem_b = Membership(workspace_id=ws.id, user_id=b_user.id, posx=120, posy=0)
+        session.add_all([mem_a, mem_b])
+        await session.flush()
+        ids = sorted([mem_a.id, mem_b.id])
+        session.add(Passage(workspace_id=ws.id, from_membership_id=ids[0],
+                            to_membership_id=ids[1], is_active=True, mode="dual"))
+        await session.commit()
+
+        resp = client.post(
+            f"/api/v1/organizations/{bundle.org.id}/clone", headers=headers, json={}
+        )
+        assert resp.status_code == 201, resp.text
+        new_org_id = resp.json()["id"]
+
+        engine, factory = await _verify_session(db_url)
+        try:
+            async with factory() as verify:
+                new_ws = (await verify.execute(select(Workspace).where(
+                    Workspace.namespace_id.in_(
+                        select(Namespace.id).where(
+                            Namespace.org_id == new_org_id, Namespace.deleted_at.is_(None)
+                        )
+                    ),
+                    Workspace.deleted_at.is_(None),
+                ))).scalars().all()
+                assert len(new_ws) == 1
+        finally:
+            await engine.dispose()
+
+    @pytest.mark.asyncio
+    async def test_clone_deep_copies_provider_bindings(
+        self, client: TestClient, session: AsyncSession, create_org_bundle, db_url: str
+    ) -> None:
+        from app.models.organization_provider import OrganizationProvider
+
+        _register(client, f"og-pv-sa-{_uid()}", f"og-pv-sa-{_uid()}@t.co")
+        token, member_id = _register(client, f"og-pv-m-{_uid()}", f"og-pv-m-{_uid()}@t.co")
+        bundle = await create_org_bundle(
+            member_id, atoms=("can_clone_organization", "can_manage_organization")
+        )
+        headers = {**_auth(token), "X-Organization-Id": bundle.org.id}
+
+        hub_prov = OrganizationProvider(
+            organization_id=bundle.org.id, origin="custom", name="Hub Provider",
+            slug="hub-prov", request_format="completion",
+            base_url="https://hub.example.com", api_key_ref="sk-hub-1",
+            default_model="gpt-4o",
+        )
+        session.add(hub_prov)
+        await session.flush()
+        cereb_prov = OrganizationProvider(
+            organization_id=bundle.org.id, origin="custom", name="Cereb Provider",
+            slug="cereb-prov", request_format="anthropic",
+            base_url="https://cereb.example.com", api_key_ref="sk-cereb-1",
+            default_model="claude-sonnet",
+        )
+        session.add(cereb_prov)
+        await session.flush()
+        bundle.org.system_hub_provider_id = hub_prov.id
+        bundle.org.system_hub_model = "gpt-4o"
+        bundle.org.cerebellum_default_provider_id = cereb_prov.id
+        bundle.org.cerebellum_default_model = "claude-sonnet"
+        bundle.org.use_proxy = True
+        bundle.org.proxy_host = "proxy.example.com"
+        bundle.org.proxy_port = 8080
+        bundle.org.proxy_username = "user"
+        bundle.org.proxy_password = "secret"
+        await session.commit()
+
+        resp = client.post(
+            f"/api/v1/organizations/{bundle.org.id}/clone", headers=headers, json={}
+        )
+        assert resp.status_code == 201, resp.text
+        new_org_id = resp.json()["id"]
+
+        engine, factory = await _verify_session(db_url)
+        try:
+            async with factory() as verify:
+                new_org = await verify.get(Organization, new_org_id)
+                assert new_org is not None
+                assert new_org.system_hub_provider_id is not None
+                assert new_org.system_hub_provider_id != hub_prov.id
+                assert new_org.cerebellum_default_provider_id != cereb_prov.id
+                assert new_org.system_hub_model == "gpt-4o"
+                assert new_org.cerebellum_default_model == "claude-sonnet"
+                assert new_org.use_proxy is True
+                assert new_org.proxy_host == "proxy.example.com"
+                assert new_org.proxy_port == 8080
+                assert new_org.proxy_password == "secret"
+
+                new_providers = (await verify.execute(select(OrganizationProvider).where(
+                    OrganizationProvider.organization_id == new_org_id,
+                    OrganizationProvider.deleted_at.is_(None),
+                ))).scalars().all()
+                assert len(new_providers) == 2
+                by_slug = {p.slug: p for p in new_providers}
+                assert by_slug["hub-prov"].api_key_ref == "sk-hub-1"
+                assert by_slug["hub-prov"].id == new_org.system_hub_provider_id
+                assert by_slug["cereb-prov"].api_key_ref == "sk-cereb-1"
+                assert by_slug["cereb-prov"].id == new_org.cerebellum_default_provider_id
+
+                src_providers = (await verify.execute(select(OrganizationProvider).where(
+                    OrganizationProvider.organization_id == bundle.org.id,
+                    OrganizationProvider.deleted_at.is_(None),
+                ))).scalars().all()
+                assert len(src_providers) == 2
+        finally:
+            await engine.dispose()
+
 
 # ---------------------------------------------------------------------------
 # Workspace clone
@@ -636,6 +871,15 @@ class TestCloneWorkspace:
                     Vault.workspace_id == new_ws_id, Vault.deleted_at.is_(None)
                 ))).scalars().all()
                 assert len(vault) == 1
+
+                from app.models.event import Event
+
+                events = (await verify.execute(select(Event).where(
+                    Event.type == "workspace.cloned"
+                ))).scalars().all()
+                assert len(events) == 1
+                assert events[0].payload["source_id"] == ws.id
+                assert events[0].payload["new_id"] == new_ws_id
         finally:
             await engine.dispose()
 
