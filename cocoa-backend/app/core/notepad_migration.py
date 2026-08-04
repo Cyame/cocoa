@@ -101,12 +101,17 @@ def migrate_notepad_refs(conn: sa.Connection) -> dict[str, int]:
     }
 
     rows = conn.execute(
-        sa.select(LOOP_STATE).where(LOOP_STATE.c.notepad_refs.isnot(None))
+        sa.select(LOOP_STATE).where(
+            LOOP_STATE.c.notepad_refs.isnot(None),
+            LOOP_STATE.c.deleted_at.is_(None),
+        )
     ).mappings().all()
 
     instances = {
         row["id"]: row
-        for row in conn.execute(sa.select(INSTANCE)).mappings()
+        for row in conn.execute(
+            sa.select(INSTANCE).where(INSTANCE.c.deleted_at.is_(None))
+        ).mappings()
     }
 
     for ls in rows:

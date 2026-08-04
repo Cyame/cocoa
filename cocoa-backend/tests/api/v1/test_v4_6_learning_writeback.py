@@ -691,6 +691,42 @@ class TestCombineJunctionBinding:
         ).scalar_one_or_none()
         assert gene is None, "gene must not be created when binding is forbidden"
 
+    async def test_combine_forbids_system_base_class_binding_for_plain_user(
+        self, client: TestClient, auth_token: str, session: AsyncSession,
+    ) -> None:
+        await self._seed_capabilities(session, ["zeta-cap"])
+
+        system_bc = BaseClass(
+            slug=f"v46-sys-bc-{uuid.uuid4().hex[:6]}", name="V46 System BC",
+            scope="system",
+        )
+        session.add(system_bc)
+        await session.commit()
+
+        plain = f"v46-plain2-{uuid.uuid4().hex[:6]}"
+        client.post("/api/v1/auth/register", json={
+            "username": plain,
+            "email": f"{plain}@test.com",
+            "password": "password123",
+        })
+        login = client.post("/api/v1/auth/login", json={
+            "username": plain, "password": "password123",
+        })
+        assert login.status_code == 200, login.text
+        plain_token = login.json()["access_token"]
+
+        resp = client.post(
+            "/api/v1/learning/capabilities/combine",
+            headers=_auth(plain_token),
+            json={
+                "capability_names": ["zeta-cap"],
+                "gene_slug": "v46-gene-sys403",
+                "gene_name": "V46 Gene Sys 403",
+                "base_class_id": system_bc.id,
+            },
+        )
+        assert resp.status_code == 403, resp.text
+
     async def test_combine_snapshot_only_validates_binding(
         self, client: TestClient, auth_token: str, auth_user_id: str,
         session: AsyncSession,

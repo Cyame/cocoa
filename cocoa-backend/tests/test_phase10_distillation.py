@@ -180,6 +180,26 @@ class TestAggregatingDistiller:
         assert result.aggregated_memory.decision == 0
         assert result.aggregated_memory.total == 2
 
+    async def test_notepad_keys_do_not_pollute_distilled_skills(
+        self, session: AsyncSession, entity_factory
+    ) -> None:
+        """v4.6: H4 notepad mirror keys must not surface as distilled skills."""
+        emp = await entity_factory()
+        await self._add_entries(
+            session,
+            emp.id,
+            ("notepad", "notepad/p14a-checkpoint/learnings", "checkpoint note"),
+            ("lesson", "debug-concurrency", "Debug concurrency"),
+        )
+
+        distiller = AggregatingDistiller()
+        request = DistillRequest(target_skill_slug="test-skill")
+        result = await distiller.distill(emp.id, request=request, session=session)
+
+        assert result.aggregated_memory.notepad == 1
+        assert "notepad/p14a" not in result.manifest_preview.skills
+        assert "debug" in result.manifest_preview.skills
+
     async def test_lesson_keys_extract_kebab_case_to_commands(
         self, session: AsyncSession, entity_factory
     ) -> None:

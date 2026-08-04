@@ -1097,14 +1097,15 @@ async def combine_capabilities(
                 "errors.base_class.not_found",
                 f"BaseClass {body.base_class_id!r} not found",
             )
-        if base_class_target.scope != "system":
-            await require_permission(
-                db,
-                current_user.user_id,
-                "can_manage_ai_genes",
-                organization_id=base_class_target.organization_id,
-                namespace_id=base_class_target.namespace_id,
-            )
+        # Unconditional, mirroring base_classes.py attach_base_class_ai_gene_route:
+        # system-scope presets resolve to a root grant check (super-admin only).
+        await require_permission(
+            db,
+            current_user.user_id,
+            "can_manage_ai_genes",
+            organization_id=base_class_target.organization_id,
+            namespace_id=base_class_target.namespace_id,
+        )
 
     # 5. snapshot_only → preview without writing.
     if body.snapshot_only:
