@@ -81,6 +81,41 @@ class AckRequest(BaseModel):
     queue_ids: list[str] = Field(..., min_length=1)
 
 
+class HubReadRequest(BaseModel):
+    """Body for ``POST /internal/hub/read`` — mount-contract hub file reads.
+
+    ``workspace_id`` is explicit because internal endpoints carry no JWT / org
+    context; the caller (agent pod) resolves it from its own Instance row.
+    """
+
+    workspace_id: str
+    refs: list[ContentRef] = Field(..., min_length=1)
+
+
+class HubWriteRequest(BaseModel):
+    """Body for ``POST /internal/hub/write``.
+
+    ``scope="shared"`` dual-writes the FornixFile row (uploader = instance)
+    and the ``<FORNIX_ROOT>/<workspace_id>/shared/`` mirror — the work →
+    shared promote path. ``scope="work"`` validates the pod-local ``work/``
+    path and records an audit event only (work files are pod-private per
+    v4.5 ``data/work/`` — never mirrored to the backend).
+    """
+
+    workspace_id: str
+    instance_id: str
+    scope: Literal["work", "shared"]
+    path: str
+    content: str
+
+
+class InternalReportRequest(ReportRequest):
+    """Body for ``POST /internal/report`` — ReportRequest + caller identity."""
+
+    workspace_id: str
+    instance_id: str
+
+
 def _list_string_length(items: Any) -> int:
     """Total character length of the string entries in ``items`` (0 if not a list)."""
     if not isinstance(items, list):

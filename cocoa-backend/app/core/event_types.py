@@ -58,6 +58,9 @@ FORNIX_FILE_RESTORED = "fornix.file_restored"
 # Dual-write (DB + Host shared/ mirror) failure. The API rolls back the DB
 # change and surfaces a 5xx — never a silent DB-only or file-only write.
 FORNIX_SYNC_FAILED = "fornix.sync_failed"
+# Host hub_write audit for pod-local ``data/work/`` writes (v4.7): the work
+# file itself is never mirrored to the shared mount / FornixFile rows.
+FORNIX_FILE_WRITTEN = "fornix.file_written"
 
 # ---------------------------------------------------------------------------
 # Memory (emit points in P6)

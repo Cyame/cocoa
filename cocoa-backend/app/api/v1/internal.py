@@ -24,16 +24,39 @@ from __future__ import annotations
 
 import os
 import secrets
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import DB
-from app.core.event_types import HARNESS_CONTROL_SENT
+from app.core.dirs import _validate_no_traversal
+from app.core.errors import CocoaError, ConflictError, NotFoundError
+from app.core.event_types import (
+    FORNIX_FILE_CREATED,
+    FORNIX_FILE_WRITTEN,
+    FORNIX_SYNC_FAILED,
+    HARNESS_CONTROL_SENT,
+    HARNESS_REPORT_RECEIVED,
+)
 from app.core.events import emit
+from app.core.glow import GlowColor, loop_status_to_glow, user_membership_glow
 from app.core.inject_queue import ack_injects, poll_pending_injects
+from app.core.passages import neighbor_membership_ids
+from app.models.central_hub import CentralHub, FornixFile
+from app.models.entity import Entity
 from app.models.event import Event
-from app.schemas.internal import AckRequest
+from app.models.instance import Instance
+from app.models.loop_state import InstanceLoopState, LoopStatus
+from app.models.workspace import Membership
+from app.schemas.internal import (
+    AckRequest,
+    HubReadRequest,
+    HubWriteRequest,
+    InternalReportRequest,
+)
+from app.services import fornix_sync
 
 router = APIRouter(prefix="/internal", tags=["internal"])
 
@@ -174,3 +197,468 @@ async def internal_control_ack(body: AckRequest, db: DB) -> dict:
     acked = await ack_injects(db, queue_ids=body.queue_ids)
     await db.commit()
     return {"acked": acked}
+
+# v4.7 H6: hub / topology / report surfaces for agent pods
+# ---------------------------------------------------------------------------
+
+
+def _split_hub_path(path: str) -> tuple[str | None, str]:
+    """Split a hub-relative path into ``(parent_path, name)``.
+
+    Mirrors central_hubs ``_split_parent_path``: ``"docs/plan.md"`` →
+    ``("/docs", "plan.md")``; ``"plan.md"`` → ``(None, "plan.md")``.
+    """
+    clean = path.strip("/")
+    if not clean:
+        raise ValueError(f"empty hub path: {path!r}")
+    dirname = os.path.dirname(clean)
+    basename = os.path.basename(clean)
+    parent_path = f"/{dirname}" if dirname else None
+    return parent_path, basename
+
+
+def _glow_to_dict(glow: GlowColor) -> dict[str, str]:
+    return {"color": glow.color, "intensity": glow.intensity.value}
+
+
+async def _loop_status_map(
+    db: AsyncSession, instance_ids: list[str]
+) -> dict[str, str]:
+    if not instance_ids:
+        return {}
+    rows = (
+        await db.execute(
+            select(InstanceLoopState).where(
+                InstanceLoopState.instance_id.in_(instance_ids),
+                InstanceLoopState.deleted_at.is_(None),
+            )
+        )
+    ).scalars().all()
+    return {row.instance_id: row.loop_status for row in rows}
+
+
+async def _hub_write_shared(
+    db: AsyncSession, body: HubWriteRequest, instance: Instance
+) -> dict:
+    """Dual-write a shared/ file: FornixFile row (instance uploader) + mirror."""
+    try:
+        parent_path, name = _split_hub_path(body.path)
+    except ValueError as exc:
+        raise CocoaError(
+            "internal.hub.path_invalid",
+            "errors.internal.hub.path_invalid",
+            f"invalid hub path {body.path!r}",
+            status_code=400,
+        ) from exc
+
+    if parent_path is not None:
+        parent_dir_path, parent_name = _split_hub_path(parent_path)
+        parent = (
+            await db.execute(
+                select(FornixFile).where(
+                    FornixFile.workspace_id == body.workspace_id,
+                    FornixFile.parent_path == parent_dir_path,
+                    FornixFile.name == parent_name,
+                    FornixFile.is_directory.is_(True),
+                    FornixFile.deleted_at.is_(None),
+                )
+            )
+        ).scalar_one_or_none()
+        if parent is None:
+            raise NotFoundError(
+                "central_hub.parent_directory_not_found",
+                "errors.central_hub.parent_directory_not_found",
+                f"Parent directory '{parent_path}' not found in workspace "
+                f"'{body.workspace_id}'",
+            )
+
+    existing = (
+        await db.execute(
+            select(FornixFile).where(
+                FornixFile.workspace_id == body.workspace_id,
+                FornixFile.parent_path == parent_path,
+                FornixFile.name == name,
+                FornixFile.deleted_at.is_(None),
+            )
+        )
+    ).scalar_one_or_none()
+    if existing is not None:
+        raise ConflictError(
+            "central_hub.fornix.duplicate_path",
+            "errors.central_hub.fornix.duplicate_path",
+            f"A file or directory named '{name}' already exists at "
+            f"'{parent_path or '/'}'",
+        )
+
+    hub = (
+        await db.execute(
+            select(CentralHub).where(
+                CentralHub.workspace_id == body.workspace_id,
+                CentralHub.deleted_at.is_(None),
+            )
+        )
+    ).scalar_one_or_none()
+    if hub is None:
+        hub = CentralHub(workspace_id=body.workspace_id)
+        db.add(hub)
+        await db.flush()
+
+    file = FornixFile(
+        workspace_id=body.workspace_id,
+        central_hub_id=hub.id,
+        name=name,
+        parent_path=parent_path,
+        storage_key=str(uuid.uuid4()),
+        content_type=None,
+        file_size=len(body.content),
+        content=body.content,
+        is_directory=False,
+        uploader_instance_id=body.instance_id,
+    )
+    db.add(file)
+    await db.flush()
+
+    try:
+        fornix_sync.sync_write(
+            body.workspace_id,
+            parent_path,
+            name,
+            content=body.content,
+            is_directory=False,
+        )
+    except Exception as exc:  # pragma: no cover — disk failure path
+        await db.rollback()
+        await emit(
+            FORNIX_SYNC_FAILED,
+            actor_type="system",
+            resource_type="fornix_file",
+            resource_id=file.id,
+            payload={
+                "workspace_id": body.workspace_id,
+                "file_id": file.id,
+                "error": f"{type(exc).__name__}: {exc}",
+            },
+            session=db,
+        )
+        await db.commit()
+        raise CocoaError(
+            "central_hub.fornix.sync_failed",
+            "errors.central_hub.fornix.sync_failed",
+            f"Failed to sync FornixFile '{file.id}' to the shared mount",
+            status_code=500,
+        ) from exc
+
+    await emit(
+        FORNIX_FILE_CREATED,
+        actor_type="instance",
+        actor_id=body.instance_id,
+        resource_type="fornix_file",
+        resource_id=file.id,
+        payload={
+            "workspace_id": body.workspace_id,
+            "name": name,
+            "parent_path": parent_path,
+            "is_directory": False,
+            "scope": "shared",
+        },
+        session=db,
+    )
+    await db.commit()
+    return {"file_id": file.id, "path": body.path, "scope": "shared", "mirrored": True}
+
+
+async def _hub_write_work(
+    db: AsyncSession, body: HubWriteRequest, instance: Instance
+) -> dict:
+    """Validate a pod-local ``work/`` path and record the audit event only.
+
+    Work files are pod-private (v4.5 ``data/work/``, the pod writes them
+    directly); the backend validates the path and persists the audit trail
+    without mirroring to the shared mount or FornixFile rows.
+    """
+    if not body.path.startswith("work/") or len(body.path) <= len("work/"):
+        raise CocoaError(
+            "internal.hub.work_path_invalid",
+            "errors.internal.hub.work_path_invalid",
+            f"work scope requires a path under 'work/', got {body.path!r}",
+            status_code=400,
+        )
+    event = await emit(
+        FORNIX_FILE_WRITTEN,
+        actor_type="instance",
+        actor_id=body.instance_id,
+        resource_type="instance",
+        resource_id=body.instance_id,
+        payload={
+            "workspace_id": body.workspace_id,
+            "scope": "work",
+            "path": body.path,
+            "content_length": len(body.content),
+        },
+        session=db,
+    )
+    await db.commit()
+    return {
+        "scope": "work",
+        "path": body.path,
+        "event_id": event.id,
+        "mirrored": False,
+    }
+
+
+async def _neighbor_snapshots(
+    db: AsyncSession, workspace_id: str, neighbor_ids: list[str]
+) -> list[dict]:
+    if not neighbor_ids:
+        return []
+    memberships = (
+        await db.execute(
+            select(Membership).where(
+                Membership.id.in_(neighbor_ids),
+                Membership.deleted_at.is_(None),
+            )
+        )
+    ).scalars().all()
+    by_id = {m.id: m for m in memberships}
+    instance_ids = [m.instance_id for m in memberships if m.instance_id]
+    instances: dict[str, Instance] = {}
+    entities: dict[str, Entity] = {}
+    if instance_ids:
+        inst_rows = (
+            await db.execute(
+                select(Instance).where(
+                    Instance.id.in_(instance_ids),
+                    Instance.deleted_at.is_(None),
+                )
+            )
+        ).scalars().all()
+        instances = {row.id: row for row in inst_rows}
+        entity_ids = [row.entity_id for row in inst_rows]
+        if entity_ids:
+            entity_rows = (
+                await db.execute(
+                    select(Entity).where(
+                        Entity.id.in_(entity_ids),
+                        Entity.deleted_at.is_(None),
+                    )
+                )
+            ).scalars().all()
+            entities = {row.id: row for row in entity_rows}
+    loop_statuses = await _loop_status_map(db, instance_ids)
+
+    snapshots: list[dict] = []
+    for membership_id in neighbor_ids:
+        membership = by_id.get(membership_id)
+        if membership is None:
+            continue
+        if membership.user_id is not None:
+            snapshots.append(
+                {
+                    "membership_id": membership_id,
+                    "entity_slug": None,
+                    "loop_status": None,
+                    "glow": _glow_to_dict(user_membership_glow()),
+                }
+            )
+            continue
+        instance_id = membership.instance_id or ""
+        instance = instances.get(instance_id)
+        entity = entities.get(instance.entity_id) if instance is not None else None
+        loop_status = loop_statuses.get(instance_id, LoopStatus.idle.value)
+        snapshots.append(
+            {
+                "membership_id": membership_id,
+                "entity_slug": entity.slug if entity is not None else None,
+                "loop_status": loop_status,
+                "glow": _glow_to_dict(loop_status_to_glow(loop_status)),
+            }
+        )
+    return snapshots
+
+
+@router.post(
+    "/hub/read",
+    dependencies=[Depends(verify_internal_token)],
+)
+async def internal_hub_read(body: HubReadRequest, db: DB) -> dict:
+    """Read hub files from the shared mount mirror (v4.5 mount contract).
+
+    ``workspace_id`` is explicit in the body because internal endpoints carry
+    no JWT / org context; the pod resolves it from its own Instance row.
+    """
+    files: list[dict] = []
+    for ref in body.refs:
+        if ref.scope != "hub":
+            raise CocoaError(
+                "internal.hub.invalid_scope",
+                "errors.internal.hub.invalid_scope",
+                f"hub/read only supports scope='hub', got {ref.scope!r}",
+                status_code=400,
+            )
+        try:
+            _validate_no_traversal(ref.path)
+            parent_path, name = _split_hub_path(ref.path)
+        except ValueError as exc:
+            raise CocoaError(
+                "internal.hub.path_invalid",
+                "errors.internal.hub.path_invalid",
+                f"invalid hub path {ref.path!r}",
+                status_code=400,
+            ) from exc
+        target = fornix_sync.mirror_abs_path(body.workspace_id, parent_path, name)
+        if not os.path.isfile(target):
+            raise NotFoundError(
+                "internal.hub.file_not_found",
+                "errors.internal.hub.file_not_found",
+                f"Hub file '{ref.path}' not found",
+            )
+        with open(target, "r", encoding="utf-8") as fh:
+            content = fh.read()
+        files.append(
+            {
+                "scope": "hub",
+                "path": ref.path,
+                "content": content,
+                "size": len(content),
+            }
+        )
+    return {"files": files}
+
+
+@router.post(
+    "/hub/write",
+    status_code=201,
+    dependencies=[Depends(verify_internal_token)],
+)
+async def internal_hub_write(body: HubWriteRequest, db: DB) -> dict:
+    """Write a hub file: ``scope=shared`` promotes work → shared (dual-write
+    FornixFile row + mirror, uploader = instance); ``scope=work`` validates
+    the pod-local ``work/`` path and audits without mirroring.
+    """
+    try:
+        _validate_no_traversal(body.path)
+    except ValueError as exc:
+        raise CocoaError(
+            "internal.hub.path_traversal",
+            "errors.internal.hub.path_traversal",
+            f"path traversal rejected: {body.path!r}",
+            status_code=400,
+        ) from exc
+
+    instance = (
+        await db.execute(
+            select(Instance).where(
+                Instance.id == body.instance_id,
+                Instance.deleted_at.is_(None),
+            )
+        )
+    ).scalar_one_or_none()
+    if instance is None:
+        raise NotFoundError(
+            "internal.hub.instance_not_found",
+            "errors.internal.hub.instance_not_found",
+            f"Instance '{body.instance_id}' not found",
+        )
+
+    if body.scope == "work":
+        return await _hub_write_work(db, body, instance)
+    return await _hub_write_shared(db, body, instance)
+
+
+@router.get(
+    "/topology",
+    dependencies=[Depends(verify_internal_token)],
+)
+async def internal_topology(db: DB, instance_id: str = Query(...)) -> dict:
+    """Return the caller instance + Passage neighbors with loop/glow snapshots.
+
+    ``workspace_id`` is resolved from the caller's Instance row — no JWT / org
+    context is needed.
+    """
+    instance = (
+        await db.execute(
+            select(Instance).where(
+                Instance.id == instance_id,
+                Instance.deleted_at.is_(None),
+            )
+        )
+    ).scalar_one_or_none()
+    if instance is None:
+        raise NotFoundError(
+            "internal.topology.instance_not_found",
+            "errors.internal.topology.instance_not_found",
+            f"Instance '{instance_id}' not found",
+        )
+
+    membership = (
+        await db.execute(
+            select(Membership).where(
+                Membership.workspace_id == instance.workspace_id,
+                Membership.instance_id == instance.id,
+                Membership.deleted_at.is_(None),
+            )
+        )
+    ).scalar_one_or_none()
+    if membership is None:
+        raise NotFoundError(
+            "internal.topology.membership_not_found",
+            "errors.internal.topology.membership_not_found",
+            f"No membership for instance '{instance_id}'",
+        )
+
+    neighbor_ids = await neighbor_membership_ids(
+        db, instance.workspace_id, membership.id
+    )
+    entity = (
+        await db.execute(
+            select(Entity).where(
+                Entity.id == instance.entity_id,
+                Entity.deleted_at.is_(None),
+            )
+        )
+    ).scalar_one_or_none()
+    loop_statuses = await _loop_status_map(db, [instance.id])
+    loop_status = loop_statuses.get(instance.id, LoopStatus.idle.value)
+
+    return {
+        "self": {
+            "membership_id": membership.id,
+            "entity_slug": entity.slug if entity is not None else None,
+            "loop_status": loop_status,
+            "glow": _glow_to_dict(loop_status_to_glow(loop_status)),
+        },
+        "neighbors": await _neighbor_snapshots(
+            db, instance.workspace_id, neighbor_ids
+        ),
+    }
+
+
+@router.post(
+    "/report",
+    status_code=202,
+    dependencies=[Depends(verify_internal_token)],
+)
+async def internal_report(body: InternalReportRequest, db: DB) -> dict:
+    """Persist a structured harness report (V47-10 tldr-validated) as a
+    ``harness.report_received`` event. Hub file materialization is deferred
+    (MVP emits the event only).
+    """
+    event = await emit(
+        HARNESS_REPORT_RECEIVED,
+        actor_type="instance",
+        actor_id=body.instance_id,
+        resource_type="instance",
+        resource_id=body.instance_id,
+        payload={
+            "workspace_id": body.workspace_id,
+            "tldr": body.tldr,
+            "outcome": body.outcome,
+            "changes": body.changes,
+            "validation": body.validation,
+            "blockers": body.blockers,
+            "content_refs": [ref.model_dump() for ref in body.content_refs],
+        },
+        session=db,
+    )
+    await db.commit()
+    return {"event_id": event.id}
