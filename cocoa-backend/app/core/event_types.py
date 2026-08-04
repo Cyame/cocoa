@@ -104,6 +104,19 @@ LEARNING_NOTEPAD_MIGRATION_ORPHAN = "learning.notepad_migration_orphan"
 LEARNING_CAPABILITY_INJECTED = "learning.capability_injected"
 LEARNING_GENE_INJECTED = "learning.gene_injected"
 
+# ---------------------------------------------------------------------------
+# Inject queue / report (emit points in v4.7 H6 inject_queue service)
+# ---------------------------------------------------------------------------
+
+# Enqueue: Harness/Workspace 下行注入已入队（payload 含 queue_id/kind/delivery_mode/tldr）。
+HARNESS_INJECT_REQUESTED = "harness.inject_requested"
+# Host 对 soft_inject/wake 应用成功并 ACK 后发出。
+HARNESS_INJECT_APPLIED = "harness.inject_applied"
+# Host 报错 / 拒绝 / 超时 → failed。
+HARNESS_INJECT_FAILED = "harness.inject_failed"
+# Instance 结构化 report_event 被接受（V47-10 校验通过）。
+HARNESS_REPORT_RECEIVED = "harness.report_received"
+
 # Phase-15f T4: instance re-sync after promote (PRD §13.6.7).
 # Plural form distinct from the lifecycle INSTANCE_RESTARTED above; this
 # is the operator-initiated batch re-sync event payload.

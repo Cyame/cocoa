@@ -10,6 +10,7 @@ import app.models.deploy_record  # noqa: E402, F401
 import app.models.entity  # noqa: E402, F401
 import app.models.event  # noqa: E402, F401
 import app.models.instance  # noqa: E402, F401
+import app.models.inject_queue  # noqa: E402, F401
 import app.models.instance_provider_config  # noqa: E402, F401
 import app.models.junctions  # noqa: E402, F401
 import app.models.knowledge  # noqa: E402, F401
