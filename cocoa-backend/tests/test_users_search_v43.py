@@ -255,21 +255,44 @@ class TestSearchSemantics:
         assert [u["username"] for u in resp.json()["items"]] == ["alice-dev"]
 
     @pytest.mark.asyncio
-    async def test_missing_or_empty_q_returns_recent_users(
+    async def test_missing_or_empty_q_returns_empty(
         self, client: TestClient, session: AsyncSession, create_org_bundle
     ) -> None:
+        # v4-3 D14 hardening: empty/missing q must NOT enumerate platform
+        # users (cross-platform PII guard). Empty page, total 0.
         env = await _env(client, create_org_bundle)
         headers = _mgr_headers(env)
         resp = client.get("/api/v1/users/search", headers=headers, params={"q": ""})
         assert resp.status_code == 200, resp.text
         body = resp.json()
-        assert body["total"] >= 3
-        # carol-dev was created last → most recent.
-        assert body["items"][0]["username"] == "carol-dev"
+        assert body["items"] == []
+        assert body["total"] == 0
         # Missing q behaves the same as empty q.
         resp2 = client.get("/api/v1/users/search", headers=headers)
         assert resp2.status_code == 200
-        assert resp2.json()["items"][0]["username"] == "carol-dev"
+        body2 = resp2.json()
+        assert body2["items"] == []
+        assert body2["total"] == 0
+
+    @pytest.mark.asyncio
+    async def test_match_is_strict_prefix_not_substring(
+        self, client: TestClient, session: AsyncSession, create_org_bundle
+    ) -> None:
+        env = await _env(client, create_org_bundle)
+        headers = _mgr_headers(env)
+        # "arol" is a substring of "carol-dev" but NOT a prefix → no match.
+        resp = client.get(
+            "/api/v1/users/search", headers=headers, params={"q": "arol"}
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["items"] == []
+        assert resp.json()["total"] == 0
+        # "car" is a genuine prefix of "carol-dev" (and carol@example.com).
+        resp2 = client.get(
+            "/api/v1/users/search", headers=headers, params={"q": "car"}
+        )
+        assert resp2.status_code == 200, resp2.text
+        assert [u["username"] for u in resp2.json()["items"]] == ["carol-dev"]
 
     @pytest.mark.asyncio
     async def test_wildcards_treated_literally(

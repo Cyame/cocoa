@@ -109,6 +109,7 @@ def _create_entry(
     workspace_id: str | None = None,
     entity_id: str | None = None,
     instance_id: str | None = None,
+    dimension_id: str | None = None,
     title: str = "Title",
     body: str = "Body",
 ):
@@ -125,6 +126,7 @@ def _create_entry(
             "workspace_id": workspace_id,
             "entity_id": entity_id,
             "instance_id": instance_id,
+            "dimension_id": dimension_id,
         },
     )
 
@@ -739,3 +741,104 @@ class TestSystemScopeReadonly:
         )
         assert resp.status_code == 403
         assert resp.json()["error_code"] == "scope.system_readonly"
+
+
+class TestPatchKeyUniqueness:
+    """PATCH key-rename must enforce same-scope key uniqueness independent of
+    dimension_id.
+
+    The DB partial unique index ``uq_knowledge_entries_active_key`` includes
+    ``coalesce(dimension_id)``, so renaming entry B's key to entry A's key in
+    the same scope is NOT rejected by the DB when the two entries carry
+    different dimensions. The plan contract is "same key unique per scope"
+    (dimension-independent, as POST enforces), so PATCH must pre-check too.
+    """
+
+    async def _make_dimension(
+        self, client: TestClient, token: str, org_id: str
+    ) -> str:
+        resp = client.post(
+            "/api/v1/knowledge-dimensions",
+            headers={**_auth(token), "X-Organization-Id": org_id},
+            json={"name": f"dim-{uuid.uuid4().hex[:6]}"},
+        )
+        assert resp.status_code == 201, resp.text
+        return resp.json()["id"]
+
+    @pytest.mark.asyncio
+    async def test_patch_key_to_taken_key_different_dimension_409(
+        self, client: TestClient, session: AsyncSession, create_org_bundle
+    ) -> None:
+        """Renaming B's key to A's key at the same scope must 409 even when
+        the two rows carry different dimension_id (DB index would otherwise
+        be bypassed)."""
+        token, user_id, bundle = await _org_knowledge_manager(
+            client, session, create_org_bundle
+        )
+        org_id = bundle.org.id
+        dim_a = await self._make_dimension(client, token, org_id)
+        dim_b = await self._make_dimension(client, token, org_id)
+        key = f"patch-dup-{uuid.uuid4().hex[:6]}"
+        a = _create_entry(
+            client, token, org_id, key=key, scope="org",
+            organization_id=org_id, dimension_id=dim_a,
+        )
+        assert a.status_code == 201, a.text
+        b = _create_entry(
+            client, token, org_id, key=f"{key}-b", scope="org",
+            organization_id=org_id, dimension_id=dim_b,
+        )
+        assert b.status_code == 201, b.text
+        resp = client.patch(
+            f"/api/v1/knowledge/{b.json()['id']}",
+            headers={**_auth(token), "X-Organization-Id": org_id},
+            json={"key": key},
+        )
+        assert resp.status_code == 409
+        assert resp.json()["error_code"] == "knowledge.key_conflict"
+        assert "message_key" in resp.json()
+
+    @pytest.mark.asyncio
+    async def test_patch_key_unchanged_does_not_conflict(
+        self, client: TestClient, session: AsyncSession, create_org_bundle
+    ) -> None:
+        """PATCHing an entry to its own key (no-op) must not self-conflict."""
+        token, user_id, bundle = await _org_knowledge_manager(
+            client, session, create_org_bundle
+        )
+        org_id = bundle.org.id
+        key = f"patch-self-{uuid.uuid4().hex[:6]}"
+        a = _create_entry(
+            client, token, org_id, key=key, scope="org", organization_id=org_id,
+        )
+        assert a.status_code == 201, a.text
+        resp = client.patch(
+            f"/api/v1/knowledge/{a.json()['id']}",
+            headers={**_auth(token), "X-Organization-Id": org_id},
+            json={"key": key},
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["key"] == key
+
+    @pytest.mark.asyncio
+    async def test_patch_key_to_free_key_succeeds(
+        self, client: TestClient, session: AsyncSession, create_org_bundle
+    ) -> None:
+        """Renaming to a key no other active row owns at the same scope 200s."""
+        token, user_id, bundle = await _org_knowledge_manager(
+            client, session, create_org_bundle
+        )
+        org_id = bundle.org.id
+        a = _create_entry(
+            client, token, org_id, key=f"k-{uuid.uuid4().hex[:6]}", scope="org",
+            organization_id=org_id,
+        )
+        assert a.status_code == 201, a.text
+        new_key = f"renamed-{uuid.uuid4().hex[:6]}"
+        resp = client.patch(
+            f"/api/v1/knowledge/{a.json()['id']}",
+            headers={**_auth(token), "X-Organization-Id": org_id},
+            json={"key": new_key},
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["key"] == new_key

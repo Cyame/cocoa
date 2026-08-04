@@ -151,9 +151,10 @@ async def search_users(
     super-admin. No valid org context and not super-admin → 403. Response is
     slim (``UserSearchOut``) — no password_hash / identity / gene data.
 
-    ``q`` empty or missing → up to ``limit`` most recent users (created_at
-    desc). ``q`` present → case-insensitive prefix match (ILIKE) on username
-    OR email; ``%`` / ``_`` / ``\\`` are escaped and treated literally.
+    ``q`` empty or missing → empty result (guards against cross-platform
+    PII enumeration; the portal only calls with a non-empty prefix). ``q``
+    present → case-insensitive prefix match (ILIKE) on username OR email;
+    ``%`` / ``_`` / ``\\`` are escaped and treated literally.
     ``limit`` is clamped to [1, 50] (default 10).
     """
     org_id = await resolve_current_org_id(
@@ -175,19 +176,25 @@ async def search_users(
 
     limit = min(max(limit, 1), 50)
     offset = max(offset, 0)
-    stmt = select(User).where(User.deleted_at.is_(None))
     needle = q.strip() if q is not None else ""
-    if needle:
-        escaped = needle.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-        pattern = f"{escaped}%"
-        stmt = stmt.where(
+    if not needle:
+        # No prefix → nothing to search. Returning an empty page (rather
+        # than "most recent users") prevents any holder of
+        # can_manage_org_members from enumerating platform-wide PII.
+        return OffsetPage(items=[], offset=offset, limit=limit, total=0)
+    escaped = needle.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    pattern = f"{escaped}%"
+    stmt = (
+        select(User)
+        .where(User.deleted_at.is_(None))
+        .where(
             or_(
                 User.username.ilike(pattern, escape="\\"),
                 User.email.ilike(pattern, escape="\\"),
             )
-        ).order_by(User.username, User.id)
-    else:
-        stmt = stmt.order_by(User.created_at.desc(), User.id)
+        )
+        .order_by(User.username, User.id)
+    )
     page = await paginate_offset(db, stmt, offset, limit)
     items = [
         UserSearchOut(

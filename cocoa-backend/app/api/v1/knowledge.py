@@ -98,19 +98,33 @@ async def _get_active_dimension(db: DB, dimension_id: str) -> KnowledgeDimension
 
 
 async def _entry_key_taken(
-    db: DB, scope: str, org_id: str | None, ns_id: str | None, ws_id: str | None, key: str
+    db: DB,
+    scope: str,
+    org_id: str | None,
+    ns_id: str | None,
+    ws_id: str | None,
+    key: str,
+    *,
+    exclude_id: str | None = None,
 ) -> bool:
-    result = await db.execute(
-        select(KnowledgeEntry.id)
-        .where(
-            KnowledgeEntry.deleted_at.is_(None),
-            KnowledgeEntry.scope == scope,
-            _coalesce_match(KnowledgeEntry.organization_id, org_id),
-            _coalesce_match(KnowledgeEntry.namespace_id, ns_id),
-            _coalesce_match(KnowledgeEntry.workspace_id, ws_id),
-            KnowledgeEntry.key == key,
-        )
+    """True when another active entry owns *key* in the effective scope.
+
+    The check is dimension-independent on purpose: the plan contract is "same
+    key unique per scope" (see POST), even though the DB partial unique index
+    also keys on ``coalesce(dimension_id)``. ``exclude_id`` lets PATCH skip
+    the row being updated itself.
+    """
+    stmt = select(KnowledgeEntry.id).where(
+        KnowledgeEntry.deleted_at.is_(None),
+        KnowledgeEntry.scope == scope,
+        _coalesce_match(KnowledgeEntry.organization_id, org_id),
+        _coalesce_match(KnowledgeEntry.namespace_id, ns_id),
+        _coalesce_match(KnowledgeEntry.workspace_id, ws_id),
+        KnowledgeEntry.key == key,
     )
+    if exclude_id is not None:
+        stmt = stmt.where(KnowledgeEntry.id != exclude_id)
+    result = await db.execute(stmt)
     return result.scalar_one_or_none() is not None
 
 
@@ -310,9 +324,26 @@ async def update_knowledge_entry(
         current_org_id, entry.scope, entry.organization_id, entry_id,
         error_code="knowledge.not_found",
     )
-    for field, value in body.model_dump(exclude_unset=True).items():
-        if field == "key" and value is not None:
-            value = _lower_key(value)
+    data = body.model_dump(exclude_unset=True)
+    new_key = data.get("key")
+    if new_key is not None:
+        new_key = _lower_key(new_key)
+        data["key"] = new_key
+        if await _entry_key_taken(
+            db,
+            entry.scope,
+            entry.organization_id,
+            entry.namespace_id,
+            entry.workspace_id,
+            new_key,
+            exclude_id=entry.id,
+        ):
+            raise ConflictError(
+                "knowledge.key_conflict",
+                "errors.knowledge.key_conflict",
+                f"Knowledge entry key '{new_key}' already exists in this scope",
+            )
+    for field, value in data.items():
         setattr(entry, field, value)
     try:
         await db.commit()
