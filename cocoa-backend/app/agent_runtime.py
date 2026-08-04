@@ -24,6 +24,7 @@ from app.agent_runtime.k8s_adapter import (
     emit_event,
     get_proxy_token,
     is_k8s_pod_mode,
+    poll_control,  # noqa: F401 — module-level attribute for test monkeypatch
     poll_control_full,
 )
 from app.agent_runtime.safe_point import SafePointGuard
