@@ -170,9 +170,9 @@ Cocoa no longer plans primarily as open-ended "P-N feature waves". After foundat
 │ 1. Lock naming / ontology     (P15d — done)                 │
 │ 2. Write PRD (interaction + data decisions)                 │
 │ 3. Write /approve execution plan (.omo/plans/)              │
-│ 4. Implement on feature branch from master                  │
+│ 4. Implement on feature branch from main                    │
 │ 5. Tests + evidence                                         │
-│ 6. Merge master                                             │
+│ 6. Merge main                                               │
 │ 7. Deploy orbstack (mandatory — §6)                         │
 │ 8. Human inspect live cluster → next PRD delta or polish    │
 └─────────────────────────────────────────────────────────────┘
@@ -319,7 +319,7 @@ Priority among remaining 3.5.x slices is **re-decided from orbstack human QA**, 
 
 **Standing user rule (2026-07-28, reaffirmed 2026-07-29):** after development for a wave (or any bugfix that changes runtime behavior) completes:
 
-1. Commit on the feature branch → merge to `master` (fast-forward when possible).
+1. Commit on the feature branch → merge to `main` (fast-forward when possible).
 2. Run `bash scripts/deploy-to-orbstack.sh` (idempotent).
 3. Verify pods Ready; smoke via curl + browser on the live cluster.
 4. Leave the `cocoa` namespace running for human inspection.
@@ -340,7 +340,7 @@ Full ops: AGENTS.md "Cocoa Deployment Operations Rules" + "Persistent Fix Policy
 
 ### 6.3 Branch workflow
 
-`master` is source of truth. Each wave: `git checkout master && git checkout -b feat/<kebab>`. Merge back after acceptance + orbstack deploy.
+`main` is source of truth. Each wave: `git checkout main && git checkout -b feat/<kebab>`. Merge back after acceptance + orbstack deploy.
 
 ---
 
