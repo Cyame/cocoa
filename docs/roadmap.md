@@ -281,7 +281,7 @@ Full history: `.omo/plans/archive/` + `.omo/plans/archive/cocoa-v2-roadmap.md` (
 
 | Track | Intent | Plan |
 |---|---|---|
-| **3.5.x** | **主流程产品设计闭环** — summon / connect / talk / observe / lifecycle / brain handoff stub；行为正确、可部署、可人测；缺口随迭代小步修正 | `.omo/plans/product-version-track-3-5-3-6.md` |
+| **3.5.x** | **主流程产品设计闭环** — summon / connect / talk / observe / lifecycle / brain handoff stub；行为正确、可部署、可人测；缺口随迭代小步修正 | `.omo/plans/archive/product-version-track-3-5-3-6.md` |
 | **3.6** | **整体 UI 大重构** — 壳层 / 密度 / Composer·Topology 视觉语言 / 空态；不抢跑于 3.5.x 闭环之前 | same file §4–§5 |
 
 **Working agreement:** 主功能仍有不通处与未修正项，随产品迭代逐步设计与变更；**不做**「先大改 UI 再通主流程」。
@@ -290,7 +290,7 @@ Full history: `.omo/plans/archive/` + `.omo/plans/archive/cocoa-v2-roadmap.md` (
 
 | Slot | Title | Spec / Plan | Notes |
 |---|---|---|---|
-| **3.5 track** | Main-flow closed loop | `product-version-track-3-5-3-6.md` + `main-flow-remainder-tracking.md` | Product **3.5.2+**; iterative QA-driven slices |
+| **3.5 track** | Main-flow closed loop | `archive/product-version-track-3-5-3-6.md` + `archive/main-flow-remainder-tracking.md` | Product **3.5.2+**; iterative QA-driven slices |
 | **PRD-v3.5 baseline** | Tunnel + pi Host 真连接 | `.omo/plans/prd-v3-5-tunnel-pi.md` | Landed; Host chat + offline stub |
 | **PRD-v3.4.1** | Composer `@`/`/` + stream + deploy-existing | `docs/prd-v3.4.1.md` | Verified; passage gate + transcript continue in 3.5.x |
 

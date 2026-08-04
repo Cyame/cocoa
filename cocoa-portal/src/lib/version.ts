@@ -1,10 +1,11 @@
 /**
  * Product version shown in the AppShell sidebar footer (`vMAJOR.MINOR.PATCH`).
  *
- * - MAJOR — product generation (currently 3)
- * - MINOR — bumps once per completed PRD (PRD-v1 → .1, PRD-v2 → .2, PRD-v3 → .3)
- * - PATCH — bumps on each small change / hotfix within the current PRD
+ * - MAJOR — product generation (current 4; v4 = implementation waves per
+ *   v4-roadmap, after the v3.5.x design-correction docs track)
+ * - MINOR — bumps once per completed v4 slice (v4.0 → .0, v4.1 → .1, …)
+ * - PATCH — bumps on each small change / hotfix within the current slice
  *
  * Keep in sync with `cocoa-portal/package.json` and `cocoa-backend/pyproject.toml`.
  */
-export const APP_VERSION = '3.5.5';
+export const APP_VERSION = '4.4.0';
