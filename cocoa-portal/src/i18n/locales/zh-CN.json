@@ -95,7 +95,25 @@
     "selfLockError": "不能移除自己的世界管理权限。",
     "empty": "还没有成员",
     "loading": "正在加载成员…",
-    "memberCount": "{{count}} 名成员"
+    "memberCount": "{{count}} 名成员",
+    "atoms": {
+      "can_manage_organization": "管理世界",
+      "can_manage_org_members": "管理世界成员",
+      "can_manage_namespace": "管理次元",
+      "can_manage_workspace": "管理工作区",
+      "can_edit_workspace": "编辑工作区",
+      "can_view_workspace": "查看工作区",
+      "can_operate_workspace": "操作工作区",
+      "can_manage_genes": "管理基因",
+      "can_manage_capabilities": "管理能力",
+      "can_manage_ai_genes": "管理 AI 基因",
+      "can_clone_base_class": "克隆神职",
+      "can_clone_entity": "克隆眷族",
+      "can_clone_organization": "克隆世界",
+      "can_clone_workspace": "克隆工作区",
+      "can_manage_knowledge": "管理知识",
+      "can_manage_meetings": "管理会议"
+    }
   },
   "namespaceContracts": {
     "title": "次元契印",

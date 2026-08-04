@@ -95,7 +95,25 @@
     "selfLockError": "Cannot remove your own world-management permission.",
     "empty": "No members yet",
     "loading": "Loading members…",
-    "memberCount": "{{count}} members"
+    "memberCount": "{{count}} members",
+    "atoms": {
+      "can_manage_organization": "Manage world",
+      "can_manage_org_members": "Manage world members",
+      "can_manage_namespace": "Manage namespaces",
+      "can_manage_workspace": "Manage workspaces",
+      "can_edit_workspace": "Edit workspaces",
+      "can_view_workspace": "View workspaces",
+      "can_operate_workspace": "Operate workspaces",
+      "can_manage_genes": "Manage genes",
+      "can_manage_capabilities": "Manage capabilities",
+      "can_manage_ai_genes": "Manage AI genes",
+      "can_clone_base_class": "Clone base classes",
+      "can_clone_entity": "Clone entities",
+      "can_clone_organization": "Clone world",
+      "can_clone_workspace": "Clone workspace",
+      "can_manage_knowledge": "Manage knowledge",
+      "can_manage_meetings": "Manage meetings"
+    }
   },
   "namespaceContracts": {
     "title": "Namespace contracts",

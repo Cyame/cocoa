@@ -14,6 +14,7 @@ import DashboardPage from '@/pages/DashboardPage';
 import DebugPage from '@/pages/DebugPage';
 import ForbiddenPage from '@/pages/ForbiddenPage';
 import GenesPage from '@/pages/GenesPage';
+import KnowledgePage from '@/pages/KnowledgePage';
 import LoginPage from '@/pages/LoginPage';
 import NamespaceContractsPage from '@/pages/NamespaceContractsPage';
 import NamespaceEntitiesPage from '@/pages/NamespaceEntitiesPage';
@@ -22,7 +23,6 @@ import NamespaceOverviewPage from '@/pages/NamespaceOverviewPage';
 import NamespacesListPage from '@/pages/NamespacesListPage';
 import NamespaceWorkspacesPage from '@/pages/NamespaceWorkspacesPage';
 import OrgPickerPage from '@/pages/OrgPickerPage';
-import PagePlaceholder from '@/pages/PagePlaceholder';
 import WorkspaceIdePage from '@/pages/WorkspaceIdePage';
 import WorldMembersPage from '@/pages/WorldMembersPage';
 import WorldSettingsPage from '@/pages/WorldSettingsPage';
@@ -71,17 +71,17 @@ function useLegacyOrgRedirect(target: string) {
   }, [currentOrgId, navigate, target, token]);
 }
 
-function LegacyNamespacesRedirect() {
+export function LegacyNamespacesRedirect() {
   useLegacyOrgRedirect('/orgs/:orgId/namespaces');
   return <RedirectingNote />;
 }
 
-function LegacyOrganizationRedirect() {
+export function LegacyOrganizationRedirect() {
   useLegacyOrgRedirect('/orgs/:orgId/settings');
   return <RedirectingNote />;
 }
 
-function LegacyBaseClassRedirect() {
+export function LegacyBaseClassRedirect() {
   const { slug } = useParams<{ slug: string }>();
   useLegacyOrgRedirect(`/orgs/:orgId/base-classes/${slug ?? ''}`);
   return <RedirectingNote />;
@@ -92,7 +92,7 @@ function LegacyBaseClassRedirect() {
  * destination is immediate; without one, resolve ws → namespace → org via the
  * API (cheap two hops) and fall back to the picker on failure.
  */
-function LegacyWorkspaceRedirect() {
+export function LegacyWorkspaceRedirect() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const currentOrgId = useSessionStore((state) => state.currentOrgId);
@@ -187,7 +187,7 @@ const router = createBrowserRouter([
       { path: 'base-classes/:slug', Component: BaseClassDetailPage },
       { path: 'capabilities', Component: CapabilitiesPage },
       { path: 'genes', Component: GenesPage },
-      { path: 'knowledge', element: <PagePlaceholder titleKey="nav.knowledge" /> },
+      { path: 'knowledge', Component: KnowledgePage },
       { path: 'namespaces', Component: NamespacesListPage },
       { path: 'namespaces/:nsId', Component: NamespaceOverviewPage },
       { path: 'namespaces/:nsId/workspaces', Component: NamespaceWorkspacesPage },

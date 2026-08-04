@@ -64,9 +64,39 @@ describe('WorldMembersPage', () => {
 
     expect(await screen.findByText('Alice')).toBeInTheDocument();
     expect(screen.getByText(/alice · alice@example\.com/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /can_manage_org_members/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Manage world members/ })).toBeInTheDocument();
     expect(screen.queryByText('contract-1')).not.toBeInTheDocument();
     expect(screen.getByText('1 members')).toBeInTheDocument();
+  });
+
+  it('offers the full 16-atom catalog as toggle buttons per member', async () => {
+    mockedApi.mockResolvedValue({ items: [makeMember()] });
+    renderMembersPage();
+
+    expect(await screen.findByText('Alice')).toBeInTheDocument();
+    const expectedNames = [
+      'Manage world',
+      'Manage world members',
+      'Manage namespaces',
+      'Manage workspaces',
+      'Edit workspaces',
+      'View workspaces',
+      'Operate workspaces',
+      'Manage genes',
+      'Manage capabilities',
+      'Manage AI genes',
+      'Clone base classes',
+      'Clone entities',
+      'Clone world',
+      'Clone workspace',
+      'Manage knowledge',
+      'Manage meetings',
+    ];
+    for (const name of expectedNames) {
+      expect(
+        screen.getByRole('button', { name: new RegExp(`^${name}: (on|off)$`) }),
+      ).toBeInTheDocument();
+    }
   });
 
   it('renders an empty state when the world has no members', async () => {
@@ -121,7 +151,7 @@ describe('WorldMembersPage', () => {
       target: { value: 'alice' },
     });
     fireEvent.click(await screen.findByText('alice'));
-    fireEvent.click(screen.getByLabelText('can_manage_org_members'));
+    fireEvent.click(screen.getByLabelText('Manage world members'));
     fireEvent.click(screen.getByTestId('world-members-submit'));
 
     await waitFor(() => {

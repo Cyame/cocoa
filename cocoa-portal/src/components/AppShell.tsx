@@ -1,4 +1,5 @@
 import {
+  BookOpen,
   Bug,
   Building2,
   Dna,
@@ -56,6 +57,7 @@ function worldNavItems(orgId: string): readonly NavItem[] {
     { to: `/orgs/${orgId}/base-classes`, labelKey: 'nav.divinity', Icon: Sparkles },
     { to: `/orgs/${orgId}/capabilities`, labelKey: 'nav.capabilities', Icon: FlaskConical },
     { to: `/orgs/${orgId}/genes`, labelKey: 'nav.genes', Icon: Dna },
+    { to: `/orgs/${orgId}/knowledge`, labelKey: 'nav.knowledge', Icon: BookOpen },
     { to: `/orgs/${orgId}/namespaces`, labelKey: 'nav.namespaces', Icon: Layers, exact: true },
     { to: `/orgs/${orgId}/debug`, labelKey: 'nav.debug', Icon: Bug },
   ];

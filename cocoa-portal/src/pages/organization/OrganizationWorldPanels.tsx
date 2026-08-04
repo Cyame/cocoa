@@ -9,7 +9,6 @@ import {
   type NamespaceWithStats,
   updateNamespace,
 } from '@/lib/api/namespaces';
-import { fetchOrganization, updateOrganization } from '@/lib/api/organizations';
 import {
   fetchDefaultOrganization,
   generateDescription,
@@ -38,8 +37,7 @@ export function OrganizationWorldPanel({ canWrite, orgId }: WorldProps) {
     setIsLoading(true);
     setErrorMessage(null);
     try {
-      const data =
-        orgId !== undefined ? await fetchOrganization(orgId) : await fetchDefaultOrganization();
+      const data = await fetchDefaultOrganization(orgId);
       setOrg(data);
       setName(data.name);
       setDescription(data.description ?? '');
@@ -60,16 +58,13 @@ export function OrganizationWorldPanel({ canWrite, orgId }: WorldProps) {
     setErrorMessage(null);
     setNotice(null);
     try {
-      const next =
-        orgId !== undefined
-          ? await updateOrganization(orgId, {
-              name,
-              description: description.trim() || null,
-            })
-          : await updateDefaultOrganization({
-              name,
-              description: description.trim() || null,
-            });
+      const next = await updateDefaultOrganization(
+        {
+          name,
+          description: description.trim() || null,
+        },
+        orgId,
+      );
       setOrg(next);
       setNotice(t('organization.world.saved'));
     } catch (error) {

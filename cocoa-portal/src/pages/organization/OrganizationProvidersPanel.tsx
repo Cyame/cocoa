@@ -38,9 +38,10 @@ import { cn } from '@/lib/utils';
 
 type ProvidersPanelProps = {
   readonly canWrite: boolean;
+  readonly orgId?: string;
 };
 
-export function OrganizationProvidersPanel({ canWrite }: ProvidersPanelProps) {
+export function OrganizationProvidersPanel({ canWrite, orgId }: ProvidersPanelProps) {
   const { t } = useTranslation();
 
   const [providers, setProviders] = useState<readonly OrganizationProvider[]>([]);
@@ -70,10 +71,10 @@ export function OrganizationProvidersPanel({ canWrite }: ProvidersPanelProps) {
     setErrorMessage(null);
     try {
       const [providerRows, bcPage, hub, cerebellum] = await Promise.all([
-        listOrganizationProviders(),
+        listOrganizationProviders(undefined, orgId),
         fetchBaseClassesPage({ limit: 100, offset: 0 }),
-        fetchSystemHub(),
-        fetchCerebellumDefaults(),
+        fetchSystemHub(orgId),
+        fetchCerebellumDefaults(orgId),
       ]);
       setProviders(providerRows);
       setBaseClasses(
@@ -92,7 +93,7 @@ export function OrganizationProvidersPanel({ canWrite }: ProvidersPanelProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [t]);
+  }, [orgId, t]);
 
   useEffect(() => {
     void loadAll();
@@ -103,7 +104,7 @@ export function OrganizationProvidersPanel({ canWrite }: ProvidersPanelProps) {
     setTestingId(providerId);
     setActionError(null);
     try {
-      await testOrganizationProvider(providerId);
+      await testOrganizationProvider(providerId, orgId);
       await loadAll();
     } catch (error) {
       setActionError(error instanceof ApiError ? error.message : t('errors.network'));
@@ -116,7 +117,7 @@ export function OrganizationProvidersPanel({ canWrite }: ProvidersPanelProps) {
     if (!canWrite) return;
     setActionError(null);
     try {
-      await updateOrganizationProvider(provider.id, { enabled: !provider.enabled });
+      await updateOrganizationProvider(provider.id, { enabled: !provider.enabled }, orgId);
       await loadAll();
     } catch (error) {
       setActionError(error instanceof ApiError ? error.message : t('errors.network'));
@@ -127,7 +128,7 @@ export function OrganizationProvidersPanel({ canWrite }: ProvidersPanelProps) {
     if (!canWrite) return;
     setActionError(null);
     try {
-      await deleteOrganizationProvider(providerId);
+      await deleteOrganizationProvider(providerId, orgId);
       await loadAll();
     } catch (error) {
       setActionError(error instanceof ApiError ? error.message : t('errors.network'));
@@ -139,10 +140,13 @@ export function OrganizationProvidersPanel({ canWrite }: ProvidersPanelProps) {
     setHubSaving(true);
     setHubError(null);
     try {
-      await updateSystemHub({
-        provider_id: systemHubProviderId || null,
-        model: systemHubModel || null,
-      });
+      await updateSystemHub(
+        {
+          provider_id: systemHubProviderId || null,
+          model: systemHubModel || null,
+        },
+        orgId,
+      );
       await loadAll();
     } catch (error) {
       setHubError(error instanceof ApiError ? error.message : t('errors.network'));
@@ -156,10 +160,13 @@ export function OrganizationProvidersPanel({ canWrite }: ProvidersPanelProps) {
     setCerebellumSaving(true);
     setCerebellumError(null);
     try {
-      await updateCerebellumDefaults({
-        provider_id: cerebellumProviderId || null,
-        model: cerebellumModel || null,
-      });
+      await updateCerebellumDefaults(
+        {
+          provider_id: cerebellumProviderId || null,
+          model: cerebellumModel || null,
+        },
+        orgId,
+      );
       await loadAll();
     } catch (error) {
       setCerebellumError(error instanceof ApiError ? error.message : t('errors.network'));
@@ -378,6 +385,7 @@ export function OrganizationProvidersPanel({ canWrite }: ProvidersPanelProps) {
       {catalogOpen && canWrite ? (
         <EnableCatalogModal
           existing={providers}
+          orgId={orgId}
           onClose={() => setCatalogOpen(false)}
           onCreated={() => {
             setCatalogOpen(false);
@@ -388,6 +396,7 @@ export function OrganizationProvidersPanel({ canWrite }: ProvidersPanelProps) {
 
       {customOpen && canWrite ? (
         <CustomProviderModal
+          orgId={orgId}
           onClose={() => setCustomOpen(false)}
           onCreated={() => {
             setCustomOpen(false);
@@ -400,6 +409,7 @@ export function OrganizationProvidersPanel({ canWrite }: ProvidersPanelProps) {
         <SetDefaultModal
           provider={providers.find((p) => p.id === setDefaultOpen) ?? null}
           baseClasses={baseClasses}
+          orgId={orgId}
           onClose={() => setSetDefaultOpen(null)}
           onSaved={() => {
             setSetDefaultOpen(null);
@@ -535,10 +545,12 @@ function HubSettingsPanel({
 
 function EnableCatalogModal({
   existing,
+  orgId,
   onClose,
   onCreated,
 }: {
   readonly existing: readonly OrganizationProvider[];
+  readonly orgId?: string;
   readonly onClose: () => void;
   readonly onCreated: () => void;
 }) {
@@ -590,13 +602,16 @@ function EnableCatalogModal({
     setFetchingModels(true);
     setError(null);
     try {
-      const page = await previewProviderModels({
-        catalog_provider_id: selectedId,
-        api_key_ref: apiKey.trim(),
-        base_url: baseUrl.trim() || null,
-        request_format: selectedEntry?.inferred_request_format ?? 'completion',
-        verify_ssl: verifySsl,
-      });
+      const page = await previewProviderModels(
+        {
+          catalog_provider_id: selectedId,
+          api_key_ref: apiKey.trim(),
+          base_url: baseUrl.trim() || null,
+          request_format: selectedEntry?.inferred_request_format ?? 'completion',
+          verify_ssl: verifySsl,
+        },
+        orgId,
+      );
       setModels(page.items);
       if (page.error) setError(page.error);
       if (!defaultModel && page.items[0]) setDefaultModel(page.items[0].id);
@@ -612,15 +627,18 @@ function EnableCatalogModal({
     setSubmitting(true);
     setError(null);
     try {
-      await createOrganizationProvider({
-        origin: 'catalog',
-        catalog_provider_id: selectedId,
-        api_key_ref: apiKey.trim(),
-        base_url: baseUrl.trim() || null,
-        default_model: defaultModel.trim(),
-        verify_ssl: verifySsl,
-        models_allowlist: models.length > 0 ? models.map((m) => m.id) : null,
-      });
+      await createOrganizationProvider(
+        {
+          origin: 'catalog',
+          catalog_provider_id: selectedId,
+          api_key_ref: apiKey.trim(),
+          base_url: baseUrl.trim() || null,
+          default_model: defaultModel.trim(),
+          verify_ssl: verifySsl,
+          models_allowlist: models.length > 0 ? models.map((m) => m.id) : null,
+        },
+        orgId,
+      );
       onCreated();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t('errors.network'));
@@ -735,9 +753,11 @@ function EnableCatalogModal({
 }
 
 function CustomProviderModal({
+  orgId,
   onClose,
   onCreated,
 }: {
+  readonly orgId?: string;
   readonly onClose: () => void;
   readonly onCreated: () => void;
 }) {
@@ -758,12 +778,15 @@ function CustomProviderModal({
     setFetchingModels(true);
     setError(null);
     try {
-      const page = await previewProviderModels({
-        api_key_ref: apiKey.trim(),
-        base_url: baseUrl.trim(),
-        request_format: requestFormat,
-        verify_ssl: verifySsl,
-      });
+      const page = await previewProviderModels(
+        {
+          api_key_ref: apiKey.trim(),
+          base_url: baseUrl.trim(),
+          request_format: requestFormat,
+          verify_ssl: verifySsl,
+        },
+        orgId,
+      );
       setModels(page.items);
       if (page.error) setError(page.error);
       if (!defaultModel && page.items[0]) setDefaultModel(page.items[0].id);
@@ -778,16 +801,19 @@ function CustomProviderModal({
     setSubmitting(true);
     setError(null);
     try {
-      await createOrganizationProvider({
-        origin: 'custom',
-        name: name.trim(),
-        base_url: baseUrl.trim(),
-        request_format: requestFormat,
-        default_model: defaultModel.trim(),
-        api_key_ref: apiKey.trim(),
-        verify_ssl: verifySsl,
-        models_allowlist: models.length > 0 ? models.map((m) => m.id) : null,
-      });
+      await createOrganizationProvider(
+        {
+          origin: 'custom',
+          name: name.trim(),
+          base_url: baseUrl.trim(),
+          request_format: requestFormat,
+          default_model: defaultModel.trim(),
+          api_key_ref: apiKey.trim(),
+          verify_ssl: verifySsl,
+          models_allowlist: models.length > 0 ? models.map((m) => m.id) : null,
+        },
+        orgId,
+      );
       onCreated();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t('errors.network'));
@@ -903,11 +929,13 @@ function CustomProviderModal({
 function SetDefaultModal({
   provider,
   baseClasses,
+  orgId,
   onClose,
   onSaved,
 }: {
   readonly provider: OrganizationProvider | null;
   readonly baseClasses: readonly BaseClass[];
+  readonly orgId?: string;
   readonly onClose: () => void;
   readonly onSaved: () => void;
 }) {
@@ -953,7 +981,7 @@ function SetDefaultModal({
     setFetchingModels(true);
     setError(null);
     try {
-      const page = await refreshProviderModels(provider.id);
+      const page = await refreshProviderModels(provider.id, orgId);
       setModels(page.items);
       if (page.error) setError(page.error);
       if (page.default_model) setModel(page.default_model);
@@ -970,11 +998,15 @@ function SetDefaultModal({
     setSubmitting(true);
     setError(null);
     try {
-      await setProviderDefault(provider.id, {
-        target,
-        model: model.trim(),
-        base_class_ids: target === 'base_class' ? Array.from(selectedBaseClassIds) : undefined,
-      });
+      await setProviderDefault(
+        provider.id,
+        {
+          target,
+          model: model.trim(),
+          base_class_ids: target === 'base_class' ? Array.from(selectedBaseClassIds) : undefined,
+        },
+        orgId,
+      );
       onSaved();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t('errors.network'));

@@ -13,14 +13,28 @@ import {
 import type { OrgMember, UserBrief } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
-/** Static catalog of common world-management atoms shown as toggles/checkboxes. */
+/**
+ * Full 16-atom world-management catalog shown as toggles/checkboxes.
+ * Mirrors the backend single source cocoa-backend/app/core/gene_atoms.py
+ * (ATOM_CATALOG); display names come from worldMembers.atoms.<slug> i18n keys.
+ */
 export const WORLD_ATOM_CATALOG = [
-  { slug: 'can_view_workspace', name: 'can_view_workspace' },
-  { slug: 'can_edit_workspace', name: 'can_edit_workspace' },
-  { slug: 'can_operate_workspace', name: 'can_operate_workspace' },
   { slug: 'can_manage_organization', name: 'can_manage_organization' },
   { slug: 'can_manage_org_members', name: 'can_manage_org_members' },
+  { slug: 'can_manage_namespace', name: 'can_manage_namespace' },
+  { slug: 'can_manage_workspace', name: 'can_manage_workspace' },
+  { slug: 'can_edit_workspace', name: 'can_edit_workspace' },
+  { slug: 'can_view_workspace', name: 'can_view_workspace' },
+  { slug: 'can_operate_workspace', name: 'can_operate_workspace' },
+  { slug: 'can_manage_genes', name: 'can_manage_genes' },
+  { slug: 'can_manage_capabilities', name: 'can_manage_capabilities' },
+  { slug: 'can_manage_ai_genes', name: 'can_manage_ai_genes' },
+  { slug: 'can_clone_base_class', name: 'can_clone_base_class' },
+  { slug: 'can_clone_entity', name: 'can_clone_entity' },
+  { slug: 'can_clone_organization', name: 'can_clone_organization' },
+  { slug: 'can_clone_workspace', name: 'can_clone_workspace' },
   { slug: 'can_manage_knowledge', name: 'can_manage_knowledge' },
+  { slug: 'can_manage_meetings', name: 'can_manage_meetings' },
 ] as const satisfies readonly { readonly slug: string; readonly name: string }[];
 
 const SEARCH_DEBOUNCE_MS = 300;
@@ -40,6 +54,12 @@ function isSelfLockError(error: unknown): boolean {
 function formatDate(iso: string): string {
   const date = new Date(iso);
   return Number.isNaN(date.getTime()) ? iso : date.toLocaleDateString();
+}
+
+type TFn = ReturnType<typeof useTranslation>['t'];
+
+function atomDisplayName(t: TFn, slug: string): string {
+  return t(`worldMembers.atoms.${slug}`, { defaultValue: slug });
 }
 
 export default function WorldMembersPage() {
@@ -319,9 +339,11 @@ export default function WorldMembersPage() {
             <div className="flex flex-wrap gap-2">
               {WORLD_ATOM_CATALOG.map((atom) => {
                 const checked = selectedAtomSlugs.includes(atom.slug);
+                const displayName = atomDisplayName(t, atom.slug);
                 return (
                   <label
                     key={atom.slug}
+                    title={atom.slug}
                     className={cn(
                       'flex cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm transition-colors',
                       checked
@@ -335,7 +357,7 @@ export default function WorldMembersPage() {
                       onChange={() => toggleCatalogAtom(atom.slug)}
                       className="size-4 accent-blue-600"
                     />
-                    {atom.slug}
+                    {displayName}
                   </label>
                 );
               })}
@@ -419,6 +441,7 @@ export default function WorldMembersPage() {
                 <div className="mt-3 flex flex-wrap gap-2">
                   {WORLD_ATOM_CATALOG.map((atom) => {
                     const has = member.atoms.some((a) => a.slug === atom.slug);
+                    const displayName = atomDisplayName(t, atom.slug);
                     return (
                       <button
                         key={atom.slug}
@@ -426,7 +449,8 @@ export default function WorldMembersPage() {
                         disabled={pending}
                         onClick={() => void handleToggleAtom(member, atom.slug)}
                         aria-pressed={has}
-                        aria-label={`${atom.slug}: ${has ? 'on' : 'off'}`}
+                        aria-label={`${displayName}: ${has ? 'on' : 'off'}`}
+                        title={atom.slug}
                         className={cn(
                           'inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors',
                           has
@@ -436,7 +460,7 @@ export default function WorldMembersPage() {
                         )}
                       >
                         {has ? <Check className="size-3" aria-hidden="true" /> : null}
-                        {atom.slug}
+                        {displayName}
                       </button>
                     );
                   })}

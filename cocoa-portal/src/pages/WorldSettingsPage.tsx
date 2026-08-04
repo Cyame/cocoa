@@ -3,8 +3,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 import { ApiError, api } from '@/lib/api';
+import { fetchMe } from '@/lib/api/auth';
 import { fetchOrganization } from '@/lib/api/organizations';
-import type { Organization } from '@/lib/types';
+import type { Organization, OrgIdentity } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { OrganizationProvidersPanel } from '@/pages/organization/OrganizationProvidersPanel';
 import { OrganizationWorldPanel } from '@/pages/organization/OrganizationWorldPanels';
@@ -22,8 +23,30 @@ export default function WorldSettingsPage() {
   const { orgId } = useParams<{ orgId: string }>();
   const user = useSessionStore((state) => state.user);
   const isSuperAdmin = user?.is_super_admin ?? false;
-  const identity = user?.identity ?? null;
-  const canManageWorld = isSuperAdmin || identity === 'system' || identity === 'org';
+  // H7: tenant gating reads org_identity.atoms from GET /auth/me (same pattern
+  // as StatusBar). The legacy `identity` field never yields 'org', so org
+  // managers holding can_manage_organization were locked out before.
+  const [orgIdentity, setOrgIdentity] = useState<OrgIdentity | null>(null);
+  const canManageWorld =
+    isSuperAdmin || (orgIdentity?.atoms.includes('can_manage_organization') ?? false);
+
+  useEffect(() => {
+    if (orgId === undefined) {
+      setOrgIdentity(null);
+      return;
+    }
+    let cancelled = false;
+    fetchMe()
+      .then((me) => {
+        if (!cancelled) setOrgIdentity(me.org_identity ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setOrgIdentity(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [orgId]);
 
   const [org, setOrg] = useState<OrgWithProxy | null>(null);
   const [useProxy, setUseProxy] = useState(false);
@@ -221,7 +244,7 @@ export default function WorldSettingsPage() {
           </section>
         ) : null}
 
-        <OrganizationProvidersPanel canWrite={isSuperAdmin} />
+        <OrganizationProvidersPanel canWrite={canManageWorld} orgId={orgId} />
       </div>
     </section>
   );

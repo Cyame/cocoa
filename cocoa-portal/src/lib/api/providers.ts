@@ -1,4 +1,15 @@
 import { api } from '@/lib/api';
+import { getCurrentOrgId } from '@/stores/session';
+
+/**
+ * Org-scoped provider lanes live at /organizations/{org_id}/providers...
+ * Resolution order for the URL segment: explicit orgId argument → session
+ * current org (the same context the API layer sends as X-Organization-Id) →
+ * the legacy 'default' alias, which the backend keeps for backward compat.
+ */
+function orgSegment(orgId?: string): string {
+  return encodeURIComponent(orgId ?? getCurrentOrgId() ?? 'default');
+}
 
 export type Organization = {
   readonly id: string;
@@ -101,15 +112,18 @@ export type CerebellumAgent = {
   readonly updated_at: string | null;
 };
 
-export function fetchDefaultOrganization(): Promise<Organization> {
-  return api<Organization>('/organizations/default');
+export function fetchDefaultOrganization(orgId?: string): Promise<Organization> {
+  return api<Organization>(`/organizations/${orgSegment(orgId)}`);
 }
 
-export function updateDefaultOrganization(body: {
-  readonly name?: string;
-  readonly description?: string | null;
-}): Promise<Organization> {
-  return api<Organization>('/organizations/default', {
+export function updateDefaultOrganization(
+  body: {
+    readonly name?: string;
+    readonly description?: string | null;
+  },
+  orgId?: string,
+): Promise<Organization> {
+  return api<Organization>(`/organizations/${orgSegment(orgId)}`, {
     method: 'PATCH',
     body: JSON.stringify(body),
   });
@@ -117,9 +131,12 @@ export function updateDefaultOrganization(body: {
 
 export function listOrganizationProviders(
   enabled?: boolean,
+  orgId?: string,
 ): Promise<readonly OrganizationProvider[]> {
   const query = enabled === undefined ? '' : `?enabled=${enabled ? 'true' : 'false'}`;
-  return api<readonly OrganizationProvider[]>(`/organizations/default/providers${query}`);
+  return api<readonly OrganizationProvider[]>(
+    `/organizations/${orgSegment(orgId)}/providers${query}`,
+  );
 }
 
 export type OrganizationProviderCreatePayload = {
@@ -140,8 +157,9 @@ export type OrganizationProviderCreatePayload = {
 
 export function createOrganizationProvider(
   payload: OrganizationProviderCreatePayload,
+  orgId?: string,
 ): Promise<OrganizationProvider> {
-  return api<OrganizationProvider>('/organizations/default/providers', {
+  return api<OrganizationProvider>(`/organizations/${orgSegment(orgId)}/providers`, {
     method: 'POST',
     body: JSON.stringify(payload),
   });
@@ -163,9 +181,10 @@ export type OrganizationProviderUpdatePayload = {
 export function updateOrganizationProvider(
   providerId: string,
   payload: OrganizationProviderUpdatePayload,
+  orgId?: string,
 ): Promise<OrganizationProvider> {
   return api<OrganizationProvider>(
-    `/organizations/default/providers/${encodeURIComponent(providerId)}`,
+    `/organizations/${orgSegment(orgId)}/providers/${encodeURIComponent(providerId)}`,
     {
       method: 'PATCH',
       body: JSON.stringify(payload),
@@ -173,15 +192,21 @@ export function updateOrganizationProvider(
   );
 }
 
-export function deleteOrganizationProvider(providerId: string): Promise<void> {
-  return api<void>(`/organizations/default/providers/${encodeURIComponent(providerId)}`, {
-    method: 'DELETE',
-  });
+export function deleteOrganizationProvider(providerId: string, orgId?: string): Promise<void> {
+  return api<void>(
+    `/organizations/${orgSegment(orgId)}/providers/${encodeURIComponent(providerId)}`,
+    {
+      method: 'DELETE',
+    },
+  );
 }
 
-export function testOrganizationProvider(providerId: string): Promise<ProviderTestResult> {
+export function testOrganizationProvider(
+  providerId: string,
+  orgId?: string,
+): Promise<ProviderTestResult> {
   return api<ProviderTestResult>(
-    `/organizations/default/providers/${encodeURIComponent(providerId)}/test`,
+    `/organizations/${orgSegment(orgId)}/providers/${encodeURIComponent(providerId)}/test`,
     { method: 'POST' },
   );
 }
@@ -193,6 +218,7 @@ export function setProviderDefault(
     readonly model: string;
     readonly base_class_ids?: readonly string[];
   },
+  orgId?: string,
 ): Promise<{
   readonly status: string;
   readonly target: string;
@@ -204,35 +230,44 @@ export function setProviderDefault(
     readonly target: string;
     readonly provider_id: string;
     readonly model: string;
-  }>(`/organizations/default/providers/${encodeURIComponent(providerId)}/set-default`, {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
+  }>(
+    `/organizations/${orgSegment(orgId)}/providers/${encodeURIComponent(providerId)}/set-default`,
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
+  );
 }
 
-export function fetchSystemHub(): Promise<SystemHubConfig> {
-  return api<SystemHubConfig>('/organizations/default/system-hub');
+export function fetchSystemHub(orgId?: string): Promise<SystemHubConfig> {
+  return api<SystemHubConfig>(`/organizations/${orgSegment(orgId)}/system-hub`);
 }
 
-export function updateSystemHub(payload: {
-  readonly provider_id?: string | null;
-  readonly model?: string | null;
-}): Promise<SystemHubConfig> {
-  return api<SystemHubConfig>('/organizations/default/system-hub', {
+export function updateSystemHub(
+  payload: {
+    readonly provider_id?: string | null;
+    readonly model?: string | null;
+  },
+  orgId?: string,
+): Promise<SystemHubConfig> {
+  return api<SystemHubConfig>(`/organizations/${orgSegment(orgId)}/system-hub`, {
     method: 'PATCH',
     body: JSON.stringify(payload),
   });
 }
 
-export function fetchCerebellumDefaults(): Promise<CerebellumDefaults> {
-  return api<CerebellumDefaults>('/organizations/default/cerebellum-defaults');
+export function fetchCerebellumDefaults(orgId?: string): Promise<CerebellumDefaults> {
+  return api<CerebellumDefaults>(`/organizations/${orgSegment(orgId)}/cerebellum-defaults`);
 }
 
-export function updateCerebellumDefaults(payload: {
-  readonly provider_id?: string | null;
-  readonly model?: string | null;
-}): Promise<CerebellumDefaults> {
-  return api<CerebellumDefaults>('/organizations/default/cerebellum-defaults', {
+export function updateCerebellumDefaults(
+  payload: {
+    readonly provider_id?: string | null;
+    readonly model?: string | null;
+  },
+  orgId?: string,
+): Promise<CerebellumDefaults> {
+  return api<CerebellumDefaults>(`/organizations/${orgSegment(orgId)}/cerebellum-defaults`, {
     method: 'PATCH',
     body: JSON.stringify(payload),
   });
@@ -269,24 +304,30 @@ export function fetchModelCatalog(
   return api<CatalogModelsPage>(`/model-catalog?${params.toString()}`);
 }
 
-export function previewProviderModels(payload: {
-  readonly api_key_ref: string;
-  readonly base_url?: string | null;
-  readonly request_format?: string;
-  readonly verify_ssl?: boolean;
-  readonly models_endpoint_mode?: 'inherit' | 'separate';
-  readonly models_base_url?: string | null;
-  readonly catalog_provider_id?: string | null;
-}): Promise<CatalogModelsPage> {
-  return api<CatalogModelsPage>('/organizations/default/providers/preview-models', {
+export function previewProviderModels(
+  payload: {
+    readonly api_key_ref: string;
+    readonly base_url?: string | null;
+    readonly request_format?: string;
+    readonly verify_ssl?: boolean;
+    readonly models_endpoint_mode?: 'inherit' | 'separate';
+    readonly models_base_url?: string | null;
+    readonly catalog_provider_id?: string | null;
+  },
+  orgId?: string,
+): Promise<CatalogModelsPage> {
+  return api<CatalogModelsPage>(`/organizations/${orgSegment(orgId)}/providers/preview-models`, {
     method: 'POST',
     body: JSON.stringify(payload),
   });
 }
 
-export function refreshProviderModels(providerId: string): Promise<CatalogModelsPage> {
+export function refreshProviderModels(
+  providerId: string,
+  orgId?: string,
+): Promise<CatalogModelsPage> {
   return api<CatalogModelsPage>(
-    `/organizations/default/providers/${encodeURIComponent(providerId)}/refresh-models`,
+    `/organizations/${orgSegment(orgId)}/providers/${encodeURIComponent(providerId)}/refresh-models`,
     { method: 'POST' },
   );
 }
