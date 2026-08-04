@@ -3,11 +3,13 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, Navigate, useNavigate, useParams } from 'react-router';
 import { ApiError, api } from '@/lib/api';
+import { fetchMe } from '@/lib/api/auth';
 import { cloneWorkspace } from '@/lib/api/clone';
 import { listMemberships } from '@/lib/api/instances';
 import { createWorkspace, fetchWorkspaces } from '@/lib/api/workspaces';
 import { toSlug } from '@/lib/slug';
-import type { Workspace } from '@/lib/types';
+import type { OrgIdentity, Workspace } from '@/lib/types';
+import { useSessionStore } from '@/stores/session';
 
 type WorkspaceSummary = {
   readonly workspace: Workspace;
@@ -24,6 +26,11 @@ export default function NamespaceWorkspacesPage() {
   const { t } = useTranslation();
   const { orgId, nsId } = useParams<{ orgId: string; nsId: string }>();
   const navigate = useNavigate();
+  const user = useSessionStore((state) => state.user);
+  const isSuperAdmin = user?.is_super_admin ?? false;
+  const [orgIdentity, setOrgIdentity] = useState<OrgIdentity | null>(null);
+  const canCloneWorkspace =
+    isSuperAdmin || (orgIdentity?.atoms.includes('can_clone_workspace') ?? false);
 
   const [workspaces, setWorkspaces] = useState<readonly WorkspaceSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -35,6 +42,24 @@ export default function NamespaceWorkspacesPage() {
   const [createSlug, setCreateSlug] = useState('');
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (orgId === undefined) {
+      setOrgIdentity(null);
+      return;
+    }
+    let cancelled = false;
+    fetchMe()
+      .then((me) => {
+        if (!cancelled) setOrgIdentity(me.org_identity ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setOrgIdentity(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [orgId]);
 
   const loadWorkspaces = useCallback(async () => {
     if (nsId === undefined) return;
@@ -253,6 +278,7 @@ export default function NamespaceWorkspacesPage() {
         <WorkspaceList
           orgId={orgId ?? ''}
           workspaces={workspaces}
+          canClone={canCloneWorkspace}
           cloningId={cloningId}
           onClone={(workspace) => void handleCloneWorkspace(workspace)}
           onCreate={() => {
@@ -271,6 +297,7 @@ type TFn = ReturnType<typeof useTranslation>['t'];
 function WorkspaceList({
   orgId,
   workspaces,
+  canClone,
   cloningId,
   onClone,
   onCreate,
@@ -278,6 +305,7 @@ function WorkspaceList({
 }: {
   readonly orgId: string;
   readonly workspaces: readonly WorkspaceSummary[];
+  readonly canClone: boolean;
   readonly cloningId: string | null;
   readonly onClone: (workspace: Workspace) => void;
   readonly onCreate: () => void;
@@ -337,17 +365,19 @@ function WorkspaceList({
             </p>
           </Link>
           <div className="flex justify-end border-t border-slate-100 px-5 py-3">
-            <button
-              type="button"
-              disabled={cloningId !== null}
-              onClick={() => onClone(workspace)}
-              data-testid={`workspace-clone-${workspace.id}`}
-              title={t('clone.instancesNotCopied')}
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900 disabled:opacity-50"
-            >
-              <Copy className="size-3.5" aria-hidden="true" />
-              {cloningId === workspace.id ? t('clone.cloning') : t('clone.workspace')}
-            </button>
+            {canClone ? (
+              <button
+                type="button"
+                disabled={cloningId !== null}
+                onClick={() => onClone(workspace)}
+                data-testid={`workspace-clone-${workspace.id}`}
+                title={t('clone.instancesNotCopied')}
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900 disabled:opacity-50"
+              >
+                <Copy className="size-3.5" aria-hidden="true" />
+                {cloningId === workspace.id ? t('clone.cloning') : t('clone.workspace')}
+              </button>
+            ) : null}
           </div>
         </div>
       ))}

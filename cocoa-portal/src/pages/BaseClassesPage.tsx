@@ -3,15 +3,22 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, Navigate, useParams } from 'react-router';
 import { ApiError } from '@/lib/api';
+import { fetchMe } from '@/lib/api/auth';
 import { fetchBaseClassesPage } from '@/lib/api/baseClasses';
 import { cloneBaseClass } from '@/lib/api/clone';
 import { translateBaseClassTag } from '@/lib/baseClassTags';
-import type { BaseClass } from '@/lib/types';
+import type { BaseClass, OrgIdentity } from '@/lib/types';
 import { useOnboardingModalStore } from '@/stores/onboardingModalStore';
+import { useSessionStore } from '@/stores/session';
 
 export default function BaseClassesPage() {
   const { t } = useTranslation();
   const { orgId } = useParams<{ orgId: string }>();
+  const user = useSessionStore((state) => state.user);
+  const isSuperAdmin = user?.is_super_admin ?? false;
+  const [orgIdentity, setOrgIdentity] = useState<OrgIdentity | null>(null);
+  const canCloneBaseClass =
+    isSuperAdmin || (orgIdentity?.atoms.includes('can_clone_base_class') ?? false);
 
   const [baseClasses, setBaseClasses] = useState<readonly BaseClass[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -20,6 +27,24 @@ export default function BaseClassesPage() {
   const [cloningId, setCloningId] = useState<string | null>(null);
 
   const openOnboarding = useOnboardingModalStore((state) => state.open);
+
+  useEffect(() => {
+    if (orgId === undefined) {
+      setOrgIdentity(null);
+      return;
+    }
+    let cancelled = false;
+    fetchMe()
+      .then((me) => {
+        if (!cancelled) setOrgIdentity(me.org_identity ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setOrgIdentity(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [orgId]);
 
   const refresh = useCallback(async () => {
     setIsLoading(true);
@@ -117,6 +142,7 @@ export default function BaseClassesPage() {
         <BaseClassGrid
           orgId={orgId ?? ''}
           baseClasses={baseClasses}
+          canClone={canCloneBaseClass}
           cloningId={cloningId}
           onClone={(bc) => void handleClone(bc)}
           onSummon={(slug) => openOnboarding({ baseClassSlug: slug })}
@@ -132,6 +158,7 @@ type TFn = ReturnType<typeof useTranslation>['t'];
 function BaseClassGrid({
   orgId,
   baseClasses,
+  canClone,
   cloningId,
   onClone,
   onSummon,
@@ -139,6 +166,7 @@ function BaseClassGrid({
 }: {
   readonly orgId: string;
   readonly baseClasses: readonly BaseClass[];
+  readonly canClone: boolean;
   readonly cloningId: string | null;
   readonly onClone: (baseClass: BaseClass) => void;
   readonly onSummon: (slug: string) => void;
@@ -180,16 +208,19 @@ function BaseClassGrid({
               <Plus className="size-3.5" aria-hidden="true" />
               {t('namespaces.summonFromBaseClass')}
             </button>
-            <button
-              type="button"
-              disabled={cloningId !== null}
-              onClick={() => onClone(bc)}
-              data-testid={`base-class-clone-${bc.id}`}
-              className="inline-flex items-center gap-1 text-sm font-medium text-slate-600 hover:text-slate-900 disabled:opacity-50"
-            >
-              <Copy className="size-3.5" aria-hidden="true" />
-              {cloningId === bc.id ? t('clone.cloning') : t('clone.baseClass')}
-            </button>
+            {canClone ? (
+              <button
+                type="button"
+                disabled={cloningId !== null}
+                onClick={() => onClone(bc)}
+                data-testid={`base-class-clone-${bc.id}`}
+                title={t('clone.instancesNotCopied')}
+                className="inline-flex items-center gap-1 text-sm font-medium text-slate-600 hover:text-slate-900 disabled:opacity-50"
+              >
+                <Copy className="size-3.5" aria-hidden="true" />
+                {cloningId === bc.id ? t('clone.cloning') : t('clone.baseClass')}
+              </button>
+            ) : null}
           </div>
         </article>
       ))}

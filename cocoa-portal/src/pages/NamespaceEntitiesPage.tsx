@@ -3,10 +3,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Navigate, useParams } from 'react-router';
 import { ApiError, api } from '@/lib/api';
+import { fetchMe } from '@/lib/api/auth';
 import { cloneEntity } from '@/lib/api/clone';
-import type { Entity } from '@/lib/types';
+import type { Entity, OrgIdentity } from '@/lib/types';
 import { useEntityModalStore } from '@/stores/entityModalStore';
 import { useOnboardingModalStore } from '@/stores/onboardingModalStore';
+import { useSessionStore } from '@/stores/session';
 
 type OffsetPage<T> = {
   readonly items: readonly T[];
@@ -18,6 +20,10 @@ type OffsetPage<T> = {
 export default function NamespaceEntitiesPage() {
   const { t } = useTranslation();
   const { nsId } = useParams<{ nsId: string }>();
+  const user = useSessionStore((state) => state.user);
+  const isSuperAdmin = user?.is_super_admin ?? false;
+  const [orgIdentity, setOrgIdentity] = useState<OrgIdentity | null>(null);
+  const canCloneEntity = isSuperAdmin || (orgIdentity?.atoms.includes('can_clone_entity') ?? false);
 
   const [entities, setEntities] = useState<readonly Entity[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -28,6 +34,20 @@ export default function NamespaceEntitiesPage() {
 
   const openOnboarding = useOnboardingModalStore((state) => state.open);
   const openEntityModal = useEntityModalStore((state) => state.open);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchMe()
+      .then((me) => {
+        if (!cancelled) setOrgIdentity(me.org_identity ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setOrgIdentity(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const refresh = useCallback(async () => {
     if (nsId === undefined) return;
@@ -135,6 +155,7 @@ export default function NamespaceEntitiesPage() {
         <EntitiesList
           entities={entities}
           selectedId={selectedEntityId}
+          canClone={canCloneEntity}
           cloningId={cloningId}
           onSelect={setSelectedEntityId}
           onClone={(entity) => void handleClone(entity)}
@@ -152,6 +173,7 @@ type TFn = ReturnType<typeof useTranslation>['t'];
 function EntitiesList({
   entities,
   selectedId,
+  canClone,
   cloningId,
   onSelect,
   onClone,
@@ -161,6 +183,7 @@ function EntitiesList({
 }: {
   readonly entities: readonly Entity[];
   readonly selectedId: string | null;
+  readonly canClone: boolean;
   readonly cloningId: string | null;
   readonly onSelect: (id: string) => void;
   readonly onClone: (entity: Entity) => void;
@@ -225,19 +248,22 @@ function EntitiesList({
                     <FlaskConical className="size-3.5" aria-hidden="true" />
                     {t('transmuteModal.open')}
                   </button>
-                  <button
-                    type="button"
-                    disabled={cloningId !== null}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onClone(entity);
-                    }}
-                    className="inline-flex items-center gap-1 text-slate-600 hover:text-slate-900 disabled:opacity-50"
-                    data-testid={`entity-clone-${entity.id}`}
-                  >
-                    <Copy className="size-3.5" aria-hidden="true" />
-                    {cloningId === entity.id ? t('clone.cloning') : t('clone.entity')}
-                  </button>
+                  {canClone ? (
+                    <button
+                      type="button"
+                      disabled={cloningId !== null}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onClone(entity);
+                      }}
+                      className="inline-flex items-center gap-1 text-slate-600 hover:text-slate-900 disabled:opacity-50"
+                      data-testid={`entity-clone-${entity.id}`}
+                      title={t('clone.instancesNotCopied')}
+                    >
+                      <Copy className="size-3.5" aria-hidden="true" />
+                      {cloningId === entity.id ? t('clone.cloning') : t('clone.entity')}
+                    </button>
+                  ) : null}
                 </div>
               </td>
             </tr>
