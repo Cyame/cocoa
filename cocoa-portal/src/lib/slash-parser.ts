@@ -13,14 +13,19 @@
  *     <target>      := "@" <employee-name>   (at line start, followed by whitespace)
  *     <cmd>         := "/" <name>            (lowercase-start, alphanumeric + hyphens)
  *     <content-ref> : "@" <scope> [":" <path>]
- *     scope         := "workspace" | "fornix" | "vault" | "memory"
+ *     scope         := "hub" | "instance"
+ *
+ * Legacy content-ref scopes (workspace | fornix | vault | blackboard |
+ * memory) are still *accepted* in input text so existing messages don't
+ * break, but the parsed ``scope`` is always normalized to the canonical
+ * enum — ``hub`` for hub-scoped storage, ``instance`` for memory.
  */
 
 // ---------------------------------------------------------------------------
 // Types - mirror app/schemas/slash.py (Pydantic models)
 // ---------------------------------------------------------------------------
 
-export type Scope = 'workspace' | 'fornix' | 'vault' | 'memory';
+export type Scope = 'hub' | 'instance';
 
 export type ContentRef = {
   readonly scope: Scope;
@@ -60,15 +65,34 @@ const RE_TARGET = /^@([a-zA-Z0-9_-]+)(?:\s+|$)/;
 const RE_CMD = /\/([a-z][a-z0-9-]*)/;
 
 /**
- * @scope:path where scope is one of the 4 keywords. The global flag is
- * required for both matchAll (mirrors Python ``re.finditer``) and replace
- * (mirrors Python ``re.sub``, which is global by default).
+ * @scope:path where scope is a canonical (hub|instance) or legacy
+ * (workspace|fornix|vault|memory) keyword — legacy values are normalized by
+ * {@link normalizeScope} after capture. The global flag is required for both
+ * matchAll (mirrors Python ``re.finditer``) and replace (mirrors Python
+ * ``re.sub``, which is global by default).
  */
-const RE_CONTENT_REF = /@(workspace|fornix|vault|memory)(?::(\S+))?/g;
+const RE_CONTENT_REF = /@(hub|instance|workspace|fornix|vault|memory)(?::(\S+))?/g;
 
 /** Inline @slug tokens for same-line multi-mention chat expansion. */
 const RE_AT_TOKEN = /@([a-zA-Z0-9_-]+)/g;
-const CONTENT_REF_SCOPES = new Set(['workspace', 'fornix', 'vault', 'memory']);
+// Both canonical and legacy scopes — legacy values still appear in inbound
+// text and must be excluded from @slug mention expansion.
+const CONTENT_REF_SCOPES = new Set(['hub', 'instance', 'workspace', 'fornix', 'vault', 'memory']);
+
+/** Map a legacy ContentRef scope string to the v4.5 canonical enum. */
+export function normalizeScope(scope: string): Scope {
+  switch (scope) {
+    case 'workspace':
+    case 'fornix':
+    case 'vault':
+    case 'blackboard':
+      return 'hub';
+    case 'memory':
+      return 'instance';
+    default:
+      return scope as Scope;
+  }
+}
 
 /**
  * Expand ``@a hi @b bye`` (no slash cmds) into one {@link Directive} per @slug.
@@ -168,7 +192,7 @@ export function parse_directive(line: string): Directive | string {
   const refMatches = remaining.matchAll(RE_CONTENT_REF);
   for (const m of refMatches) {
     contentRef = {
-      scope: m[1] as Scope,
+      scope: normalizeScope(m[1]),
       path: m[2] ?? null,
     };
   }

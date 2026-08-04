@@ -455,7 +455,11 @@
     "removeLostOne": "Remove Lost One",
     "removeAwakenedConfirm": "Remove Awakened \"{{name}}\" from the topology? Incident passages will be cleaned up.",
     "removeLostOneConfirm": "Exit and remove Lost One \"{{name}}\"? Its seat and incident passages will be cleaned up.",
-    "removeHint": "Removing a node soft-deletes the seat and incident passages; Lost Ones exit the instance first."
+    "removeHint": "Removing a node soft-deletes the seat and incident passages; Lost Ones exit the instance first.",
+    "removePassage": "Remove passage",
+    "removePassageConfirm": "Remove the passage between \"{{from}}\" and \"{{to}}\"?",
+    "deleteSelection": "Delete selection",
+    "failedDeletePassage": "Failed to delete passage"
   },
   "composer": {
     "title": "Composer",
@@ -1077,6 +1081,7 @@
     "brain": {
       "memory": "Memory",
       "fornix": "Fornix",
+      "vault": "Vault",
       "frontal": "Frontal lobe",
       "brainstem": "Brainstem",
       "cerebellum": "Cerebellum",
@@ -1089,6 +1094,42 @@
       "noWorldDefault": "No world main-brain default is set yet.",
       "inheritWorld": "Inherit world main-brain default",
       "saveCerebellum": "Save cerebellum"
+    },
+    "fornix": {
+      "title": "Fornix files",
+      "newFile": "New file",
+      "newFolder": "New folder",
+      "empty": "No files in this directory.",
+      "count": "{{total}} items",
+      "name": "Name",
+      "parentPath": "Parent path",
+      "parentPathPlaceholder": "Empty = root directory",
+      "content": "Content",
+      "createFileTitle": "Create file",
+      "createFolderTitle": "Create folder",
+      "createFile": "Create file",
+      "createFolder": "Create folder",
+      "renameTitle": "Rename or move",
+      "rename": "Rename",
+      "delete": "Delete",
+      "archive": "Archive",
+      "root": "Root",
+      "openFolder": "Open folder",
+      "viewFile": "View file",
+      "emptyContent": "This file is empty.",
+      "deleteConfirm": "Delete \"{{name}}\"? This cannot be undone.",
+      "archiveConfirm": "Archive \"{{name}}\" to the vault?"
+    },
+    "vault": {
+      "title": "Vault",
+      "empty": "The vault is empty.",
+      "count": "{{total}} entries",
+      "searchPlaceholder": "Search by archived key",
+      "search": "Search",
+      "clear": "Clear",
+      "restore": "Restore",
+      "restoreConfirm": "Restore \"{{key}}\" to the fornix?",
+      "archivedAt": "Archived at"
     },
     "emptyMembershipsTitle": "No directors",
     "emptyMembershipsDetail": "No humans are present in this workspace yet.",

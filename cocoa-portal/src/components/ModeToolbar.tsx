@@ -1,4 +1,4 @@
-import { Link, Maximize2, MousePointer, Move } from 'lucide-react';
+import { Link, Maximize2, MousePointer, Move, Trash2 } from 'lucide-react';
 import { type ReactElement, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
@@ -13,9 +13,16 @@ type ModeConfig = {
 
 type ModeToolbarProps = {
   readonly onFit?: () => void;
+  /** Trash button appears only when this callback is provided. */
+  readonly onDeleteSelected?: () => void;
+  readonly canDelete?: boolean;
 };
 
-export function ModeToolbar({ onFit }: ModeToolbarProps): ReactElement {
+export function ModeToolbar({
+  onFit,
+  onDeleteSelected,
+  canDelete,
+}: ModeToolbarProps): ReactElement {
   const { t } = useTranslation();
   const interactionMode = useSelectedStore((state) => state.interactionMode);
   const setInteractionMode = useSelectedStore((state) => state.setInteractionMode);
@@ -106,6 +113,20 @@ export function ModeToolbar({ onFit }: ModeToolbarProps): ReactElement {
           <Maximize2 className="size-4" aria-hidden="true" />
           <span className="hidden sm:inline">{t('topology.fitView')}</span>
           <kbd className="font-mono text-[10px] text-slate-400">F</kbd>
+        </button>
+      ) : null}
+      {onDeleteSelected !== undefined ? (
+        <button
+          type="button"
+          onClick={onDeleteSelected}
+          disabled={canDelete !== true}
+          title={t('topology.deleteSelection')}
+          data-testid="topology-delete-selection"
+          className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/95 px-3 py-2 text-sm font-medium text-slate-600 shadow-lg backdrop-blur transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Trash2 className="size-4" aria-hidden="true" />
+          <span className="hidden sm:inline">{t('topology.deleteSelection')}</span>
+          <kbd className="font-mono text-[10px] text-slate-400">Del</kbd>
         </button>
       ) : null}
     </div>

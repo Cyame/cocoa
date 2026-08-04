@@ -73,7 +73,7 @@ function setupMockApi(options?: {
   readonly passages?: readonly (typeof PASSAGE_EDGE)[];
   readonly liveStatus?: typeof LIVE_STATUS_ITEMS;
 }) {
-  const passages = options?.passages ?? [PASSAGE_EDGE];
+  let passages = options?.passages ?? [PASSAGE_EDGE];
   const liveStatus = options?.liveStatus ?? LIVE_STATUS_ITEMS;
 
   mockedApi.mockImplementation((path: string, init?: RequestInit) => {
@@ -82,6 +82,13 @@ function setupMockApi(options?: {
     }
     if (path === '/messaging/passages' && init?.method === 'POST') {
       return Promise.resolve(PASSAGE_EDGE);
+    }
+    if (path === '/messaging/passages/passage-1' && init?.method === 'DELETE') {
+      passages = [];
+      return Promise.resolve(undefined);
+    }
+    if (path === '/instances/instance-1' && init?.method === 'DELETE') {
+      return Promise.resolve(undefined);
     }
     if (path.startsWith('/messaging/passages?')) {
       return Promise.resolve({ items: passages, total: passages.length });
@@ -221,5 +228,89 @@ describe('TopologyPage', () => {
     });
 
     expect(await screen.findByTestId('topology-action-error')).toBeInTheDocument();
+  });
+
+  it('selects a passage edge in select mode', async () => {
+    setupMockApi();
+
+    renderTopology();
+    await screen.findByTestId('topology-passage-line-passage-1');
+
+    fireEvent.click(screen.getByTestId('topology-passage-hit-passage-1'));
+
+    const line = screen.getByTestId('topology-passage-line-passage-1');
+    expect(line.getAttribute('data-selected')).toBe('true');
+    expect(line.getAttribute('stroke')).toBe('#2563eb');
+    expect(screen.getByTestId('topology-delete-selection')).toBeEnabled();
+  });
+
+  it('deletes the selected passage from the toolbar after confirmation', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    setupMockApi();
+
+    renderTopology();
+    await screen.findByTestId('topology-passage-hit-passage-1');
+
+    fireEvent.click(screen.getByTestId('topology-passage-hit-passage-1'));
+    fireEvent.click(screen.getByTestId('topology-delete-selection'));
+
+    await waitFor(() => {
+      expect(mockedApi).toHaveBeenCalledWith(
+        '/messaging/passages/passage-1',
+        expect.objectContaining({ method: 'DELETE' }),
+      );
+    });
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(screen.queryByTestId('topology-passage-line-passage-1')).not.toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('topology-delete-selection')).toBeDisabled();
+    });
+  });
+
+  it('deletes the selected passage with the Delete key', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    setupMockApi();
+
+    renderTopology();
+    await screen.findByTestId('topology-passage-hit-passage-1');
+    fireEvent.click(screen.getByTestId('topology-passage-hit-passage-1'));
+
+    fireEvent.keyDown(window, { key: 'Delete' });
+
+    await waitFor(() => {
+      expect(mockedApi).toHaveBeenCalledWith(
+        '/messaging/passages/passage-1',
+        expect.objectContaining({ method: 'DELETE' }),
+      );
+    });
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('deletes a node with the Delete key after confirmation', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    setupMockApi();
+
+    renderTopology();
+    const node = await screen.findByTestId('topology-node-membership-1');
+    fireEvent.click(node);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 350));
+    });
+    expect(screen.getByTestId('topology-node-modal')).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: 'Delete' });
+
+    await waitFor(() => {
+      expect(mockedApi).toHaveBeenCalledWith(
+        '/instances/instance-1',
+        expect.objectContaining({ method: 'DELETE' }),
+      );
+    });
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(screen.queryByTestId('topology-node-modal')).not.toBeInTheDocument();
+    });
   });
 });

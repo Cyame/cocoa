@@ -1,4 +1,21 @@
-import { AlertCircle, Brain, Cpu, LoaderCircle, Plus, Trash, UserRound, Users } from 'lucide-react';
+import {
+  AlertCircle,
+  Archive,
+  Brain,
+  Cpu,
+  FilePlus,
+  FileText,
+  Folder,
+  FolderPlus,
+  LoaderCircle,
+  Pencil,
+  Plus,
+  RotateCcw,
+  Search,
+  Trash,
+  UserRound,
+  Users,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
@@ -6,6 +23,18 @@ import IdeShell from '@/components/IdeShell';
 import IntroduceInstanceModal from '@/components/IntroduceInstanceModal';
 import { ModelInputCombobox } from '@/components/ModelInputCombobox';
 import { ApiError, api } from '@/lib/api';
+import {
+  archiveFornixFile,
+  createFornixFile,
+  deleteFornixFile,
+  fetchFornixFile,
+  type FornixFile,
+  listFornixFiles,
+  listVaultEntries,
+  patchFornixFile,
+  restoreVaultEntry,
+  type VaultEntry,
+} from '@/lib/api/fornix';
 import { deleteInstanceById, deleteMembership } from '@/lib/api/instances';
 import { fetchLiveStatus } from '@/lib/api/liveStatus';
 import {
@@ -33,7 +62,7 @@ import { useSelectedStore } from '@/stores/selected';
 import { useSessionStore } from '@/stores/session';
 
 type CanvasTab = 'topology' | 'memberships' | 'instances' | 'brain';
-type BrainSubTab = 'fornix' | 'frontal' | 'brainstem' | 'cerebellum';
+type BrainSubTab = 'fornix' | 'vault' | 'frontal' | 'brainstem' | 'cerebellum';
 
 type OffsetPage<T> = {
   readonly items: readonly T[];
@@ -91,6 +120,9 @@ export default function WorkspaceIdePage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [introduceOpen, setIntroduceOpen] = useState(false);
   const [topologyRefreshKey, setTopologyRefreshKey] = useState(0);
+  const [brainRefreshKey, setBrainRefreshKey] = useState(0);
+
+  const bumpBrainRefresh = useCallback(() => setBrainRefreshKey((key) => key + 1), []);
 
   useEffect(() => {
     if (id === undefined) return;
@@ -353,7 +385,7 @@ export default function WorkspaceIdePage() {
           {!isLoading && activeTab === 'brain' ? (
             <div className="flex h-full flex-col">
               <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-200 bg-slate-50 px-4 py-2">
-                {(['fornix', 'frontal', 'brainstem', 'cerebellum'] as const).map((subTab) => (
+                {(['fornix', 'vault', 'frontal', 'brainstem', 'cerebellum'] as const).map((subTab) => (
                   <button
                     key={subTab}
                     type="button"
@@ -379,19 +411,23 @@ export default function WorkspaceIdePage() {
                     onUpdated={(next) => setCerebellum(next)}
                   />
                 ) : brainSubTab === 'fornix' ? (
-                  <BrainRegionPanel
+                  <FornixPanel
                     workspaceId={id}
-                    title={t('workspace.brain.fornix')}
-                    empty={t('workspace.brain.fornixEmpty')}
                     hub={centralHub}
-                    kind="fornix"
+                    refreshKey={brainRefreshKey}
+                    onMutated={bumpBrainRefresh}
+                  />
+                ) : brainSubTab === 'vault' ? (
+                  <VaultPanel
+                    workspaceId={id}
+                    refreshKey={brainRefreshKey}
+                    onMutated={bumpBrainRefresh}
                   />
                 ) : brainSubTab === 'frontal' ? (
                   <BrainRegionPanel
                     workspaceId={id}
                     title={t('workspace.brain.frontal')}
                     empty={t('workspace.brain.frontalEmpty')}
-                    hub={centralHub}
                     kind="frontal"
                   />
                 ) : (
@@ -399,7 +435,6 @@ export default function WorkspaceIdePage() {
                     workspaceId={id}
                     title={t('workspace.brain.brainstem')}
                     empty={t('workspace.brain.brainstemEmpty')}
-                    hub={centralHub}
                     kind="brainstem"
                   />
                 )}
@@ -427,14 +462,12 @@ function BrainRegionPanel({
   workspaceId,
   title,
   empty,
-  hub,
   kind,
 }: {
   readonly workspaceId: string;
   readonly title: string;
   readonly empty: string;
-  readonly hub: CentralHub | null;
-  readonly kind: 'fornix' | 'frontal' | 'brainstem';
+  readonly kind: 'frontal' | 'brainstem';
 }) {
   const { t } = useTranslation();
   const [items, setItems] = useState<readonly { id: string; label: string }[]>([]);
@@ -444,11 +477,9 @@ function BrainRegionPanel({
     let cancelled = false;
     setLoading(true);
     const path =
-      kind === 'fornix'
-        ? `/central-hubs/${encodeURIComponent(workspaceId)}/fornix/files`
-        : kind === 'frontal'
-          ? `/central-hubs/${encodeURIComponent(workspaceId)}/frontal-lobe/kanbans`
-          : `/central-hubs/${encodeURIComponent(workspaceId)}/brainstem/schedules`;
+      kind === 'frontal'
+        ? `/central-hubs/${encodeURIComponent(workspaceId)}/frontal-lobe/kanbans`
+        : `/central-hubs/${encodeURIComponent(workspaceId)}/brainstem/schedules`;
     void api<unknown>(path)
       .then((res) => {
         if (cancelled) return;
@@ -479,22 +510,6 @@ function BrainRegionPanel({
 
   return (
     <div className="space-y-4">
-      {kind === 'fornix' && hub !== null ? (
-        <div className="grid gap-4 lg:grid-cols-2">
-          <article className="rounded-lg border border-slate-200 bg-white p-4">
-            <h2 className="text-sm font-semibold">{t('workspace.sharedContext')}</h2>
-            <p className="mt-3 whitespace-pre-wrap text-sm text-slate-600">
-              {hub.content ?? t('workspace.noSharedContext')}
-            </p>
-          </article>
-          <article className="rounded-lg border border-slate-200 bg-white p-4">
-            <h2 className="text-sm font-semibold">{t('workspace.manualNotes')}</h2>
-            <p className="mt-3 whitespace-pre-wrap text-sm text-slate-600">
-              {hub.manual_notes ?? t('workspace.noManualNotes')}
-            </p>
-          </article>
-        </div>
-      ) : null}
       <article className="rounded-lg border border-slate-200 bg-white p-4">
         <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
         {loading ? (
@@ -515,6 +530,615 @@ function BrainRegionPanel({
               </li>
             ))}
           </ul>
+        )}
+      </article>
+    </div>
+  );
+}
+
+function joinHubPath(parent: string, name: string): string {
+  return parent.length > 0 ? `${parent}/${name}` : name;
+}
+
+function FornixPanel({
+  workspaceId,
+  hub,
+  refreshKey,
+  onMutated,
+}: {
+  readonly workspaceId: string;
+  readonly hub: CentralHub | null;
+  readonly refreshKey: number;
+  readonly onMutated: () => void;
+}) {
+  const { t } = useTranslation();
+  const [items, setItems] = useState<readonly FornixFile[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [parentPath, setParentPath] = useState('');
+  const [viewing, setViewing] = useState<FornixFile | null>(null);
+  const [viewContent, setViewContent] = useState<string | null>(null);
+  const [viewingLoading, setViewingLoading] = useState(false);
+  const [creating, setCreating] = useState<'file' | 'directory' | null>(null);
+  const [createName, setCreateName] = useState('');
+  const [createContent, setCreateContent] = useState('');
+  const [editing, setEditing] = useState<FornixFile | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editParentPath, setEditParentPath] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(
+    async (path: string) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const page = await listFornixFiles(workspaceId, {
+          parent_path: path.length > 0 ? path : undefined,
+        });
+        setItems(page.items);
+        setTotal(page.total);
+      } catch (err) {
+        setError(err instanceof ApiError ? err.message : t('errors.network'));
+        setItems([]);
+        setTotal(0);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [t, workspaceId],
+  );
+
+  useEffect(() => {
+    void load(parentPath);
+  }, [load, parentPath, refreshKey]);
+
+  const segments = useMemo(
+    () => parentPath.split('/').filter((segment) => segment.length > 0),
+    [parentPath],
+  );
+
+  function handleOpenDirectory(dir: FornixFile) {
+    setViewing(null);
+    setParentPath(joinHubPath(parentPath, dir.name));
+  }
+
+  async function handleView(file: FornixFile) {
+    setViewing(file);
+    setViewContent(null);
+    setViewingLoading(true);
+    setError(null);
+    try {
+      const detail = await fetchFornixFile(workspaceId, file.id);
+      setViewContent(detail.content);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t('errors.network'));
+    } finally {
+      setViewingLoading(false);
+    }
+  }
+
+  async function handleCreate() {
+    if (creating === null || createName.trim().length === 0) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await createFornixFile(workspaceId, {
+        workspace_id: workspaceId,
+        name: createName.trim(),
+        parent_path: parentPath.length > 0 ? parentPath : null,
+        content: creating === 'file' ? createContent : null,
+        is_directory: creating === 'directory',
+      });
+      setCreating(null);
+      setCreateName('');
+      setCreateContent('');
+      onMutated();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t('errors.network'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDelete(file: FornixFile) {
+    const ok = window.confirm(t('workspace.fornix.deleteConfirm', { name: file.name }));
+    if (!ok) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await deleteFornixFile(workspaceId, file.id);
+      if (viewing?.id === file.id) setViewing(null);
+      onMutated();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t('errors.network'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleArchive(file: FornixFile) {
+    const ok = window.confirm(t('workspace.fornix.archiveConfirm', { name: file.name }));
+    if (!ok) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await archiveFornixFile(workspaceId, file.id);
+      if (viewing?.id === file.id) setViewing(null);
+      onMutated();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t('errors.network'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRenameSave() {
+    if (editing === null) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await patchFornixFile(workspaceId, editing.id, {
+        name: editName.trim().length > 0 ? editName.trim() : undefined,
+        parent_path: editParentPath.trim().length > 0 ? editParentPath.trim() : null,
+      });
+      setEditing(null);
+      onMutated();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t('errors.network'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      {hub !== null ? (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <article className="rounded-lg border border-slate-200 bg-white p-4">
+            <h2 className="text-sm font-semibold">{t('workspace.sharedContext')}</h2>
+            <p className="mt-3 whitespace-pre-wrap text-sm text-slate-600">
+              {hub.content ?? t('workspace.noSharedContext')}
+            </p>
+          </article>
+          <article className="rounded-lg border border-slate-200 bg-white p-4">
+            <h2 className="text-sm font-semibold">{t('workspace.manualNotes')}</h2>
+            <p className="mt-3 whitespace-pre-wrap text-sm text-slate-600">
+              {hub.manual_notes ?? t('workspace.noManualNotes')}
+            </p>
+          </article>
+        </div>
+      ) : null}
+
+      <article className="rounded-lg border border-slate-200 bg-white p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-slate-900">{t('workspace.fornix.title')}</h2>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setEditing(null);
+                setCreating('file');
+              }}
+              disabled={busy}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-500 disabled:opacity-60"
+            >
+              <FilePlus className="size-3.5" aria-hidden="true" />
+              {t('workspace.fornix.newFile')}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEditing(null);
+                setCreating('directory');
+              }}
+              disabled={busy}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+            >
+              <FolderPlus className="size-3.5" aria-hidden="true" />
+              {t('workspace.fornix.newFolder')}
+            </button>
+          </div>
+        </div>
+
+        <nav
+          aria-label={t('workspace.fornix.title')}
+          className="mt-3 flex flex-wrap items-center gap-1 text-xs text-slate-500"
+        >
+          <button
+            type="button"
+            onClick={() => setParentPath('')}
+            className="rounded px-1.5 py-0.5 hover:bg-slate-100 hover:text-slate-700"
+          >
+            {t('workspace.fornix.root')}
+          </button>
+          {segments.map((segment, index) => (
+            <span key={`${segment}-${index}`} className="flex items-center gap-1">
+              <span aria-hidden="true">/</span>
+              <button
+                type="button"
+                onClick={() => setParentPath(segments.slice(0, index + 1).join('/'))}
+                className="rounded px-1.5 py-0.5 hover:bg-slate-100 hover:text-slate-700"
+              >
+                {segment}
+              </button>
+            </span>
+          ))}
+        </nav>
+
+        {error !== null ? (
+          <p role="alert" className="mt-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">
+            {error}
+          </p>
+        ) : null}
+
+        {loading ? (
+          <p className="mt-3 flex items-center gap-2 text-sm text-slate-500">
+            <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+            {t('common.loading')}
+          </p>
+        ) : items.length === 0 ? (
+          <p className="mt-3 text-sm text-slate-500">{t('workspace.fornix.empty')}</p>
+        ) : (
+          <>
+            <ul className="mt-3 space-y-2">
+              {items.map((file) => (
+                <li
+                  key={file.id}
+                  className="flex items-center gap-3 rounded-md border border-slate-100 bg-slate-50 px-3 py-2"
+                >
+                  {file.is_directory ? (
+                    <Folder className="size-4 shrink-0 text-slate-500" aria-hidden="true" />
+                  ) : (
+                    <FileText className="size-4 shrink-0 text-slate-500" aria-hidden="true" />
+                  )}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      file.is_directory ? handleOpenDirectory(file) : void handleView(file)
+                    }
+                    title={
+                      file.is_directory
+                        ? t('workspace.fornix.openFolder')
+                        : t('workspace.fornix.viewFile')
+                    }
+                    className="min-w-0 flex-1 truncate text-left font-mono text-xs text-slate-700 hover:text-blue-700"
+                  >
+                    {file.name}
+                  </button>
+                  <div className="flex shrink-0 gap-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCreating(null);
+                        setEditing(file);
+                        setEditName(file.name);
+                        setEditParentPath(file.parent_path ?? '');
+                      }}
+                      disabled={busy}
+                      aria-label={t('workspace.fornix.rename')}
+                      className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-60"
+                    >
+                      <Pencil className="size-3.5" aria-hidden="true" />
+                    </button>
+                    {!file.is_directory ? (
+                      <button
+                        type="button"
+                        onClick={() => void handleArchive(file)}
+                        disabled={busy}
+                        aria-label={t('workspace.fornix.archive')}
+                        className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-60"
+                      >
+                        <Archive className="size-3.5" aria-hidden="true" />
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => void handleDelete(file)}
+                      disabled={busy}
+                      aria-label={t('workspace.fornix.delete')}
+                      className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-60"
+                    >
+                      <Trash className="size-3.5" aria-hidden="true" />
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-3 text-xs text-slate-400">
+              {t('workspace.fornix.count', { total })}
+            </p>
+          </>
+        )}
+      </article>
+
+      {viewing !== null ? (
+        <article className="rounded-lg border border-slate-200 bg-white p-4">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="min-w-0 truncate font-mono text-xs font-semibold text-slate-900">
+              {viewing.name}
+            </h3>
+            <button
+              type="button"
+              onClick={() => setViewing(null)}
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100"
+            >
+              {t('common.close')}
+            </button>
+          </div>
+          {viewingLoading ? (
+            <p className="mt-3 flex items-center gap-2 text-sm text-slate-500">
+              <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+              {t('common.loading')}
+            </p>
+          ) : (
+            <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap rounded-md bg-slate-50 px-3 py-2 font-mono text-xs text-slate-700">
+              {viewContent ?? t('workspace.fornix.emptyContent')}
+            </pre>
+          )}
+        </article>
+      ) : null}
+
+      {creating !== null ? (
+        <article className="rounded-lg border border-slate-200 bg-white p-4">
+          <h3 className="text-xs font-semibold text-slate-900">
+            {creating === 'directory'
+              ? t('workspace.fornix.createFolderTitle')
+              : t('workspace.fornix.createFileTitle')}
+          </h3>
+          <form
+            className="mt-3 space-y-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleCreate();
+            }}
+          >
+            <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600">
+              {t('workspace.fornix.name')}
+              <input
+                value={createName}
+                onChange={(event) => setCreateName(event.target.value)}
+                autoFocus
+                className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              />
+            </label>
+            {creating === 'file' ? (
+              <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600">
+                {t('workspace.fornix.content')}
+                <textarea
+                  value={createContent}
+                  onChange={(event) => setCreateContent(event.target.value)}
+                  rows={6}
+                  className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-xs"
+                />
+              </label>
+            ) : null}
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                disabled={busy || createName.trim().length === 0}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-500 disabled:opacity-60"
+              >
+                {creating === 'directory'
+                  ? t('workspace.fornix.createFolder')
+                  : t('workspace.fornix.createFile')}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setCreating(null);
+                  setCreateName('');
+                  setCreateContent('');
+                }}
+                disabled={busy}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+              >
+                {t('common.cancel')}
+              </button>
+            </div>
+          </form>
+        </article>
+      ) : null}
+
+      {editing !== null ? (
+        <article className="rounded-lg border border-slate-200 bg-white p-4">
+          <h3 className="text-xs font-semibold text-slate-900">
+            {t('workspace.fornix.renameTitle')}
+          </h3>
+          <form
+            className="mt-3 space-y-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleRenameSave();
+            }}
+          >
+            <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600">
+              {t('workspace.fornix.name')}
+              <input
+                value={editName}
+                onChange={(event) => setEditName(event.target.value)}
+                className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600">
+              {t('workspace.fornix.parentPath')}
+              <input
+                value={editParentPath}
+                onChange={(event) => setEditParentPath(event.target.value)}
+                placeholder={t('workspace.fornix.parentPathPlaceholder')}
+                className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              />
+            </label>
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                disabled={busy}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-500 disabled:opacity-60"
+              >
+                {t('workspace.fornix.rename')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditing(null)}
+                disabled={busy}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+              >
+                {t('common.cancel')}
+              </button>
+            </div>
+          </form>
+        </article>
+      ) : null}
+    </div>
+  );
+}
+
+function VaultPanel({
+  workspaceId,
+  refreshKey,
+  onMutated,
+}: {
+  readonly workspaceId: string;
+  readonly refreshKey: number;
+  readonly onMutated: () => void;
+}) {
+  const { t } = useTranslation();
+  const [entries, setEntries] = useState<readonly VaultEntry[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [searchDraft, setSearchDraft] = useState('');
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const load = useCallback(
+    async (archivedKey: string) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const page = await listVaultEntries(workspaceId, {
+          archived_key: archivedKey.trim().length > 0 ? archivedKey.trim() : undefined,
+        });
+        setEntries(page.items);
+        setTotal(page.total);
+      } catch (err) {
+        setError(err instanceof ApiError ? err.message : t('errors.network'));
+        setEntries([]);
+        setTotal(0);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [t, workspaceId],
+  );
+
+  useEffect(() => {
+    void load(search);
+  }, [load, refreshKey, search]);
+
+  async function handleRestore(entry: VaultEntry) {
+    const ok = window.confirm(
+      t('workspace.vault.restoreConfirm', { key: entry.archived_key ?? entry.id }),
+    );
+    if (!ok) return;
+    setBusyId(entry.id);
+    setError(null);
+    try {
+      await restoreVaultEntry(workspaceId, entry.id);
+      onMutated();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t('errors.network'));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <article className="rounded-lg border border-slate-200 bg-white p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-slate-900">{t('workspace.vault.title')}</h2>
+          <form
+            className="flex gap-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setSearch(searchDraft);
+            }}
+          >
+            <input
+              value={searchDraft}
+              onChange={(event) => setSearchDraft(event.target.value)}
+              placeholder={t('workspace.vault.searchPlaceholder')}
+              className="w-56 rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+            />
+            <button
+              type="submit"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-500"
+            >
+              <Search className="size-3.5" aria-hidden="true" />
+              {t('workspace.vault.search')}
+            </button>
+            {search.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch('');
+                  setSearchDraft('');
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                {t('workspace.vault.clear')}
+              </button>
+            ) : null}
+          </form>
+        </div>
+
+        {error !== null ? (
+          <p role="alert" className="mt-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">
+            {error}
+          </p>
+        ) : null}
+
+        {loading ? (
+          <p className="mt-3 flex items-center gap-2 text-sm text-slate-500">
+            <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+            {t('common.loading')}
+          </p>
+        ) : entries.length === 0 ? (
+          <p className="mt-3 text-sm text-slate-500">{t('workspace.vault.empty')}</p>
+        ) : (
+          <>
+            <ul className="mt-3 space-y-2">
+              {entries.map((entry) => (
+                <li
+                  key={entry.id}
+                  className="flex items-center gap-3 rounded-md border border-slate-100 bg-slate-50 px-3 py-2"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-mono text-xs text-slate-700">
+                      {entry.archived_key ?? entry.id}
+                    </p>
+                    <p className="mt-0.5 text-xs text-slate-400">
+                      {t('workspace.vault.archivedAt')}:{' '}
+                      {entry.archived_at !== null ? new Date(entry.archived_at).toLocaleString() : '-'}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void handleRestore(entry)}
+                    disabled={busyId !== null}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+                  >
+                    <RotateCcw className="size-3.5" aria-hidden="true" />
+                    {t('workspace.vault.restore')}
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-3 text-xs text-slate-400">
+              {t('workspace.vault.count', { total })}
+            </p>
+          </>
         )}
       </article>
     </div>

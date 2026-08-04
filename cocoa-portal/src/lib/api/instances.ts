@@ -124,6 +124,12 @@ export function deleteMembership(membershipId: string): Promise<void> {
   });
 }
 
+export function deletePassage(passageId: string): Promise<void> {
+  return api<void>(`/messaging/passages/${encodeURIComponent(passageId)}`, {
+    method: 'DELETE',
+  });
+}
+
 export type MembershipCreatePayload = {
   readonly workspace_id: string;
   readonly user_id?: string | null;

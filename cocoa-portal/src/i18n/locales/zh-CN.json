@@ -291,7 +291,11 @@
     "removeLostOne": "移除迷失者",
     "removeAwakenedConfirm": "从拓扑移除觉醒者「{{name}}」？相关通道也会一并清理。",
     "removeLostOneConfirm": "退出并移除迷失者「{{name}}」？其成员席位与相关通道会一并清理。",
-    "removeHint": "移除节点会软删除席位与周围通道；迷失者会先退出化身。"
+    "removeHint": "移除节点会软删除席位与周围通道；迷失者会先退出化身。",
+    "removePassage": "删除连线",
+    "removePassageConfirm": "确定删除「{{from}}」与「{{to}}」之间的连线吗？",
+    "deleteSelection": "删除所选",
+    "failedDeletePassage": "删除连线失败"
   },
   "composer": {
     "title": "编辑器",
@@ -913,6 +917,7 @@
     "brain": {
       "memory": "记忆",
       "fornix": "穹窿",
+      "vault": "冰封库",
       "frontal": "额叶",
       "brainstem": "脑干",
       "cerebellum": "小脑",
@@ -925,6 +930,42 @@
       "noWorldDefault": "世界尚未配置主脑默认。",
       "inheritWorld": "继承世界主脑默认",
       "saveCerebellum": "保存小脑设置"
+    },
+    "fornix": {
+      "title": "穹窿文件",
+      "newFile": "新建文件",
+      "newFolder": "新建文件夹",
+      "empty": "此目录暂无文件。",
+      "count": "共 {{total}} 项",
+      "name": "名称",
+      "parentPath": "父路径",
+      "parentPathPlaceholder": "留空表示根目录",
+      "content": "内容",
+      "createFileTitle": "创建文件",
+      "createFolderTitle": "创建文件夹",
+      "createFile": "创建文件",
+      "createFolder": "创建文件夹",
+      "renameTitle": "重命名或移动",
+      "rename": "重命名",
+      "delete": "删除",
+      "archive": "归档",
+      "root": "根目录",
+      "openFolder": "打开文件夹",
+      "viewFile": "查看文件",
+      "emptyContent": "该文件为空。",
+      "deleteConfirm": "删除「{{name}}」？此操作不可撤销。",
+      "archiveConfirm": "将「{{name}}」归档到冰封库？"
+    },
+    "vault": {
+      "title": "冰封库",
+      "empty": "冰封库为空。",
+      "count": "共 {{total}} 条",
+      "searchPlaceholder": "按归档键搜索",
+      "search": "搜索",
+      "clear": "清除",
+      "restore": "恢复",
+      "restoreConfirm": "将「{{key}}」恢复到穹窿？",
+      "archivedAt": "归档时间"
     },
     "emptyMembershipsTitle": "暂无觉醒者",
     "emptyMembershipsDetail": "该空间尚无真人在场。",

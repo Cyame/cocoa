@@ -30,7 +30,7 @@ import TopologyGlowDefs, {
   OutdatedOverlay,
 } from '@/components/TopologyGlow';
 import { ApiError, api } from '@/lib/api';
-import { deleteInstanceById, deleteMembership } from '@/lib/api/instances';
+import { deleteInstanceById, deleteMembership, deletePassage } from '@/lib/api/instances';
 import { fetchTopologyLiveStatus } from '@/lib/api/topology';
 import { fitNodes } from '@/lib/topologyFit';
 import type {
@@ -136,6 +136,8 @@ const HUB_SPOKE_STROKE = '#0d9488';
 
 const DEFAULT_USER_FILL = '#e2e8f0';
 const DEFAULT_INSTANCE_FILL = '#3b82f6';
+const SELECTED_STROKE = '#2563eb';
+const SELECTED_STROKE_WIDTH = 3;
 
 function intensityOpacity(intensity: GlowIntensity): number {
   return GLOW_INTENSITY_OPACITY[intensity];
@@ -145,6 +147,26 @@ function intensityStrokeOpacity(intensity: GlowIntensity): number {
   // Slightly stronger so the inner ring remains visible against the halo
   if (intensity === 'static') return 0.4;
   return Math.min(1, GLOW_INTENSITY_OPACITY[intensity] + 0.2);
+}
+
+type TranslateFn = (key: string, options?: { readonly defaultValue?: string }) => string;
+
+function resolveErrorMessage(error: unknown, translate: TranslateFn, fallbackKey: string): string {
+  if (error instanceof ApiError) {
+    const payload = error.payload;
+    if (
+      typeof payload === 'object' &&
+      payload !== null &&
+      'message_key' in payload &&
+      typeof (payload as { message_key: unknown }).message_key === 'string'
+    ) {
+      const key = (payload as { message_key: string }).message_key;
+      const translated = translate(key, { defaultValue: '' });
+      if (translated.length > 0) return translated;
+    }
+    return error.message;
+  }
+  return translate(fallbackKey);
 }
 
 function userFillColor(): string {
@@ -209,6 +231,7 @@ export default function TopologyPage({
 
   // ---- Interaction state (Todo 9) ----
   const [selectedNode, setSelectedNode] = useState<NodeSummary | null>(null);
+  const [selectedPassage, setSelectedPassage] = useState<PassageEdge | null>(null);
   const [pendingConnection, setPendingConnection] = useState<PendingConnection | null>(null);
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -224,6 +247,10 @@ export default function TopologyPage({
   const panXRef = useRef(0);
   const panYRef = useRef(0);
   const svgRef = useRef<SVGSVGElement | null>(null);
+
+  // Latest delete handler for the global keydown listener (Delete / Backspace),
+  // mirrored so the listener never re-subscribes when the selection changes.
+  const deleteSelectionRef = useRef<() => void>(() => {});
 
   // Mirror panX/panY into refs so the pointer handlers always read the
   // latest committed value without depending on the React state version.
@@ -493,6 +520,10 @@ export default function TopologyPage({
         event.preventDefault();
         applyFit();
       }
+      if (event.key === 'Delete' || event.key === 'Backspace') {
+        event.preventDefault();
+        deleteSelectionRef.current();
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
@@ -545,6 +576,14 @@ export default function TopologyPage({
     }
     return result;
   }, [staticData]);
+
+  const membershipLabelById = useMemo(() => {
+    const byId = new Map<string, string>();
+    for (const node of nodes) {
+      if (node.kind === 'membership') byId.set(node.id, node.label);
+    }
+    return byId;
+  }, [nodes]);
 
   // ---- Pointer handlers (pan via drag) ----
   const handleMouseDown = useCallback(
@@ -707,6 +746,16 @@ export default function TopologyPage({
     };
   }, [pendingConnectionCompletion, workspaceId, t]);
 
+  const handlePassageSelect = useCallback(
+    (passage: PassageEdge) => {
+      if (interactionMode !== 'select') return;
+      setSelectedNode(null);
+      setPendingConnection(null);
+      setSelectedPassage(passage);
+    },
+    [interactionMode],
+  );
+
   const handleRemoveNode = useCallback(
     async (node: NodeSummary) => {
       if (workspaceId === null || node.kind === 'hub') return;
@@ -721,29 +770,69 @@ export default function TopologyPage({
         setSelectedNode(null);
         setActionError(null);
       } catch (error) {
-        const message =
-          error instanceof ApiError
-            ? (() => {
-                const payload = error.payload;
-                if (
-                  typeof payload === 'object' &&
-                  payload !== null &&
-                  'message_key' in payload &&
-                  typeof (payload as { message_key: unknown }).message_key === 'string'
-                ) {
-                  const key = (payload as { message_key: string }).message_key;
-                  const translated = t(key, { defaultValue: '' });
-                  if (translated.length > 0) return translated;
-                }
-                return error.message;
-              })()
-            : t('topology.failedDelete');
+        const message = resolveErrorMessage(
+          error,
+          (key, options) => t(key, options),
+          'topology.failedDelete',
+        );
         setActionError(message);
         throw error;
       }
     },
     [workspaceId, t],
   );
+
+  const handleDeletePassage = useCallback(async () => {
+    if (selectedPassage === null || workspaceId === null) return;
+    const from =
+      membershipLabelById.get(selectedPassage.from_membership_id) ??
+      selectedPassage.from_membership_id;
+    const to =
+      membershipLabelById.get(selectedPassage.to_membership_id) ?? selectedPassage.to_membership_id;
+    const ok = window.confirm(t('topology.removePassageConfirm', { from, to }));
+    if (!ok) return;
+    try {
+      await deletePassage(selectedPassage.id);
+      const fresh = await fetchStaticData(workspaceId);
+      setStaticData(fresh);
+      setSelectedPassage(null);
+      setActionError(null);
+    } catch (error) {
+      const message = resolveErrorMessage(
+        error,
+        (key, options) => t(key, options),
+        'topology.failedDeletePassage',
+      );
+      setActionError(message);
+    }
+  }, [selectedPassage, workspaceId, membershipLabelById, t]);
+
+  const handleDeleteSelection = useCallback(async () => {
+    if (workspaceId === null) return;
+    if (selectedNode !== null && selectedNode.kind !== 'hub') {
+      const confirmKey =
+        selectedNode.instanceId !== null
+          ? 'topology.removeLostOneConfirm'
+          : 'topology.removeAwakenedConfirm';
+      const ok = window.confirm(t(confirmKey, { name: selectedNode.label }));
+      if (!ok) return;
+      try {
+        await handleRemoveNode(selectedNode);
+      } catch {
+        // Error already surfaced via setActionError inside handleRemoveNode
+      }
+      return;
+    }
+    if (selectedPassage !== null) {
+      await handleDeletePassage();
+    }
+  }, [workspaceId, selectedNode, selectedPassage, handleRemoveNode, handleDeletePassage, t]);
+
+  useEffect(() => {
+    deleteSelectionRef.current = () => {
+      void handleDeleteSelection();
+    };
+  }, [handleDeleteSelection]);
 
   // ---- Move mode: drag handlers ----
 
@@ -856,6 +945,7 @@ export default function TopologyPage({
   useEffect(() => {
     if (interactionMode !== 'connect') setPendingConnection(null);
     if (interactionMode !== 'select') setSelectedNode(null);
+    if (interactionMode !== 'select') setSelectedPassage(null);
   }, [interactionMode]);
 
   // ---- Render ----
@@ -944,7 +1034,13 @@ export default function TopologyPage({
           className="relative flex min-w-0 flex-1 items-center justify-center overflow-hidden bg-slate-50"
           data-testid="topology-canvas-container"
         >
-          <ModeToolbar onFit={applyFit} />
+          <ModeToolbar
+            onFit={applyFit}
+            onDeleteSelected={() => {
+              void handleDeleteSelection();
+            }}
+            canDelete={selectedNode !== null || selectedPassage !== null}
+          />
           {isStaticLoading ? (
             <div className="flex items-center justify-center gap-3 text-sm text-slate-500">
               <LoaderCircle className="size-5 animate-spin" aria-hidden="true" />
@@ -1020,6 +1116,9 @@ export default function TopologyPage({
                     key={entry.passage.id}
                     entry={entry}
                     isActive={activePassages.has(entry.passage.id)}
+                    isSelected={selectedPassage !== null && selectedPassage.id === entry.passage.id}
+                    isSelectMode={interactionMode === 'select'}
+                    onSelect={handlePassageSelect}
                     now={now}
                   />
                 ))}
@@ -1339,13 +1438,27 @@ export function NodeDrawer({ node, isEditor, onClose, onDelete }: NodeDrawerProp
 type PassageViewProps = {
   readonly entry: ResolvedPassage;
   readonly isActive: boolean;
+  readonly isSelected: boolean;
+  readonly isSelectMode: boolean;
+  readonly onSelect: (passage: PassageEdge) => void;
   readonly now: number;
 };
 
-function PassageView({ entry, isActive, now }: PassageViewProps): ReactElement {
+function PassageView({
+  entry,
+  isActive,
+  isSelected,
+  isSelectMode,
+  onSelect,
+  now,
+}: PassageViewProps): ReactElement {
   const { passage, from, to } = entry;
-  const stroke = isActive ? ACTIVE_STROKE : DEFAULT_STROKE;
-  const strokeWidth = isActive ? ACTIVE_STROKE_WIDTH : DEFAULT_STROKE_WIDTH;
+  const stroke = isActive ? ACTIVE_STROKE : isSelected ? SELECTED_STROKE : DEFAULT_STROKE;
+  const strokeWidth = isActive
+    ? ACTIVE_STROKE_WIDTH
+    : isSelected
+      ? SELECTED_STROKE_WIDTH
+      : DEFAULT_STROKE_WIDTH;
 
   return (
     <g data-testid={`topology-passage-${passage.id}`} data-passage-id={passage.id}>
@@ -1358,6 +1471,29 @@ function PassageView({ entry, isActive, now }: PassageViewProps): ReactElement {
         strokeWidth={strokeWidth}
         data-testid={`topology-passage-line-${passage.id}`}
         data-active={isActive ? 'true' : 'false'}
+        data-selected={isSelected ? 'true' : 'false'}
+      />
+      {/* Invisible wide hit target so thin edges are selectable in Select mode. */}
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: SVG <line> has no semantic <button> */}
+      <line
+        x1={from.x}
+        y1={from.y}
+        x2={to.x}
+        y2={to.y}
+        stroke="transparent"
+        strokeWidth={16}
+        fill="none"
+        pointerEvents="stroke"
+        className={isSelectMode ? 'cursor-pointer' : undefined}
+        data-testid={`topology-passage-hit-${passage.id}`}
+        onMouseDown={(event) => {
+          // In Select mode, grabbing an edge selects it instead of panning.
+          if (isSelectMode) event.stopPropagation();
+        }}
+        onClick={(event) => {
+          event.stopPropagation();
+          if (isSelectMode) onSelect(passage);
+        }}
       />
       {isActive ? (
         <ParticleView passageId={passage.id} from={from} to={to} startedAt={now} />
