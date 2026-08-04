@@ -198,6 +198,8 @@ async def internal_control_ack(body: AckRequest, db: DB) -> dict:
     await db.commit()
     return {"acked": acked}
 
+
+# ---------------------------------------------------------------------------
 # v4.7 H6: hub / topology / report surfaces for agent pods
 # ---------------------------------------------------------------------------
 
