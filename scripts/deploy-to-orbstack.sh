@@ -140,9 +140,15 @@ kubectl wait --for=condition=ready pod -l app=cocoa-postgres -n "$NS" --timeout=
 POSTGRES_POD="$(kubectl get pod -l app=cocoa-postgres -n "$NS" -o jsonpath='{.items[0].metadata.name}')"
 # The manifest's PVC may already be initialized with another database name.
 # Create the configured database if it is absent; this is safe to repeat.
-kubectl exec -n "$NS" "$POSTGRES_POD" -- psql -U "$POSTGRES_USER" -d postgres \
-  -v ON_ERROR_STOP=1 -tc "SELECT 1 FROM pg_database WHERE datname = '$POSTGRES_DB'" \
-  | grep -q 1 || kubectl exec -n "$NS" "$POSTGRES_POD" -- createdb -U "$POSTGRES_USER" "$POSTGRES_DB"
+# NB: capture the full psql output first (no pipe into grep -q), because
+# grep -q exits on the first match and SIGPIPEs psql, which under
+# `set -o pipefail` makes the pipeline non-zero and spuriously triggers
+# createdb even when the database already exists.
+DB_PRESENT="$(kubectl exec -n "$NS" "$POSTGRES_POD" -- psql -U "$POSTGRES_USER" -d postgres \
+  -v ON_ERROR_STOP=1 -tAc "SELECT 1 FROM pg_database WHERE datname = '$POSTGRES_DB'")"
+if [[ "$DB_PRESENT" != "1" ]]; then
+  kubectl exec -n "$NS" "$POSTGRES_POD" -- createdb -U "$POSTGRES_USER" "$POSTGRES_DB"
+fi
 
 apply_secret cocoa-backend-secrets \
   --from-literal=DATABASE_URL="$DATABASE_URL" \
