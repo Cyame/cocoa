@@ -184,11 +184,13 @@ async def test_k8s_mode_calls_llm_via_http(monkeypatch: pytest.MonkeyPatch) -> N
     )
 
     # Force the loop to exit after one iteration by setting the stop flag
-    # directly via poll_control's first response.
-    async def fake_poll_control(last_seen_id):
-        return [{"id": 1, "payload": {"action": "kill"}}]
+    # via poll_control_full's first response (v4.7 contract: {"events", "injects"}).
+    async def fake_poll_control_full(last_seen_id):
+        return {"events": [{"id": 1, "payload": {"action": "kill"}}], "injects": []}
 
-    monkeypatch.setattr("app._agent_runtime_legacy_for_tests.poll_control", fake_poll_control)
+    monkeypatch.setattr(
+        "app._agent_runtime_legacy_for_tests.poll_control_full", fake_poll_control_full,
+    )
 
     llm_client = _mock_llm_client(content="k8s mode response", prompt_tokens=15, completion_tokens=30)
     monkeypatch.setattr(
