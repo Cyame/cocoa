@@ -20,11 +20,13 @@ from loguru import logger
 from sqlalchemy import select
 
 from app.agent_runtime.k8s_adapter import (
+    ack_injects,
     emit_event,
     get_proxy_token,
     is_k8s_pod_mode,
-    poll_control,
+    poll_control_full,
 )
+from app.agent_runtime.safe_point import SafePointGuard
 from app.core.builtin_presets import BUILTIN_PRESETS
 from app.core.db import get_session_factory
 from app.core.event_types import (
@@ -225,19 +227,51 @@ async def run_agent_loop(instance_id: str) -> None:
     stop_flag = asyncio.Event()
     last_seen_id = 0
     control_task: asyncio.Task | None = None
+    guard = SafePointGuard()
 
     if k8s_mode:
+        async def _apply_inject(item: dict[str, Any]) -> None:
+            """Deliver one inject payload at the safe point and ack it.
+
+            The current runtime is a stub / event-driven loop with no real
+            provider tool lifecycle: applying means acking the queue row
+            (the backend then emits ``harness.inject_applied``) and logging
+            the payload into the loop context. Threading the payload into a
+            real provider conversation is future work (v4.8+).
+            """
+            queue_id = item.get("queue_id")
+            logger.info(
+                "applying inject",
+                instance_id=instance_id,
+                queue_id=queue_id,
+                kind=item.get("kind"),
+                delivery_mode=item.get("delivery_mode"),
+            )
+            if queue_id:
+                try:
+                    acked = await ack_injects([queue_id])
+                    if not acked:
+                        logger.warning(
+                            "inject ack reported 0 rows",
+                            instance_id=instance_id, queue_id=queue_id,
+                        )
+                except Exception:
+                    logger.opt(exception=True).warning(
+                        "ack_injects failed",
+                        instance_id=instance_id, queue_id=queue_id,
+                    )
+
         async def _poll_control_loop() -> None:
             nonlocal last_seen_id
             while not stop_flag.is_set():
                 try:
-                    events = await poll_control(last_seen_id)
+                    data = await poll_control_full(last_seen_id)
                 except Exception:
                     logger.opt(exception=True).warning(
                         "poll_control failed; will retry", instance_id=instance_id,
                     )
-                    events = []
-                for event in events:
+                    data = {}
+                for event in data.get("events", []):
                     eid = event.get("id")
                     if isinstance(eid, int):
                         last_seen_id = max(last_seen_id, eid)
@@ -245,6 +279,15 @@ async def run_agent_loop(instance_id: str) -> None:
                     if payload.get("action") == "kill":
                         stop_flag.set()
                         return
+                for item in data.get("injects", []):
+                    # Safe-point rule: soft_inject / wake are held and
+                    # flushed after the current tool-result batch (never
+                    # between a tool_use and its tool_result); notify
+                    # deliveries ride through immediately.
+                    if item.get("delivery_mode") in ("soft_inject", "wake"):
+                        guard.hold(item)
+                    else:
+                        await _apply_inject(item)
                 await asyncio.sleep(_POLL_INTERVAL)
 
         control_task = asyncio.create_task(_poll_control_loop())
@@ -346,6 +389,13 @@ async def run_agent_loop(instance_id: str) -> None:
                 "stop_reason": response.stop_reason,
                 "snapshot": {"iteration": i, "content_preview": response.content[:100]},
             })
+            # v4.7 H6 safe point: the current turn's tool results (none in
+            # the stub loop) are complete — flush held soft-inject / wake
+            # items now, BEFORE the next provider call. The guard never
+            # delivers between a tool_use and its tool_result.
+            if k8s_mode:
+                for item in guard.flush():
+                    await _apply_inject(item)
             i += 1
             # K8s stub/idle pacing — avoid tight checkpoint spam without a real LLM.
             if k8s_mode:

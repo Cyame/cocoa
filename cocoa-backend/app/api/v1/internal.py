@@ -31,7 +31,9 @@ from sqlalchemy import select
 from app.api.deps import DB
 from app.core.event_types import HARNESS_CONTROL_SENT
 from app.core.events import emit
+from app.core.inject_queue import ack_injects, poll_pending_injects
 from app.models.event import Event
+from app.schemas.internal import AckRequest
 
 router = APIRouter(prefix="/internal", tags=["internal"])
 
@@ -108,11 +110,14 @@ async def internal_control_poll(
     instance_id: str = Query(...),
     last_seen_id: int = Query(0, ge=0),
 ) -> dict:
-    """Return recent ``harness.control_sent`` events for this instance.
+    """Return recent ``harness.control_sent`` events + pending injects.
 
     ``last_seen_id`` is the caller-side cursor; ``0`` (the default) means
     "from the beginning".  Up to 50 events are returned per call,
-    oldest-first, so the caller can resume from ``events[-1].id``.
+    oldest-first, so the caller can resume from ``events[-1].id``. The
+    ``injects`` field carries up to 20 pending (unexpired) v4.7 inject
+    queue items for this instance; they are flipped to ``delivered`` in
+    the same call so a subsequent poll does not repeat them.
     """
     stmt = (
         select(Event)
@@ -128,6 +133,8 @@ async def internal_control_poll(
     )
     result = await db.execute(stmt)
     events = list(result.scalars().all())
+    injects = await poll_pending_injects(db, instance_id=instance_id, limit=20)
+    await db.commit()
     return {
         "events": [
             {
@@ -139,4 +146,31 @@ async def internal_control_poll(
             for e in events
         ],
         "last_seen_id": events[-1].id if events else last_seen_id,
+        "injects": [
+            {
+                "queue_id": q.id,
+                "kind": q.kind,
+                "delivery_mode": q.delivery_mode,
+                "payload": q.payload,
+                "tldr": (q.payload or {}).get("tldr"),
+                "expires_at": q.expires_at,
+            }
+            for q in injects
+        ],
     }
+
+
+@router.post(
+    "/control/ack",
+    dependencies=[Depends(verify_internal_token)],
+)
+async def internal_control_ack(body: AckRequest, db: DB) -> dict:
+    """Ack delivered inject queue rows; returns the acked count.
+
+    soft_inject / wake acks emit ``harness.inject_applied`` (the service
+    does this); notify acks only flip the row to ``acked``. Rows that are
+    not in the ``delivered`` state are skipped, so acking is idempotent.
+    """
+    acked = await ack_injects(db, queue_ids=body.queue_ids)
+    await db.commit()
+    return {"acked": acked}

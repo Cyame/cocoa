@@ -78,7 +78,25 @@ async def emit_event(
 
 
 async def poll_control(last_seen_id: int = 0) -> list[dict]:
-    """GET recent control events for this instance from backend."""
+    """GET recent control events for this instance from backend.
+
+    Returns only the ``events`` list (pre-v4.7 contract — signature kept
+    for existing callers); v4.7 inject queue items come from
+    :func:`poll_control_full`.
+    """
+    data = await poll_control_full(last_seen_id)
+    return data.get("events", [])
+
+
+async def poll_control_full(last_seen_id: int = 0) -> dict:
+    """GET control events AND pending inject queue items in one call.
+
+    Backend response shape: ``{"events": [...], "last_seen_id": int,
+    "injects": [{queue_id, kind, delivery_mode, payload, tldr,
+    expires_at}]}``. Polling marks the inject rows ``delivered`` on the
+    backend, so a caller that crashes before acking re-polling will not
+    see them again.
+    """
     params = {"instance_id": get_instance_id(), "last_seen_id": last_seen_id}
     headers = {"Authorization": f"Bearer {get_api_token()}"}
     async with get_httpx_client() as client:
@@ -88,4 +106,21 @@ async def poll_control(last_seen_id: int = 0) -> list[dict]:
             headers=headers,
         )
         resp.raise_for_status()
-        return resp.json().get("events", [])
+        return resp.json()
+
+
+async def ack_injects(queue_ids: list[str]) -> int:
+    """Ack delivered inject queue items; returns the acked count.
+
+    POSTs to ``/api/v1/internal/control/ack``; the backend emits
+    ``harness.inject_applied`` for soft_inject / wake rows.
+    """
+    headers = {"Authorization": f"Bearer {get_api_token()}"}
+    async with get_httpx_client() as client:
+        resp = await client.post(
+            f"{get_api_url()}/api/v1/internal/control/ack",
+            json={"queue_ids": queue_ids},
+            headers=headers,
+        )
+        resp.raise_for_status()
+        return int(resp.json().get("acked", 0))

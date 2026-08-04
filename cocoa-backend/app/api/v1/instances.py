@@ -37,6 +37,7 @@ from app.core.event_types import (
     INSTANCE_STOPPED,
 )
 from app.core.events import emit
+from app.core.inject_queue import enqueue_inject
 from app.core.knowledge import entry_to_dict, resolve_knowledge_for_instance
 from app.core.migration_hash import compute_entity_migration_hash
 from app.core.openapi import add_error_responses
@@ -46,7 +47,9 @@ from app.core.permissions import require_workspace_permission
 from app.core.topology_cleanup import soft_delete_passages_touching
 from app.core.workspace import generate_workspace_path
 from app.models.entity import Entity
+from app.models.inject_queue import InjectStatus
 from app.models.instance import Instance, InstanceStatus
+from app.models.loop_state import InstanceLoopState, LoopStatus
 from app.models.workspace import Membership, Workspace
 from app.schemas.instance import (
     InstanceCreate,
@@ -60,6 +63,7 @@ from app.schemas.instance_actions import (
     RestartRequest,
     RestartResultOut,
 )
+from app.schemas.internal import DeliveryMode, InjectEnqueueRequest
 from app.services.deploy_service import (
     deploy_existing_instance as svc_deploy_existing_instance,
 )
@@ -130,6 +134,52 @@ class DeployRecordOut(BaseModel):
     action: str
     status: str
     image_version: str | None = None
+
+
+class InjectEnqueueBody(InjectEnqueueRequest):
+    """Public body for ``POST /instances/{id}/inject`` (V47-5).
+
+    ``delivery_mode`` may be omitted: the V47-1 default table derives it
+    from the instance's loop / lifecycle state. An explicit value always
+    wins over the derivation. Inherits the V47-10 tldr hard rules from
+    :class:`app.schemas.internal.InjectEnqueueRequest`.
+    """
+
+    delivery_mode: DeliveryMode | None = None
+
+
+_ACTIVE_INSTANCE_STATUSES = frozenset(
+    {
+        InstanceStatus.running.value,
+        InstanceStatus.pending.value,
+        InstanceStatus.creating.value,
+        InstanceStatus.deploying.value,
+    }
+)
+
+
+async def _derive_delivery_mode(db: DB, instance: Instance) -> DeliveryMode:
+    """V47-1 default table: loop state wins when present, else instance status.
+
+    Loop state (authoritative): ``running`` -> ``soft_inject``; every other
+    loop state (idle / completed / paused / interrupted / failed) -> ``wake``.
+    Without a loop row, active lifecycle statuses (running / pending /
+    creating / deploying) map to ``soft_inject`` and the rest to ``wake``.
+    """
+    result = await db.execute(
+        select(InstanceLoopState).where(
+            InstanceLoopState.instance_id == instance.id,
+            InstanceLoopState.deleted_at.is_(None),
+        )
+    )
+    loop_state = result.scalars().first()
+    if loop_state is not None:
+        if loop_state.loop_status == LoopStatus.running.value:
+            return "soft_inject"
+        return "wake"
+    if instance.status in _ACTIVE_INSTANCE_STATUSES:
+        return "soft_inject"
+    return "wake"
 
 
 def _is_k8s_available() -> bool:
@@ -627,6 +677,66 @@ async def deploy_instance(
         status="running",
         image_version=ctx.image_version,
     )
+
+
+@router.post("/{instance_id}/inject", status_code=status.HTTP_202_ACCEPTED)
+async def inject_instance(
+    instance_id: str,
+    body: InjectEnqueueBody,
+    db: DB,
+    current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
+) -> dict:
+    """Enqueue a v4.7 inject delivery for one instance (V47-5).
+
+    Stripe-style action: the payload is persisted to the instance inject
+    queue and the Host picks it up on its next control poll. The effective
+    ``delivery_mode`` follows the V47-1 default table unless the caller
+    provided one explicitly (explicit wins). Emits
+    ``harness.inject_requested`` via the service and returns 202 with the
+    queue row id.
+    """
+    instance = await db.get(Instance, instance_id)
+    if instance is None or instance.deleted_at is not None:
+        raise NotFoundError(
+            "instance.not_found",
+            "errors.instance.not_found",
+            f"Instance '{instance_id}' not found",
+        )
+    await require_workspace_permission(
+        db,
+        current_user.user_id,
+        instance.workspace_id,
+        "can_edit_workspace",
+        x_organization_id=x_organization_id,
+    )
+
+    delivery_mode = body.delivery_mode or await _derive_delivery_mode(db, instance)
+    payload: dict = {
+        "content_refs": [ref.model_dump(exclude_none=True) for ref in body.content_refs],
+        "gene_ids": body.gene_ids,
+        "capability_ids": body.capability_ids,
+    }
+    if body.report is not None:
+        payload["report"] = body.report
+    if body.tldr:
+        payload["tldr"] = body.tldr
+
+    row = await enqueue_inject(
+        db,
+        instance_id=instance.id,
+        kind=body.kind,
+        delivery_mode=delivery_mode,
+        payload=payload,
+        tldr=body.tldr,
+    )
+    await db.commit()
+    return {
+        "queue_id": row.id,
+        "instance_id": instance.id,
+        "delivery_mode": delivery_mode,
+        "status": InjectStatus.pending.value,
+    }
 
 
 @router.post("/{instance_id}/start", response_model=InstanceOut)
