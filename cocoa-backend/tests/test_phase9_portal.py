@@ -33,6 +33,11 @@ PARITY_INPUTS = [
     "@alice /cmd with @vault:doc/path",
     "   \n  \n  ",
     "@bob /read @workspace:a.md @workspace:b.md",
+    # v4.5 scope normalization: legacy scopes → hub/instance, new pass through.
+    "@carol /read @memory:lesson:intro",
+    "@dave /write @blackboard:shared/doc.md",
+    "@erin /plan @hub:shared/plan.md @instance:notes/a.md",
+    "@frank /read @vault:archive/key @workspace:other/path",
 ]
 
 

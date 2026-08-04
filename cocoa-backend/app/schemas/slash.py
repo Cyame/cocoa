@@ -9,26 +9,47 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+#: Legacy ContentRef scope values accepted on input (parse / read path) and
+#: their canonical v4.5 replacements.  New code must only write hub/instance.
+_LEGACY_SCOPE_MAP: dict[str, str] = {
+    "workspace": "hub",
+    "fornix": "hub",
+    "vault": "hub",
+    "blackboard": "hub",
+    "memory": "instance",
+}
+
 
 class ContentRef(BaseModel):
     """Reference to content scoped within the cocoa system.
 
     Attributes:
-        scope: Mandatory content scope.
+        scope: Mandatory content scope — ``hub`` (shared content) or
+            ``instance`` (per-agent memory).  Legacy values
+            (``workspace``/``fornix``/``vault``/``blackboard`` → ``hub``,
+            ``memory`` → ``instance``) are normalized on validation so old
+            persisted payloads still construct cleanly.
         path: Optional path within the scope (e.g. a file path for
-            ``workspace``, a key for ``central_hub``, etc.).
+            ``hub``, a key for ``instance`` memory, etc.).
     """
 
-    scope: Literal["workspace", "fornix", "vault", "memory"]
+    scope: Literal["hub", "instance"]
     path: str | None = None
 
-    @field_validator("scope")
+    @field_validator("scope", mode="before")
     @classmethod
     def scope_must_not_be_none(cls, v: str | None) -> str:
-        """Reject explicit ``None`` values — ``scope`` is mandatory."""
+        """Reject explicit ``None`` and normalize legacy scope values.
+
+        ``scope`` is mandatory.  Legacy pre-v4.5 strings are mapped to the
+        canonical enum so read paths (parsed directives, persisted payloads)
+        never carry stale values out of the boundary.
+        """
         if v is None:
             raise ValueError("scope is mandatory")
-        return v
+        if isinstance(v, str):
+            return _LEGACY_SCOPE_MAP.get(v, v)
+        return v  # type: ignore[return-value]  # non-str Literal member rejected below
 
 
 class Directive(BaseModel):

@@ -1,31 +1,24 @@
 """CentralHub API routes — collaborative surface, virtual filesystem, and vault.
 
 > **15d-rename (2026-07-29)**: Renamed from `app/api/v1/central_hub.py`.
-> Served at the new path `/central-hubs/{wid}/...`. No back-compat alias —
-> callers must update URLs. (No prod data yet.)
+> Served at the new path `/central-hubs/{workspace_id}/...`. No back-compat
+> alias — callers must update URLs. (No prod data yet.)
 
-Endpoints (15d+ canonical path /central_hub/...):
-    GET    /central-hubs/{wid}                        Lazy-get CentralHub (was /central_hub/{wid})
-    PATCH  /central-hubs/{wid}                        Update content/notes
-    GET    /central-hubs/{wid}/fornix/files          List FornixFile (was /central_hub/{wid}/files)
-    GET    /central-hubs/{wid}/fornix/files/{fid}    Get one FornixFile
-    POST   /central-hubs/{wid}/fornix/files          Create file/directory
-    PATCH  /central-hubs/{wid}/fornix/files/{fid}    Rename/move
-    DELETE /central-hubs/{wid}/fornix/files/{fid}    Soft-delete
-    GET    /central-hubs/{wid}/vault                  Lazy-get Vault
-    GET    /central-hubs/{wid}/vault/entries          List vault entries
-    POST   /central-hubs/{wid}/fornix/files/{fid}/archive  Archive file to Vault (was
-    /central_hub/{wid}/files/{fid}/archive)
-    GET    /{workspace_id}                        Lazy-get CentralHub
-    PATCH  /{workspace_id}                        Update content/notes
-    GET    /{workspace_id}/files                  List files (offset page)
-    GET    /{workspace_id}/files/{file_id}        Get one file
-    POST   /{workspace_id}/files                  Create file/directory
-    PATCH  /{workspace_id}/files/{file_id}        Rename/move
-    DELETE /{workspace_id}/files/{file_id}        Soft-delete
-    GET    /{workspace_id}/vault                  Lazy-get Vault
-    GET    /{workspace_id}/vault/entries          List vault entries
-    POST   /{workspace_id}/files/{file_id}/archive  Archive file to Vault
+Endpoints (15d+ canonical path /central-hubs/...):
+    GET    /{workspace_id}                            Lazy-get CentralHub
+    PATCH  /{workspace_id}                            Update content/notes
+    GET    /{workspace_id}/files                      List files (offset page)
+    GET    /{workspace_id}/files/{file_id}            Get one file
+    POST   /{workspace_id}/files                      Create file/directory
+    PATCH  /{workspace_id}/files/{file_id}            Rename/move
+    DELETE /{workspace_id}/files/{file_id}            Soft-delete (+ disk mirror)
+    GET    /{workspace_id}/vault                      Lazy-get Vault
+    GET    /{workspace_id}/vault/entries              List vault entries
+    POST   /{workspace_id}/files/{file_id}/archive    Archive file to Vault
+    POST   /{workspace_id}/vault/entries/{id}/restore Restore archived file
+    GET/POST/PATCH/DELETE /{workspace_id}/frontal-lobe/kanbans
+    GET/POST/PATCH/DELETE /{workspace_id}/brainstem/schedules
+    GET/PATCH /{workspace_id}/cerebellum ; POST /{workspace_id}/cerebellum/restart
 """
 
 from __future__ import annotations
@@ -38,11 +31,13 @@ from fastapi import APIRouter, Query, status
 from sqlalchemy import func, select
 
 from app.api.deps import DB, CurrentUserDep, XOrgIdHeader
-from app.core.errors import ConflictError, NotFoundError
+from app.core.errors import ConflictError, InternalError, NotFoundError
 from app.core.event_types import (
     FORNIX_FILE_ARCHIVED,
     FORNIX_FILE_CREATED,
+    FORNIX_FILE_RESTORED,
     FORNIX_FILE_UPDATED,
+    FORNIX_SYNC_FAILED,
 )
 from app.core.events import emit
 from app.core.openapi import add_error_responses
@@ -76,6 +71,7 @@ from app.schemas.fornix_file import (
     FornixFileUpdate,
 )
 from app.schemas.vault import VaultEntryOut, VaultOut
+from app.services import fornix_sync
 
 # 15d+ canonical path — no back-compat alias
 router = APIRouter(prefix="/central-hubs", tags=["CentralHub"])
@@ -161,6 +157,44 @@ async def _validate_parent_directory(
             f"Parent directory '{parent_path}' not found in workspace '{workspace_id}'",
             details={"workspace_id": workspace_id, "parent_path": parent_path},
         )
+
+
+async def _raise_sync_failed(
+    db: DB,
+    workspace_id: str,
+    file_id: str,
+    exc: Exception,
+) -> None:
+    """Roll back the DB change, persist ``fornix.sync_failed``, surface a 5xx.
+
+    H3 contract: never leave a silent DB-only or file-only write. The failed
+    sync exception is deliberately broad — any disk failure in the shared
+    mount must fail the whole operation loudly.
+    """
+    await db.rollback()
+    await emit(
+        FORNIX_SYNC_FAILED,
+        actor_type="system",
+        resource_type="fornix_file",
+        resource_id=file_id,
+        payload={
+            "workspace_id": workspace_id,
+            "file_id": file_id,
+            "error": f"{type(exc).__name__}: {exc}",
+        },
+        session=db,
+    )
+    await db.commit()
+    raise InternalError(
+        "central_hub.fornix.sync_failed",
+        "errors.central_hub.fornix.sync_failed",
+        f"Failed to sync FornixFile '{file_id}' to the shared mount",
+        details={
+            "workspace_id": workspace_id,
+            "file_id": file_id,
+            "error": f"{type(exc).__name__}: {exc}",
+        },
+    ) from exc
 
 
 # ---------------------------------------------------------------------------
@@ -354,10 +388,23 @@ async def create_file(
         storage_key=storage_key,
         content_type=body.content_type,
         file_size=body.file_size,
+        content=body.content,
         is_directory=body.is_directory,
         uploader_user_id=current_user.user_id,
     )
     db.add(file)
+    await db.flush()
+
+    try:
+        fornix_sync.sync_write(
+            workspace_id,
+            body.parent_path,
+            body.name,
+            content=body.content,
+            is_directory=body.is_directory,
+        )
+    except Exception as exc:
+        await _raise_sync_failed(db, workspace_id, file.id, exc)
 
     await emit(
         FORNIX_FILE_CREATED,
@@ -412,12 +459,27 @@ async def update_file(
             details={"file_id": file_id, "workspace_id": workspace_id},
         )
 
+    old_parent_path = file.parent_path
+    old_name = file.name
+
     if body.parent_path is not None and body.parent_path != file.parent_path:
         await _validate_parent_directory(db, workspace_id, body.parent_path)
 
     patch_data = body.model_dump(exclude_unset=True)
     for field, value in patch_data.items():
         setattr(file, field, value)
+
+    if file.parent_path != old_parent_path or file.name != old_name:
+        try:
+            fornix_sync.sync_move(
+                workspace_id,
+                old_parent_path,
+                old_name,
+                file.parent_path,
+                file.name,
+            )
+        except Exception as exc:
+            await _raise_sync_failed(db, workspace_id, file.id, exc)
 
     await emit(
         FORNIX_FILE_UPDATED,
@@ -487,6 +549,12 @@ async def delete_file(
             )
 
     file.soft_delete()
+
+    try:
+        fornix_sync.sync_remove(workspace_id, file.parent_path, file.name)
+    except Exception as exc:
+        await _raise_sync_failed(db, workspace_id, file.id, exc)
+
     await db.commit()
 
 
@@ -522,6 +590,7 @@ async def list_vault_entries(
     current_user: CurrentUserDep,
     x_organization_id: XOrgIdHeader = None,
     source_type: str | None = Query(None),
+    archived_key: str | None = Query(None),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ) -> OffsetPage:
@@ -543,6 +612,8 @@ async def list_vault_entries(
     )
     if source_type is not None:
         stmt = stmt.where(VaultEntry.source_type == source_type)
+    if archived_key is not None:
+        stmt = stmt.where(VaultEntry.archived_key.ilike(f"%{archived_key}%"))
     return await paginate_offset(db, stmt, offset, limit)
 
 
@@ -609,10 +680,21 @@ async def archive_file_to_vault(
         source_ref=file_id,
         archived_key=file.storage_key,
         archived_at=func.now(),
+        value={
+            "name": file.name,
+            "parent_path": file.parent_path,
+            "is_directory": file.is_directory,
+            "content": file.content,
+        },
     )
     db.add(entry)
 
     file.soft_delete()
+
+    try:
+        fornix_sync.sync_remove(workspace_id, file.parent_path, file.name)
+    except Exception as exc:
+        await _raise_sync_failed(db, workspace_id, file.id, exc)
 
     await emit(
         FORNIX_FILE_ARCHIVED,
@@ -631,6 +713,143 @@ async def archive_file_to_vault(
     await db.commit()
     await db.refresh(entry)
     return entry
+
+
+@router.post(
+    "/{workspace_id}/vault/entries/{entry_id}/restore",
+    response_model=FornixFileOut,
+)
+async def restore_vault_entry(
+    workspace_id: str,
+    entry_id: str,
+    db: DB,
+    current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
+) -> FornixFile:
+    await require_workspace_permission(
+        db,
+        current_user.user_id,
+        workspace_id,
+        "can_edit_workspace",
+        x_organization_id=x_organization_id,
+    )
+    vault = await _get_or_create_vault(db, workspace_id)
+    result = await db.execute(
+        select(VaultEntry).where(
+            VaultEntry.id == entry_id,
+            VaultEntry.vault_id == vault.id,
+            VaultEntry.deleted_at.is_(None),
+        )
+    )
+    entry = result.scalar_one_or_none()
+    if entry is None:
+        raise NotFoundError(
+            "central_hub.vault.entry_not_found",
+            "errors.central_hub.vault.entry_not_found",
+            f"VaultEntry '{entry_id}' not found",
+            details={"entry_id": entry_id, "workspace_id": workspace_id},
+        )
+
+    archived_value = entry.value if isinstance(entry.value, dict) else {}
+    restored_name: str | None = archived_value.get("name")
+    restored_parent: str | None = archived_value.get("parent_path")
+    restored_content: str | None = archived_value.get("content")
+    restored_is_dir: bool = bool(archived_value.get("is_directory", False))
+
+    source_file = None
+    if entry.source_ref:
+        source_result = await db.execute(
+            select(FornixFile).where(FornixFile.id == entry.source_ref)
+        )
+        source_file = source_result.scalar_one_or_none()
+
+    if source_file is not None:
+        target_name = source_file.name
+        target_parent = source_file.parent_path
+    else:
+        target_name = restored_name or entry.archived_key or "restored.txt"
+        target_parent = restored_parent
+
+    conflict_stmt = select(FornixFile).where(
+        FornixFile.workspace_id == workspace_id,
+        FornixFile.parent_path == target_parent,
+        FornixFile.name == target_name,
+        FornixFile.deleted_at.is_(None),
+    )
+    if source_file is not None:
+        conflict_stmt = conflict_stmt.where(FornixFile.id != source_file.id)
+    conflict = await db.execute(conflict_stmt)
+    if conflict.scalar_one_or_none() is not None:
+        raise ConflictError(
+            "central_hub.fornix.duplicate_path",
+            "errors.central_hub.fornix.duplicate_path",
+            f"A file or directory named '{target_name}' already exists at '{target_parent or '/'}'",
+            details={
+                "workspace_id": workspace_id,
+                "parent_path": target_parent,
+                "name": target_name,
+            },
+        )
+
+    if source_file is None:
+        hub_result = await db.execute(
+            select(CentralHub).where(
+                CentralHub.workspace_id == workspace_id,
+                CentralHub.deleted_at.is_(None),
+            )
+        )
+        hub = hub_result.scalar_one_or_none()
+        if hub is None:
+            hub = CentralHub(workspace_id=workspace_id)
+            db.add(hub)
+            await db.flush()
+        source_file = FornixFile(
+            workspace_id=workspace_id,
+            central_hub_id=hub.id,
+            name=target_name,
+            parent_path=target_parent,
+            storage_key=entry.archived_key or str(uuid.uuid4()),
+            content=restored_content,
+            is_directory=restored_is_dir,
+            uploader_user_id=current_user.user_id,
+        )
+        db.add(source_file)
+        await db.flush()
+    else:
+        if restored_content is not None:
+            source_file.content = restored_content
+        source_file.deleted_at = None
+
+    try:
+        fornix_sync.sync_write(
+            workspace_id,
+            source_file.parent_path,
+            source_file.name,
+            content=source_file.content,
+            is_directory=source_file.is_directory,
+        )
+    except Exception as exc:
+        await _raise_sync_failed(db, workspace_id, source_file.id, exc)
+
+    entry.soft_delete()
+
+    await emit(
+        FORNIX_FILE_RESTORED,
+        actor_type="user",
+        actor_id=current_user.user_id,
+        resource_type="fornix_file",  # 15d+ canonical (was "fornix_file" pre-rename)
+        resource_id=source_file.id,
+        payload={
+            "workspace_id": workspace_id,
+            "vault_entry_id": entry_id,
+            "storage_key": source_file.storage_key,
+        },
+        session=db,
+    )
+
+    await db.commit()
+    await db.refresh(source_file)
+    return source_file
 
 
 # ---------------------------------------------------------------------------

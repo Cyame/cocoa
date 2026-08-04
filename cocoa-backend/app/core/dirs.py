@@ -128,10 +128,14 @@ def memory_export_path(entity_slug: str) -> str:
     return f"memory/{entity_slug}.jsonl"
 
 
-def shared_host_path(workspace_id: str) -> str:
+def shared_host_path(workspace_id: str, root: str = "/var/cocoa/workspaces") -> str:
     """Absolute hostPath for workspace shared volume (orbstack single-node).
 
     Production should replace this with an RWX PVC / NFS share.
+
+    ``root`` is the Host mount tree root (defaults to the K8s hostPath); the
+    backend threads ``settings.FORNIX_ROOT`` here so the test suite can point
+    it at a tmp dir. Pure function — no settings import.
     """
     _validate_no_traversal(workspace_id)
-    return f"/var/cocoa/workspaces/{workspace_id}/shared"
+    return f"{root.rstrip('/')}/{workspace_id}/shared"

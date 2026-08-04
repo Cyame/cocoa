@@ -34,7 +34,7 @@ class TestParseDirective:
         assert isinstance(result, Directive)
         assert result.cmd == "/read"
         assert result.content_ref is not None
-        assert result.content_ref.scope == "fornix"
+        assert result.content_ref.scope == "hub"  # legacy fornix → hub
         assert result.content_ref.path == "docs/spec.md"
 
     def test_parse_targeted_with_content_ref(self) -> None:
@@ -44,17 +44,17 @@ class TestParseDirective:
         assert result.target_entity == "reviewer"
         assert result.cmd == "/review"
         assert result.content_ref is not None
-        assert result.content_ref.scope == "fornix"
+        assert result.content_ref.scope == "hub"  # legacy fornix → hub
         assert result.content_ref.path == "docs/draft.md"
         assert result.raw_text == "@reviewer /review @fornix:docs/draft.md"
 
     def test_parse_memory_scope(self) -> None:
-        """@memory is a valid content-ref scope."""
+        """@memory is a valid content-ref scope — normalized to ``instance``."""
         result = parse_directive("/write @memory:lesson:intro")
         assert isinstance(result, Directive)
         assert result.cmd == "/write"
         assert result.content_ref is not None
-        assert result.content_ref.scope == "memory"
+        assert result.content_ref.scope == "instance"
         assert result.content_ref.path == "lesson:intro"
 
     def test_parse_invalid_line_to_general_text(self) -> None:

@@ -22,6 +22,7 @@ class FornixFileCreate(BaseModel):
     content_type: str | None = None
     file_size: int | None = None
     is_directory: bool = False
+    content: str | None = None
 
     @field_validator("name")
     @classmethod
@@ -52,6 +53,7 @@ class FornixFileOut(BaseModel):
     content_type: str | None
     file_size: int | None
     is_directory: bool
+    content: str | None
     uploader_user_id: str | None
     uploader_instance_id: str | None
     created_at: datetime

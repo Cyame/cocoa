@@ -19,20 +19,30 @@ class TestContentRef:
         with pytest.raises(ValidationError):
             ContentRef()  # type: ignore[call-arg]
 
-    def test_scope_workspace_with_path(self) -> None:
-        """Valid scope + path combination."""
+    def test_scope_legacy_workspace_normalizes_to_hub(self) -> None:
+        """Legacy ``workspace`` scope + path — normalized to ``hub`` on validation."""
         ref = ContentRef(scope="workspace", path="/foo")
-        assert ref.scope == "workspace"
+        assert ref.scope == "hub"
         assert ref.path == "/foo"
 
-    def test_scope_fornix_no_path(self) -> None:
-        """Valid scope without path (path defaults to None)."""
+    def test_scope_legacy_fornix_normalizes_to_hub(self) -> None:
+        """Legacy ``fornix`` scope without path — normalized to ``hub``."""
         ref = ContentRef(scope="fornix")
-        assert ref.scope == "fornix"
+        assert ref.scope == "hub"
         assert ref.path is None
 
+    def test_scope_legacy_memory_normalizes_to_instance(self) -> None:
+        """Legacy ``memory`` scope — normalized to ``instance``."""
+        ref = ContentRef(scope="memory")
+        assert ref.scope == "instance"
+
+    def test_scope_new_values_pass_through(self) -> None:
+        """Canonical ``hub`` / ``instance`` scopes are unchanged."""
+        assert ContentRef(scope="hub").scope == "hub"
+        assert ContentRef(scope="instance").scope == "instance"
+
     def test_invalid_scope_value_raises_validation_error(self) -> None:
-        """A scope outside the Literal must be rejected."""
+        """A scope outside the canonical/legacy enum must be rejected."""
         with pytest.raises(ValidationError):
             ContentRef(scope="invalid_scope")
 
@@ -68,6 +78,7 @@ class TestDirective:
         assert d.cmd == "/write"
         assert d.args == ["summary", "draft"]
         assert d.content_ref == ref
+        assert d.content_ref is not None and d.content_ref.scope == "instance"
         assert d.raw_text == "@alice /write summary draft ->memory"
 
 

@@ -78,6 +78,16 @@ spec:
             requests:
               cpu: 200m
               memory: 512Mi
+          volumeMounts:
+            # v4.5 H3: the backend dual-writes FornixFile content into the
+            # same Host shared tree that instance pods mount at /data/shared.
+            - name: fornix-shared
+              mountPath: /var/cocoa/workspaces
+      volumes:
+        - name: fornix-shared
+          hostPath:
+            path: /var/cocoa/workspaces
+            type: DirectoryOrCreate
 ---
 apiVersion: v1
 kind: Service

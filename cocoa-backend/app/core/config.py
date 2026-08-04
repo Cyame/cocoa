@@ -48,5 +48,11 @@ class Settings(BaseSettings):
     # LANGFUSE_SECRET_KEY: str = ""
     # LANGFUSE_HOST: str = ""
 
+    # ── Fornix mount mirror (v4.5, H3) ────────────────────
+    # Root of the Host shared-mount tree. The backend dual-writes every
+    # FornixFile into <FORNIX_ROOT>/<workspace_id>/shared/ so instance pods
+    # (which mount that directory at /data/shared) see the same view.
+    FORNIX_ROOT: str = "/var/cocoa/workspaces"
+
 
 settings = Settings()

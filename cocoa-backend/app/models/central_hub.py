@@ -84,6 +84,8 @@ class FornixFile(BaseModel, Base):
     storage_key: Mapped[str] = mapped_column(String(36), nullable=False)
     content_type: Mapped[str | None] = mapped_column(String(255), nullable=True)
     file_size: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    # Inline file content — the API→shared mirror write source (v4.5 H3).
+    content: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_directory: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     uploader_user_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("users.id"), nullable=True

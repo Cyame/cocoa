@@ -10,7 +10,12 @@ Grammar (informal)::
     <target>      := "@" <entity-name>
     <cmd>         := "/" <name>
     <content-ref> : "@" <scope> [":" <path>]
-    scope         := "workspace" | "fornix" | "vault" | "memory"
+    scope         := "hub" | "instance"
+
+Legacy content-ref scopes (``workspace`` | ``fornix`` | ``vault`` |
+``blackboard`` | ``memory``) are still *accepted* in input text so existing
+messages don't break, but the parsed ``scope`` is always normalized to the
+canonical enum — ``hub`` for hub-scoped storage, ``instance`` for memory.
 
 This is a **pure parser** — it only validates structural syntax, NOT
 whether targets or commands exist.  Command validation, target resolution,
@@ -24,15 +29,38 @@ from typing import Literal
 
 from app.schemas.slash import ContentRef, Directive, Turn
 
-Scope = Literal["workspace", "fornix", "vault", "memory"]
+Scope = Literal["hub", "instance"]
+
+#: Legacy → canonical scope map (H7).  Keep in sync with
+#: ``app.schemas.slash._LEGACY_SCOPE_MAP``.
+_SCOPE_NORMALIZE: dict[str, str] = {
+    "workspace": "hub",
+    "fornix": "hub",
+    "vault": "hub",
+    "blackboard": "hub",
+    "memory": "instance",
+}
+
+
+def normalize_scope(scope: str) -> str:
+    """Map a legacy ContentRef scope string to the v4.5 canonical enum.
+
+    ``workspace``/``fornix``/``vault``/``blackboard`` → ``hub``,
+    ``memory`` → ``instance``; new values (``hub``/``instance``) and any
+    unknown strings pass through unchanged.
+    """
+    return _SCOPE_NORMALIZE.get(scope, scope)
+
 
 # Regex: @entity-name (alphanumeric + hyphens/underscores) at line start.
 # Trailing whitespace OR end-of-line (bare ``@slug`` chat mention).
 _RE_TARGET = re.compile(r"^@([a-zA-Z0-9_-]+)(?:\s+|$)")
 
-# Regex: @scope:path where scope is one of the 4 keywords
+# Regex: @scope:path where scope is a canonical (hub|instance) or legacy
+# (workspace|fornix|vault|memory) keyword — legacy values are normalized by
+# ``normalize_scope`` after capture.
 _RE_CONTENT_REF = re.compile(
-    r"@(?P<scope>workspace|fornix|vault|memory)"
+    r"@(?P<scope>hub|instance|workspace|fornix|vault|memory)"
     r"(?::(?P<path>\S+))?"
 )
 
@@ -41,7 +69,11 @@ _RE_CMD = re.compile(r"/(?P<cmd>[a-z][a-z0-9-]*)")
 
 # Inline @slug tokens (for same-line multi-mention chat expansion).
 _RE_AT_TOKEN = re.compile(r"@([a-zA-Z0-9_-]+)")
-_CONTENT_REF_SCOPES = frozenset({"workspace", "fornix", "vault", "memory"})
+# Both canonical and legacy scopes — legacy values still appear in inbound
+# text and must be excluded from @slug mention expansion.
+_CONTENT_REF_SCOPES = frozenset(
+    {"hub", "instance", "workspace", "fornix", "vault", "memory"}
+)
 
 
 def expand_inline_chat_mentions(raw: str) -> list[Directive] | None:
@@ -123,10 +155,10 @@ def parse_directive(line: str) -> Directive | str:
     #    directive); for simplicity we extract all and keep the last.
     content_ref: ContentRef | None = None
     for m in _RE_CONTENT_REF.finditer(remaining):
-        scope: str = m.group("scope")
+        scope: str = normalize_scope(m.group("scope"))
         path: str | None = m.group("path")
         content_ref = ContentRef(
-            scope=scope,  # type: ignore[arg-type]
+            scope=scope,
             path=path,
         )
     if content_ref is not None:

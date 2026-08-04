@@ -9,9 +9,11 @@ Alembic-managed development schema) is never touched by the test suite.
 
 import os
 import subprocess
+import tempfile
 import uuid
 
 import asyncpg
+import pytest
 import pytest_asyncio
 from _pytest.monkeypatch import MonkeyPatch
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -20,6 +22,18 @@ from starlette.testclient import TestClient
 _ADMIN_DSN = "postgresql://postgres:postgres@127.0.0.1:5432/postgres"
 _TEMPLATE_DB = "cocoa_test_template"
 _BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Point FORNIX_ROOT at a session tmp dir before any app import.
+
+    ``app.core.config`` instantiates ``Settings()`` at module import time, so
+    the env var must be set before test modules (or the ``client`` fixture)
+    import the app. This keeps every FornixFile write out of the real
+    ``/var/cocoa/workspaces`` mount.
+    """
+    if "FORNIX_ROOT" not in os.environ:
+        os.environ["FORNIX_ROOT"] = tempfile.mkdtemp(prefix="cocoa_fornix_root_")
 
 
 def _url(db: str) -> str:
