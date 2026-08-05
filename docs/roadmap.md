@@ -7,7 +7,7 @@
 > **Visual wave**: **v5 / 3.6** (pure UI; not in v4 closure).
 > **Archived PRDs**: `docs/archive/` (prd-v1 … prd-v3.4.1). Subsystem `docs/*-system.md` = pre-v4 reference; conflicts → audit wins.
 > **Naming**: `docs/terminology.md` + `docs/metaphor-name-table.md` (15d locked; incremental edits in v4).
-> **Last revision**: 2026-08-02（v4.7 harness collab design draft + jcode 外部参考）。
+> **Last revision**: 2026-08-05（v4.9 closure gate 收尾；v4.7/v4.8 Done；PRD-v2 归档标注）。
 
 ---
 
@@ -234,7 +234,7 @@ Orbstack namespace `cocoa` is the **persistent human inspection environment**. S
 
 ## 4. Target architecture (PRD-v2 condensed)
 
-Authoritative detail: `docs/prd-v2.md`. This section is the blueprint digest only.
+Authoritative detail: 设计 SoT `.omo/evidence/audit-product-design.md`（PRD-v2 已归档至 `docs/archive/prd-v2.md`）。This section is the blueprint digest only.
 
 ### 4.1 Data
 
@@ -285,6 +285,8 @@ Full history: `.omo/plans/archive/` + `.omo/plans/archive/cocoa-v2-roadmap.md` (
 | **3.6** | **整体 UI 大重构** — 壳层 / 密度 / Composer·Topology 视觉语言 / 空态；不抢跑于 3.5.x 闭环之前 | same file §4–§5 |
 
 **Working agreement:** 主功能仍有不通处与未修正项，随产品迭代逐步设计与变更；**不做**「先大改 UI 再通主流程」。
+
+> **历史轨**：3.5.x / 3.6 为文档纠偏与纯视觉轨；当前实现轨 **4.x** 见 `.omo/plans/v4-roadmap.md`。
 
 ### 5.3 Now (immediate — inside 3.5.x)
 
@@ -362,7 +364,7 @@ Recorded so future planners do not lose intent:
 |---|---|
 | **`roadmap.md`** | **This file — system blueprint + living roadmap** |
 | `prd-v1.md` | PRD generation 1 (MVP UX); historical + residual reference |
-| `prd-v2.md` | PRD generation 2 — **active product target** |
+| `prd-v2.md` | PRD generation 2 — **archived**（`docs/archive/prd-v2.md`；设计以 `audit-product-design.md` 为准） |
 | `terminology.md` / `metaphor-name-table.md` | Naming |
 | `domain-model.md` / `api-architecture.md` / `*-system.md` / `observability.md` / `product-positioning.md` | Subsystem contracts (refresh when code lands) |
 
