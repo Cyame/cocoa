@@ -272,8 +272,8 @@ async def delete_membership(
 # ---------------------------------------------------------------------------
 
 
-from app.core.topology import check_acyclic  # noqa: E402
 from app.core.passages import PASSAGE_MODE_DUAL, normalize_endpoints  # noqa: E402
+from app.core.topology import check_acyclic  # noqa: E402
 from app.schemas.passage import PassageCreate, PassageOut, PassageUpdate  # noqa: E402
 
 
@@ -580,21 +580,3 @@ async def _enrich_memberships(db: DB, memberships: list) -> list[MembershipOut]:
             base = base.model_copy(update=updates)
         out.append(base)
     return out
-
-
-@router.post("/meetings", status_code=501)
-async def create_meeting():
-    return {
-        "error_code": "not_implemented",
-        "message_key": "errors.not_implemented",
-        "message": "Meeting semantics deferred to later phase",
-    }
-
-
-@router.post("/scheduled-tasks", status_code=501)
-async def create_scheduled_task():
-    return {
-        "error_code": "not_implemented",
-        "message_key": "errors.not_implemented",
-        "message": "Scheduled-task semantics deferred to later phase",
-    }

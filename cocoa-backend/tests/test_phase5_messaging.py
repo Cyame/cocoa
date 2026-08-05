@@ -428,25 +428,21 @@ class TestPassageCrud:
 
 
 class TestScaffoldEndpoints:
-    """Placeholder endpoints that return 501."""
+    """The messaging 501 scaffolds were removed in v4.8 (moved to /meetings)."""
 
-    def test_meeting_scaffold(
+    def test_meeting_scaffold_removed(
         self, client: TestClient,
     ) -> None:
-        """POST /meetings returns 501 (no auth required)."""
+        """POST /messaging/meetings now 404s (real surface lives on /meetings)."""
         resp = client.post("/api/v1/messaging/meetings")
-        assert resp.status_code == 501
-        body = resp.json()
-        assert body["error_code"] == "not_implemented"
+        assert resp.status_code == 404
 
-    def test_scheduled_task_scaffold(
+    def test_scheduled_task_scaffold_removed(
         self, client: TestClient,
     ) -> None:
-        """POST /scheduled-tasks returns 501 (no auth required)."""
+        """POST /messaging/scheduled-tasks now 404s (brainstem schedules)."""
         resp = client.post("/api/v1/messaging/scheduled-tasks")
-        assert resp.status_code == 501
-        body = resp.json()
-        assert body["error_code"] == "not_implemented"
+        assert resp.status_code == 404
 
 
 # =========================================================================

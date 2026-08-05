@@ -31,6 +31,7 @@ from fastapi import APIRouter, Query, status
 from sqlalchemy import func, select
 
 from app.api.deps import DB, CurrentUserDep, XOrgIdHeader
+from app.core.brainstem_runner import compute_next_run_at
 from app.core.errors import ConflictError, InternalError, NotFoundError
 from app.core.event_types import (
     FORNIX_FILE_ARCHIVED,
@@ -38,6 +39,8 @@ from app.core.event_types import (
     FORNIX_FILE_RESTORED,
     FORNIX_FILE_UPDATED,
     FORNIX_SYNC_FAILED,
+    SCHEDULE_CANCELLED,
+    SCHEDULE_CREATED,
 )
 from app.core.events import emit
 from app.core.openapi import add_error_responses
@@ -1063,8 +1066,21 @@ async def create_brainstem_schedule(
         x_organization_id=x_organization_id,
     )
     hub = await _get_or_create_central_hub(db, workspace_id)
-    schedule = BrainstemSchedule(central_hub_id=hub.id, **body.model_dump())
+    data = body.model_dump()
+    # v4.8: prime next_run_at from cron_expr so the runner can schedule
+    # immediately (never left NULL after create).
+    data["next_run_at"] = compute_next_run_at(body.cron_expr)
+    schedule = BrainstemSchedule(central_hub_id=hub.id, **data)
     db.add(schedule)
+    await emit(
+        SCHEDULE_CREATED,
+        actor_type="user",
+        actor_id=current_user.user_id,
+        resource_type="brainstem_schedule",
+        resource_id=schedule.id,
+        payload={"cron_expr": schedule.cron_expr},
+        session=db,
+    )
     await db.commit()
     await db.refresh(schedule)
     return schedule
@@ -1106,6 +1122,9 @@ async def update_brainstem_schedule(
         )
     for field, value in body.model_dump(exclude_unset=True).items():
         setattr(schedule, field, value)
+    # v4.8: a cron_expr change must re-prime next_run_at from the new schedule.
+    if "cron_expr" in body.model_dump(exclude_unset=True):
+        schedule.next_run_at = compute_next_run_at(schedule.cron_expr)
     await db.commit()
     await db.refresh(schedule)
     return schedule
@@ -1145,6 +1164,15 @@ async def delete_brainstem_schedule(
             f"Brainstem schedule '{schedule_id}' not found",
         )
     schedule.soft_delete()
+    await emit(
+        SCHEDULE_CANCELLED,
+        actor_type="user",
+        actor_id=current_user.user_id,
+        resource_type="brainstem_schedule",
+        resource_id=schedule.id,
+        payload={"enabled": False},
+        session=db,
+    )
     await db.commit()
 
 

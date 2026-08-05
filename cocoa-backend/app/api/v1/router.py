@@ -19,6 +19,8 @@ from app.api.v1.internal import router as internal_router
 from app.api.v1.knowledge import dimensions_router as knowledge_dimensions_router
 from app.api.v1.knowledge import router as knowledge_router
 from app.api.v1.learning import router as learning_router
+from app.api.v1.meetings import router as meetings_router
+from app.api.v1.meetings_actions import router as meetings_actions_router
 from app.api.v1.memory import router as memory_router
 from app.api.v1.messaging import router as messaging_router
 from app.api.v1.model_catalog import router as model_catalog_router
@@ -52,6 +54,8 @@ api_router.include_router(knowledge_router)
 api_router.include_router(knowledge_dimensions_router)
 api_router.include_router(learning_router)
 api_router.include_router(memory_router)
+api_router.include_router(meetings_router)
+api_router.include_router(meetings_actions_router)
 api_router.include_router(messaging_router)
 api_router.include_router(model_catalog_router)
 api_router.include_router(namespaces_router)

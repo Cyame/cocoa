@@ -1,5 +1,6 @@
 """FastAPI application entry point for the Cocoa backend."""
 
+import asyncio
 import json
 import os
 import secrets
@@ -132,7 +133,25 @@ async def lifespan(app: FastAPI):
         except Exception:
             logger.opt(exception=True).warning("EventWatcher start failed")
 
+    # v4.8: brainstem scheduled-task runner (60s tick, FOR UPDATE SKIP LOCKED).
+    brainstem_task: asyncio.Task[None] | None = None
+    try:
+        from app.core.brainstem_runner import brainstem_runner_loop
+
+        brainstem_task = asyncio.create_task(brainstem_runner_loop())
+    except Exception:
+        logger.opt(exception=True).warning("Brainstem runner start failed")
+
     yield
+
+    if brainstem_task is not None:
+        brainstem_task.cancel()
+        try:
+            await brainstem_task
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            logger.opt(exception=True).warning("Brainstem runner stop failed")
 
     try:
         async with get_session_factory()() as s:

@@ -134,3 +134,23 @@ ENTITY_CLONED = "entity.cloned"
 ORGANIZATION_CLONED = "organization.cloned"
 WORKSPACE_CLONED = "workspace.cloned"
 WORKSPACE_CLONE_PASSAGE_DROPPED = "workspace.clone_passage_dropped"
+
+# ---------------------------------------------------------------------------
+# Meetings (emit points in v4.8)
+# ---------------------------------------------------------------------------
+
+MEETING_CREATED = "meeting.created"
+MEETING_STARTED = "meeting.started"
+MEETING_ENDED = "meeting.ended"
+MEETING_CANCELLED = "meeting.cancelled"
+# M6 wake matrix outcomes (best-effort, one per participant):
+MEETING_PARTICIPANT_WAKE_FAILED = "meeting.participant_wake_failed"
+MEETING_PARTICIPANT_NO_INSTANCE = "meeting.participant_no_instance"
+
+# ---------------------------------------------------------------------------
+# Brainstem schedules (emit points in v4.8)
+# ---------------------------------------------------------------------------
+
+SCHEDULE_CREATED = "schedule.created"
+SCHEDULE_CANCELLED = "schedule.cancelled"
+SCHEDULE_FIRED = "schedule.fired"

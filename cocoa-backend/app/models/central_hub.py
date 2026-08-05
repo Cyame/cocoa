@@ -191,6 +191,14 @@ class BrainstemSchedule(BaseModel, Base):
     """脑干 scheduled task."""
 
     __tablename__ = "brainstem_schedules"
+    __table_args__ = (
+        Index(
+            "ix_brainstem_schedules_enabled_next_run",
+            "enabled",
+            "next_run_at",
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+    )
 
     central_hub_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("central_hubs.id"), nullable=False

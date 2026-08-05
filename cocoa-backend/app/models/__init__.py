@@ -15,6 +15,7 @@ import app.models.instance_provider_config  # noqa: E402, F401
 import app.models.junctions  # noqa: E402, F401
 import app.models.knowledge  # noqa: E402, F401
 import app.models.loop_state  # noqa: E402, F401
+import app.models.meeting  # noqa: E402, F401
 import app.models.memory  # noqa: E402, F401
 import app.models.namespace_contract  # noqa: E402, F401
 import app.models.organization  # noqa: E402, F401
@@ -56,6 +57,7 @@ from app.models.knowledge import (  # noqa: E402, F401
     KnowledgeDimension,
     KnowledgeEntry,
 )
+from app.models.meeting import Meeting, MeetingParticipant, MeetingStatus  # noqa: E402, F401
 from app.models.memory import Memory, MemoryKind  # noqa: E402, F401
 from app.models.namespace_contract import (  # noqa: E402, F401
     NamespaceContract,
