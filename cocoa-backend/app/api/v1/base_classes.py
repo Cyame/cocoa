@@ -270,7 +270,10 @@ async def attach_base_class_capability(
     x_organization_id: XOrgIdHeader = None,
 ) -> dict[str, str]:
     """Attach a capability to a base class."""
-    from app.core.capabilities import attach_base_class_capability
+    from app.core.capabilities import (
+        attach_base_class_capability,
+        bump_entities_for_base_class,
+    )
 
     preset = await db.get(BaseClass, preset_id)
     if preset is None or preset.deleted_at is not None:
@@ -304,6 +307,7 @@ async def attach_base_class_capability(
     await attach_base_class_capability(
         db, base_class_id=preset_id, capability_id=body.capability_id
     )
+    await bump_entities_for_base_class(db, preset.slug)
     await db.commit()
     return {"base_class_id": preset_id, "capability_id": body.capability_id}
 

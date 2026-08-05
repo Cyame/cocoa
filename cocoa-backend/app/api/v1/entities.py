@@ -291,7 +291,10 @@ async def attach_entity_capability_route(
     current_user: CurrentUserDep,
 ) -> dict[str, str]:
     """Attach a capability to an entity."""
-    from app.core.capabilities import attach_entity_capability
+    from app.core.capabilities import (
+        attach_entity_capability,
+        bump_entity_migration_hash,
+    )
 
     entity = await db.get(Entity, entity_id)
     if entity is None or entity.deleted_at is not None:
@@ -316,6 +319,7 @@ async def attach_entity_capability_route(
     await attach_entity_capability(
         db, entity_id=entity_id, capability_id=body.capability_id
     )
+    await bump_entity_migration_hash(db, entity)
     await db.commit()
     return {"entity_id": entity_id, "capability_id": body.capability_id}
 

@@ -26,6 +26,7 @@ from app.core.capabilities import (
     upsert_capability,
 )
 from app.models.ai_gene import AiGene
+from app.models.capability_market import CapabilityMarketEntry
 
 
 def _auth(token: str) -> dict[str, str]:
@@ -448,3 +449,58 @@ class TestMigrationHashSync:
             f"/api/v1/entities/{entity_id}", headers=_auth(admin_token)
         )
         assert detail.json()["migration_hash"] == hash_before
+
+    @pytest.mark.asyncio
+    async def test_attach_capability_bumps_entity_migration_hash(
+        self,
+        client: TestClient,
+        session: AsyncSession,
+        create_org_bundle,
+    ) -> None:
+        admin_token, admin_id = _register(
+            client,
+            f"a2b-h4-{uuid.uuid4().hex[:6]}",
+            f"a2b-h4-{uuid.uuid4().hex[:6]}@t.co",
+        )
+        bundle = await create_org_bundle(
+            admin_id,
+            atoms=("can_manage_capabilities", "can_manage_namespace"),
+        )
+        cap = CapabilityMarketEntry(
+            name=f"a2b-attach-cap-{uuid.uuid4().hex[:8]}",
+            type="skill",
+            scope="org",
+            organization_id=bundle.org.id,
+            created_via="manual",
+        )
+        session.add(cap)
+        await session.flush()
+        cap_id = cap.id
+        await session.commit()
+
+        ent = client.post(
+            "/api/v1/entities",
+            headers=_auth(admin_token),
+            json={
+                "slug": f"a2b-hash-cap-{uuid.uuid4().hex[:6]}",
+                "name": "Hash Cap Entity",
+                "rank": "intern",
+            },
+        )
+        assert ent.status_code == 201, ent.text
+        entity_id = ent.json()["id"]
+        hash_before = ent.json()["migration_hash"]
+
+        attached = client.post(
+            f"/api/v1/entities/{entity_id}/capabilities",
+            headers=_auth(admin_token),
+            json={"capability_id": cap_id},
+        )
+        assert attached.status_code == 201, attached.text
+
+        detail = client.get(
+            f"/api/v1/entities/{entity_id}", headers=_auth(admin_token)
+        )
+        assert detail.status_code == 200, detail.text
+        assert detail.json()["migration_hash"] != hash_before
+        assert cap.name in _names(detail.json()["capabilities"])
