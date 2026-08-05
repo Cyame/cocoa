@@ -869,6 +869,14 @@
     "membership": {
       "last_owner": "Cannot remove the last owner of a workspace.",
       "not_found": "Membership not found."
+    },
+    "meeting": {
+      "not_found": "Meeting not found.",
+      "invalid_transition": "This action is not allowed for the meeting's current status.",
+      "membership_not_in_workspace": "One or more participants do not belong to this workspace."
+    },
+    "central_hub": {
+      "brainstem_schedule_not_found": "Brainstem schedule not found."
     }
   },
   "onboarding": {
@@ -1077,6 +1085,7 @@
       "memberships": "Directors",
       "instances": "Lost Ones",
       "brain": "Brain",
+      "meetings": "Meetings",
       "memory": "Memory"
     },
     "brain": {
@@ -1154,6 +1163,72 @@
     "noSharedContext": "No shared context recorded.",
     "manualNotes": "Manual notes",
     "noManualNotes": "No manual notes recorded."
+  },
+  "meetings": {
+    "title": "Meetings",
+    "createTitle": "Schedule a meeting",
+    "fieldTitle": "Title",
+    "titlePlaceholder": "e.g. Standup sync",
+    "titleRequired": "Title is required.",
+    "fieldAgenda": "Agenda",
+    "agendaPlaceholder": "What should be discussed?",
+    "fieldScheduledAt": "Scheduled at",
+    "scheduledAtRequired": "Scheduled time is required.",
+    "fieldParticipants": "Participants",
+    "participantsSelected": "{{count}} selected",
+    "noParticipants": "No participants",
+    "create": "Create meeting",
+    "created": "Meeting created.",
+    "failed": "Meeting action failed. Please retry.",
+    "empty": "No meetings yet.",
+    "emptyDetail": "Schedule a meeting to gather Awakened and Lost Ones.",
+    "count": "{{total}} meetings",
+    "statuses": {
+      "scheduled": "Scheduled",
+      "active": "Active",
+      "ended": "Ended",
+      "cancelled": "Cancelled"
+    },
+    "start": "Start",
+    "end": "End",
+    "cancel": "Cancel",
+    "startConfirm": "Start meeting \"{{title}}\" now? Participants will be notified.",
+    "endConfirm": "End meeting \"{{title}}\"?",
+    "cancelConfirm": "Cancel meeting \"{{title}}\"?",
+    "scheduledAtLabel": "Scheduled",
+    "endedAtLabel": "Ended",
+    "participantsCount": "{{count}} participants",
+    "unknownParticipant": "Unknown participant"
+  },
+  "schedules": {
+    "title": "Brainstem schedules",
+    "createTitle": "New schedule",
+    "editTitle": "Edit schedule",
+    "empty": "No brainstem schedules yet.",
+    "count": "{{total}} schedules",
+    "fieldName": "Name",
+    "namePlaceholder": "e.g. morning standup",
+    "nameRequired": "Name is required.",
+    "fieldCron": "Cron expression",
+    "cronPlaceholder": "0 9 * * 1-5",
+    "cronInvalid": "Cron expression must have 5 fields (minute hour day month weekday).",
+    "fieldPayload": "Action payload (JSON)",
+    "payloadPlaceholder": "{\"instance_id\": \"...\", \"delivery_mode\": \"wake\"}",
+    "payloadInvalid": "Action payload must be valid JSON.",
+    "fieldEnabled": "Enabled",
+    "create": "Create schedule",
+    "save": "Save changes",
+    "created": "Schedule created.",
+    "saved": "Schedule updated.",
+    "failed": "Schedule action failed. Please retry.",
+    "edit": "Edit",
+    "delete": "Delete",
+    "deleteConfirm": "Delete schedule \"{{name}}\"?",
+    "lastRunAt": "Last run",
+    "nextRunAt": "Next run",
+    "never": "Never",
+    "enabled": "Enabled",
+    "disabled": "Disabled"
   },
   "instanceDetail": {
     "expand": "Show inject and report events",

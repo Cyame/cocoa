@@ -502,3 +502,45 @@ export type OrgIdentity = {
   readonly atoms: readonly string[];
   readonly display_label: string;
 };
+
+/** v4.8 meeting lifecycle status (see `.omo/plans/v4-8-meetings-schedules.md`). */
+export type MeetingStatus = 'scheduled' | 'active' | 'ended' | 'cancelled';
+
+/** One membership seat in a meeting (`meeting_participants` row). */
+export type MeetingParticipant = {
+  readonly id: string;
+  readonly meeting_id: string;
+  readonly membership_id: string;
+  /** Free-form label, NOT an auth role (plan M3). */
+  readonly role_in_meeting?: string | null;
+};
+
+/** `POST /api/v1/meetings` + `GET /api/v1/meetings/{id}` shape. */
+export type Meeting = {
+  readonly id: string;
+  readonly workspace_id: string;
+  readonly title: string;
+  readonly agenda: string | null;
+  readonly status: MeetingStatus;
+  readonly scheduled_at: string;
+  readonly ended_at: string | null;
+  readonly created_by_user_id: string;
+  readonly created_at: string;
+  readonly updated_at: string | null;
+  /** Only present on create / detail responses; list items carry an empty array. */
+  readonly participants?: readonly MeetingParticipant[];
+};
+
+/** `brainstem_schedules` row — fired by the backend runner on cron. */
+export type BrainstemSchedule = {
+  readonly id: string;
+  readonly central_hub_id: string;
+  readonly name: string;
+  readonly cron_expr: string;
+  readonly action_payload: JsonObject | null;
+  readonly enabled: boolean;
+  readonly last_run_at: string | null;
+  readonly next_run_at: string | null;
+  readonly created_at: string;
+  readonly updated_at: string | null;
+};

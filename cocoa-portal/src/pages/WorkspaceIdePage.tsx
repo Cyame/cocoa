@@ -2,6 +2,7 @@ import {
   AlertCircle,
   Archive,
   Brain,
+  CalendarDays,
   Cpu,
   FilePlus,
   FileText,
@@ -22,14 +23,16 @@ import { useParams } from 'react-router';
 import IdeShell from '@/components/IdeShell';
 import InstancesPanel from '@/components/InstancesPanel';
 import IntroduceInstanceModal from '@/components/IntroduceInstanceModal';
+import MeetingPanel from '@/components/MeetingPanel';
 import { ModelInputCombobox } from '@/components/ModelInputCombobox';
+import SchedulesPanel from '@/components/SchedulesPanel';
 import { ApiError, api } from '@/lib/api';
 import {
   archiveFornixFile,
   createFornixFile,
   deleteFornixFile,
-  fetchFornixFile,
   type FornixFile,
+  fetchFornixFile,
   listFornixFiles,
   listVaultEntries,
   patchFornixFile,
@@ -62,7 +65,7 @@ import TopologyPage from '@/pages/TopologyPage';
 import { useSelectedStore } from '@/stores/selected';
 import { useSessionStore } from '@/stores/session';
 
-type CanvasTab = 'topology' | 'memberships' | 'instances' | 'brain';
+type CanvasTab = 'topology' | 'memberships' | 'instances' | 'meetings' | 'brain';
 type BrainSubTab = 'fornix' | 'vault' | 'frontal' | 'brainstem' | 'cerebellum';
 
 type OffsetPage<T> = {
@@ -258,6 +261,7 @@ export default function WorkspaceIdePage() {
     { id: 'topology', label: t('workspace.tabs.topology'), Icon: Users },
     { id: 'memberships', label: t('workspace.tabs.memberships'), Icon: Users },
     { id: 'instances', label: t('workspace.tabs.instances'), Icon: Cpu },
+    { id: 'meetings', label: t('workspace.tabs.meetings'), Icon: CalendarDays },
     { id: 'brain', label: t('workspace.tabs.brain'), Icon: Brain },
   ];
 
@@ -376,25 +380,29 @@ export default function WorkspaceIdePage() {
             />
           ) : null}
 
+          {!isLoading && activeTab === 'meetings' ? <MeetingPanel workspaceId={id} /> : null}
+
           {!isLoading && activeTab === 'brain' ? (
             <div className="flex h-full flex-col">
               <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-200 bg-slate-50 px-4 py-2">
-                {(['fornix', 'vault', 'frontal', 'brainstem', 'cerebellum'] as const).map((subTab) => (
-                  <button
-                    key={subTab}
-                    type="button"
-                    role="tab"
-                    aria-selected={brainSubTab === subTab}
-                    onClick={() => setBrainSubTab(subTab)}
-                    className={`rounded-md px-3 py-1.5 text-xs font-semibold ${
-                      brainSubTab === subTab
-                        ? 'bg-white text-slate-900 shadow-sm'
-                        : 'text-slate-600 hover:bg-white'
-                    }`}
-                  >
-                    {t(`workspace.brain.${subTab}`)}
-                  </button>
-                ))}
+                {(['fornix', 'vault', 'frontal', 'brainstem', 'cerebellum'] as const).map(
+                  (subTab) => (
+                    <button
+                      key={subTab}
+                      type="button"
+                      role="tab"
+                      aria-selected={brainSubTab === subTab}
+                      onClick={() => setBrainSubTab(subTab)}
+                      className={`rounded-md px-3 py-1.5 text-xs font-semibold ${
+                        brainSubTab === subTab
+                          ? 'bg-white text-slate-900 shadow-sm'
+                          : 'text-slate-600 hover:bg-white'
+                      }`}
+                    >
+                      {t(`workspace.brain.${subTab}`)}
+                    </button>
+                  ),
+                )}
               </div>
               <div className="min-h-0 flex-1 overflow-y-auto p-6">
                 {brainSubTab === 'cerebellum' ? (
@@ -422,15 +430,9 @@ export default function WorkspaceIdePage() {
                     workspaceId={id}
                     title={t('workspace.brain.frontal')}
                     empty={t('workspace.brain.frontalEmpty')}
-                    kind="frontal"
                   />
                 ) : (
-                  <BrainRegionPanel
-                    workspaceId={id}
-                    title={t('workspace.brain.brainstem')}
-                    empty={t('workspace.brain.brainstemEmpty')}
-                    kind="brainstem"
-                  />
+                  <SchedulesPanel workspaceId={id} />
                 )}
               </div>
             </div>
@@ -456,12 +458,10 @@ function BrainRegionPanel({
   workspaceId,
   title,
   empty,
-  kind,
 }: {
   readonly workspaceId: string;
   readonly title: string;
   readonly empty: string;
-  readonly kind: 'frontal' | 'brainstem';
 }) {
   const { t } = useTranslation();
   const [items, setItems] = useState<readonly { id: string; label: string }[]>([]);
@@ -470,10 +470,7 @@ function BrainRegionPanel({
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    const path =
-      kind === 'frontal'
-        ? `/central-hubs/${encodeURIComponent(workspaceId)}/frontal-lobe/kanbans`
-        : `/central-hubs/${encodeURIComponent(workspaceId)}/brainstem/schedules`;
+    const path = `/central-hubs/${encodeURIComponent(workspaceId)}/frontal-lobe/kanbans`;
     void api<unknown>(path)
       .then((res) => {
         if (cancelled) return;
@@ -500,7 +497,7 @@ function BrainRegionPanel({
     return () => {
       cancelled = true;
     };
-  }, [workspaceId, kind]);
+  }, [workspaceId]);
 
   return (
     <div className="space-y-4">
@@ -839,9 +836,7 @@ function FornixPanel({
                 </li>
               ))}
             </ul>
-            <p className="mt-3 text-xs text-slate-400">
-              {t('workspace.fornix.count', { total })}
-            </p>
+            <p className="mt-3 text-xs text-slate-400">{t('workspace.fornix.count', { total })}</p>
           </>
         )}
       </article>
@@ -1114,7 +1109,9 @@ function VaultPanel({
                     </p>
                     <p className="mt-0.5 text-xs text-slate-400">
                       {t('workspace.vault.archivedAt')}:{' '}
-                      {entry.archived_at !== null ? new Date(entry.archived_at).toLocaleString() : '-'}
+                      {entry.archived_at !== null
+                        ? new Date(entry.archived_at).toLocaleString()
+                        : '-'}
                     </p>
                   </div>
                   <button
@@ -1129,9 +1126,7 @@ function VaultPanel({
                 </li>
               ))}
             </ul>
-            <p className="mt-3 text-xs text-slate-400">
-              {t('workspace.vault.count', { total })}
-            </p>
+            <p className="mt-3 text-xs text-slate-400">{t('workspace.vault.count', { total })}</p>
           </>
         )}
       </article>
