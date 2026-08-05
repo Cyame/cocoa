@@ -58,7 +58,7 @@ beforeEach(() => {
 
 describe('OrgPickerPage', () => {
   it('renders the empty-state create CTA when the account has no worlds', async () => {
-    mockedApi.mockResolvedValue([]);
+    mockedApi.mockResolvedValue({ items: [], offset: 0, limit: 50, total: 0 });
     renderPicker();
 
     expect(await screen.findByText('No worlds yet')).toBeInTheDocument();
@@ -66,7 +66,12 @@ describe('OrgPickerPage', () => {
   });
 
   it('lists the fetched worlds as selectable cards', async () => {
-    mockedApi.mockResolvedValue([makeOrg({}), makeOrg({ id: 'org-2', slug: 'omega', name: 'Omega' })]);
+    mockedApi.mockResolvedValue({
+      items: [makeOrg({}), makeOrg({ id: 'org-2', slug: 'omega', name: 'Omega' })],
+      offset: 0,
+      limit: 50,
+      total: 2,
+    });
     renderPicker();
 
     expect(await screen.findByText('Acme')).toBeInTheDocument();
@@ -75,7 +80,7 @@ describe('OrgPickerPage', () => {
   });
 
   it('selecting a world sets the org context and enters its dashboard', async () => {
-    mockedApi.mockResolvedValue([makeOrg({})]);
+    mockedApi.mockResolvedValue({ items: [makeOrg({})], offset: 0, limit: 50, total: 1 });
     renderPicker();
 
     fireEvent.click(await screen.findByTestId('org-card-acme'));
@@ -84,12 +89,24 @@ describe('OrgPickerPage', () => {
     expect(await screen.findByText('Org dashboard destination')).toBeInTheDocument();
   });
 
+  it('surfaces an error instead of crashing when the list payload is not paginated', async () => {
+    mockedApi.mockResolvedValue([]);
+    renderPicker();
+
+    expect(
+      await screen.findByText('Received an unexpected response from the server.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId('org-picker-empty-cta')).not.toBeInTheDocument();
+  });
+
   it('creates a world and auto-enters it without returning to the picker', async () => {
     mockedApi.mockImplementation((path, init) => {
       if (path === '/organizations' && init?.method === 'POST') {
         return Promise.resolve(makeOrg({ id: 'org-new', slug: 'acme', name: 'Acme' }));
       }
-      if (path === '/organizations') return Promise.resolve([]);
+      if (path === '/organizations') {
+        return Promise.resolve({ items: [], offset: 0, limit: 50, total: 0 });
+      }
       return Promise.resolve(undefined);
     });
     renderPicker();
@@ -111,7 +128,9 @@ describe('OrgPickerPage', () => {
 
   it('surfaces a validation error for a malformed slug without navigating', async () => {
     mockedApi.mockImplementation((path) => {
-      if (path === '/organizations') return Promise.resolve([]);
+      if (path === '/organizations') {
+        return Promise.resolve({ items: [], offset: 0, limit: 50, total: 0 });
+      }
       return Promise.resolve(undefined);
     });
     renderPicker();

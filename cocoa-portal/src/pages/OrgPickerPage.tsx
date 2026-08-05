@@ -32,8 +32,14 @@ export default function OrgPickerPage() {
     setIsLoading(true);
     setLoadError(null);
     try {
-      const items = await fetchOrganizations();
-      setOrgs(items);
+      // v4.3+ GET /organizations is an OffsetPage — unwrap `.items`.
+      const page = await fetchOrganizations();
+      if (!Array.isArray(page.items)) {
+        // Runtime guard: never white-screen on a malformed list payload.
+        setLoadError(t('errors.invalidResponse'));
+        return;
+      }
+      setOrgs(page.items);
     } catch (error) {
       setLoadError(error instanceof ApiError ? error.message : t('errors.network'));
     } finally {

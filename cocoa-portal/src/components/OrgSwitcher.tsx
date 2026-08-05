@@ -41,7 +41,13 @@ export default function OrgSwitcher({ variant = 'header' }: OrgSwitcherProps) {
     setLoading(true);
     setError(null);
     try {
-      setOrgs(await fetchOrganizations());
+      const page = await fetchOrganizations();
+      if (!Array.isArray(page.items)) {
+        // Same OffsetPage contract guard as OrgPickerPage.
+        setError(t('errors.invalidResponse'));
+        return;
+      }
+      setOrgs(page.items);
     } catch (loadError) {
       setError(loadError instanceof ApiError ? loadError.message : t('errors.network'));
     } finally {

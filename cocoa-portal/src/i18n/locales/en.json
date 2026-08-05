@@ -859,6 +859,7 @@
     "502": "Server error. Please try again later.",
     "503": "Server error. Please try again later.",
     "network": "Network error. Please check your connection.",
+    "invalidResponse": "Received an unexpected response from the server.",
     "unknown": "Something went wrong. Please try again.",
     "validation": "Some input is invalid. Please review the form.",
     "requestFailed": "API request failed with status {{status}}",

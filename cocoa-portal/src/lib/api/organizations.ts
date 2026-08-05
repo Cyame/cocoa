@@ -31,8 +31,15 @@ export type SearchUsersPage = {
   readonly items: readonly UserBrief[];
 };
 
-export function fetchOrganizations(): Promise<readonly Organization[]> {
-  return api<readonly Organization[]>('/organizations');
+export type OffsetPage<T> = {
+  readonly items: readonly T[];
+  readonly offset: number;
+  readonly limit: number;
+  readonly total: number;
+};
+
+export function fetchOrganizations(): Promise<OffsetPage<Organization>> {
+  return api<OffsetPage<Organization>>('/organizations');
 }
 
 export async function createOrganization(
