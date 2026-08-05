@@ -29,8 +29,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.testclient import TestClient
 
-from app.models.workspace import Membership, Workspace
 from app.models.user import User
+from app.models.workspace import Membership, Workspace
 
 # ---------------------------------------------------------------------------
 # 1. Alembic round-trip data-preservation test

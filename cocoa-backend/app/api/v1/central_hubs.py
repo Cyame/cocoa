@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 
 from fastapi import APIRouter, Query, status
 from sqlalchemy import func, select
@@ -75,6 +75,7 @@ from app.schemas.fornix_file import (
 )
 from app.schemas.vault import VaultEntryOut, VaultOut
 from app.services import fornix_sync
+from app.services.instance_restart import restart_instance_runtime
 
 # 15d+ canonical path — no back-compat alias
 router = APIRouter(prefix="/central-hubs", tags=["CentralHub"])
@@ -1233,7 +1234,13 @@ async def restart_cerebellum(
     current_user: CurrentUserDep,
     x_organization_id: XOrgIdHeader = None,
 ) -> CerebellumRestartOut:
-    """Restart the cerebellum loop: bounce the workspace Instance (stub)."""
+    """Restart the cerebellum loop: re-deploy the workspace Instance.
+
+    Drives the same pipeline as ``POST /instances/{id}/restart``
+    (:func:`app.services.instance_restart.restart_instance_runtime`):
+    scale-to-zero -> ``active_hash`` sync to ``entity.migration_hash`` ->
+    ``instance.restarted`` audit event -> real deploy pipeline kick-off.
+    """
     await require_workspace_permission(
         db,
         current_user.user_id,
@@ -1242,18 +1249,19 @@ async def restart_cerebellum(
         x_organization_id=x_organization_id,
     )
     entity, instance = await _get_cerebellum_pair(db, workspace_id)
-    from app.models.instance import InstanceStatus
-
-    instance.status = InstanceStatus.restarting.value
-    await db.flush()
-    restarted_at = datetime.now(timezone.utc)
-    instance.status = InstanceStatus.running.value
-    await db.commit()
+    outcome = await restart_instance_runtime(
+        db,
+        instance=instance,
+        entity=entity,
+        triggered_by=current_user.user_id,
+    )
     return CerebellumRestartOut(
         entity_id=entity.id,
         instance_id=instance.id,
-        status=instance.status,
-        restarted_at=restarted_at,
+        status=outcome.status_after,
+        restarted_at=datetime.fromisoformat(outcome.restarted_at),
+        old_hash=outcome.old_hash,
+        new_hash=outcome.new_hash,
     )
 
 

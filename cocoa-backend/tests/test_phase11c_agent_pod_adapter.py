@@ -17,63 +17,29 @@ Branching on ``app.agent_runtime.k8s_adapter.is_k8s_pod_mode()``:
 
 All HTTP adapter calls are monkey-patched — no real network, no DB.
 
-The transitional ``app/agent_runtime/__init__.py`` (P11c package split)
-only re-exports ``start_runtime_for``; it shadows the legacy
-``app/agent_runtime.py`` module where ``run_agent_loop`` lives. The
-tests load the legacy module via ``importlib.util`` and expose it as
-an attribute on the ``app`` package so ``monkeypatch.setattr`` can
-resolve ``"app._agent_runtime_legacy_for_tests.X"``. Same pattern as
-``test_phase11c_deploy_endpoint.py``.
+The canonical module is ``app.agent_runtime.loop`` (the v4.9 convergence
+moved the legacy ``app/agent_runtime.py`` file into the package and
+dropped the importlib shim). P14a's ``run_agent_loop`` calls
+``poll_control_full`` (not the pre-v4.7 ``poll_control``), so the K8s
+tests patch the full-poll function.
 """
 
 from __future__ import annotations
 
-import importlib.util
-import sys
 import time
 from contextlib import asynccontextmanager
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.agent_runtime import loop as _runtime
 from app.core.event_types import (
     HARNESS_CHECKPOINT,
     HARNESS_LOOP_STARTED,
     HARNESS_LOOP_STOPPED,
 )
 
-_APP_DIR = Path(__file__).resolve().parent.parent / "app"
-_spec = importlib.util.spec_from_file_location(
-    "app._agent_runtime_legacy_for_tests",
-    str(_APP_DIR / "agent_runtime" / "__init__.py"),
-)
-_pkg_mod = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_pkg_mod)
-# The package __init__.py (P11c shim) loads the legacy ``app/agent_runtime.py``
-# into ``sys.modules['app._agent_runtime_legacy']`` and re-exports only
-# ``start_runtime_for``. The test needs the full legacy namespace (it
-# monkey-patches ``is_k8s_pod_mode``, ``run_agent_loop``, ``emit``, etc.),
-# so we follow the shim chain and pull the legacy module out of sys.modules.
-_legacy = sys.modules["app._agent_runtime_legacy"]
-sys.modules["app._agent_runtime_legacy_for_tests"] = _legacy
-import app as _app_pkg  # noqa: E402
-
-_app_pkg._agent_runtime_legacy_for_tests = _legacy
-
-run_agent_loop = _legacy.run_agent_loop
-
-# P14a replaced the P11c no-LLM skeleton with a real LLM call loop
-# (commit 7a00d16). ``_build_llm_client()`` now requires an
-# ``OPENAI_API_KEY`` and an httpx SOCKS proxy, neither of which the
-# local/K8s dispatch tests provide. The tests were designed against
-# the P11c no-op loop and exercise dispatch branches that no longer
-# exist in P14a's ``run_agent_loop``. Skipped per the task note
-# "accept some skips if needed"; re-enable when these tests are
-# ported to P14a's LLMClient contract.
-pytestmark = pytest.mark.skip(
-    reason="P14a real-LLM loop incompatible with P11c no-LLM test design",
-)
+run_agent_loop = _runtime.run_agent_loop
 
 # ── 1. Local mode keeps the P8 in-process emit contract ────────────────
 
@@ -86,9 +52,10 @@ async def test_local_mode_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
     in-process ``emit`` MUST be called for ``HARNESS_LOOP_STARTED``,
     at least one ``HARNESS_CHECKPOINT``, and ``HARNESS_LOOP_STOPPED``.
     """
-    monkeypatch.setattr("app._agent_runtime_legacy_for_tests.is_k8s_pod_mode", lambda: False)
+    monkeypatch.setattr(_runtime, "is_k8s_pod_mode", lambda: False)
     monkeypatch.setattr(
-        "app._agent_runtime_legacy_for_tests._resolve_workspace_path",
+        _runtime,
+        "_resolve_workspace_path",
         AsyncMock(return_value="/tmp/fake-ws-local"),
     )
 
@@ -106,7 +73,7 @@ async def test_local_mode_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
         })
         return MagicMock(id="fake-event-id-local")
 
-    monkeypatch.setattr("app._agent_runtime_legacy_for_tests.emit", fake_emit)
+    monkeypatch.setattr(_runtime, "emit", fake_emit)
 
     @asynccontextmanager
     async def fake_session_ctx():
@@ -121,7 +88,8 @@ async def test_local_mode_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
         yield session
 
     monkeypatch.setattr(
-        "app._agent_runtime_legacy_for_tests.get_session_factory",
+        _runtime,
+        "get_session_factory",
         lambda: lambda: fake_session_ctx(),
     )
 
@@ -131,7 +99,7 @@ async def test_local_mode_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
         k8s_http_calls.append({"args": args, "kwargs": kwargs})
         return "fake-event-id"
 
-    monkeypatch.setattr("app._agent_runtime_legacy_for_tests.emit_event", fake_emit_event)
+    monkeypatch.setattr(_runtime, "emit_event", fake_emit_event)
 
     await run_agent_loop("inst-local-1")
 
@@ -160,36 +128,33 @@ async def test_k8s_mode_emits_via_http_mocked(
 
     The in-process ``emit()`` MUST NOT be called in K8s mode.
     """
-    monkeypatch.setattr("app._agent_runtime_legacy_for_tests.is_k8s_pod_mode", lambda: True)
+    monkeypatch.setattr(_runtime, "is_k8s_pod_mode", lambda: True)
     monkeypatch.setattr(
-        "app._agent_runtime_legacy_for_tests._resolve_workspace_path",
+        _runtime,
+        "_resolve_workspace_path",
         AsyncMock(return_value="/tmp/fake-ws-k8s"),
     )
-    monkeypatch.setattr(
-        "app._agent_runtime_legacy_for_tests.get_proxy_token", lambda: "test-proxy-token",
-    )
+    monkeypatch.setattr(_runtime, "get_proxy_token", lambda: "test-proxy-token")
 
     emit_event_calls: list[dict] = []
 
-    async def fake_emit_event(
-        event_type, actor_type, actor_id, resource_type, resource_id, payload,
-    ):
+    async def fake_emit_event(event_type, **kwargs):
         emit_event_calls.append({
             "event_type": event_type,
-            "actor_type": actor_type,
-            "actor_id": actor_id,
-            "resource_type": resource_type,
-            "resource_id": resource_id,
-            "payload": payload,
+            **kwargs,
         })
         return f"http-event-id-{len(emit_event_calls)}"
 
-    monkeypatch.setattr("app._agent_runtime_legacy_for_tests.emit_event", fake_emit_event)
+    monkeypatch.setattr(_runtime, "emit_event", fake_emit_event)
 
-    async def fake_poll_control(last_seen_id):
-        return []
+    async def fake_poll_control_full(last_seen_id):
+        return {"events": [], "injects": []}
 
-    monkeypatch.setattr("app._agent_runtime_legacy_for_tests.poll_control", fake_poll_control)
+    monkeypatch.setattr(_runtime, "poll_control_full", fake_poll_control_full)
+    monkeypatch.setattr(_runtime, "_ITERATIONS", 2)
+    monkeypatch.setattr(_runtime, "_ITERATION_SLEEP", 0)
+    monkeypatch.setattr(_runtime, "_K8S_ITERATION_SLEEP", 0)
+    monkeypatch.setattr(_runtime, "_POLL_INTERVAL", 0)
 
     inproc_emit_calls: list[dict] = []
 
@@ -198,7 +163,7 @@ async def test_k8s_mode_emits_via_http_mocked(
         inproc_emit_calls.append({"event_type": event_type})
         return MagicMock(id="should-not-be-called")
 
-    monkeypatch.setattr("app._agent_runtime_legacy_for_tests.emit", fake_emit)
+    monkeypatch.setattr(_runtime, "emit", fake_emit)
 
     await run_agent_loop("inst-k8s-1")
 
@@ -214,8 +179,7 @@ async def test_k8s_mode_emits_via_http_mocked(
 
     first = checkpoints[0]
     assert first["payload"]["proxy_token"] == "test-proxy-token"
-    assert first["payload"]["iteration"] == 0
-    assert first["payload"]["instance_id"] == "inst-k8s-1"
+    assert first["payload"]["snapshot"]["iteration"] == 0
 
 
 # ── 3. K8s mode polls control and stops on kill ─────────────────────────
@@ -228,32 +192,35 @@ async def test_k8s_mode_polls_control(
     """``is_k8s_pod_mode() == True`` → polling task calls ``poll_control()``
     and sets the stop flag on ``action == "kill"`` within 2 seconds.
     """
-    monkeypatch.setattr("app._agent_runtime_legacy_for_tests.is_k8s_pod_mode", lambda: True)
+    monkeypatch.setattr(_runtime, "is_k8s_pod_mode", lambda: True)
     monkeypatch.setattr(
-        "app._agent_runtime_legacy_for_tests._resolve_workspace_path",
+        _runtime,
+        "_resolve_workspace_path",
         AsyncMock(return_value="/tmp/fake-ws-k8s-poll"),
     )
 
     emit_event_calls: list[dict] = []
 
-    async def fake_emit_event(
-        event_type, actor_type, actor_id, resource_type, resource_id, payload,
-    ):
+    async def fake_emit_event(event_type, **kwargs):
         emit_event_calls.append({"event_type": event_type})
         return "http-event-id"
 
-    monkeypatch.setattr("app._agent_runtime_legacy_for_tests.emit_event", fake_emit_event)
+    monkeypatch.setattr(_runtime, "emit_event", fake_emit_event)
 
     poll_count = 0
 
-    async def fake_poll_control(last_seen_id):
+    async def fake_poll_control_full(last_seen_id):
         nonlocal poll_count
         poll_count += 1
         if poll_count == 1:
-            return [{"id": 1, "payload": {"action": "kill"}}]
-        return []
+            return {"events": [{"id": 1, "payload": {"action": "kill"}}], "injects": []}
+        return {"events": [], "injects": []}
 
-    monkeypatch.setattr("app._agent_runtime_legacy_for_tests.poll_control", fake_poll_control)
+    monkeypatch.setattr(_runtime, "poll_control_full", fake_poll_control_full)
+    monkeypatch.setattr(_runtime, "_ITERATIONS", 100)
+    monkeypatch.setattr(_runtime, "_ITERATION_SLEEP", 0)
+    monkeypatch.setattr(_runtime, "_K8S_ITERATION_SLEEP", 0)
+    monkeypatch.setattr(_runtime, "_POLL_INTERVAL", 0)
 
     started = time.monotonic()
     await run_agent_loop("inst-k8s-poll-1")

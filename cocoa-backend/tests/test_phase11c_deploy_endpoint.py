@@ -23,34 +23,7 @@ specific tests. The shared ``session`` / ``db_url`` fixtures come from
 
 from __future__ import annotations
 
-import importlib.util
 import uuid
-from pathlib import Path
-
-# ---------------------------------------------------------------------------
-# Workaround: the parallel P11c Todo "agent-runtime package split" introduced
-# ``app/agent_runtime/__init__.py`` (the package), which shadows the existing
-# ``app/agent_runtime.py`` module that exports ``start_runtime_for``. The
-# downstream ``app.api.v1.harness`` then fails at import time with
-# ``ImportError: cannot import name 'start_runtime_for'``. The conftest
-# autouse fixture ``_clear_handlers`` does ``from app.main import app``
-# which transitively triggers that broken import, so EVERY test in this
-# file would fail collection even though deploy.py has nothing to do with
-# the harness. Re-export ``start_runtime_for`` from the module file onto
-# the package namespace BEFORE any ``app.main`` import resolves.
-# ---------------------------------------------------------------------------
-_APP_DIR = Path(__file__).resolve().parent.parent / "app"
-_spec = importlib.util.spec_from_file_location(
-    "app.agent_runtime._compat_module",
-    str(_APP_DIR / "agent_runtime" / "__init__.py"),
-)
-_agent_runtime_compat = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_agent_runtime_compat)
-import app.agent_runtime as _ar_pkg  # noqa: E402
-
-for _name in ("start_runtime_for", "run_agent_loop"):
-    if hasattr(_agent_runtime_compat, _name) and not hasattr(_ar_pkg, _name):
-        setattr(_ar_pkg, _name, getattr(_agent_runtime_compat, _name))
 
 import pytest  # noqa: E402
 import pytest_asyncio  # noqa: E402
@@ -112,8 +85,9 @@ async def _make_deploy_record(session: AsyncSession) -> DeployRecord:
     required. The instance is built with the minimum column set the
     model accepts without constraint violations.
     """
-    import app.core.db as db_mod
     from sqlalchemy import select
+
+    import app.core.db as db_mod
     from app.models.entity import Entity
     from app.models.instance import Instance, InstanceStatus
     from app.models.organization import Namespace

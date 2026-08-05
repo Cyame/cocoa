@@ -146,7 +146,7 @@ export default function WorkspaceIdePage() {
             `/messaging/memberships?workspace_id=${encodeURIComponent(id)}&kind=user`,
           ),
           api<OffsetPage<Instance>>(`/instances?workspace_id=${encodeURIComponent(id)}`),
-          api<OffsetPage<Entity>>('/entities?limit=200'),
+          api<OffsetPage<Entity>>('/entities?limit=200&is_cerebellum=false'),
           api<CentralHub>(`/central-hubs/${encodeURIComponent(id)}`).catch(() => null),
           fetchWorkspaceCerebellum(id).catch(() => null),
           fetchCerebellumDefaults().catch(() => null),

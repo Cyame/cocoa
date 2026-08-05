@@ -35,8 +35,10 @@ async def list_mention_candidates(
     """Passage-neighbor Lost Ones for Composer ``@`` autocomplete.
 
     Neighbors are duplex: an active Passage in either orientation counts.
-    Typing ``@`` a non-neighbor is still parsed; delivery then routes to the
-    Workspace cerebellum stub (not the Host).
+    Typing ``@`` a non-neighbor is still parsed; delivery then routes through
+    ``message_router._route_to_cerebellum`` — notify-only (persists the
+    utterance + template reply, emits ``messaging.delivery_blocked``), never
+    proxied to the Lost One Host.
     """
     workspace = await db.get(Workspace, workspace_id)
     if workspace is None or workspace.deleted_at is not None:
@@ -183,7 +185,10 @@ async def composer_stream(
         if terminal_seen:
             return
 
-        yield f"event: status\ndata: {json.dumps({'type': 'composer.turn.status', 'status': state.status, 'turn_id': turn_id})}\n\n"
+        yield (
+            "event: status\n"
+            f"data: {json.dumps({'type': 'composer.turn.status', 'status': state.status, 'turn_id': turn_id})}\n\n"
+        )
         while True:
             try:
                 frame = await asyncio.wait_for(state.queue.get(), timeout=30.0)

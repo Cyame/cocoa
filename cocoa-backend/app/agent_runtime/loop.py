@@ -19,15 +19,6 @@ from typing import Any
 from loguru import logger
 from sqlalchemy import select
 
-from app.agent_runtime.k8s_adapter import (
-    ack_injects,
-    emit_event,
-    get_proxy_token,
-    is_k8s_pod_mode,
-    poll_control,  # noqa: F401 — module-level attribute for test monkeypatch
-    poll_control_full,
-)
-from app.agent_runtime.safe_point import SafePointGuard
 from app.core.builtin_presets import BUILTIN_PRESETS
 from app.core.db import get_session_factory
 from app.core.event_types import (
@@ -44,12 +35,26 @@ from app.models.loop_state import InstanceLoopState, LoopStatus
 from app.schemas.llm import LLMProviderConfig
 from app.services.llm.llm_client import LLMClient, LLMError
 
+from .k8s_adapter import (
+    ack_injects,
+    emit_event,
+    get_proxy_token,
+    is_k8s_pod_mode,
+    poll_control,  # noqa: F401 — module-level attribute for test monkeypatch
+    poll_control_full,
+)
+from .safe_point import SafePointGuard
+
 _MAX_ITERATIONS = 10_000  # safety cap; loop normally exits on stop_flag
 # Test alias — phase11c monkeypatches ``_ITERATIONS`` / ``_ITERATION_SLEEP``.
 _ITERATIONS = _MAX_ITERATIONS
 _ITERATION_SLEEP = 0.05
 _LLM_ERROR_BACKOFF_SECONDS = 5.0
 _POLL_INTERVAL = 1.0
+# K8s stub/idle pacing between checkpoints — avoids tight checkpoint spam
+# when no real LLM is configured. Test alias: phase11c tests set it to 0
+# alongside ``_ITERATIONS`` / ``_ITERATION_SLEEP``.
+_K8S_ITERATION_SLEEP = 5.0
 
 
 def _build_llm_client() -> tuple[Any, dict[str, Any]]:
@@ -400,7 +405,7 @@ async def run_agent_loop(instance_id: str) -> None:
             i += 1
             # K8s stub/idle pacing — avoid tight checkpoint spam without a real LLM.
             if k8s_mode:
-                await asyncio.sleep(max(_POLL_INTERVAL, 5.0))
+                await asyncio.sleep(max(_POLL_INTERVAL, _K8S_ITERATION_SLEEP))
 
         await _emit(
             HARNESS_LOOP_STOPPED,

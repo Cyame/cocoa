@@ -73,7 +73,12 @@ async def test_cors_headers(client: TestClient):
     assert "GET" in allow_methods
 
 
-async def test_rate_limit(client: TestClient):
+async def test_rate_limit(client: TestClient, monkeypatch):
+    # Product default is 600 req/min (SPA polling); pin to 100 to exercise
+    # the 429 path deterministically without 600 HTTP round-trips.
+    monkeypatch.setattr(
+        "app.core.middleware.rate_limit.MAX_REQUESTS_PER_WINDOW", 100
+    )
     for _ in range(100):
         response = client.get("/api/v1/error-test")
         assert response.status_code != 429
@@ -89,8 +94,11 @@ async def test_health_not_rate_limited(client: TestClient):
         assert response.status_code == 200
 
 
-async def test_middleware_order_on_429(client: TestClient):
+async def test_middleware_order_on_429(client: TestClient, monkeypatch):
     headers = {"Origin": "http://localhost:5173"}
+    monkeypatch.setattr(
+        "app.core.middleware.rate_limit.MAX_REQUESTS_PER_WINDOW", 100
+    )
     for _ in range(100):
         client.get("/api/v1/error-test", headers=headers)
     response = client.get("/api/v1/error-test", headers=headers)

@@ -98,7 +98,17 @@ class CerebellumOut(BaseModel):
 
 
 class CerebellumRestartOut(BaseModel):
+    """v4.9.1: cerebellum restart response.
+
+    ``status`` mirrors the re-deploy pipeline outcome (``deploying`` after a
+    successful kick-off, ``failed`` when the deploy could not start).
+    ``old_hash`` / ``new_hash`` are optional for schema backward
+    compatibility with the pre-v4.9.1 status-bounce stub.
+    """
+
     entity_id: str
     instance_id: str
     status: str
     restarted_at: datetime
+    old_hash: str | None = None
+    new_hash: str | None = None

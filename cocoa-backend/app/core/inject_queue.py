@@ -17,6 +17,8 @@ from app.core.event_types import (
     HARNESS_INJECT_APPLIED,
     HARNESS_INJECT_FAILED,
     HARNESS_INJECT_REQUESTED,
+    LEARNING_CAPABILITY_INJECTED,
+    LEARNING_GENE_INJECTED,
 )
 from app.core.events import emit
 from app.models.inject_queue import InjectStatus, InstanceInjectQueue
@@ -91,6 +93,40 @@ async def enqueue_inject(
         },
         session=session,
     )
+
+    # L3 (audit-v4-design-review): learning-side injection entry events pair
+    # with the harness inject downlink. A capability/gene inject enqueue also
+    # records the learning-side ``learning.*_injected`` audit event.
+    if row.kind == "capability_inject":
+        await emit(
+            LEARNING_CAPABILITY_INJECTED,
+            actor_type="system",
+            resource_type="instance",
+            resource_id=instance_id,
+            payload={
+                "queue_id": row.id,
+                "kind": row.kind,
+                "delivery_mode": row.delivery_mode,
+                "capability_ids": payload.get("capability_ids", []),
+                "tldr": req.tldr,
+            },
+            session=session,
+        )
+    elif row.kind == "gene_inject":
+        await emit(
+            LEARNING_GENE_INJECTED,
+            actor_type="system",
+            resource_type="instance",
+            resource_id=instance_id,
+            payload={
+                "queue_id": row.id,
+                "kind": row.kind,
+                "delivery_mode": row.delivery_mode,
+                "gene_ids": payload.get("gene_ids", []),
+                "tldr": req.tldr,
+            },
+            session=session,
+        )
     return row
 
 

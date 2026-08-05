@@ -151,7 +151,6 @@ async def namespace_factory(session: AsyncSession):
     """Ensure a default Organization+Namespace exist; return Namespace."""
 
     async def _make(**overrides):
-        import uuid as _uuid
 
         from sqlalchemy import select
 

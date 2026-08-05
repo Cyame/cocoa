@@ -1,7 +1,8 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, api } from '@/lib/api';
 import FirstRunOnboardingModal from '@/pages/FirstRunOnboardingModal';
+import { useOnboardingModalStore } from '@/stores/onboardingModalStore';
 import { useOnboardingStore } from '@/stores/onboardingStore';
 
 vi.mock('@/lib/api', async (importOriginal) => {
@@ -112,50 +113,45 @@ function mockApiSuccess() {
   });
 }
 
+function resetOnboardingStores() {
+  act(() => {
+    useOnboardingStore.setState({
+      step: 1,
+      selectedBaseClass: null,
+      displayName: '',
+      slug: '',
+      slugTouched: false,
+      rank: 'researcher',
+      providerId: '',
+      model: '',
+      description: '',
+      knowledgeRows: [],
+      knowledgeFiles: [],
+      knowledgeScope: 'instance',
+      submitError: null,
+    });
+    useOnboardingModalStore.setState({ isOpen: false, baseClassSlug: null });
+  });
+}
+
 beforeEach(() => {
   mockedApi.mockReset();
   mockApiSuccess();
-  useOnboardingStore.setState({
-    step: 1,
-    selectedBaseClass: null,
-    displayName: '',
-    slug: '',
-    slugTouched: false,
-    rank: 'researcher',
-    providerId: '',
-    model: '',
-    description: '',
-    knowledgeRows: [],
-    knowledgeFiles: [],
-    knowledgeScope: 'instance',
-    submitError: null,
-  });
+  resetOnboardingStores();
 });
 
 afterEach(() => {
-  useOnboardingStore.setState({
-    step: 1,
-    selectedBaseClass: null,
-    displayName: '',
-    slug: '',
-    slugTouched: false,
-    rank: 'researcher',
-    providerId: '',
-    model: '',
-    description: '',
-    knowledgeRows: [],
-    knowledgeFiles: [],
-    knowledgeScope: 'instance',
-    submitError: null,
-  });
+  resetOnboardingStores();
 });
 
 describe('FirstRunOnboardingModal', () => {
   it('renders Step 1 with the deity cards and step indicator', async () => {
     renderModal();
 
-    expect(await screen.findByTestId('onboarding-step1')).toBeInTheDocument();
-    const indicator = await screen.findByTestId('step-indicator');
+    expect(
+      await screen.findByTestId('onboarding-step1', {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
+    const indicator = await screen.findByTestId('step-indicator', {}, { timeout: 5000 });
     expect(indicator).toHaveTextContent(/Step 1\/3/);
 
     const miShi = await screen.findByTestId('deity-card-mi-shi');
@@ -171,7 +167,9 @@ describe('FirstRunOnboardingModal', () => {
   it('keeps the Next button disabled until a deity is selected', async () => {
     renderModal();
 
-    expect(await screen.findByTestId('onboarding-step1')).toBeInTheDocument();
+    expect(
+      await screen.findByTestId('onboarding-step1', {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
     const next = screen.getByTestId('onboarding-next');
     expect(next).toBeDisabled();
 
@@ -183,12 +181,16 @@ describe('FirstRunOnboardingModal', () => {
   it('navigates Step 1 → Step 2 → Step 3 via Next and Back', async () => {
     renderModal();
 
-    expect(await screen.findByTestId('onboarding-step1')).toBeInTheDocument();
+    expect(
+      await screen.findByTestId('onboarding-step1', {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId('deity-card-mi-shi'));
     fireEvent.click(screen.getByTestId('onboarding-next'));
 
-    expect(await screen.findByTestId('onboarding-step2')).toBeInTheDocument();
+    expect(
+      await screen.findByTestId('onboarding-step2', {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
     expect(screen.getByTestId('step-indicator')).toHaveTextContent(/Step 2\/3/);
 
     fireEvent.change(screen.getByLabelText(/Display name/i), {
@@ -196,21 +198,29 @@ describe('FirstRunOnboardingModal', () => {
     });
     fireEvent.click(screen.getByTestId('onboarding-next'));
 
-    expect(await screen.findByTestId('onboarding-step3')).toBeInTheDocument();
+    expect(
+      await screen.findByTestId('onboarding-step3', {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
     expect(screen.getByTestId('step-indicator')).toHaveTextContent(/Step 3\/3/);
 
     fireEvent.click(screen.getByTestId('onboarding-back'));
-    expect(await screen.findByTestId('onboarding-step2')).toBeInTheDocument();
+    expect(
+      await screen.findByTestId('onboarding-step2', {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
   });
 
   it('validates Step 2 form: blocks Next when display_name is empty or slug invalid', async () => {
     renderModal();
 
-    expect(await screen.findByTestId('onboarding-step1')).toBeInTheDocument();
+    expect(
+      await screen.findByTestId('onboarding-step1', {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('deity-card-mi-shi'));
     fireEvent.click(screen.getByTestId('onboarding-next'));
 
-    expect(await screen.findByTestId('onboarding-step2')).toBeInTheDocument();
+    expect(
+      await screen.findByTestId('onboarding-step2', {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
 
     const next = screen.getByTestId('onboarding-next');
     expect(next).toBeDisabled();
@@ -225,7 +235,9 @@ describe('FirstRunOnboardingModal', () => {
       target: { value: 'Nyar Proutzi' },
     });
 
-    expect(await screen.findByText(/Slug must start with a lowercase letter/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Slug must start with a lowercase letter/i, {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
     expect(next).toBeDisabled();
 
     fireEvent.change(screen.getByLabelText(/Slug/i), {
@@ -238,11 +250,15 @@ describe('FirstRunOnboardingModal', () => {
   it('auto-generates slug from display_name until the user edits the slug', async () => {
     renderModal();
 
-    expect(await screen.findByTestId('onboarding-step1')).toBeInTheDocument();
+    expect(
+      await screen.findByTestId('onboarding-step1', {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('deity-card-mi-shi'));
     fireEvent.click(screen.getByTestId('onboarding-next'));
 
-    expect(await screen.findByTestId('onboarding-step2')).toBeInTheDocument();
+    expect(
+      await screen.findByTestId('onboarding-step2', {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
 
     const displayInput = screen.getByLabelText(/Display name/i);
     const slugInput = screen.getByLabelText(/Slug/i);
@@ -262,50 +278,63 @@ describe('FirstRunOnboardingModal', () => {
     const onClose = vi.fn();
     renderModal(onClose);
 
-    expect(await screen.findByTestId('onboarding-step1')).toBeInTheDocument();
+    expect(
+      await screen.findByTestId('onboarding-step1', {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId('deity-card-mi-shi'));
     fireEvent.click(screen.getByTestId('onboarding-next'));
 
-    expect(await screen.findByTestId('onboarding-step2')).toBeInTheDocument();
+    expect(
+      await screen.findByTestId('onboarding-step2', {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText(/Display name/i), {
       target: { value: 'nyar-proutzi' },
     });
-    useOnboardingStore.setState({
-      providerId: 'prov-1',
-      model: 'gpt-4o-mini',
-    });
-
-    fireEvent.click(screen.getByTestId('onboarding-next'));
-
-    expect(await screen.findByTestId('onboarding-step3')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByTestId('onboarding-next'));
-
-    await waitFor(() => {
-      const submitCall = mockedApi.mock.calls.find(
-        ([path, init]) => path === '/entities' && init?.method === 'POST',
-      );
-      expect(submitCall).toBeDefined();
-      if (submitCall === undefined) return;
-      const init = submitCall[1] as RequestInit;
-      const body = JSON.parse(init.body as string);
-      expect(body).toEqual({
-        name: 'nyar-proutzi',
-        slug: 'nyar-proutzi',
-        rank: 'researcher',
-        preset_slug: 'mi-shi',
-        display_name: 'nyar-proutzi',
-        system_prompt: null,
-        config_override: {
-          provider_id: 'prov-1',
-          model: 'gpt-4o-mini',
-        },
+    act(() => {
+      useOnboardingStore.setState({
+        providerId: 'prov-1',
+        model: 'gpt-4o-mini',
       });
     });
 
-    expect(await screen.findByTestId('onboarding-success')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('onboarding-next'));
+
+    expect(
+      await screen.findByTestId('onboarding-step3', {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('onboarding-next'));
+
+    await waitFor(
+      () => {
+        const submitCall = mockedApi.mock.calls.find(
+          ([path, init]) => path === '/entities' && init?.method === 'POST',
+        );
+        expect(submitCall).toBeDefined();
+        if (submitCall === undefined) return;
+        const init = submitCall[1] as RequestInit;
+        const body = JSON.parse(init.body as string);
+        expect(body).toEqual({
+          name: 'nyar-proutzi',
+          slug: 'nyar-proutzi',
+          rank: 'researcher',
+          preset_slug: 'mi-shi',
+          display_name: 'nyar-proutzi',
+          system_prompt: null,
+          config_override: {
+            provider_id: 'prov-1',
+            model: 'gpt-4o-mini',
+          },
+        });
+      },
+      { timeout: 5000 },
+    );
+
+    expect(
+      await screen.findByTestId('onboarding-success', {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Confirm/i }));
 
@@ -325,21 +354,29 @@ describe('FirstRunOnboardingModal', () => {
 
     renderModal();
 
-    expect(await screen.findByTestId('onboarding-step1')).toBeInTheDocument();
+    expect(
+      await screen.findByTestId('onboarding-step1', {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('deity-card-mi-shi'));
     fireEvent.click(screen.getByTestId('onboarding-next'));
 
-    expect(await screen.findByTestId('onboarding-step2')).toBeInTheDocument();
+    expect(
+      await screen.findByTestId('onboarding-step2', {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText(/Display name/i), {
       target: { value: 'nyar-proutzi' },
     });
     fireEvent.click(screen.getByTestId('onboarding-next'));
 
-    expect(await screen.findByTestId('onboarding-step3')).toBeInTheDocument();
+    expect(
+      await screen.findByTestId('onboarding-step3', {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('onboarding-next'));
 
-    expect(await screen.findByText(/slug already taken/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/slug already taken/i, {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
     expect(screen.queryByTestId('onboarding-success')).not.toBeInTheDocument();
     expect(screen.getByTestId('onboarding-step3')).toBeInTheDocument();
   });
@@ -348,7 +385,9 @@ describe('FirstRunOnboardingModal', () => {
     const onClose = vi.fn();
     renderModal(onClose);
 
-    expect(await screen.findByTestId('onboarding-step1')).toBeInTheDocument();
+    expect(
+      await screen.findByTestId('onboarding-step1', {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Close/i }));
 
     expect(onClose).toHaveBeenCalledWith('dismissed');

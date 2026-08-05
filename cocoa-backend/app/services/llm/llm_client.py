@@ -13,7 +13,8 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, AsyncIterator
 
 import httpx
 from anthropic import AsyncAnthropic
@@ -64,10 +65,6 @@ _LEGACY_TO_FORMAT: dict[str, str] = {
     "custom": "completion",
     "gemini": "gemini",
 }
-
-
-from dataclasses import dataclass
-from typing import Any, AsyncIterator
 
 
 @dataclass(frozen=True, slots=True)

@@ -17,12 +17,9 @@ Wave 1-3 ``test_phase14a_*.py`` files.
 
 from __future__ import annotations
 
-import importlib.util
-import sys
 from contextlib import asynccontextmanager
-from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
 import pytest_asyncio
@@ -220,8 +217,11 @@ async def test_llm_client_custom_provider_uses_base_url() -> None:
             default_model="internal-llm",
         )
         resp = await llm.complete(messages=[{"role": "user", "content": "ping"}])
-    # AsyncOpenAI was instantiated with the custom base_url
-    openai_cls.assert_called_once_with(api_key="internal-key", base_url=custom_url)
+    # AsyncOpenAI was instantiated with the custom base_url (plus the
+    # verify-controlled httpx client P14a injects for TLS).
+    openai_cls.assert_called_once_with(
+        api_key="internal-key", base_url=custom_url, http_client=ANY
+    )
     assert resp.content == "internal"
     assert resp.model == "internal-llm"
 
@@ -317,7 +317,11 @@ async def test_model_catalog_fallback_includes_anthropic_models() -> None:
     import httpx
     failing.get = AsyncMock(side_effect=httpx.ConnectError("offline"))
 
-    with patch("app.services.llm.model_catalog.httpx.AsyncClient", return_value=failing):
+    # Skip the committed models.dev snapshot so the chain reaches the builtin
+    # fallback list (the snapshot ships newer model ids than the stock trio).
+    with patch(
+        "app.services.llm.model_catalog.httpx.AsyncClient", return_value=failing
+    ), patch.object(ModelCatalog, "_load_bundled_raw", return_value=None):
         catalog = ModelCatalog()
         models = await catalog.list_models(provider="anthropic")
 
@@ -397,18 +401,15 @@ def _LLMProviderConfig_from_preset(preset: dict) -> LLMProviderConfig:
 
 
 def _load_agent_runtime_module():
-    """Load the legacy agent_runtime.py under a stable test alias."""
-    app_dir = Path(__file__).resolve().parent.parent / "app"
-    spec = importlib.util.spec_from_file_location(
-        "app._agent_runtime_for_integration",
-        str(app_dir / "agent_runtime.py"),
-    )
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules["app._agent_runtime_for_integration"] = mod
-    import app as _app_pkg
-    _app_pkg._agent_runtime_for_integration = mod
-    spec.loader.exec_module(mod)
-    return mod
+    """Return the canonical ``app.agent_runtime.loop`` module.
+
+    The v4.9 convergence moved the legacy ``app/agent_runtime.py`` file
+    into the package (``app/agent_runtime/loop.py``) and dropped the
+    P11c importlib bridge, so the module is importable directly.
+    """
+    from app.agent_runtime import loop
+
+    return loop
 
 
 @asynccontextmanager

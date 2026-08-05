@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-import importlib.util
-import sys
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -14,17 +11,11 @@ import anyio
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agent_runtime import loop as _runtime
 from app.core.event_types import HARNESS_CHECKPOINT, HARNESS_LOOP_STARTED, HARNESS_LOOP_STOPPED
 from app.core.event_watcher import EventWatcher
 from app.core.events import register_handler
 
-_RUNTIME_MODULE = "app._agent_runtime_p11c_integration"
-_RUNTIME_PATH = Path(__file__).parents[1] / "app" / "agent_runtime.py"
-_spec = importlib.util.spec_from_file_location(_RUNTIME_MODULE, _RUNTIME_PATH)
-assert _spec is not None and _spec.loader is not None
-_runtime = importlib.util.module_from_spec(_spec)
-sys.modules[_RUNTIME_MODULE] = _runtime
-_spec.loader.exec_module(_runtime)
 run_agent_loop = _runtime.run_agent_loop
 
 
@@ -35,14 +26,16 @@ def _configure_k8s_runtime(
 ) -> tuple[AsyncMock, AsyncMock]:
     """Configure a one-iteration K8s loop and return its HTTP mocks."""
     emit_event = AsyncMock(return_value="event-id")
-    poll_control = AsyncMock(return_value=[])
+    poll_control = AsyncMock(return_value={"events": [], "injects": []})
     monkeypatch.setattr(_runtime, "is_k8s_pod_mode", lambda: True)
     monkeypatch.setattr(_runtime, "_resolve_workspace_path", AsyncMock(return_value="/tmp/p11c-pod"))
     monkeypatch.setattr(_runtime, "get_proxy_token", lambda: proxy_token)
     monkeypatch.setattr(_runtime, "emit_event", emit_event)
-    monkeypatch.setattr(_runtime, "poll_control", poll_control)
+    monkeypatch.setattr(_runtime, "poll_control_full", poll_control)
     monkeypatch.setattr(_runtime, "_ITERATIONS", 1)
     monkeypatch.setattr(_runtime, "_ITERATION_SLEEP", 0)
+    monkeypatch.setattr(_runtime, "_K8S_ITERATION_SLEEP", 0)
+    monkeypatch.setattr(_runtime, "_POLL_INTERVAL", 0)
     return emit_event, poll_control
 
 
@@ -63,7 +56,10 @@ async def test_k8s_mode_emits_via_http_mocked(monkeypatch: pytest.MonkeyPatch) -
 async def test_k8s_mode_polls_control_mocked(monkeypatch: pytest.MonkeyPatch) -> None:
     """A polled kill event stops the pod loop within the two-second bound."""
     emit_event, poll_control = _configure_k8s_runtime(monkeypatch)
-    poll_control.return_value = [{"id": 1, "payload": {"action": "kill"}}]
+    poll_control.return_value = {
+        "events": [{"id": 1, "payload": {"action": "kill"}}],
+        "injects": [],
+    }
     monkeypatch.setattr(_runtime, "_ITERATIONS", 10)
 
     with anyio.fail_after(2):

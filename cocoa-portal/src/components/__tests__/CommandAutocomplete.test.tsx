@@ -113,7 +113,29 @@ describe('CommandAutocomplete', () => {
     expect(mockedApi).toHaveBeenCalledWith(`/base-classes/${encodeURIComponent('mi-shi')}`);
   });
 
-  it('inserts the highlighted command into the textarea on Enter', async () => {
+  it('inserts the highlighted command into the textarea on Enter when a filter is typed', async () => {
+    render(<Wrapper />);
+    const textarea = screen.getByTestId('composer') as HTMLTextAreaElement;
+
+    act(() => {
+      typeAndPlaceCursor(textarea, '/r');
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('listbox')).toBeInTheDocument();
+    });
+
+    act(() => {
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+    });
+
+    await waitFor(() => {
+      expect(textarea.value).toBe('/read ');
+    });
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+  });
+
+  it('keeps bare "/" editable on Enter (baseline: menu stays open, no forced pick)', async () => {
     render(<Wrapper />);
     const textarea = screen.getByTestId('composer') as HTMLTextAreaElement;
 
@@ -129,9 +151,9 @@ describe('CommandAutocomplete', () => {
       fireEvent.keyDown(textarea, { key: 'Enter' });
     });
 
-    await waitFor(() => {
-      expect(textarea.value).toBe('/read ');
-    });
-    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    // Bare "/" stays editable — Enter does not force a command pick, and the
+    // suggestion menu remains open so the user can keep typing a filter.
+    expect(textarea.value).toBe('/');
+    expect(screen.getByRole('listbox')).toBeInTheDocument();
   });
 });

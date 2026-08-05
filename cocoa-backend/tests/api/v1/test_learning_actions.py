@@ -485,8 +485,13 @@ class TestPromote:
         entity_id = _create_entity(client, auth_token)
         instance_id = _create_instance(client, auth_token, entity_id, workspace_id)
 
-        # Create a second instance with no active_hash.
-        _create_instance(client, auth_token, entity_id, workspace_id)
+        # Create a second instance with no active_hash. One instance per
+        # (entity, workspace) is enforced by ``uq_instances_workspace_entity``
+        # (PRD v3.4), so the sibling lives in a second workspace.
+        workspace2_id = _setup_workspace(
+            client, auth_token, slug=f"p15f-ws2-{uuid.uuid4().hex[:6]}",
+        )
+        _create_instance(client, auth_token, entity_id, workspace2_id)
 
         _create_memory(
             client, auth_token, entity_id, kind="lesson",

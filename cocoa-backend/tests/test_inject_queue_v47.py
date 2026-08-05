@@ -129,6 +129,97 @@ async def test_enqueue_validation_rejects_bad_literals(session, instance_factory
         )
 
 
+@pytest.mark.asyncio
+async def test_enqueue_capability_inject_emits_learning_event(session, instance_factory) -> None:
+    """capability_inject enqueue pairs the harness event with learning.capability_injected."""
+    inst = await instance_factory()
+    row = await enqueue_inject(
+        session,
+        instance_id=inst.id,
+        kind="capability_inject",
+        delivery_mode="soft_inject",
+        payload={"capability_ids": ["cap-1", "cap-2"], "text": "inject"},
+        tldr="inject caps",
+    )
+
+    ev = (
+        await session.execute(
+            select(Event).where(
+                Event.type == LEARNING_CAPABILITY_INJECTED,
+                Event.resource_id == inst.id,
+            )
+        )
+    ).scalar_one()
+    assert ev.actor_type == "system"
+    assert ev.resource_type == "instance"
+    assert ev.payload == {
+        "queue_id": row.id,
+        "kind": "capability_inject",
+        "delivery_mode": "soft_inject",
+        "capability_ids": ["cap-1", "cap-2"],
+        "tldr": "inject caps",
+    }
+    # The paired harness downlink event is also present.
+    harness_ev = (
+        await session.execute(
+            select(Event).where(
+                Event.type == HARNESS_INJECT_REQUESTED,
+                Event.resource_id == inst.id,
+            )
+        )
+    ).scalar_one()
+    assert harness_ev.payload["kind"] == "capability_inject"
+
+
+@pytest.mark.asyncio
+async def test_enqueue_gene_inject_emits_learning_event(session, instance_factory) -> None:
+    """gene_inject enqueue pairs the harness event with learning.gene_injected."""
+    inst = await instance_factory()
+    row = await enqueue_inject(
+        session,
+        instance_id=inst.id,
+        kind="gene_inject",
+        delivery_mode="wake",
+        payload={"gene_ids": ["g-1"], "text": "inject"},
+        tldr="inject gene",
+    )
+
+    ev = (
+        await session.execute(
+            select(Event).where(
+                Event.type == LEARNING_GENE_INJECTED,
+                Event.resource_id == inst.id,
+            )
+        )
+    ).scalar_one()
+    assert ev.actor_type == "system"
+    assert ev.resource_type == "instance"
+    assert ev.payload == {
+        "queue_id": row.id,
+        "kind": "gene_inject",
+        "delivery_mode": "wake",
+        "gene_ids": ["g-1"],
+        "tldr": "inject gene",
+    }
+
+
+@pytest.mark.asyncio
+async def test_enqueue_collab_inject_emits_no_learning_event(session, instance_factory) -> None:
+    """collab_inject does not emit the capability/gene learning-side events."""
+    inst = await instance_factory()
+    await _enqueue(session, inst.id, kind="collab_inject", delivery_mode="notify")
+
+    result = await session.execute(
+        select(Event).where(
+            Event.type.in_(
+                [LEARNING_CAPABILITY_INJECTED, LEARNING_GENE_INJECTED]
+            )
+        )
+    )
+    assert result.scalars().all() == []
+
+
+
 # ---------------------------------------------------------------------------
 # poll
 # ---------------------------------------------------------------------------

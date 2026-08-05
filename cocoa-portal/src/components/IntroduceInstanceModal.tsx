@@ -34,7 +34,7 @@ export default function IntroduceInstanceModal({
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    void api<OffsetPage<Entity>>('/entities?limit=200')
+    void api<OffsetPage<Entity>>('/entities?limit=200&is_cerebellum=false')
       .then((page) => {
         if (cancelled) return;
         setEntities(page.items);
@@ -70,9 +70,7 @@ export default function IntroduceInstanceModal({
         });
       }
     } catch (error) {
-      setErrorMessage(
-        error instanceof ApiError ? error.message : t('workspace.introduceFailed'),
-      );
+      setErrorMessage(error instanceof ApiError ? error.message : t('workspace.introduceFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -110,7 +108,10 @@ export default function IntroduceInstanceModal({
         </header>
 
         <div className="space-y-4 px-5 py-4">
-          <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600">
+          <label
+            htmlFor="introduce-entity-select"
+            className="block text-xs font-semibold uppercase tracking-wide text-slate-600"
+          >
             {t('workspace.introduceEntity')}
             {loading ? (
               <span className="mt-2 flex items-center gap-2 text-sm font-normal normal-case text-slate-500">
@@ -119,6 +120,7 @@ export default function IntroduceInstanceModal({
               </span>
             ) : (
               <select
+                id="introduce-entity-select"
                 value={entityId}
                 onChange={(e) => setEntityId(e.target.value)}
                 data-testid="introduce-entity-select"
@@ -165,7 +167,9 @@ export default function IntroduceInstanceModal({
                 : 'bg-blue-600 hover:bg-blue-700',
             )}
           >
-            {submitting ? <LoaderCircle className="size-4 animate-spin" aria-hidden="true" /> : null}
+            {submitting ? (
+              <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+            ) : null}
             {t('workspace.introduceSubmit')}
           </button>
         </footer>

@@ -111,11 +111,16 @@ class TestInstanceModel:
         indexes = {idx.name: idx for idx in Instance.__table__.indexes}
         assert "uq_instances_workspace_path" in indexes
 
-    def test_no_entity_workspace_unique_constraint(self) -> None:
-        """(entity_id, workspace_id) must NOT have a unique constraint.
-        Multi-instance per entity per workspace is the key design feature.
+    def test_entity_workspace_unique_constraint(self) -> None:
+        """(entity_id, workspace_id) has a partial unique index.
+        PRD v3.4 made one-instance-per-(entity, workspace) the contract
+        (``uq_instances_workspace_entity``); the index must be partial on
+        ``deleted_at IS NULL`` so soft-deleted rows do not block recreation.
         """
-        indexes = Instance.__table__.indexes
-        for idx in indexes:
-            cols = [c.name for c in idx.columns]
-            assert set(cols) != {"entity_id", "workspace_id"}
+        indexes = {idx.name: idx for idx in Instance.__table__.indexes}
+        idx = indexes.get("uq_instances_workspace_entity")
+        assert idx is not None
+        cols = {c.name for c in idx.columns}
+        assert cols == {"entity_id", "workspace_id"}
+        assert idx.unique is True
+        assert "deleted_at" in str(idx.dialect_options["postgresql"].get("where", ""))

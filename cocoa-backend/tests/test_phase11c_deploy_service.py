@@ -176,8 +176,8 @@ async def test_execute_pipeline_runs_9_steps_mocked(
     # K8s API surface was actually invoked for each step
     assert fake_client.ensure_namespace.await_count == 1
     # cm + pvc + svc + np (secret + deployment use apply)
-    assert fake_client.create_or_skip.await_count == 4
-    assert fake_client.apply.await_count == 2  # secret + deployment
+    assert fake_client.create_or_skip.await_count == 3  # pvc + svc + np
+    assert fake_client.apply.await_count == 3  # cm + secret + deployment
     assert fake_client.scale_deployment.await_count == 1
     assert fake_client.get_deployment_status.await_count == 1
 

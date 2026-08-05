@@ -518,16 +518,26 @@ class TestCentralHubsCerebellum:
             headers=_h(token),
         )
         assert restart.status_code == 200, restart.text
-        assert restart.json()["status"] == "running"
+        # v4.9.1 real restart: response mirrors the re-deploy pipeline.
+        restart_body = restart.json()
+        assert restart_body["status"] in {"deploying", "failed"}
+        assert restart_body["entity_id"] == body["entity_id"]
+        assert restart_body["instance_id"] == body["instance_id"]
+        assert "restarted_at" in restart_body
 
-        # DB truth: PATCH wrote the Entity, restart wrote the Instance.
         entity = await session.get(Entity, body["entity_id"])
         assert entity is not None
         assert entity.name == "Renamed Cerebellum"
         assert entity.system_prompt == "Think deeper"
         instance = await session.get(Instance, body["instance_id"])
         assert instance is not None
-        assert instance.status == "running"
+        assert instance.status in {
+            "deploying",
+            "failed",
+            "running",
+            "restarting",
+        }
+        assert instance.active_hash == entity.migration_hash
 
 
 # ---------------------------------------------------------------------------

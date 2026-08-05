@@ -13,8 +13,8 @@ from app.core.activation import handle_intern_invocation, trigger_on_mention
 from app.core.message_router import MessageDeliveryResult, route_message
 from app.core.preset_registry import is_control_command, is_learning_command
 from app.core.slash_parser import parse_turn
-from app.models.entity import Entity, EntityRank
 from app.models.base_class import BaseClass
+from app.models.entity import Entity, EntityRank
 from app.models.workspace import Membership
 from app.schemas.slash import Directive
 

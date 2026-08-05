@@ -32,7 +32,6 @@ from app.core.event_types import (
     INSTANCE_DELETED,
     INSTANCE_DEPLOYED,
     INSTANCE_FAILED,
-    INSTANCE_RESTARTED,
     INSTANCE_STARTED,
     INSTANCE_STOPPED,
 )
@@ -76,6 +75,7 @@ from app.services.deploy_service import (
 from app.services.deploy_service import (
     teardown_instance_namespace as svc_teardown_instance_namespace,
 )
+from app.services.instance_restart import restart_instance_runtime
 
 logger = logging.getLogger(__name__)
 
@@ -776,6 +776,10 @@ async def restart_instance(
     Confirmed by Portal. Running instances are stopped (scaled to 0), hash
     refreshed, then a new deploy pipeline is started. ``force`` is accepted
     for backward compatibility but no longer required.
+
+    Pipeline semantics live in
+    :func:`app.services.instance_restart.restart_instance_runtime` so the
+    cerebellum restart endpoint shares the exact same code path.
     """
     instance = await db.get(Instance, instance_id)
     if instance is None or instance.deleted_at is not None:
@@ -801,62 +805,20 @@ async def restart_instance(
         x_organization_id=x_organization_id,
     )
 
-    was_running = instance.status == InstanceStatus.running.value
-    if was_running:
-        await svc_scale_instance_runtime(instance_id, 0)
-
-    old_hash = instance.active_hash
-    instance.status = InstanceStatus.restarting.value
-    await db.flush()
-
-    instance.active_hash = entity.migration_hash
-    instance.status = InstanceStatus.deploying.value
-
-    await emit(
-        INSTANCE_RESTARTED,
-        actor_type="user",
-        actor_id=current_user.user_id,
-        resource_type="instance",
-        resource_id=instance.id,
-        payload={
-            "old_hash": old_hash,
-            "new_hash": instance.active_hash,
-            "reason": body.reason,
-            "force": body.force or was_running,
-        },
-        session=db,
+    outcome = await restart_instance_runtime(
+        db,
+        instance=instance,
+        entity=entity,
+        triggered_by=current_user.user_id,
+        reason=body.reason,
+        force=body.force,
     )
-    await db.commit()
-
-    try:
-        record_id, ctx = await svc_deploy_existing_instance(
-            instance_id,
-            triggered_by=current_user.user_id,
-            db=db,
-        )
-        asyncio.create_task(
-            svc_execute_deploy_pipeline(ctx),
-            name=f"restart-deploy-{instance_id[:8]}",
-        )
-        logger.info(
-            "restart triggered deploy record_id=%s instance_id=%s",
-            record_id,
-            instance_id,
-        )
-    except Exception:  # noqa: BLE001
-        logger.exception("restart deploy failed instance_id=%s", instance_id)
-        instance = await db.get(Instance, instance_id)
-        if instance is not None:
-            instance.status = InstanceStatus.failed.value
-            await db.commit()
-
-    instance = await db.get(Instance, instance_id)
     return RestartResultOut(
-        restarted_at=datetime.now(timezone.utc).isoformat(),
+        restarted_at=outcome.restarted_at,
         instance_id=instance_id,
-        old_hash=old_hash,
-        new_hash=instance.active_hash if instance else None,
-        status_after=instance.status if instance else InstanceStatus.failed.value,
+        old_hash=outcome.old_hash,
+        new_hash=outcome.new_hash,
+        status_after=outcome.status_after,
     )
 
 

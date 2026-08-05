@@ -134,7 +134,9 @@ class TestInstanceCrud:
             client, auth_token, "lister-emp", "Lister Entity",
         )
 
-        # Create two instances with different statuses
+        # Two instances with different statuses. Each needs its own
+        # (workspace, entity) pair — ``uq_instances_workspace_entity``
+        # (PRD v3.4) allows only one instance per entity+workspace.
         resp1 = client.post("/api/v1/instances", headers=h, json={
             "entity_id": entity_id,
             "workspace_id": workspace_id,
@@ -142,9 +144,14 @@ class TestInstanceCrud:
         assert resp1.status_code == 201
         inst1_id = resp1.json()["id"]
 
+        workspace2_id = _setup_workspace_and_membership(
+            client, auth_token, auth_user_id,
+            workspace_name="Runtime Workspace 2",
+            workspace_slug="runtime-workspace-2",
+        )
         resp2 = client.post("/api/v1/instances", headers=h, json={
             "entity_id": entity_id,
-            "workspace_id": workspace_id,
+            "workspace_id": workspace2_id,
         })
         assert resp2.status_code == 201
         inst2_id = resp2.json()["id"]
@@ -156,8 +163,10 @@ class TestInstanceCrud:
             json={"reason": "test"},
         )
 
-        # List all — should see both
-        resp = client.get("/api/v1/instances", headers=h)
+        # List all instances for this entity — should see both. Scoped by
+        # entity_id so the auto-created cerebellum instance of each workspace
+        # (workspaces.py ensure_cerebellum_entity_and_instance) can't leak in.
+        resp = client.get(f"/api/v1/instances?entity_id={entity_id}", headers=h)
         assert resp.status_code == 200
         body = resp.json()
         assert body["total"] >= 2
@@ -166,7 +175,9 @@ class TestInstanceCrud:
         assert inst2_id in ids
 
         # Filter by status=creating — only inst1
-        resp = client.get("/api/v1/instances?status=creating", headers=h)
+        resp = client.get(
+            f"/api/v1/instances?entity_id={entity_id}&status=creating", headers=h,
+        )
         assert resp.status_code == 200
         body = resp.json()
         assert body["total"] == 1
@@ -425,7 +436,10 @@ class TestInstanceIsolation:
         auth_token: str,
         auth_user_id: str,
     ) -> None:
-        """Create 2 instances for same entity — both have different workspace_path."""
+        """Create 2 instances for same entity across workspaces — both have
+        different workspace_path. One instance per (entity, workspace) is
+        enforced by ``uq_instances_workspace_entity`` (PRD v3.4), so the
+        isolation pair spans two workspaces."""
         h = _auth(auth_token)
         workspace_id = _setup_workspace_and_membership(
             client, auth_token, auth_user_id,
@@ -441,9 +455,14 @@ class TestInstanceIsolation:
         assert resp1.status_code == 201
         ws1 = resp1.json()["workspace_path"]
 
+        workspace2_id = _setup_workspace_and_membership(
+            client, auth_token, auth_user_id,
+            workspace_name="Isolation Workspace 2",
+            workspace_slug="isolation-workspace-2",
+        )
         resp2 = client.post("/api/v1/instances", headers=h, json={
             "entity_id": entity_id,
-            "workspace_id": workspace_id,
+            "workspace_id": workspace2_id,
         })
         assert resp2.status_code == 201
         ws2 = resp2.json()["workspace_path"]

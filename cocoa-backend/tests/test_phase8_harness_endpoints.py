@@ -19,8 +19,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.testclient import TestClient
 
 from app.models.instance import Instance
-from app.models.workspace import Membership
 from app.models.user import User
+from app.models.workspace import Membership
 
 
 @pytest.fixture(autouse=True)

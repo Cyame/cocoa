@@ -98,12 +98,13 @@ async def test_cache_hit_within_600s() -> None:
     When: list_models() is called twice in quick succession.
     Then: the underlying fetch is invoked exactly once (cache hit)."""
     catalog = ModelCatalog(ttl_seconds=CACHE_TTL_SECONDS)
-    fetch_spy = AsyncMock(return_value=[ModelInfo(id="x", name="X", provider="test")])
-    with patch.object(catalog, "_fetch_from_models_dev", fetch_spy):
+    fetch_spy = AsyncMock(return_value=_sample_models_dev_payload())
+    with patch.object(catalog, "_fetch_raw", fetch_spy):
         first = await catalog.list_models()
         second = await catalog.list_models()
 
-    assert first == second == [ModelInfo(id="x", name="X", provider="test")]
+    assert first == second
+    assert {m.id for m in first} == {"gpt-4o", "gpt-4o-mini", "claude-3-5-sonnet-latest"}
     assert fetch_spy.await_count == 1, "second call must be served from cache"
 
 
@@ -115,7 +116,9 @@ async def test_fetch_fails_fallback_to_builtin() -> None:
     failing_client.__aexit__ = AsyncMock(return_value=None)
     failing_client.get = AsyncMock(side_effect=httpx.ConnectError("boom"))
 
-    with patch("app.services.llm.model_catalog.httpx.AsyncClient", return_value=failing_client):
+    with patch(
+        "app.services.llm.model_catalog.httpx.AsyncClient", return_value=failing_client
+    ), patch.object(ModelCatalog, "_load_bundled_raw", return_value=None):
         catalog = ModelCatalog()
         models = await catalog.list_models()
 

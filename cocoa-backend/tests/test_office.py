@@ -4,8 +4,8 @@ from sqlalchemy import CheckConstraint, Index
 
 from app.models.entity import Entity  # noqa: F401
 from app.models.instance import Instance  # noqa: F401
-from app.models.workspace import Passage, Membership, Workspace
 from app.models.user import User  # noqa: F401
+from app.models.workspace import Membership, Passage, Workspace
 
 
 class TestWorkspaceModel:

@@ -160,7 +160,7 @@ async def test_deploy_calls_deploy_service(
     async def fake_execute(ctx):
         return None
 
-    monkeypatch.setattr(instances_mod, "svc_deploy_instance", fake_deploy)
+    monkeypatch.setattr(instances_mod, "svc_deploy_existing_instance", fake_deploy)
     monkeypatch.setattr(instances_mod, "svc_execute_deploy_pipeline", fake_execute)
 
     instance = await instance_factory(workspace_path="deploy-svc-1")
@@ -252,14 +252,15 @@ async def test_delete_calls_k8s_delete_namespace(
 ) -> None:
     """DELETE /instances/{id} invokes K8s delete_namespace on the right ns.
 
-    Mocks ``k8s_manager.get_gateway_client`` to return a fake
-    ApiClient, and patches ``K8sClient`` so the resulting
-    ``client.core.delete_namespace`` is a MagicMock. The test verifies
-    the namespace name follows the ``cocoa-default-{workspace_path}``
-    convention and that the API call returns 204.
+    The delete endpoint soft-deletes the Instance then calls
+    ``deploy_service.teardown_instance_namespace`` (best-effort). Mocks
+    ``k8s_manager.get_gateway_client`` and ``K8sClient`` inside
+    ``deploy_service`` so the resulting ``client.core.delete_namespace``
+    is a MagicMock. The test verifies the namespace follows the
+    ``cocoa-inst-{id-compact-[:20]}`` convention and returns 204.
     """
-    import app.api.v1.instances as instances_mod
     import app.core.db as db_mod
+    import app.services.deploy_service as deploy_service
 
     db_mod._engine = None
     db_mod._session_factory = None
@@ -270,7 +271,7 @@ async def test_delete_calls_k8s_delete_namespace(
         return fake_api_client
 
     monkeypatch.setattr(
-        instances_mod.k8s_manager,
+        deploy_service.k8s_manager,
         "get_gateway_client",
         fake_get_gateway_client,
     )
@@ -278,7 +279,9 @@ async def test_delete_calls_k8s_delete_namespace(
     fake_k8s_client = MagicMock(name="K8sClient")
     fake_k8s_client.core = MagicMock()
     fake_k8s_client.core.delete_namespace = AsyncMock(return_value=None)
-    monkeypatch.setattr(instances_mod, "K8sClient", MagicMock(return_value=fake_k8s_client))
+    monkeypatch.setattr(
+        deploy_service, "K8sClient", MagicMock(return_value=fake_k8s_client)
+    )
 
     instance = await instance_factory(workspace_path="delete-ns-test")
 
@@ -300,4 +303,5 @@ async def test_delete_calls_k8s_delete_namespace(
     assert resp.status_code == 204, resp.text
     fake_k8s_client.core.delete_namespace.assert_awaited_once()
     call_args = fake_k8s_client.core.delete_namespace.call_args
-    assert call_args.args[0] == f"cocoa-default-{instance.workspace_path}"
+    expected_ns = f"cocoa-inst-{instance.id.replace('-', '').lower()[:20]}"
+    assert call_args.args[0] == expected_ns

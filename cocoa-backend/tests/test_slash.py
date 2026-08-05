@@ -59,10 +59,14 @@ class TestDirective:
         assert d.content_ref is None
         assert d.raw_text == ""
 
-    def test_cmd_missing_raises_validation_error(self) -> None:
-        """cmd is required with no default."""
-        with pytest.raises(ValidationError):
-            Directive()  # type: ignore[call-arg]
+    def test_cmd_defaults_to_empty(self) -> None:
+        """cmd defaults to "" — an @slug mention without a slash command is valid."""
+        d = Directive()
+        assert d.cmd == ""
+        assert d.args == []
+        assert d.target_entity is None
+        assert d.content_ref is None
+        assert d.raw_text == ""
 
     def test_full_directive_with_content_ref(self) -> None:
         """Directive with all optional fields populated."""

@@ -122,6 +122,15 @@ async def test_inject_enqueue_returns_202_pending_row_and_event(
     assert events[0].payload["delivery_mode"] == "soft_inject"
     assert events[0].payload["tldr"] == "grant capability x"
 
+    # L3: a gene_inject enqueue pairs with the learning-side audit event.
+    learning_ev = (
+        await session.execute(
+            select(Event).where(Event.type == "learning.gene_injected")
+        )
+    ).scalar_one()
+    assert learning_ev.resource_id == inst.id
+    assert learning_ev.payload["gene_ids"] == ["gene-1"]
+
 
 async def test_inject_enqueue_404_for_missing_instance(
     client: TestClient, session: AsyncSession

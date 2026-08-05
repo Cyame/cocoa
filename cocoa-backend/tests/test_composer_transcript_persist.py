@@ -5,9 +5,7 @@ from __future__ import annotations
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import select
 
-from app.models.composer_message import ComposerMessage
 from app.models.user import User
 from app.models.workspace import Membership
 from app.services.composer_transcript import append_composer_message, list_composer_messages
@@ -236,7 +234,6 @@ async def test_messaging_send_commits_composer_rows(
     await session.commit()
 
     from app.core.config import settings
-    from app.core.security import create_access_token
 
     token = create_access_token(user.id, False, settings.JWT_SECRET)
     resp = client.post(

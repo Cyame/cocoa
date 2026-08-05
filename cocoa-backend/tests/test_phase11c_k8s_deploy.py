@@ -126,8 +126,8 @@ async def test_execute_pipeline_runs_9_steps_mocked(
     assert len(progress) == 18
     assert {data["step"] for data in progress} == set(range(1, 10))
     assert client.ensure_namespace.await_count == 1
-    assert client.create_or_skip.await_count == 4
-    assert client.apply.await_count == 2
+    assert client.create_or_skip.await_count == 3  # pvc + svc + np
+    assert client.apply.await_count == 3  # cm + secret + deployment
     assert client.scale_deployment.await_count == 1
     assert client.get_deployment_status.await_count == 1
     record = await session.get(DeployRecord, record_id)

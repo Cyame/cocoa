@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, api } from '@/lib/api';
@@ -180,14 +180,8 @@ describe('TopologyPage', () => {
 
     fireEvent.click(screen.getByTestId('topology-toolbar-connect'));
     fireEvent.click(screen.getByTestId('topology-node-membership-1'));
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 350));
-    });
-    expect(screen.getByTestId('topology-connect-hint')).toBeInTheDocument();
+    await screen.findByTestId('topology-connect-hint');
     fireEvent.click(screen.getByTestId('topology-node-membership-2'));
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 350));
-    });
 
     await waitFor(() => {
       expect(mockedApi).toHaveBeenCalledWith(
@@ -219,13 +213,8 @@ describe('TopologyPage', () => {
     await screen.findByTestId('topology-node-membership-1');
     fireEvent.click(screen.getByTestId('topology-toolbar-connect'));
     fireEvent.click(screen.getByTestId('topology-node-membership-1'));
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 350));
-    });
+    await screen.findByTestId('topology-connect-hint');
     fireEvent.click(screen.getByTestId('topology-node-membership-2'));
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 350));
-    });
 
     expect(await screen.findByTestId('topology-action-error')).toBeInTheDocument();
   });
@@ -295,10 +284,7 @@ describe('TopologyPage', () => {
     renderTopology();
     const node = await screen.findByTestId('topology-node-membership-1');
     fireEvent.click(node);
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 350));
-    });
-    expect(screen.getByTestId('topology-node-modal')).toBeInTheDocument();
+    expect(await screen.findByTestId('topology-node-modal')).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: 'Delete' });
 

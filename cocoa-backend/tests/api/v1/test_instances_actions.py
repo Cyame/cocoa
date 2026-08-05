@@ -307,21 +307,25 @@ class TestBatchRestart:
     ) -> None:
         h = _auth(auth_token)
         workspace_id = _setup_workspace(client, auth_token)
-        entity_id = _create_entity(client, auth_token)
 
-        emp = await session.get(Entity, entity_id)
-        assert emp is not None
-        emp.migration_hash = "c" * 64
-        await session.commit()
-
-        ids = [
-            await _create_instance(
-                client, auth_token, entity_id, workspace_id,
-                status=InstanceStatus.pending.value,
-            session=session,
+        # One instance per (workspace, entity) is enforced by
+        # ``uq_instances_workspace_entity`` (PRD v3.4), so each instance
+        # gets its own entity with the same out-of-sync migration_hash.
+        ids = []
+        for _ in range(3):
+            entity_id = _create_entity(client, auth_token)
+            emp = await session.get(Entity, entity_id)
+            assert emp is not None
+            emp.migration_hash = "c" * 64
+            await session.flush()
+            ids.append(
+                await _create_instance(
+                    client, auth_token, entity_id, workspace_id,
+                    status=InstanceStatus.pending.value,
+                    session=session,
+                )
             )
-            for _ in range(3)
-        ]
+        await session.commit()
 
         resp = client.post(
             "/api/v1/instances/batch-restart",
@@ -346,15 +350,16 @@ class TestBatchRestart:
     ) -> None:
         h = _auth(auth_token)
         workspace_id = _setup_workspace(client, auth_token)
-        entity_id = _create_entity(client, auth_token)
 
+        idle_entity_id = _create_entity(client, auth_token)
+        running_entity_id = _create_entity(client, auth_token)
         idle_id = await _create_instance(
-            client, auth_token, entity_id, workspace_id,
+            client, auth_token, idle_entity_id, workspace_id,
             status=InstanceStatus.pending.value,
         session=session,
         )
         running_id = await _create_instance(
-            client, auth_token, entity_id, workspace_id,
+            client, auth_token, running_entity_id, workspace_id,
             status=InstanceStatus.running.value,
         session=session,
         )
@@ -395,15 +400,16 @@ class TestBatchRestart:
     ) -> None:
         h = _auth(auth_token)
         workspace_id = _setup_workspace(client, auth_token)
-        entity_id = _create_entity(client, auth_token)
-        ids = [
-            await _create_instance(
-                client, auth_token, entity_id, workspace_id,
-                status=InstanceStatus.pending.value,
-            session=session,
+        ids = []
+        for _ in range(2):
+            entity_id = _create_entity(client, auth_token)
+            ids.append(
+                await _create_instance(
+                    client, auth_token, entity_id, workspace_id,
+                    status=InstanceStatus.pending.value,
+                    session=session,
+                )
             )
-            for _ in range(2)
-        ]
 
         client.post(
             "/api/v1/instances/batch-restart",

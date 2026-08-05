@@ -30,17 +30,15 @@ from app.models.loop_state import InstanceLoopState
 
 
 def _legacy_runtime():
-    """Return the P11c-bridged legacy ``app.agent_runtime`` module.
+    """Return the canonical ``app.agent_runtime.loop`` module.
 
-    Import order matters: importing the package first runs its ``__init__``
-    bridge, which registers ``app._agent_runtime_legacy`` in ``sys.modules``.
-    Kept function-local so ruff's import sorting cannot reorder it.
+    The v4.9 convergence moved the legacy ``app/agent_runtime.py`` file
+    into the package (``app/agent_runtime/loop.py``) and dropped the
+    P11c importlib bridge, so the module is importable directly.
     """
-    import app._agent_runtime_legacy as legacy
+    from app.agent_runtime import loop
 
-    import app.agent_runtime  # noqa: F401
-
-    return legacy
+    return loop
 
 
 @pytest.fixture(autouse=True)

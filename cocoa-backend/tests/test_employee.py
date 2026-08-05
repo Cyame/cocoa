@@ -4,8 +4,8 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.entity import Entity, EntityRank
 from app.models.base_class import BaseClass
+from app.models.entity import Entity, EntityRank
 
 
 class TestEntityRank:

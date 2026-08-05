@@ -1,8 +1,7 @@
 """P14a agent_runtime tests — real LLM call loop replaces the P11c no-op skeleton.
 
-Loads the legacy ``app/agent_runtime.py`` module via ``importlib`` (P11c
-package split pattern from ``test_phase11c_agent_pod_adapter.py``) so
-``monkeypatch.setattr`` can resolve module-level symbols.
+Targets the canonical ``app.agent_runtime.loop`` module (v4.9 convergence
+moved the legacy ``app/agent_runtime.py`` file into the package).
 
 Covers:
 1. ``test_local_mode_calls_llm`` — local mode: LLMClient.complete() is
@@ -21,15 +20,13 @@ All HTTP / DB calls are monkey-patched — no real network, no DB.
 
 from __future__ import annotations
 
-import importlib.util
-import sys
 import time
 from contextlib import asynccontextmanager
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.agent_runtime import loop as _runtime
 from app.core.event_types import (
     HARNESS_CHECKPOINT,
     HARNESS_LOOP_STARTED,
@@ -37,19 +34,7 @@ from app.core.event_types import (
 )
 from app.services.llm.llm_client import LLMResponse
 
-_APP_DIR = Path(__file__).resolve().parent.parent / "app"
-_spec = importlib.util.spec_from_file_location(
-    "app._agent_runtime_legacy_for_tests",
-    str(_APP_DIR / "agent_runtime.py"),
-)
-_legacy = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_legacy)
-sys.modules["app._agent_runtime_legacy_for_tests"] = _legacy
-import app as _app_pkg  # noqa: E402
-
-_app_pkg._agent_runtime_legacy_for_tests = _legacy
-
-run_agent_loop = _legacy.run_agent_loop
+run_agent_loop = _runtime.run_agent_loop
 
 
 def _mock_llm_client(content: str = "hello", prompt_tokens: int = 11, completion_tokens: int = 22):
@@ -90,23 +75,23 @@ async def _fake_session_ctx():
 @pytest.mark.asyncio
 async def test_local_mode_calls_llm(monkeypatch: pytest.MonkeyPatch) -> None:
     """Local mode: LLMClient.complete() is called; HARNESS_CHECKPOINT fires via emit()."""
-    monkeypatch.setattr("app._agent_runtime_legacy_for_tests.is_k8s_pod_mode", lambda: False)
+    monkeypatch.setattr(_runtime, "is_k8s_pod_mode", lambda: False)
     monkeypatch.setattr(
-        "app._agent_runtime_legacy_for_tests._resolve_workspace_path",
+        _runtime, "_resolve_workspace_path",
         AsyncMock(return_value="/tmp/fake-ws-p14a-local"),
     )
     monkeypatch.setattr(
-        "app._agent_runtime_legacy_for_tests._should_stop_via_db",
+        _runtime, "_should_stop_via_db",
         AsyncMock(return_value=False),
     )
     monkeypatch.setattr(
-        "app._agent_runtime_legacy_for_tests._write_checkpoint_memory",
+        _runtime, "_write_checkpoint_memory",
         AsyncMock(return_value=None),
     )
 
     llm_client = _mock_llm_client(content="local mode response")
     monkeypatch.setattr(
-        "app._agent_runtime_legacy_for_tests._build_llm_client",
+        _runtime, "_build_llm_client",
         lambda: (llm_client, {"provider": {"max_tokens": 256, "temperature": 0.5}}),
     )
 
@@ -121,9 +106,9 @@ async def test_local_mode_calls_llm(monkeypatch: pytest.MonkeyPatch) -> None:
         })
         return MagicMock(id="fake-event-id")
 
-    monkeypatch.setattr("app._agent_runtime_legacy_for_tests.emit", fake_emit)
+    monkeypatch.setattr(_runtime, "emit", fake_emit)
     monkeypatch.setattr(
-        "app._agent_runtime_legacy_for_tests.get_session_factory",
+        _runtime, "get_session_factory",
         lambda: lambda: _fake_session_ctx(),
     )
 
@@ -146,7 +131,7 @@ async def test_local_mode_calls_llm(monkeypatch: pytest.MonkeyPatch) -> None:
         return call_count["n"] > 1
 
     monkeypatch.setattr(
-        "app._agent_runtime_legacy_for_tests._should_stop_via_db", maybe_stop_via_db,
+        _runtime, "_should_stop_via_db", maybe_stop_via_db,
     )
 
     started = time.monotonic()
@@ -174,31 +159,34 @@ async def test_local_mode_calls_llm(monkeypatch: pytest.MonkeyPatch) -> None:
 async def test_k8s_mode_calls_llm_via_http(monkeypatch: pytest.MonkeyPatch) -> None:
     """K8s mode: LLMClient.complete() is called; HARNESS_CHECKPOINT fires via emit_event()
     with proxy_token populated."""
-    monkeypatch.setattr("app._agent_runtime_legacy_for_tests.is_k8s_pod_mode", lambda: True)
+    monkeypatch.setattr(_runtime, "is_k8s_pod_mode", lambda: True)
     monkeypatch.setattr(
-        "app._agent_runtime_legacy_for_tests._resolve_workspace_path",
+        _runtime, "_resolve_workspace_path",
         AsyncMock(return_value="/tmp/fake-ws-p14a-k8s"),
     )
     monkeypatch.setattr(
-        "app._agent_runtime_legacy_for_tests.get_proxy_token", lambda: "k8s-proxy-token",
+        _runtime, "get_proxy_token", lambda: "k8s-proxy-token",
     )
 
-    # Force the loop to exit after one iteration by setting the stop flag
-    # via poll_control_full's first response (v4.7 contract: {"events", "injects"}).
+    # Run exactly 2 iterations and exit naturally — deterministic and fast.
     async def fake_poll_control_full(last_seen_id):
-        return {"events": [{"id": 1, "payload": {"action": "kill"}}], "injects": []}
+        return {"events": [], "injects": []}
 
     monkeypatch.setattr(
-        "app._agent_runtime_legacy_for_tests.poll_control_full", fake_poll_control_full,
+        _runtime, "poll_control_full", fake_poll_control_full,
     )
+    monkeypatch.setattr(_runtime, "_ITERATIONS", 2)
+    monkeypatch.setattr(_runtime, "_ITERATION_SLEEP", 0)
+    monkeypatch.setattr(_runtime, "_K8S_ITERATION_SLEEP", 0)
+    monkeypatch.setattr(_runtime, "_POLL_INTERVAL", 0)
 
     llm_client = _mock_llm_client(content="k8s mode response", prompt_tokens=15, completion_tokens=30)
     monkeypatch.setattr(
-        "app._agent_runtime_legacy_for_tests._build_llm_client",
+        _runtime, "_build_llm_client",
         lambda: (llm_client, {"provider": {"max_tokens": 512, "temperature": 0.4}}),
     )
     monkeypatch.setattr(
-        "app._agent_runtime_legacy_for_tests._write_checkpoint_memory",
+        _runtime, "_write_checkpoint_memory",
         AsyncMock(return_value=None),
     )
 
@@ -217,7 +205,7 @@ async def test_k8s_mode_calls_llm_via_http(monkeypatch: pytest.MonkeyPatch) -> N
         })
         return f"http-event-{len(emit_event_calls)}"
 
-    monkeypatch.setattr("app._agent_runtime_legacy_for_tests.emit_event", fake_emit_event)
+    monkeypatch.setattr(_runtime, "emit_event", fake_emit_event)
 
     # In-process emit() MUST NOT be called in K8s mode.
     inproc_emit_calls: list[dict] = []
@@ -227,7 +215,7 @@ async def test_k8s_mode_calls_llm_via_http(monkeypatch: pytest.MonkeyPatch) -> N
         inproc_emit_calls.append({"event_type": event_type})
         return MagicMock(id="should-not-be-called")
 
-    monkeypatch.setattr("app._agent_runtime_legacy_for_tests.emit", fake_emit)
+    monkeypatch.setattr(_runtime, "emit", fake_emit)
 
     started = time.monotonic()
     await run_agent_loop("inst-k8s-p14a-1")
@@ -262,9 +250,9 @@ async def test_token_estimate_in_checkpoint_payload(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """HARNESS_CHECKPOINT payload carries ``token_estimate`` from response tokens."""
-    monkeypatch.setattr("app._agent_runtime_legacy_for_tests.is_k8s_pod_mode", lambda: False)
+    monkeypatch.setattr(_runtime, "is_k8s_pod_mode", lambda: False)
     monkeypatch.setattr(
-        "app._agent_runtime_legacy_for_tests._resolve_workspace_path",
+        _runtime, "_resolve_workspace_path",
         AsyncMock(return_value="/tmp/fake-ws-tokens"),
     )
 
@@ -276,17 +264,17 @@ async def test_token_estimate_in_checkpoint_payload(
         return call_count["n"] > 1
 
     monkeypatch.setattr(
-        "app._agent_runtime_legacy_for_tests._should_stop_via_db", maybe_stop_via_db,
+        _runtime, "_should_stop_via_db", maybe_stop_via_db,
     )
     monkeypatch.setattr(
-        "app._agent_runtime_legacy_for_tests._write_checkpoint_memory",
+        _runtime, "_write_checkpoint_memory",
         AsyncMock(return_value=None),
     )
 
     # Custom token counts: 100 + 250 = 350.
     llm_client = _mock_llm_client(content="custom", prompt_tokens=100, completion_tokens=250)
     monkeypatch.setattr(
-        "app._agent_runtime_legacy_for_tests._build_llm_client",
+        _runtime, "_build_llm_client",
         lambda: (llm_client, {"provider": {"max_tokens": 1024, "temperature": 0.7}}),
     )
 
@@ -298,9 +286,9 @@ async def test_token_estimate_in_checkpoint_payload(
             captured_payloads.append(dict(payload or {}))
         return MagicMock(id="x")
 
-    monkeypatch.setattr("app._agent_runtime_legacy_for_tests.emit", fake_emit)
+    monkeypatch.setattr(_runtime, "emit", fake_emit)
     monkeypatch.setattr(
-        "app._agent_runtime_legacy_for_tests.get_session_factory",
+        _runtime, "get_session_factory",
         lambda: lambda: _fake_session_ctx(),
     )
     monkeypatch.setattr("asyncio.sleep", AsyncMock(return_value=None))
@@ -322,9 +310,9 @@ async def test_token_estimate_in_checkpoint_payload(
 @pytest.mark.asyncio
 async def test_llm_error_backoff(monkeypatch: pytest.MonkeyPatch) -> None:
     """LLMError triggers sleep(5); loop continues (or exits via stop_flag)."""
-    monkeypatch.setattr("app._agent_runtime_legacy_for_tests.is_k8s_pod_mode", lambda: False)
+    monkeypatch.setattr(_runtime, "is_k8s_pod_mode", lambda: False)
     monkeypatch.setattr(
-        "app._agent_runtime_legacy_for_tests._resolve_workspace_path",
+        _runtime, "_resolve_workspace_path",
         AsyncMock(return_value="/tmp/fake-ws-err"),
     )
 
@@ -336,10 +324,10 @@ async def test_llm_error_backoff(monkeypatch: pytest.MonkeyPatch) -> None:
         return call_count["n"] > 2
 
     monkeypatch.setattr(
-        "app._agent_runtime_legacy_for_tests._should_stop_via_db", maybe_stop_via_db,
+        _runtime, "_should_stop_via_db", maybe_stop_via_db,
     )
     monkeypatch.setattr(
-        "app._agent_runtime_legacy_for_tests._write_checkpoint_memory",
+        _runtime, "_write_checkpoint_memory",
         AsyncMock(return_value=None),
     )
 
@@ -363,7 +351,7 @@ async def test_llm_error_backoff(monkeypatch: pytest.MonkeyPatch) -> None:
     llm_client = MagicMock(name="LLMClient-err")
     llm_client.complete = flaky_complete
     monkeypatch.setattr(
-        "app._agent_runtime_legacy_for_tests._build_llm_client",
+        _runtime, "_build_llm_client",
         lambda: (llm_client, {"provider": {"max_tokens": 256, "temperature": 0.7}}),
     )
 
@@ -379,9 +367,9 @@ async def test_llm_error_backoff(monkeypatch: pytest.MonkeyPatch) -> None:
                         resource_id=None, payload=None, request_id=None, session):
         return MagicMock(id="x")
 
-    monkeypatch.setattr("app._agent_runtime_legacy_for_tests.emit", fake_emit)
+    monkeypatch.setattr(_runtime, "emit", fake_emit)
     monkeypatch.setattr(
-        "app._agent_runtime_legacy_for_tests.get_session_factory",
+        _runtime, "get_session_factory",
         lambda: lambda: _fake_session_ctx(),
     )
 
