@@ -17,6 +17,7 @@ from fastapi import APIRouter, Query, status
 from sqlalchemy import select
 
 from app.api.deps import DB, CurrentUserDep, XOrgIdHeader
+from app.core.capabilities import build_capabilities_manifest
 from app.core.errors import ConflictError, NotFoundError
 from app.core.openapi import add_error_responses
 from app.core.org_scope import (
@@ -33,10 +34,48 @@ from app.schemas.ai_gene import (
     AiGeneCreate,
     AiGeneOut,
     AiGeneUpdate,
+    CapabilityInline,
+    extract_manifest_capabilities,
 )
 
 router = APIRouter(prefix="/ai-genes", tags=["AiGenes"])
 add_error_responses(router)
+
+
+def _manifest_with_capabilities(
+    manifest: dict | None,
+    capabilities: list[CapabilityInline] | None,
+) -> dict | None:
+    """Merge a ``capabilities`` entry list into a manifest (v4.9 A2a).
+
+    When ``capabilities`` is provided it becomes ``manifest["capabilities"]``
+    via the shared constructor (byte-identical to the combine endpoint's inline
+    array); other manifest keys are preserved. When ``capabilities`` is None
+    the manifest is returned unchanged — including None.
+    """
+    if capabilities is None:
+        return manifest
+    merged = dict(manifest or {})
+    merged["capabilities"] = build_capabilities_manifest(capabilities)
+    return merged
+
+
+def _updates_with_capabilities(
+    body: AiGeneUpdate, gene: AiGene
+) -> dict:
+    """Partial-update map with the ``capabilities`` field folded into manifest.
+
+    ``capabilities`` is a request-only field (no column): when present in the
+    payload it is serialized into ``manifest["capabilities"]``, taking
+    precedence over any manifest passed in the same request.
+    """
+    updates = body.model_dump(exclude_unset=True)
+    caps_present = "capabilities" in updates
+    updates.pop("capabilities", None)
+    if caps_present:
+        base = updates.get("manifest", gene.manifest)
+        updates["manifest"] = _manifest_with_capabilities(base, body.capabilities)
+    return updates
 
 
 async def _get_active_gene(db: DB, gene_id: str) -> AiGene:
@@ -148,7 +187,7 @@ async def create_ai_gene(
         slug=body.slug,
         name=body.name,
         tags=body.tags,
-        manifest=body.manifest,
+        manifest=_manifest_with_capabilities(body.manifest, body.capabilities),
         description=body.description,
         scope=body.scope,
         organization_id=org_id,
@@ -191,8 +230,16 @@ async def update_ai_gene(
                 "errors.ai_gene.not_found",
                 f"AiGene '{gene_id}' not found",
             )
-    for field, value in body.model_dump(exclude_unset=True).items():
+    before_caps = extract_manifest_capabilities(gene.manifest)
+    for field, value in _updates_with_capabilities(
+        body, gene
+    ).items():
         setattr(gene, field, value)
+    await db.flush()
+    if extract_manifest_capabilities(gene.manifest) != before_caps:
+        from app.core.capabilities import bump_entities_for_gene
+
+        await bump_entities_for_gene(db, gene.id)
     await db.commit()
     await db.refresh(gene)
     return gene
@@ -281,6 +328,10 @@ async def attach_ai_gene_to_base_class(
         }
     link = BaseClassAiGene(base_class_id=bc.id, ai_gene_id=gene.id)
     db.add(link)
+    await db.flush()
+    from app.core.capabilities import bump_entities_for_base_class
+
+    await bump_entities_for_base_class(db, bc.slug)
     await db.commit()
     return {"base_class_id": bc.id, "ai_gene_id": gene.id, "status": "attached"}
 
@@ -338,4 +389,8 @@ async def detach_ai_gene_from_base_class(
             f"AiGene '{gene_id}' is not attached to BaseClass '{base_class_id}'",
         )
     link.soft_delete()
+    await db.flush()
+    from app.core.capabilities import bump_entities_for_base_class
+
+    await bump_entities_for_base_class(db, bc.slug)
     await db.commit()

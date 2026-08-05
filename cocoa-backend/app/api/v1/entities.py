@@ -65,7 +65,7 @@ async def _entity_out(db: DB, entity: Entity) -> EntityOut:
         load_entity_capability_dicts,
     )
 
-    caps = await load_entity_capability_dicts(db, entity.id)
+    caps = await load_entity_capability_dicts(db, entity.id, entity=entity)
     genes = await load_entity_ai_gene_dicts(db, entity)
     return EntityOut(
         id=entity.id,
@@ -364,7 +364,10 @@ async def attach_entity_ai_gene_route(
     current_user: CurrentUserDep,
 ) -> dict[str, str]:
     """Attach an ai gene to an entity."""
-    from app.core.capabilities import attach_entity_ai_gene
+    from app.core.capabilities import (
+        attach_entity_ai_gene,
+        bump_entity_migration_hash,
+    )
 
     entity = await db.get(Entity, entity_id)
     if entity is None or entity.deleted_at is not None:
@@ -387,6 +390,7 @@ async def attach_entity_ai_gene_route(
             f"AiGene '{body.ai_gene_id}' not found",
         )
     await attach_entity_ai_gene(db, entity_id=entity_id, ai_gene_id=body.ai_gene_id)
+    await bump_entity_migration_hash(db, entity)
     await db.commit()
     return {"entity_id": entity_id, "ai_gene_id": body.ai_gene_id}
 

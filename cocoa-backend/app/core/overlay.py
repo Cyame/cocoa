@@ -137,7 +137,7 @@ async def resolve_instance_agent_config(
         load_entity_gene_refs,
     )
 
-    capabilities = await load_entity_capability_dicts(db, entity.id)
+    capabilities = await load_entity_capability_dicts(db, entity.id, entity=entity)
     gene_refs = await load_entity_gene_refs(db, entity.id)
 
     manifest: dict[str, Any] | None = None

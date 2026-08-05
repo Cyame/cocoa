@@ -1039,15 +1039,12 @@ async def combine_capabilities(
         )
 
     # 2. Build manifest preview.
+    from app.core.capabilities import build_capabilities_manifest
+
     manifest = {
-        "capabilities": [
-            {
-                "name": found[n].name,
-                "type": found[n].type,
-                "description": found[n].description,
-            }
-            for n in body.capability_names
-        ],
+        "capabilities": build_capabilities_manifest(
+            [found[n] for n in body.capability_names]
+        ),
         "tools": [],
         "scripts": {},
         "runtime_config": {},

@@ -38,6 +38,7 @@ export function createCapability(body: {
   readonly name: string;
   readonly type?: CapabilityType;
   readonly description?: string | null;
+  readonly config_template?: Record<string, unknown> | null;
   readonly scope?: CapabilityScope;
   readonly organization_id?: string | null;
   readonly namespace_id?: string | null;
@@ -55,6 +56,7 @@ export function updateCapability(
     readonly name?: string;
     readonly type?: CapabilityType;
     readonly description?: string | null;
+    readonly config_template?: Record<string, unknown> | null;
     readonly tags?: readonly string[] | null;
   },
 ): Promise<CapabilityMarketEntry> {

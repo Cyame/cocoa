@@ -373,7 +373,10 @@ async def attach_base_class_ai_gene_route(
     x_organization_id: XOrgIdHeader = None,
 ) -> dict[str, str]:
     """Attach an ai gene to a base class."""
-    from app.core.capabilities import attach_base_class_ai_gene
+    from app.core.capabilities import (
+        attach_base_class_ai_gene,
+        bump_entities_for_base_class,
+    )
 
     preset = await db.get(BaseClass, preset_id)
     if preset is None or preset.deleted_at is not None:
@@ -407,6 +410,7 @@ async def attach_base_class_ai_gene_route(
     await attach_base_class_ai_gene(
         db, base_class_id=preset_id, ai_gene_id=body.ai_gene_id
     )
+    await bump_entities_for_base_class(db, preset.slug)
     await db.commit()
     return {"base_class_id": preset_id, "ai_gene_id": body.ai_gene_id}
 

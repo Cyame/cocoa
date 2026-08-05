@@ -98,5 +98,5 @@ async def compute_entity_migration_hash(db: AsyncSession, entity: Entity) -> str
     """
     from app.core.capabilities import load_entity_capability_dicts
 
-    caps = await load_entity_capability_dicts(db, entity.id)
+    caps = await load_entity_capability_dicts(db, entity.id, entity=entity)
     return compute_migration_hash(caps, entity.system_prompt)

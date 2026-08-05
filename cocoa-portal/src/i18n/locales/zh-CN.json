@@ -909,7 +909,19 @@
     "contractsGenes": "基因",
     "genesSlug": "标识",
     "genesScope": "作用域",
-    "genesDescription": "描述"
+    "genesDescription": "描述",
+    "genesTagsLabel": "标签",
+    "genesTagsPlaceholder": "逗号分隔，如 planning, multimodal",
+    "genesManifestLabel": "Manifest（JSON，可选）",
+    "genesManifestPlaceholder": "{\"gene_refs\":[],\"skills\":[],\"tools\":[],\"commands\":[]}",
+    "capabilityConfigTemplateLabel": "配置模板（JSON，可选）",
+    "capabilityConfigTemplatePlaceholder": "{\"key\": \"value\"}",
+    "invalidJsonObject": "必须是合法的 JSON 对象。",
+    "geneCapabilitiesLabel": "能力多选",
+    "geneCapabilitiesHint": "勾选的能力将随提交写入 manifest.capabilities，与 combine 产物结构一致（name / type / description）。Manifest JSON 为高级模式，改动会同步到勾选态。",
+    "geneCapabilitiesEmpty": "能力市场暂无能力，可先在能力市场创建。",
+    "geneCapabilitiesSummary": "已选 {{count}} 个能力，将写入 manifest.capabilities：",
+    "geneCapabilitiesNone": "未选择能力。"
   },
   "workspace": {
     "idMissing": "缺少空间标识。",

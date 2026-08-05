@@ -2,11 +2,20 @@ import { api } from '@/lib/api';
 
 export type AiGeneScope = 'system' | 'org' | 'namespace';
 
+/** Manifest-inline capability (v4.9.2 A2) — must stay isomorphic to backend `build_capabilities_manifest` output: exactly `{name, type, description}`. */
+export type CapabilityInline = {
+  readonly name: string;
+  readonly type: string;
+  readonly description: string | null;
+};
+
 export type AiGeneCatalogItem = {
   readonly id: string;
   readonly slug: string;
   readonly name: string;
   readonly tags: readonly string[] | null;
+  readonly manifest?: Record<string, unknown> | null;
+  readonly capabilities?: readonly CapabilityInline[] | null;
   readonly description: string | null;
   readonly scope?: AiGeneScope | string;
   readonly organization_id?: string | null;
@@ -30,6 +39,8 @@ export function createAiGene(body: {
   readonly name: string;
   readonly description?: string | null;
   readonly tags?: readonly string[] | null;
+  readonly manifest?: Record<string, unknown> | null;
+  readonly capabilities?: readonly CapabilityInline[];
   readonly scope?: AiGeneScope;
   readonly organization_id?: string | null;
   readonly namespace_id?: string | null;
@@ -46,6 +57,8 @@ export function updateAiGene(
     readonly name?: string;
     readonly description?: string | null;
     readonly tags?: readonly string[] | null;
+    readonly manifest?: Record<string, unknown> | null;
+    readonly capabilities?: readonly CapabilityInline[];
   },
 ): Promise<AiGeneCatalogItem> {
   return api<AiGeneCatalogItem>(`/ai-genes/${encodeURIComponent(geneId)}`, {

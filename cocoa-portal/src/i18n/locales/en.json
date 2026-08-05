@@ -1073,7 +1073,19 @@
     "contractsGenes": "Genes",
     "genesSlug": "Slug",
     "genesScope": "Scope",
-    "genesDescription": "Description"
+    "genesDescription": "Description",
+    "genesTagsLabel": "Tags",
+    "genesTagsPlaceholder": "Comma-separated, e.g. planning, multimodal",
+    "genesManifestLabel": "Manifest (JSON, optional)",
+    "genesManifestPlaceholder": "{\"gene_refs\":[],\"skills\":[],\"tools\":[],\"commands\":[]}",
+    "capabilityConfigTemplateLabel": "Config template (JSON, optional)",
+    "capabilityConfigTemplatePlaceholder": "{\"key\": \"value\"}",
+    "invalidJsonObject": "Must be a valid JSON object.",
+    "geneCapabilitiesLabel": "Capabilities",
+    "geneCapabilitiesHint": "Checked capabilities are written to manifest.capabilities on submit, in the same shape as combine output (name / type / description). The manifest JSON is the advanced mode — edits sync back to the checkboxes.",
+    "geneCapabilitiesEmpty": "No capabilities in the market yet — create one in the capability market first.",
+    "geneCapabilitiesSummary": "{{count}} selected — will be written to manifest.capabilities:",
+    "geneCapabilitiesNone": "No capabilities selected."
   },
   "workspace": {
     "idMissing": "Workspace identifier is missing.",
