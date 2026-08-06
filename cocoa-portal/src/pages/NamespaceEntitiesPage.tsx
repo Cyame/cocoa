@@ -2,9 +2,10 @@ import { AlertCircle, Building2, Copy, FlaskConical, LoaderCircle, Sparkles } fr
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Navigate, useParams } from 'react-router';
+import CloneDialog from '@/components/CloneDialog';
 import { ApiError, api } from '@/lib/api';
 import { fetchMe } from '@/lib/api/auth';
-import { cloneEntity } from '@/lib/api/clone';
+import { type ClonePayload, cloneEntity } from '@/lib/api/clone';
 import type { Entity, OrgIdentity } from '@/lib/types';
 import { useEntityModalStore } from '@/stores/entityModalStore';
 import { useOnboardingModalStore } from '@/stores/onboardingModalStore';
@@ -31,6 +32,7 @@ export default function NamespaceEntitiesPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [selectedEntityId, setSelectedEntityId] = useState<string | null>(null);
   const [cloningId, setCloningId] = useState<string | null>(null);
+  const [cloneTarget, setCloneTarget] = useState<Entity | null>(null);
 
   const openOnboarding = useOnboardingModalStore((state) => state.open);
   const openEntityModal = useEntityModalStore((state) => state.open);
@@ -78,16 +80,17 @@ export default function NamespaceEntitiesPage() {
   }, [refresh]);
 
   const handleClone = useCallback(
-    async (entity: Entity) => {
+    async (entity: Entity, payload: ClonePayload) => {
       setCloningId(entity.id);
       setErrorMessage(null);
       try {
-        await cloneEntity(entity.id);
+        await cloneEntity(entity.id, payload);
         await refresh();
       } catch (error) {
         setErrorMessage(error instanceof ApiError ? error.message : t('clone.error'));
       } finally {
         setCloningId(null);
+        setCloneTarget(null);
       }
     },
     [refresh, t],
@@ -158,12 +161,26 @@ export default function NamespaceEntitiesPage() {
           canClone={canCloneEntity}
           cloningId={cloningId}
           onSelect={setSelectedEntityId}
-          onClone={(entity) => void handleClone(entity)}
+          onClone={(entity) => setCloneTarget(entity)}
           onOpen={(id) => openEntityModal(id)}
           onOpenDistill={(id) => openEntityModal(id, 'distill')}
           t={t}
         />
       ) : null}
+
+      <CloneDialog
+        open={cloneTarget !== null}
+        title={t('clone.entity')}
+        confirmMessage={t('clone.dialog.confirmEntity', {
+          name: cloneTarget?.display_name ?? cloneTarget?.name ?? '',
+        })}
+        confirmLabel={t('clone.entity')}
+        busy={cloneTarget !== null && cloningId === cloneTarget.id}
+        onConfirm={(payload) => {
+          if (cloneTarget !== null) void handleClone(cloneTarget, payload);
+        }}
+        onCancel={() => setCloneTarget(null)}
+      />
     </section>
   );
 }

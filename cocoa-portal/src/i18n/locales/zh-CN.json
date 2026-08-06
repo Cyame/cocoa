@@ -92,7 +92,19 @@
     "confirmWorkspace": "克隆空间「{{name}}」？仅复制觉醒者及他们之间的通道。",
     "instancesNotCopied": "化身不会被复制。",
     "success": "克隆完成。",
-    "error": "克隆失败，请重试。"
+    "error": "克隆失败，请重试。",
+    "dialog": {
+      "close": "关闭",
+      "cancel": "取消",
+      "nameLabel": "新名称（可选）",
+      "namePlaceholder": "留空则自动生成名称",
+      "slugLabel": "新标识（可选）",
+      "slugPlaceholder": "留空则自动生成标识",
+      "slugHint": "仅限小写字母、数字与单个连字符（如 my-base-class）。",
+      "slugInvalid": "标识须为 kebab-case：小写字母与数字以单个连字符分隔。",
+      "confirmBaseClass": "克隆神职「{{name}}」？",
+      "confirmEntity": "克隆眷族「{{name}}」？"
+    }
   },
   "worldMembers": {
     "title": "世界契印",
@@ -1287,7 +1299,10 @@
       "name": "名称",
       "slug": "标识（只读）",
       "description": "描述",
-      "saved": "世界已更新"
+      "saved": "世界已更新",
+      "nameTitle": "世界名称",
+      "nameLabel": "名称",
+      "nameSaved": "世界名称已更新"
     },
     "namespacesAdmin": {
       "title": "次元",

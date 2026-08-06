@@ -6,12 +6,14 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
+from app.core.slug import KebabSlug
+
 VALID_RANKS = frozenset({"intern", "researcher"})
 
 
 class EntityCreate(BaseModel):
     name: str
-    slug: str
+    slug: KebabSlug
     namespace_id: str | None = None
     rank: str = "intern"
     preset_slug: str | None = None
@@ -34,6 +36,7 @@ class EntityCreate(BaseModel):
 
 
 class EntityUpdate(BaseModel):
+    slug: KebabSlug | None = None
     name: str | None = None
     preset_slug: str | None = None
     display_name: str | None = None

@@ -17,9 +17,10 @@ Permission scoping (D10, verified 2026-08-04):
   for cross-org context but never overrides the source resource's own
   ancestry. Entity and organization routes omit the header entirely.
 - Org clone copies only org-scoped BCs (``scope != "system"``); system BCs are
-  global and never cloned. A direct single-BC clone of a system BC preserves
-  ``scope="system"`` — the portal hides system/internal-tagged BCs from the
-  clone button, so that path is API-only.
+  global and never cloned. A direct single-BC clone of a system BC is
+  downgraded to ``scope="org"`` on the caller's target organization (v4.9.4
+  C0) — the copy never inherits the source's system readonly lock. The
+  target-org permission gate lives in the route layer.
 """
 
 from __future__ import annotations
@@ -87,7 +88,8 @@ async def _emit_clone(db, event_type, resource_type, new_id, actor_user_id, sour
 
 
 async def clone_base_class(db: AsyncSession, *, source_id: str, actor_user_id: str,
-                           name: str | None = None, slug: str | None = None) -> BaseClass:
+                           name: str | None = None, slug: str | None = None,
+                           target_org_id: str | None = None) -> BaseClass:
     source = await db.get(BaseClass, source_id)
     if source is None or source.deleted_at is not None:
         raise NotFoundError("base_class.not_found", "errors.base_class.not_found",
@@ -98,10 +100,19 @@ async def clone_base_class(db: AsyncSession, *, source_id: str, actor_user_id: s
     if clash.scalar_one_or_none() is not None:
         raise ConflictError("base_class.slug_taken", "errors.base_class.slug_taken",
                             f"BaseClass slug '{new_slug}' is already taken")
+    # v4.9.4 C0: cloning a system preset downgrades the copy to org scope on
+    # the caller's target organization (a new asset, not an inherited
+    # system-only lock). Non-system sources keep source scope/org/ns.
+    if source.scope == "system":
+        copy_scope, copy_org_id, copy_ns_id = "org", target_org_id, None
+    else:
+        copy_scope, copy_org_id, copy_ns_id = (
+            source.scope, source.organization_id, source.namespace_id
+        )
     new_bc = BaseClass(slug=new_slug, name=_new_name(source.name, name),
                       display_name=source.display_name, description=source.description,
-                      manifest=source.manifest, scope=source.scope,
-                      organization_id=source.organization_id, namespace_id=source.namespace_id,
+                      manifest=source.manifest, scope=copy_scope,
+                      organization_id=copy_org_id, namespace_id=copy_ns_id,
                       version=source.version, tags=source.tags)
     db.add(new_bc)
     await db.flush()

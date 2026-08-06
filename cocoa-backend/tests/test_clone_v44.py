@@ -198,6 +198,169 @@ class TestCloneBaseClass:
         assert resp.json()["slug"].startswith("custom-slug-")
 
 
+class TestCloneBaseClassSystemDowngrade:
+    """v4.9.4 C0: cloning a system-scoped BaseClass downgrades the copy to
+    org scope on the caller's target organization.
+
+    The system readonly lock (scope_guard) is NOT inherited: the copy is a
+    new org-scoped asset, so it must be mutable via PATCH.
+    """
+
+    @pytest.mark.asyncio
+    async def test_clone_system_bc_downgrades_to_target_org(
+        self, client: TestClient, session: AsyncSession, create_org_bundle
+    ) -> None:
+        from app.models.base_class import BaseClass
+
+        _register(client, f"bc-sd-sa-{_uid()}", f"bc-sd-sa-{_uid()}@t.co")
+        token, member_id = _register(client, f"bc-sd-m-{_uid()}", f"bc-sd-m-{_uid()}@t.co")
+        bundle = await create_org_bundle(
+            member_id, atoms=("can_clone_base_class", "can_manage_organization")
+        )
+        headers = {**_auth(token), "X-Organization-Id": bundle.org.id}
+
+        sys_bc = BaseClass(slug=f"sys-{_uid()}", name="System BC", scope="system")
+        session.add(sys_bc)
+        await session.commit()
+
+        resp = client.post(
+            f"/api/v1/base-classes/{sys_bc.id}/clone", headers=headers, json={}
+        )
+        assert resp.status_code == 201, resp.text
+        body = resp.json()
+        assert body["scope"] == "org"
+        assert body["organization_id"] == bundle.org.id
+        assert body["namespace_id"] is None
+
+    @pytest.mark.asyncio
+    async def test_clone_system_bc_copy_is_mutable(
+        self, client: TestClient, session: AsyncSession, create_org_bundle
+    ) -> None:
+        from app.models.base_class import BaseClass
+
+        _register(client, f"bc-sm-sa-{_uid()}", f"bc-sm-sa-{_uid()}@t.co")
+        token, member_id = _register(client, f"bc-sm-m-{_uid()}", f"bc-sm-m-{_uid()}@t.co")
+        bundle = await create_org_bundle(
+            member_id, atoms=("can_clone_base_class", "can_manage_organization")
+        )
+        headers = {**_auth(token), "X-Organization-Id": bundle.org.id}
+
+        sys_bc = BaseClass(slug=f"sysm-{_uid()}", name="System BC", scope="system")
+        session.add(sys_bc)
+        await session.commit()
+
+        resp = client.post(
+            f"/api/v1/base-classes/{sys_bc.id}/clone", headers=headers, json={}
+        )
+        assert resp.status_code == 201, resp.text
+        new_id = resp.json()["id"]
+
+        patch = client.patch(
+            f"/api/v1/base-classes/{new_id}", headers=headers, json={"name": "Renamed Copy"}
+        )
+        assert patch.status_code == 200, patch.text
+        assert patch.json()["name"] == "Renamed Copy"
+
+    @pytest.mark.asyncio
+    async def test_clone_system_bc_without_org_context_403(
+        self, client: TestClient, session: AsyncSession
+    ) -> None:
+        from app.models.base_class import BaseClass
+
+        _register(client, f"bc-no-sa-{_uid()}", f"bc-no-sa-{_uid()}@t.co")
+        token, _ = _register(client, f"bc-no-m-{_uid()}", f"bc-no-m-{_uid()}@t.co")
+
+        sys_bc = BaseClass(slug=f"sysno-{_uid()}", name="System BC", scope="system")
+        session.add(sys_bc)
+        await session.commit()
+
+        resp = client.post(
+            f"/api/v1/base-classes/{sys_bc.id}/clone", headers=_auth(token), json={}
+        )
+        assert resp.status_code == 403
+        assert resp.json()["error_code"] == "clone.no_org_context"
+
+    @pytest.mark.asyncio
+    async def test_clone_system_bc_without_target_org_manage_403(
+        self, client: TestClient, session: AsyncSession, create_org_bundle
+    ) -> None:
+        from app.models.base_class import BaseClass
+
+        _register(client, f"bc-pm-sa-{_uid()}", f"bc-pm-sa-{_uid()}@t.co")
+        token, member_id = _register(client, f"bc-pm-m-{_uid()}", f"bc-pm-m-{_uid()}@t.co")
+        bundle = await create_org_bundle(
+            member_id, atoms=("can_clone_base_class", "can_view_workspace")
+        )
+        headers = {**_auth(token), "X-Organization-Id": bundle.org.id}
+
+        sys_bc = BaseClass(slug=f"syspm-{_uid()}", name="System BC", scope="system")
+        session.add(sys_bc)
+        await session.commit()
+
+        resp = client.post(
+            f"/api/v1/base-classes/{sys_bc.id}/clone", headers=headers, json={}
+        )
+        assert resp.status_code == 403
+        assert resp.json()["error_code"] == "permission.denied"
+
+    @pytest.mark.asyncio
+    async def test_clone_org_bc_keeps_scope_and_organization(
+        self, client: TestClient, session: AsyncSession, create_org_bundle
+    ) -> None:
+        from app.models.base_class import BaseClass
+
+        _register(client, f"bc-or-sa-{_uid()}", f"bc-or-sa-{_uid()}@t.co")
+        token, member_id = _register(client, f"bc-or-m-{_uid()}", f"bc-or-m-{_uid()}@t.co")
+        bundle = await create_org_bundle(
+            member_id, atoms=("can_clone_base_class", "can_manage_organization")
+        )
+        headers = {**_auth(token), "X-Organization-Id": bundle.org.id}
+
+        org_bc = BaseClass(slug=f"orgbc-{_uid()}", name="Org BC", scope="org",
+                           organization_id=bundle.org.id)
+        session.add(org_bc)
+        await session.commit()
+
+        resp = client.post(
+            f"/api/v1/base-classes/{org_bc.id}/clone", headers=headers, json={}
+        )
+        assert resp.status_code == 201, resp.text
+        body = resp.json()
+        assert body["scope"] == "org"
+        assert body["organization_id"] == bundle.org.id
+        assert body["namespace_id"] is None
+
+    @pytest.mark.asyncio
+    async def test_clone_org_bc_without_org_context_header_201(
+        self, client: TestClient, session: AsyncSession, create_org_bundle
+    ) -> None:
+        """Non-system sources never resolve org context and never 403 on a
+        missing X-Organization-Id — the original clone path is preserved (C0).
+        """
+        from app.models.base_class import BaseClass
+
+        _register(client, f"bc-nos-sa-{_uid()}", f"bc-nos-sa-{_uid()}@t.co")
+        token, member_id = _register(client, f"bc-nos-m-{_uid()}", f"bc-nos-m-{_uid()}@t.co")
+        bundle = await create_org_bundle(
+            member_id, atoms=("can_clone_base_class", "can_manage_organization")
+        )
+
+        org_bc = BaseClass(slug=f"orgbcn-{_uid()}", name="Org BC", scope="org",
+                           organization_id=bundle.org.id)
+        session.add(org_bc)
+        await session.commit()
+
+        # Deliberately omit the X-Organization-Id header.
+        resp = client.post(
+            f"/api/v1/base-classes/{org_bc.id}/clone", headers=_auth(token), json={}
+        )
+        assert resp.status_code == 201, resp.text
+        body = resp.json()
+        assert body["scope"] == "org"
+        assert body["organization_id"] == bundle.org.id
+        assert body["namespace_id"] is None
+
+
 # ---------------------------------------------------------------------------
 # Entity clone
 # ---------------------------------------------------------------------------

@@ -2,9 +2,10 @@ import { AlertCircle, Copy, LoaderCircle, Settings } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router';
+import CloneDialog from '@/components/CloneDialog';
 import { ApiError, api } from '@/lib/api';
 import { fetchMe } from '@/lib/api/auth';
-import { cloneOrganization } from '@/lib/api/clone';
+import { type ClonePayload, cloneOrganization } from '@/lib/api/clone';
 import { fetchOrganization } from '@/lib/api/organizations';
 import type { Organization, OrgIdentity } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -46,6 +47,7 @@ export default function WorldSettingsPage() {
   }, [orgId]);
 
   const [org, setOrg] = useState<Organization | null>(null);
+  const [orgName, setOrgName] = useState('');
   const [useProxy, setUseProxy] = useState(false);
   const [proxyHost, setProxyHost] = useState('');
   const [proxyPort, setProxyPort] = useState('');
@@ -55,6 +57,7 @@ export default function WorldSettingsPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [cloneTarget, setCloneTarget] = useState<boolean>(false);
 
   const load = useCallback(async () => {
     if (orgId === undefined) return;
@@ -63,6 +66,7 @@ export default function WorldSettingsPage() {
     try {
       const data = await fetchOrganization(orgId);
       setOrg(data);
+      setOrgName(data.name);
       setUseProxy(data.use_proxy);
       setProxyHost(data.proxy_host ?? '');
       setProxyPort(data.proxy_port !== null ? String(data.proxy_port) : '');
@@ -79,18 +83,39 @@ export default function WorldSettingsPage() {
     void load();
   }, [load]);
 
-  async function handleCloneWorld() {
+  async function handleCloneWorld(payload: ClonePayload) {
     if (!canCloneWorld || orgId === undefined || org === null) return;
-    const ok = window.confirm(t('clone.confirmOrganization', { name: org.name }));
-    if (!ok) return;
     setBusy(true);
     setErrorMessage(null);
     setNotice(null);
     try {
-      await cloneOrganization(orgId);
+      await cloneOrganization(orgId, payload);
       navigate('/orgs/picker');
     } catch (error) {
       setErrorMessage(error instanceof ApiError ? error.message : t('clone.error'));
+    } finally {
+      setBusy(false);
+      setCloneTarget(false);
+    }
+  }
+
+  async function handleSaveName() {
+    if (!canManageWorld || orgId === undefined || org === null) return;
+    const trimmed = orgName.trim();
+    if (trimmed.length === 0 || trimmed === org.name) return;
+    setBusy(true);
+    setErrorMessage(null);
+    setNotice(null);
+    try {
+      const next = await api<Organization>(`/organizations/${encodeURIComponent(orgId)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ name: trimmed }),
+      });
+      setOrg(next);
+      setOrgName(next.name);
+      setNotice(t('organization.world.nameSaved'));
+    } catch (error) {
+      setErrorMessage(error instanceof ApiError ? error.message : t('errors.network'));
     } finally {
       setBusy(false);
     }
@@ -169,6 +194,48 @@ export default function WorldSettingsPage() {
 
       <div className="space-y-6">
         <OrganizationWorldPanel canWrite={canManageWorld} orgId={orgId} />
+
+        {org !== null ? (
+          <section className="max-w-xl space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="text-base font-semibold text-slate-900">
+              {t('organization.world.nameTitle')}
+            </h2>
+            <label className="block text-sm">
+              <span className="mb-1 block font-medium text-slate-700">
+                {t('organization.world.nameLabel')}
+              </span>
+              <input
+                type="text"
+                value={orgName}
+                disabled={!canManageWorld || busy}
+                onChange={(e) => setOrgName(e.target.value)}
+                data-testid="org-name-input"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm disabled:bg-slate-50"
+              />
+            </label>
+            {notice !== null ? (
+              <p role="status" className="text-sm text-emerald-700">
+                {notice}
+              </p>
+            ) : null}
+            {canManageWorld ? (
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  disabled={busy || orgName.trim().length === 0 || orgName.trim() === org.name}
+                  onClick={() => void handleSaveName()}
+                  data-testid="org-name-save"
+                  className={cn(
+                    'rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white',
+                    'disabled:opacity-60',
+                  )}
+                >
+                  {t('common.save')}
+                </button>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
 
         {org !== null ? (
           <section className="max-w-xl space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -267,7 +334,7 @@ export default function WorldSettingsPage() {
               <button
                 type="button"
                 disabled={busy}
-                onClick={() => void handleCloneWorld()}
+                onClick={() => setCloneTarget(true)}
                 data-testid="clone-organization"
                 className={cn(
                   'inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white',
@@ -282,6 +349,16 @@ export default function WorldSettingsPage() {
           </section>
         ) : null}
       </div>
+
+      <CloneDialog
+        open={cloneTarget}
+        title={t('clone.organization')}
+        confirmMessage={t('clone.confirmOrganization', { name: org?.name ?? '' })}
+        confirmLabel={t('clone.organization')}
+        busy={busy}
+        onConfirm={(payload) => void handleCloneWorld(payload)}
+        onCancel={() => setCloneTarget(false)}
+      />
     </section>
   );
 }

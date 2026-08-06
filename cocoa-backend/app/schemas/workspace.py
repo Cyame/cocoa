@@ -6,16 +6,18 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
+from app.core.slug import KebabSlug
+
 
 class WorkspaceCreate(BaseModel):
     name: str
-    slug: str
+    slug: KebabSlug
     namespace_id: str | None = None
 
 
 class WorkspaceUpdate(BaseModel):
     name: str | None = None
-    slug: str | None = None
+    slug: KebabSlug | None = None
 
 
 class WorkspaceOut(BaseModel):

@@ -2,9 +2,10 @@ import { AlertCircle, Building2, Copy, Cpu, LoaderCircle, Plus, Users, X } from 
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, Navigate, useNavigate, useParams } from 'react-router';
+import CloneDialog from '@/components/CloneDialog';
 import { ApiError, api } from '@/lib/api';
 import { fetchMe } from '@/lib/api/auth';
-import { cloneWorkspace } from '@/lib/api/clone';
+import { type ClonePayload, cloneWorkspace } from '@/lib/api/clone';
 import { listMemberships } from '@/lib/api/instances';
 import { createWorkspace, fetchWorkspaces } from '@/lib/api/workspaces';
 import { toSlug } from '@/lib/slug';
@@ -37,6 +38,7 @@ export default function NamespaceWorkspacesPage() {
   const [isUnauthorized, setIsUnauthorized] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [cloningId, setCloningId] = useState<string | null>(null);
+  const [cloneTarget, setCloneTarget] = useState<Workspace | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [createName, setCreateName] = useState('');
   const [createSlug, setCreateSlug] = useState('');
@@ -106,19 +108,17 @@ export default function NamespaceWorkspacesPage() {
 
   const slugify = (value: string): string => toSlug(value, 48);
 
-  const handleCloneWorkspace = async (workspace: Workspace) => {
-    const ok = window.confirm(
-      `${t('clone.confirmWorkspace', { name: workspace.name })} ${t('clone.instancesNotCopied')}`,
-    );
-    if (!ok) return;
+  const handleCloneWorkspace = async (workspace: Workspace, payload: ClonePayload) => {
     setCloningId(workspace.id);
     setErrorMessage(null);
     try {
-      const cloned = await cloneWorkspace(workspace.id);
+      const cloned = await cloneWorkspace(workspace.id, payload);
       navigate(`/orgs/${orgId ?? ''}/workspaces/${cloned.id}`);
     } catch (error) {
       setErrorMessage(error instanceof ApiError ? error.message : t('clone.error'));
+    } finally {
       setCloningId(null);
+      setCloneTarget(null);
     }
   };
 
@@ -280,7 +280,7 @@ export default function NamespaceWorkspacesPage() {
           workspaces={workspaces}
           canClone={canCloneWorkspace}
           cloningId={cloningId}
-          onClone={(workspace) => void handleCloneWorkspace(workspace)}
+          onClone={(workspace) => setCloneTarget(workspace)}
           onCreate={() => {
             setCreateOpen(true);
             setCreateError(null);
@@ -288,6 +288,18 @@ export default function NamespaceWorkspacesPage() {
           t={t}
         />
       ) : null}
+
+      <CloneDialog
+        open={cloneTarget !== null}
+        title={t('clone.workspace')}
+        confirmMessage={t('clone.confirmWorkspace', { name: cloneTarget?.name ?? '' })}
+        confirmLabel={t('clone.workspace')}
+        busy={cloneTarget !== null && cloningId === cloneTarget.id}
+        onConfirm={(payload) => {
+          if (cloneTarget !== null) void handleCloneWorkspace(cloneTarget, payload);
+        }}
+        onCancel={() => setCloneTarget(null)}
+      />
     </section>
   );
 }

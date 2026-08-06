@@ -92,7 +92,19 @@
     "confirmWorkspace": "Clone workspace \"{{name}}\"? Only awakened members and passages between them are copied.",
     "instancesNotCopied": "Avatars (instances) are not copied.",
     "success": "Clone completed.",
-    "error": "Clone failed. Please try again."
+    "error": "Clone failed. Please try again.",
+    "dialog": {
+      "close": "Close",
+      "cancel": "Cancel",
+      "nameLabel": "New name (optional)",
+      "namePlaceholder": "Leave blank to use an auto-generated name",
+      "slugLabel": "New slug (optional)",
+      "slugPlaceholder": "Leave blank to use an auto-generated slug",
+      "slugHint": "Lowercase letters, digits, and single hyphens (e.g. my-base-class).",
+      "slugInvalid": "Slug must be kebab-case: lowercase letters and digits separated by single hyphens.",
+      "confirmBaseClass": "Clone base class \"{{name}}\"?",
+      "confirmEntity": "Clone entity \"{{name}}\"?"
+    }
   },
   "worldMembers": {
     "title": "World contracts",
@@ -354,7 +366,10 @@
       "name": "Name",
       "slug": "Slug (read-only)",
       "description": "Description",
-      "saved": "World updated"
+      "saved": "World updated",
+      "nameTitle": "World name",
+      "nameLabel": "Name",
+      "nameSaved": "World name updated"
     },
     "namespacesAdmin": {
       "title": "Namespaces",

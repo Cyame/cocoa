@@ -190,6 +190,43 @@ async def get_default_organization(
     return await _get_default_org(db)
 
 
+def _apply_org_slug_guards(org: Organization, body: OrganizationUpdate) -> None:
+    """Enforce v4.9.4 C2 org slug rules before setattr.
+
+    - ``default`` is a reserved seed slug: cannot rename TO or FROM it (403).
+    - Callers must still run the global uniqueness check against the DB.
+    """
+    if "slug" not in body.model_fields_set or body.slug is None:
+        return
+    if body.slug == org.slug:
+        return
+    if body.slug == "default" or org.slug == "default":
+        raise ForbiddenError(
+            "organization.default_slug_readonly",
+            "errors.organization.default_slug_readonly",
+            "Organization slug 'default' is reserved and cannot be changed",
+        )
+
+
+async def _ensure_org_slug_unique(
+    db: DB, org: Organization, new_slug: str
+) -> None:
+    """Raise 409 when *new_slug* is taken by another active organization."""
+    clash = await db.execute(
+        select(Organization).where(
+            Organization.slug == new_slug,
+            Organization.deleted_at.is_(None),
+            Organization.id != org.id,
+        )
+    )
+    if clash.scalar_one_or_none() is not None:
+        raise ConflictError(
+            "organization.slug_taken",
+            "errors.organization.slug_taken",
+            f"Organization slug '{new_slug}' is already taken",
+        )
+
+
 @router.patch("/default", response_model=OrganizationOut)
 async def update_default_organization(
     body: OrganizationUpdate,
@@ -198,7 +235,18 @@ async def update_default_organization(
 ) -> Organization:
     require_super_admin(current_user)
     org = await _get_default_org(db)
-    for field, value in body.model_dump(exclude_unset=True).items():
+    _apply_org_slug_guards(org, body)
+    if (
+        "slug" in body.model_fields_set
+        and body.slug is not None
+        and body.slug != org.slug
+    ):
+        await _ensure_org_slug_unique(db, org, body.slug)
+    patch_data = body.model_dump(exclude_unset=True)
+    # Explicit null slug is a no-op (NOT NULL column; never setattr None).
+    if "slug" in patch_data and patch_data["slug"] is None:
+        del patch_data["slug"]
+    for field, value in patch_data.items():
         setattr(org, field, value)
     await db.commit()
     await db.refresh(org)
@@ -1155,9 +1203,11 @@ async def update_organization(
     db: DB,
     current_user: CurrentUserDep,
 ) -> Organization:
-    """Update org settings (name/description/system-hub/cerebellum/proxy).
+    """Update org settings (name/description/system-hub/cerebellum/proxy/slug).
 
     Requires ``can_manage_organization`` on the org (super-admin bypasses).
+    Slug is conditionally mutable (v4.9.4 C2): global uniqueness only;
+    ``default`` is reserved (403). No downstream lock (FK graph).
     """
     org = await _get_org_for_user(db, current_user, org_id)
     await require_permission(
@@ -1166,7 +1216,18 @@ async def update_organization(
         "can_manage_organization",
         organization_id=org.id,
     )
-    for field, value in body.model_dump(exclude_unset=True).items():
+    _apply_org_slug_guards(org, body)
+    if (
+        "slug" in body.model_fields_set
+        and body.slug is not None
+        and body.slug != org.slug
+    ):
+        await _ensure_org_slug_unique(db, org, body.slug)
+    patch_data = body.model_dump(exclude_unset=True)
+    # Explicit null slug is a no-op (NOT NULL column; never setattr None).
+    if "slug" in patch_data and patch_data["slug"] is None:
+        del patch_data["slug"]
+    for field, value in patch_data.items():
         setattr(org, field, value)
     await db.commit()
     await db.refresh(org)

@@ -27,7 +27,9 @@ from app.core.preset_registry import registry
 from app.core.tenant import resolve_namespace_id
 from app.models.ai_gene import AiGene
 from app.models.capability_market import CapabilityMarketEntry
+from app.models.composer_message import ComposerMessage
 from app.models.entity import Entity
+from app.models.instance import Instance
 from app.schemas.entity import EntityCreate, EntityOut, EntityUpdate
 
 router = APIRouter(prefix="/entities", tags=["Entitys"])
@@ -220,6 +222,15 @@ async def create_entity(
     return await _entity_out(db, entity)
 
 
+def _escape_like_literal(value: str) -> str:
+    """Escape ``\\``, ``%``, and ``_`` for SQL LIKE with ``escape='\\'``."""
+    return (
+        value.replace("\\", "\\\\")
+        .replace("%", "\\%")
+        .replace("_", "\\_")
+    )
+
+
 @router.patch("/{entity_id}", response_model=EntityOut)
 async def update_entity(
     entity_id: str,
@@ -230,7 +241,10 @@ async def update_entity(
     """Update an existing entity.
 
     Only the fields provided in the request body are updated (partial update).
-    The ``slug`` field is immutable.
+    Slug is conditionally mutable (v4.9.4 C2): ``(namespace_id, slug)``
+    uniqueness is enforced and any Instance workspace_path / ComposerMessage
+    ``target_entity`` reference to the current slug (active or soft-deleted)
+    permanently locks it.
     Raises 422 if *preset_slug* is provided but does not exist in the
     preset registry.
     Refreshes the registry cache after update.
@@ -272,7 +286,65 @@ async def update_entity(
                 "A cerebellum entity already exists in this namespace",
             )
 
+    if "slug" in body.model_fields_set and body.slug is not None and body.slug != entity.slug:
+        clash = await db.execute(
+            select(Entity).where(
+                Entity.namespace_id == entity.namespace_id,
+                Entity.slug == body.slug,
+                Entity.deleted_at.is_(None),
+                Entity.id != entity.id,
+            )
+        )
+        if clash.scalar_one_or_none() is not None:
+            raise ConflictError(
+                "entity.slug_taken",
+                "errors.entity.slug_taken",
+                f"Entity slug '{body.slug}' is already taken",
+            )
+
+        # Downstream lock — soft-deleted rows count (permanent-lock semantics).
+        # Escape '_'/'%' in historical slugs so LIKE matches literally.
+        path_pattern = (
+            f".pi/workspace/{_escape_like_literal(entity.slug)}-%"
+        )
+        inst_rows = (
+            await db.execute(
+                select(Instance.id, Instance.deleted_at).where(
+                    Instance.workspace_path.like(path_pattern, escape="\\"),
+                )
+            )
+        ).all()
+        msg_rows = (
+            await db.execute(
+                select(ComposerMessage.id).where(
+                    ComposerMessage.target_entity == entity.slug,
+                )
+            )
+        ).all()
+        if inst_rows or msg_rows:
+            details: dict = {}
+            if inst_rows:
+                details["instances"] = [
+                    {"id": r.id, "deleted": r.deleted_at is not None}
+                    for r in inst_rows
+                ]
+            if msg_rows:
+                details["composer_messages"] = {
+                    "count": len(msg_rows),
+                    "message_ids": [r.id for r in msg_rows],
+                }
+            raise ConflictError(
+                "entity.slug_in_use",
+                "errors.entity.slug_in_use",
+                f"Entity slug '{entity.slug}' is referenced downstream "
+                "and cannot be renamed",
+                details=details,
+            )
+
     patch_data = body.model_dump(exclude_unset=True)
+    # Explicit null slug is a no-op (NOT NULL column; never setattr None).
+    if "slug" in patch_data and patch_data["slug"] is None:
+        del patch_data["slug"]
     for field, value in patch_data.items():
         if field == "config_override":
             value = _strip_config_override_caps(value)

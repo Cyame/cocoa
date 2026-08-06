@@ -30,6 +30,7 @@ from app.models.ai_gene import AiGene
 from app.models.base_class import BaseClass
 from app.models.base_class_provider_default import BaseClassProviderDefault
 from app.models.capability_market import CapabilityMarketEntry
+from app.models.entity import Entity
 from app.models.organization import Organization
 from app.models.organization_provider import OrganizationProvider
 from app.schemas.base_class import (
@@ -570,8 +571,11 @@ async def update_base_class(
     current_user: CurrentUserDep,
     x_organization_id: XOrgIdHeader = None,
 ) -> BaseClassOut:
-    """Partial-update an existing base class. Slug and scope are immutable;
-    system-scoped presets are read-only (v4.0 D15)."""
+    """Partial-update an existing base class. Scope is immutable; system-scoped
+    presets are read-only (v4.0 D15). Slug is conditionally mutable (v4.9.4
+    C2): global uniqueness is enforced and any Entity (active or soft-deleted)
+    referencing the current slug via ``preset_slug`` permanently locks it.
+    """
     from app.core.scope_guard import ensure_scope_mutable
 
     current_org_id = await resolve_current_org_id(
@@ -600,7 +604,55 @@ async def update_base_class(
                 f"BaseClass '{preset_id}' not found",
             )
 
-    for field, value in body.model_dump(exclude_unset=True).items():
+    if (
+        "slug" in body.model_fields_set
+        and body.slug is not None
+        and body.slug != preset.slug
+    ):
+        clash = await db.execute(
+            select(BaseClass).where(
+                BaseClass.slug == body.slug,
+                BaseClass.deleted_at.is_(None),
+                BaseClass.id != preset.id,
+            )
+        )
+        if clash.scalar_one_or_none() is not None:
+            raise ConflictError(
+                "base_class.slug_taken",
+                "errors.base_class.slug_taken",
+                f"BaseClass slug '{body.slug}' is already taken",
+            )
+        # Soft-deleted references count — soft-delete is never purged, so a
+        # referenced slug is permanently locked (v4.9.4 C2, G7-rev).
+        refs = (
+            await db.execute(
+                select(Entity.id, Entity.slug, Entity.deleted_at).where(
+                    Entity.preset_slug == preset.slug,
+                )
+            )
+        ).all()
+        if refs:
+            blocking = [
+                {
+                    "id": r.id,
+                    "slug": r.slug,
+                    "deleted": r.deleted_at is not None,
+                }
+                for r in refs
+            ]
+            raise ConflictError(
+                "base_class.slug_in_use",
+                "errors.base_class.slug_in_use",
+                f"BaseClass slug '{preset.slug}' is referenced by entities "
+                "and cannot be renamed",
+                details={"blocking_entities": blocking},
+            )
+
+    patch_data = body.model_dump(exclude_unset=True)
+    # Explicit null slug is a no-op (NOT NULL column; never setattr None).
+    if "slug" in patch_data and patch_data["slug"] is None:
+        del patch_data["slug"]
+    for field, value in patch_data.items():
         if field == "manifest":
             value = _strip_manifest_mirror(value)
         setattr(preset, field, value)

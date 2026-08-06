@@ -2,10 +2,11 @@ import { AlertCircle, Building2, Copy, LoaderCircle, Plus, Sparkles } from 'luci
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, Navigate, useParams } from 'react-router';
+import CloneDialog from '@/components/CloneDialog';
 import { ApiError } from '@/lib/api';
 import { fetchMe } from '@/lib/api/auth';
 import { fetchBaseClassesPage } from '@/lib/api/baseClasses';
-import { cloneBaseClass } from '@/lib/api/clone';
+import { type ClonePayload, cloneBaseClass } from '@/lib/api/clone';
 import { translateBaseClassTag } from '@/lib/baseClassTags';
 import type { BaseClass, OrgIdentity } from '@/lib/types';
 import { useOnboardingModalStore } from '@/stores/onboardingModalStore';
@@ -25,6 +26,7 @@ export default function BaseClassesPage() {
   const [isUnauthorized, setIsUnauthorized] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [cloningId, setCloningId] = useState<string | null>(null);
+  const [cloneTarget, setCloneTarget] = useState<BaseClass | null>(null);
 
   const openOnboarding = useOnboardingModalStore((state) => state.open);
 
@@ -78,16 +80,17 @@ export default function BaseClassesPage() {
   }, [refresh]);
 
   const handleClone = useCallback(
-    async (baseClass: BaseClass) => {
+    async (baseClass: BaseClass, payload: ClonePayload) => {
       setCloningId(baseClass.id);
       setErrorMessage(null);
       try {
-        await cloneBaseClass(baseClass.id);
+        await cloneBaseClass(baseClass.id, payload);
         await refresh();
       } catch (error) {
         setErrorMessage(error instanceof ApiError ? error.message : t('clone.error'));
       } finally {
         setCloningId(null);
+        setCloneTarget(null);
       }
     },
     [refresh, t],
@@ -144,11 +147,25 @@ export default function BaseClassesPage() {
           baseClasses={baseClasses}
           canClone={canCloneBaseClass}
           cloningId={cloningId}
-          onClone={(bc) => void handleClone(bc)}
+          onClone={(bc) => setCloneTarget(bc)}
           onSummon={(slug) => openOnboarding({ baseClassSlug: slug })}
           t={t}
         />
       ) : null}
+
+      <CloneDialog
+        open={cloneTarget !== null}
+        title={t('clone.baseClass')}
+        confirmMessage={t('clone.dialog.confirmBaseClass', {
+          name: cloneTarget?.display_name ?? cloneTarget?.name ?? '',
+        })}
+        confirmLabel={t('clone.baseClass')}
+        busy={cloneTarget !== null && cloningId === cloneTarget.id}
+        onConfirm={(payload) => {
+          if (cloneTarget !== null) void handleClone(cloneTarget, payload);
+        }}
+        onCancel={() => setCloneTarget(null)}
+      />
     </section>
   );
 }

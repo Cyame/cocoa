@@ -8,6 +8,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.core.slug import KebabSlug
+
 
 class OrganizationOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -30,6 +32,7 @@ class OrganizationOut(BaseModel):
 
 
 class OrganizationUpdate(BaseModel):
+    slug: KebabSlug | None = None
     name: str | None = None
     description: str | None = None
     system_hub_provider_id: str | None = None
@@ -44,7 +47,7 @@ class OrganizationUpdate(BaseModel):
 
 
 class OrganizationCreate(BaseModel):
-    slug: str = Field(min_length=1, max_length=255)
+    slug: KebabSlug = Field(min_length=1, max_length=255)
     name: str = Field(min_length=1, max_length=255)
     description: str | None = None
     use_proxy: bool = False

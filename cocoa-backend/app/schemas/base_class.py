@@ -6,11 +6,12 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
+from app.core.slug import KebabSlug
 from app.schemas.preset import PresetManifest
 
 
 class BaseClassCreate(BaseModel):
-    slug: str
+    slug: KebabSlug
     name: str
     version: str | None = None
     manifest: dict | None = None
@@ -24,6 +25,7 @@ class BaseClassCreate(BaseModel):
 
 
 class BaseClassUpdate(BaseModel):
+    slug: KebabSlug | None = None
     name: str | None = None
     version: str | None = None
     manifest: dict | None = None
