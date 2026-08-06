@@ -342,6 +342,150 @@ class TestSelfConsistencyCheck:
         assert events[0].payload["entity_id"] == entity_id
 
 
+class TestSelfConsistencyCheckGeneInlineCapability:
+    """v4.9.3 Q4 — gene inline capabilities that reference market rows.
+
+    Design lock (§设计锁定): 基因的 required = 自身声明 ∪ 其 capabilities 的
+    required（运行时展开去重）— a gene's inline capability ``{name, type,
+    description}`` is a name-only reference to a ``capability_market`` row;
+    that row's ``required_knowledge`` must be resolved at spawn time. These
+    tests reproduce the live orbstack scenario (requirement declared only on
+    the market row, referenced by a gene's inline capability — no
+    ``entity_capabilities`` junction row) and pin that the warning fires.
+    """
+
+    @pytest.mark.asyncio
+    async def test_gene_inline_cap_market_required_warns_on_spawn(
+        self,
+        client: TestClient,
+        session: AsyncSession,
+        create_org_bundle,
+    ) -> None:
+        from app.core.org_contract import ensure_org_contract, grant_atoms
+
+        token, user_id = _register(client, "v493gene")
+        entity_id, workspace_id, org_id = await _spawn_stack(
+            client, session, token=token, user_id=user_id
+        )
+        # Grant the atom needed for gene create + entity gene-attach.
+        contract = await ensure_org_contract(
+            session, organization_id=org_id, user_id=user_id
+        )
+        await grant_atoms(session, contract.id, ["can_manage_ai_genes"])
+        await session.commit()
+
+        # 1. Market capability declares a required-knowledge slug.
+        cap = await upsert_capability(
+            session,
+            name=f"v493req-{uuid.uuid4().hex[:8]}",
+            required_knowledge=["secret-runbook"],
+        )
+        await session.commit()
+
+        # 2. Gene whose inline capability references the market row by name.
+        gene_resp = client.post(
+            "/api/v1/ai-genes",
+            headers={**_auth(token), "X-Organization-Id": org_id},
+            json={
+                "slug": f"v493gene-{uuid.uuid4().hex[:8]}",
+                "name": "V493 Gene",
+                "scope": "org",
+                "capabilities": [
+                    {
+                        "name": cap.name,
+                        "type": "skill",
+                        "description": "inline ref to market cap",
+                    }
+                ],
+            },
+        )
+        assert gene_resp.status_code == 201, gene_resp.text
+        gene_id = gene_resp.json()["id"]
+
+        # 3. Attach the gene to the entity (no entity_capabilities junction).
+        attach_resp = client.post(
+            f"/api/v1/entities/{entity_id}/ai-genes",
+            headers=_auth(token),
+            json={"ai_gene_id": gene_id},
+        )
+        assert attach_resp.status_code == 201, attach_resp.text
+
+        # 4. Spawn — the market row's required_knowledge must surface.
+        resp = _spawn(
+            client, token, entity_id=entity_id, workspace_id=workspace_id, org_id=org_id
+        )
+        assert resp.status_code == 201, resp.text  # non-blocking
+        assert resp.json()["knowledge_consistency_warning"] == {
+            "missing": ["secret-runbook"]
+        }
+        instance_id = resp.json()["id"]
+        events = await _events_for(
+            session, "instance.knowledge_inconsistent", instance_id
+        )
+        assert len(events) == 1
+        assert events[0].payload["missing"] == ["secret-runbook"]
+
+    @pytest.mark.asyncio
+    async def test_gene_inline_cap_market_required_covered_no_warning(
+        self,
+        client: TestClient,
+        session: AsyncSession,
+        create_org_bundle,
+    ) -> None:
+        from app.core.org_contract import ensure_org_contract, grant_atoms
+
+        token, user_id = _register(client, "v493genec")
+        entity_id, workspace_id, org_id = await _spawn_stack(
+            client,
+            session,
+            token=token,
+            user_id=user_id,
+            entity_has=["secret-runbook"],
+        )
+        contract = await ensure_org_contract(
+            session, organization_id=org_id, user_id=user_id
+        )
+        await grant_atoms(session, contract.id, ["can_manage_ai_genes"])
+        await session.commit()
+
+        cap = await upsert_capability(
+            session,
+            name=f"v493reqc-{uuid.uuid4().hex[:8]}",
+            required_knowledge=["secret-runbook"],
+        )
+        await session.commit()
+
+        gene_resp = client.post(
+            "/api/v1/ai-genes",
+            headers={**_auth(token), "X-Organization-Id": org_id},
+            json={
+                "slug": f"v493genec-{uuid.uuid4().hex[:8]}",
+                "name": "V493 Gene C",
+                "scope": "org",
+                "capabilities": [
+                    {"name": cap.name, "type": "skill", "description": "covered"}
+                ],
+            },
+        )
+        assert gene_resp.status_code == 201, gene_resp.text
+        attach_resp = client.post(
+            f"/api/v1/entities/{entity_id}/ai-genes",
+            headers=_auth(token),
+            json={"ai_gene_id": gene_resp.json()["id"]},
+        )
+        assert attach_resp.status_code == 201, attach_resp.text
+
+        resp = _spawn(
+            client, token, entity_id=entity_id, workspace_id=workspace_id, org_id=org_id
+        )
+        assert resp.status_code == 201, resp.text
+        assert resp.json().get("knowledge_consistency_warning") is None
+        instance_id = resp.json()["id"]
+        assert await _events_for(
+            session, "instance.knowledge_inconsistent", instance_id
+        ) == []
+
+
 class TestDeployEnvSplice:
     @pytest.mark.asyncio
     async def test_pod_env_includes_knowledge_vars(

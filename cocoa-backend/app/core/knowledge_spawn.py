@@ -51,8 +51,10 @@ async def compute_required_knowledge(db: AsyncSession, entity: Entity) -> set[st
     Sources (design lock §B1b): market capabilities attached via the
     ``entity_capabilities`` junction, plus every gene attached to the entity
     (explicit ``entity_ai_genes`` rows and genes inherited from the BaseClass)
-    — each gene contributes its manifest ``required_knowledge`` and any
-    inline-capability ``required_knowledge``.
+    — each gene contributes its manifest ``required_knowledge``, any
+    inline-capability ``required_knowledge``, and the ``required_knowledge``
+    of the ``capability_market`` rows its inline capabilities reference by
+    name (运行时展开, design lock §设计锁定).
     """
     from app.core.capabilities import load_entity_ai_gene_dicts
     from app.models.ai_gene import AiGene
@@ -85,6 +87,7 @@ async def compute_required_knowledge(db: AsyncSession, entity: Entity) -> set[st
                 AiGene.deleted_at.is_(None),
             )
         )
+        inline_names: set[str] = set()
         for gene in genes.scalars().all():
             manifest = gene.manifest or {}
             own = manifest.get("required_knowledge")
@@ -98,6 +101,18 @@ async def compute_required_knowledge(db: AsyncSession, entity: Entity) -> set[st
                     inline = cap.get("required_knowledge")
                     if isinstance(inline, list):
                         required.update(str(item) for item in inline)
+                    name = cap.get("name")
+                    if isinstance(name, str) and name:
+                        inline_names.add(name)
+        if inline_names:
+            market_rows = await db.execute(
+                select(CapabilityMarketEntry).where(
+                    CapabilityMarketEntry.name.in_(inline_names),
+                    CapabilityMarketEntry.deleted_at.is_(None),
+                )
+            )
+            for market in market_rows.scalars().all():
+                required.update(market.required_knowledge or [])
     return required
 
 
