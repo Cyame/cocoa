@@ -55,6 +55,8 @@ class Entity(BaseModel, Base):
     display_color: Mapped[str | None] = mapped_column(String(7), nullable=True)
     system_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
     config_override: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # v4.9.3 knowledge dual-dimension: has knowledge slugs (real DB assets).
+    has_knowledge: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
     migration_hash: Mapped[str | None] = mapped_column(
         String(64), nullable=True, default=None
     )

@@ -1,7 +1,13 @@
 """Tests for DistillationEngine Protocol and AggregatingDistiller heuristic.
 
-Covers the 8 required QA scenarios from the P10 plan plus additional
-edge cases (soft-delete exclusion, kind filter, commands cap, etc.).
+Covers the QA scenarios for the v4.9.3 distill semantics — the engine now
+produces **capability candidates** (memory → capability_market) plus a gene
+suggestion, not a manifest preview:
+
+- each kebab-case lesson/decision key → one skill candidate (name = key,
+  description = truncated content, required_knowledge = key prefix slug)
+- key-prefix frequency across non-notepad entries → gene_suggestion
+- notepad mirror keys never surface as candidates
 """
 
 from __future__ import annotations
@@ -13,13 +19,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.distillation import (
     AggregatingDistiller,
+    CapabilityCandidate,
     DistillationEngine,
     DistillationError,
     DistillResult,
 )
-from app.models.base_class import BaseClass
 from app.models.memory import Memory, MemoryKind
-from app.schemas.learning import AggregatedMemoryCount, DistillRequest, SkillManifestPreview
+from app.schemas.learning import AggregatedMemoryCount, DistillRequest
 
 # ---------------------------------------------------------------------------
 # Protocol / Error / Dataclass structural tests
@@ -58,21 +64,24 @@ class TestDistillationError:
 
 
 class TestDistillResult:
-    """Verify DistillResult dataclass."""
+    """Verify DistillResult dataclass carries capability candidates."""
 
     def test_fields_present(self) -> None:
-        """DistillResult must have all 5 fields."""
-        preview = SkillManifestPreview()
+        """DistillResult must expose candidates + gene suggestion."""
+        candidate = CapabilityCandidate(
+            name="debug-memory-leak",
+            required_knowledge=["debug"],
+        )
         counts = AggregatedMemoryCount()
         dr = DistillResult(
-            new_preset_slug="slug",
-            manifest_preview=preview,
+            capability_candidates=[candidate],
+            gene_suggestion="debug",
             aggregated_memory=counts,
             source_entity_id="eid",
             source_preset_slug=None,
         )
-        assert dr.new_preset_slug == "slug"
-        assert dr.manifest_preview is preview
+        assert dr.capability_candidates == [candidate]
+        assert dr.gene_suggestion == "debug"
         assert dr.aggregated_memory is counts
         assert dr.source_entity_id == "eid"
         assert dr.source_preset_slug is None
@@ -180,10 +189,10 @@ class TestAggregatingDistiller:
         assert result.aggregated_memory.decision == 0
         assert result.aggregated_memory.total == 2
 
-    async def test_notepad_keys_do_not_pollute_distilled_skills(
+    async def test_notepad_keys_do_not_pollute_candidates(
         self, session: AsyncSession, entity_factory
     ) -> None:
-        """v4.6: H4 notepad mirror keys must not surface as distilled skills."""
+        """v4.6: notepad mirror keys must not surface as candidates."""
         emp = await entity_factory()
         await self._add_entries(
             session,
@@ -197,35 +206,39 @@ class TestAggregatingDistiller:
         result = await distiller.distill(emp.id, request=request, session=session)
 
         assert result.aggregated_memory.notepad == 1
-        assert "notepad/p14a" not in result.manifest_preview.skills
-        assert "debug" in result.manifest_preview.skills
+        names = {c.name for c in result.capability_candidates}
+        assert not any("notepad/p14a" in n for n in names)
+        assert "debug-concurrency" in names
+        # notepad entries do not feed the gene suggestion either
+        assert result.gene_suggestion == "debug"
 
-    async def test_lesson_keys_extract_kebab_case_to_commands(
+    async def test_lesson_keys_extract_kebab_case_to_candidates(
         self, session: AsyncSession, entity_factory
     ) -> None:
-        """Kebab-case keys from lesson/decision entries become commands."""
+        """Kebab-case keys from lesson/decision entries become candidates."""
         emp = await entity_factory()
         await self._add_entries(
             session,
             emp.id,
             ("lesson", "debug-concurrency", "Debug concurrency issues"),
             ("decision", "rollback-migration", "Decision to rollback"),
-            ("experience", "something-else", "Not a command source"),
+            ("experience", "something-else", "Not a candidate source"),
         )
 
         distiller = AggregatingDistiller()
         request = DistillRequest(target_skill_slug="test-skill")
         result = await distiller.distill(emp.id, request=request, session=session)
 
-        assert "debug-concurrency" in result.manifest_preview.commands
-        assert "rollback-migration" in result.manifest_preview.commands
-        # experience entries must NOT contribute to commands
-        assert "something-else" not in result.manifest_preview.commands
+        names = {c.name for c in result.capability_candidates}
+        assert "debug-concurrency" in names
+        assert "rollback-migration" in names
+        # experience entries must NOT contribute candidates
+        assert "something-else" not in names
 
-    async def test_commands_max_ten(
+    async def test_candidates_max_ten(
         self, session: AsyncSession, entity_factory
     ) -> None:
-        """Commands list must not exceed 10 entries."""
+        """Candidates list must not exceed 10 entries."""
         emp = await entity_factory()
         specs: list[tuple[str, str | None, str | None]] = []
         for i in range(15):
@@ -236,12 +249,12 @@ class TestAggregatingDistiller:
         request = DistillRequest(target_skill_slug="test-skill")
         result = await distiller.distill(emp.id, request=request, session=session)
 
-        assert len(result.manifest_preview.commands) <= 10
+        assert len(result.capability_candidates) <= 10
 
-    async def test_non_kebab_keys_excluded_from_commands(
+    async def test_non_kebab_keys_excluded_from_candidates(
         self, session: AsyncSession, entity_factory
     ) -> None:
-        """Keys that don't match the kebab-case pattern must not appear in commands."""
+        """Keys that don't match the kebab-case pattern must not become candidates."""
         emp = await entity_factory()
         await self._add_entries(
             session,
@@ -255,20 +268,21 @@ class TestAggregatingDistiller:
         request = DistillRequest(target_skill_slug="test-skill")
         result = await distiller.distill(emp.id, request=request, session=session)
 
-        assert "Valid-Key" not in result.manifest_preview.commands
-        assert "1-starting-digit" not in result.manifest_preview.commands
+        names = {c.name for c in result.capability_candidates}
+        assert "Valid-Key" not in names
+        assert "1-starting-digit" not in names
 
     async def test_longest_lesson_content_truncated_to_200_chars(
         self, session: AsyncSession, entity_factory
     ) -> None:
-        """Longest lesson content (>= 50 chars) truncated to 200 chars + '...'."""
+        """Candidate description (≥ 50 chars) truncated to 200 chars + '...'."""
         emp = await entity_factory()
         long_content = "x" * 210  # 210 chars — triggers truncation
         await self._add_entries(
             session,
             emp.id,
             ("lesson", "long-lesson", long_content),
-            ("lesson", "short-lesson", "Short content"),       # shorter, should be ignored
+            ("lesson", "short-lesson", "Short content"),       # shorter, still a candidate
             ("experience", "exp-1", "filler"),                 # ensures non-empty
         )
 
@@ -276,15 +290,16 @@ class TestAggregatingDistiller:
         request = DistillRequest(target_skill_slug="test-skill")
         result = await distiller.distill(emp.id, request=request, session=session)
 
+        long = next(c for c in result.capability_candidates if c.name == "long-lesson")
         # 200 chars + "..." = 203
-        assert len(result.manifest_preview.prompt) == 203
-        assert result.manifest_preview.prompt.endswith("...")
-        assert result.manifest_preview.prompt.startswith("x" * 200)
+        assert len(long.description or "") == 203
+        assert (long.description or "").endswith("...")
+        assert (long.description or "").startswith("x" * 200)
 
-    async def test_lesson_content_under_50_chars_falls_back_to_default(
+    async def test_short_lesson_content_passes_through_untouched(
         self, session: AsyncSession, entity_factory
     ) -> None:
-        """When no lesson content >= 50 chars, prompt defaults to 'TODO P8'."""
+        """Short lesson content is used verbatim as the candidate description."""
         emp = await entity_factory()
         await self._add_entries(
             session,
@@ -297,12 +312,13 @@ class TestAggregatingDistiller:
         request = DistillRequest(target_skill_slug="test-skill")
         result = await distiller.distill(emp.id, request=request, session=session)
 
-        assert result.manifest_preview.prompt == "TODO P8"
+        short = next(c for c in result.capability_candidates if c.name == "short")
+        assert short.description == "Too short"
 
-    async def test_key_prefix_deduplication_to_skills(
+    async def test_gene_suggestion_from_key_prefix_frequency(
         self, session: AsyncSession, entity_factory
     ) -> None:
-        """First segment of each key (split on '-') deduplicated into skills."""
+        """Most frequent key prefix across entries becomes the gene suggestion."""
         emp = await entity_factory()
         await self._add_entries(
             session,
@@ -317,72 +333,44 @@ class TestAggregatingDistiller:
         request = DistillRequest(target_skill_slug="test-skill")
         result = await distiller.distill(emp.id, request=request, session=session)
 
-        skills = result.manifest_preview.skills
-        assert "debug" in skills
-        assert "deploy" in skills
-        assert "network" in skills
-        # "debug" must appear only once
-        assert skills.count("debug") == 1
+        assert result.gene_suggestion == "debug"
+        # each candidate declares its key prefix as required knowledge
+        by_name = {c.name: c for c in result.capability_candidates}
+        assert by_name["debug-memory-leak"].required_knowledge == ["debug"]
+        assert by_name["deploy-rollback"].required_knowledge == ["deploy"]
 
-    async def test_source_preset_none_model_defaults_to_tbd(
+    async def test_source_preset_slug_echoed(
         self, session: AsyncSession, entity_factory
     ) -> None:
-        """When source_preset_slug is None, model defaults to 'tbd'."""
+        """source_preset_slug passes through to the result."""
         emp = await entity_factory()
         await self._add_entries(session, emp.id, ("experience", "test-key", "Test content"))
-
-        distiller = AggregatingDistiller()
-        request = DistillRequest(target_skill_slug="test-skill", source_preset_slug=None)
-        result = await distiller.distill(emp.id, request=request, session=session)
-
-        assert result.manifest_preview.model == "tbd"
-
-    async def test_source_preset_exists_model_inherits(
-        self, session: AsyncSession, entity_factory
-    ) -> None:
-        """When source preset exists, model inherits from manifest['model']."""
-        emp = await entity_factory()
-        session.add(BaseClass(
-            slug="source-preset",
-            name="Source Preset",
-            manifest={"model": "gpt-4o", "prompt": "You are helpful."},
-        ))
-        await self._add_entries(session, emp.id, ("experience", "test-key", "Test content"))
-        await session.flush()
 
         distiller = AggregatingDistiller()
         request = DistillRequest(
-            target_skill_slug="test-skill",
-            source_preset_slug="source-preset",
+            target_skill_slug="test-skill", source_preset_slug="mi-shi",
         )
         result = await distiller.distill(emp.id, request=request, session=session)
 
-        assert result.manifest_preview.model == "gpt-4o"
+        assert result.source_preset_slug == "mi-shi"
+        assert result.source_entity_id == emp.id
 
-    async def test_slug_generated_correctly(
+    async def test_no_kebab_keys_yields_no_candidates(
         self, session: AsyncSession, entity_factory
     ) -> None:
-        """New preset slug follows {base}-skill-{target_skill_slug} pattern."""
+        """Entries without kebab-case lesson/decision keys → no candidates
+        and no gene suggestion (nothing was distilled)."""
         emp = await entity_factory()
-        await self._add_entries(session, emp.id, ("experience", "test-key", "Test content"))
+        await self._add_entries(
+            session, emp.id, ("experience", "test-key", "Test content"),
+        )
 
         distiller = AggregatingDistiller()
-
-        # Without source_preset_slug → base = "base"
-        request = DistillRequest(target_skill_slug="distributed-debugging")
+        request = DistillRequest(target_skill_slug="test-skill")
         result = await distiller.distill(emp.id, request=request, session=session)
-        assert result.new_preset_slug == "base-skill-distributed-debugging"
-        assert result.source_preset_slug is None
 
-        # With source_preset_slug
-        request2 = DistillRequest(
-            target_skill_slug="distributed-debugging",
-            source_preset_slug="mi-shi",
-        )
-        result2 = await distiller.distill(emp.id, request=request2, session=session)
-        assert result2.new_preset_slug == "mi-shi-skill-distributed-debugging"
-        assert result2.source_preset_slug == "mi-shi"
-        assert result2.source_entity_id == emp.id
+        assert result.capability_candidates == []
+        assert result.gene_suggestion is None
 
     async def test_soft_deleted_entries_excluded(
         self, session: AsyncSession, entity_factory
@@ -403,19 +391,6 @@ class TestAggregatingDistiller:
         assert result.aggregated_memory.experience == 1
         assert result.aggregated_memory.lesson == 0
 
-    async def test_tools_always_empty(
-        self, session: AsyncSession, entity_factory
-    ) -> None:
-        """Tools list must always be empty (cannot infer from memory)."""
-        emp = await entity_factory()
-        await self._add_entries(session, emp.id, ("experience", "test-key", "Test"))
-
-        distiller = AggregatingDistiller()
-        request = DistillRequest(target_skill_slug="test-skill")
-        result = await distiller.distill(emp.id, request=request, session=session)
-
-        assert result.manifest_preview.tools == []
-
     async def test_lesson_content_exactly_200_chars_not_truncated(
         self, session: AsyncSession, entity_factory
     ) -> None:
@@ -433,9 +408,10 @@ class TestAggregatingDistiller:
         request = DistillRequest(target_skill_slug="test-skill")
         result = await distiller.distill(emp.id, request=request, session=session)
 
+        exact = next(c for c in result.capability_candidates if c.name == "exact-lesson")
         # 200 chars exactly — no "..."
-        assert len(result.manifest_preview.prompt) == 200
-        assert not result.manifest_preview.prompt.endswith("...")
+        assert len(exact.description or "") == 200
+        assert not (exact.description or "").endswith("...")
 
     async def test_distill_result_fields_populated(
         self, session: AsyncSession, entity_factory
@@ -457,12 +433,13 @@ class TestAggregatingDistiller:
         )
         result = await distiller.distill(emp.id, request=request, session=session)
 
-        assert result.new_preset_slug == "mi-shi-skill-my-skill"
-        assert isinstance(result.manifest_preview, SkillManifestPreview)
-        assert result.manifest_preview.model == "tbd"  # no source preset exists
-        assert len(result.manifest_preview.prompt) > 0
-        assert "my-command" in result.manifest_preview.commands
-        assert "my" in result.manifest_preview.skills
+        assert isinstance(result, DistillResult)
+        assert result.capability_candidates
+        assert result.gene_suggestion == "my"  # "my" outranks "arch" / "exp"
+        assert all(isinstance(c, CapabilityCandidate) for c in result.capability_candidates)
+        names = {c.name for c in result.capability_candidates}
+        assert "my-command" in names
+        assert "arch-choice" in names
         assert result.aggregated_memory.total == 3
         assert result.source_entity_id == emp.id
         assert result.source_preset_slug == "mi-shi"

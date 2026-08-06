@@ -78,6 +78,7 @@ async def _entity_out(db: DB, entity: Entity) -> EntityOut:
         display_color=entity.display_color,
         system_prompt=entity.system_prompt,
         config_override=entity.config_override,
+        has_knowledge=entity.has_knowledge,
         migration_hash=entity.migration_hash,
         capabilities=caps,
         ai_genes=genes,
@@ -206,6 +207,7 @@ async def create_entity(
         display_color=body.display_color,
         system_prompt=body.system_prompt,
         config_override=_strip_config_override_caps(body.config_override),
+        has_knowledge=body.has_knowledge,
         is_cerebellum=body.is_cerebellum,
     )
     db.add(entity)

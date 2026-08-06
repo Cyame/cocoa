@@ -26,6 +26,7 @@ export default function IdeShell({
   const { t } = useTranslation();
   const token = useSessionStore((state) => state.token);
   const user = useSessionStore((state) => state.user);
+  const orgId = useSessionStore((state) => state.currentOrgId);
   const clearToken = useSessionStore((state) => state.clearToken);
 
   if (token === null) {
@@ -38,7 +39,10 @@ export default function IdeShell({
     { href: '/namespaces?tab=contracts', Icon: Users, label: t('ide.sidebar.contracts') },
     { href: '/namespaces?tab=entities', Icon: Layers, label: t('ide.sidebar.entities') },
     {
-      href: '/namespaces?tab=capability-market',
+      href:
+        orgId !== null
+          ? `/orgs/${encodeURIComponent(orgId)}/capabilities`
+          : '/namespaces?tab=capability-market',
       Icon: Sparkles,
       label: t('ide.sidebar.capabilityMarket'),
     },

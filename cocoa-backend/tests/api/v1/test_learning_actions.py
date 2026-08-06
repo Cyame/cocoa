@@ -616,6 +616,9 @@ class TestTransmute:
         assert body["new_base_class_name"] == "Transmuted 密士"
         assert body["source_entity_id"] == entity_id
         assert "manifest_preview" in body
+        # v4.9.3: response exposes the real gene refs + has_knowledge.
+        assert isinstance(body["default_gene_refs"], list)
+        assert isinstance(body["has_knowledge"], list)
 
         bc_result = await session.execute(
             select(BaseClass).where(
@@ -627,6 +630,10 @@ class TestTransmute:
         assert bc is not None
         assert isinstance(bc.manifest, dict)
         assert "default_capabilities" in bc.manifest
+        # v4.9.3: manifest carries has_knowledge and the real gene refs.
+        assert "has_knowledge" in bc.manifest
+        assert "default_gene_refs" in bc.manifest
+        assert bc.has_knowledge == bc.manifest["has_knowledge"]
 
     async def test_transmute_does_not_mutate_entity(
         self, client: TestClient, auth_token: str, auth_user_id: str,

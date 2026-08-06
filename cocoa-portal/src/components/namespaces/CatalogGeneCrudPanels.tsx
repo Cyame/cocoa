@@ -1,5 +1,5 @@
 import type { TFunction } from 'i18next';
-import { LoaderCircle, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, LoaderCircle, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ApiError } from '@/lib/api';
 import {
@@ -12,12 +12,13 @@ import {
 } from '@/lib/api/aiGenes';
 import {
   type CapabilityMarketEntry,
+  type CapabilityType,
   createCapability,
   deleteCapability,
   listCapabilityMarket,
   updateCapability,
-  type CapabilityType,
 } from '@/lib/api/capabilityMarket';
+import { fetchKnowledgeEntries, type KnowledgeEntry } from '@/lib/api/knowledge';
 import {
   type CatalogUserGene,
   createUserGene,
@@ -31,6 +32,143 @@ type TFn = TFunction;
 
 const CAPABILITY_TYPES: readonly CapabilityType[] = ['skill', 'tool', 'mcp', 'lsp', 'command'];
 const SCOPES = ['org', 'namespace'] as const;
+
+/** Structured per-type definition fields (B1c) — the builder replaces raw JSON entry for new capabilities. */
+type StructuredForm = {
+  readonly skillName: string;
+  readonly skillDescription: string;
+  readonly skillBody: string;
+  readonly mcpCommand: string;
+  readonly mcpArgsText: string;
+  readonly mcpEnvText: string;
+  readonly mcpTransport: string;
+  readonly paramsText: string;
+};
+
+const emptyStructured = (): StructuredForm => ({
+  skillName: '',
+  skillDescription: '',
+  skillBody: '',
+  mcpCommand: '',
+  mcpArgsText: '',
+  mcpEnvText: '',
+  mcpTransport: 'stdio',
+  paramsText: '',
+});
+
+function splitArgs(text: string): readonly string[] {
+  return text
+    .split(/\s+/)
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+}
+
+function parseEnvText(text: string): Record<string, string> | null {
+  const trimmed = text.trim();
+  if (trimmed === '') return null;
+  const out: Record<string, string> = {};
+  for (const line of trimmed.split(/\n/)) {
+    const eq = line.indexOf('=');
+    if (eq <= 0) continue;
+    const key = line.slice(0, eq).trim();
+    const value = line.slice(eq + 1).trim();
+    if (key.length > 0) out[key] = value;
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
+
+function parseParamsText(text: string): readonly Record<string, unknown>[] | null {
+  const trimmed = text.trim();
+  if (trimmed === '') return null;
+  try {
+    const parsed: unknown = JSON.parse(trimmed);
+    if (Array.isArray(parsed)) return parsed as readonly Record<string, unknown>[];
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** Build a config_template object from the structured fields of a given type (B1c). */
+export function buildConfigTemplate(
+  type: CapabilityType,
+  structured: StructuredForm,
+): Record<string, unknown> | null {
+  if (type === 'skill') {
+    const out: Record<string, unknown> = {};
+    if (structured.skillName.trim() !== '') out.name = structured.skillName.trim();
+    if (structured.skillDescription.trim() !== '')
+      out.description = structured.skillDescription.trim();
+    if (structured.skillBody.trim() !== '') out.body = structured.skillBody.trim();
+    return Object.keys(out).length > 0 ? out : null;
+  }
+  if (type === 'mcp') {
+    const args = splitArgs(structured.mcpArgsText);
+    const env = parseEnvText(structured.mcpEnvText);
+    if (structured.mcpCommand.trim() === '' && args.length === 0 && env === null) return null;
+    const out: Record<string, unknown> = {};
+    if (structured.mcpCommand.trim() !== '') out.command = structured.mcpCommand.trim();
+    if (args.length > 0) out.args = args;
+    if (env !== null) out.env = env;
+    if (structured.mcpTransport.trim() !== '') out.transport = structured.mcpTransport.trim();
+    return out;
+  }
+  const params = parseParamsText(structured.paramsText);
+  if (params === null) return null;
+  return { parameters: params };
+}
+
+/** Seed structured fields from an existing config_template (reverse of buildConfigTemplate). */
+function structuredFromTemplate(
+  type: CapabilityType,
+  template: Record<string, unknown> | null,
+): StructuredForm {
+  const base = emptyStructured();
+  if (template === null) return base;
+  const str = (key: string): string => {
+    const v = template[key];
+    return typeof v === 'string' ? v : '';
+  };
+  if (type === 'skill') {
+    return {
+      ...base,
+      skillName: str('name'),
+      skillDescription: str('description'),
+      skillBody: str('body'),
+    };
+  }
+  if (type === 'mcp') {
+    const args = Array.isArray(template.args)
+      ? (template.args as unknown[]).filter((a): a is string => typeof a === 'string').join(' ')
+      : '';
+    const env = template.env;
+    const envText =
+      env !== null && typeof env === 'object' && !Array.isArray(env)
+        ? Object.entries(env as Record<string, unknown>)
+            .map(([k, v]) => `${k}=${typeof v === 'string' ? v : String(v)}`)
+            .join('\n')
+        : '';
+    return {
+      ...base,
+      mcpCommand: str('command'),
+      mcpArgsText: args,
+      mcpEnvText: envText,
+      mcpTransport: str('transport') || 'stdio',
+    };
+  }
+  const params = Array.isArray(template.parameters)
+    ? JSON.stringify(template.parameters, null, 2)
+    : '';
+  return { ...base, paramsText: params };
+}
+
+/** Read the inline `required_knowledge` slug array of a manifest object. */
+function manifestRequiredKnowledge(manifest: Record<string, unknown> | null): readonly string[] {
+  if (manifest === null) return [];
+  const raw: unknown = manifest.required_knowledge;
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((item): item is string => typeof item === 'string');
+}
 
 function ScopeBadge({ scope, t }: { readonly scope: string; readonly t: TFn }) {
   return (
@@ -59,6 +197,8 @@ type CatalogFormState = {
   readonly jsonText: string;
   readonly checkedCapabilities: readonly string[];
   readonly removedCapabilities: readonly string[];
+  readonly requiredKnowledge: readonly string[];
+  readonly structured: StructuredForm;
 };
 
 const emptyForm = (): CatalogFormState => ({
@@ -72,6 +212,8 @@ const emptyForm = (): CatalogFormState => ({
   jsonText: '',
   checkedCapabilities: [],
   removedCapabilities: [],
+  requiredKnowledge: [],
+  structured: emptyStructured(),
 });
 
 type CatalogJsonField = 'manifest' | 'configTemplate';
@@ -183,6 +325,8 @@ function CatalogFormModal({
   jsonField,
   showCapabilities,
   capabilityOptions,
+  showRequiredKnowledge,
+  knowledgeOptions,
   initial,
   busy,
   errorMessage,
@@ -200,6 +344,8 @@ function CatalogFormModal({
   readonly jsonField: CatalogJsonField | null;
   readonly showCapabilities: boolean;
   readonly capabilityOptions: readonly CapabilityInline[];
+  readonly showRequiredKnowledge: boolean;
+  readonly knowledgeOptions: readonly KnowledgeEntry[];
   readonly initial: CatalogFormState;
   readonly busy: boolean;
   readonly errorMessage: string | null;
@@ -223,6 +369,69 @@ function CatalogFormModal({
     jsonField === 'manifest'
       ? 'namespaces.genesManifestPlaceholder'
       : 'namespaces.capabilityConfigTemplatePlaceholder';
+
+  const structuredMode = jsonField === 'configTemplate';
+
+  const applyStructured = (next: StructuredForm) => {
+    const built = buildConfigTemplate(values.type, next);
+    setValues((v) => ({
+      ...v,
+      structured: next,
+      jsonText: built !== null ? JSON.stringify(built, null, 2) : '',
+    }));
+  };
+
+  const setStructuredField = (key: keyof StructuredForm, value: string) => {
+    applyStructured({ ...values.structured, [key]: value });
+  };
+
+  const handleRawJsonChange = (text: string) => {
+    setValues((v) => {
+      const parsed = parseJsonObjectInput(text);
+      return {
+        ...v,
+        jsonText: text,
+        structured: parsed.ok ? structuredFromTemplate(v.type, parsed.value) : v.structured,
+      };
+    });
+  };
+
+  const handleTypeChange = (nextType: CapabilityType) => {
+    setValues((v) => {
+      const parsed = parseJsonObjectInput(v.jsonText);
+      return {
+        ...v,
+        type: nextType,
+        structured: structuredFromTemplate(nextType, parsed.ok ? parsed.value : null),
+      };
+    });
+  };
+
+  const toggleKnowledge = (slug: string) => {
+    setValues((v) => {
+      const has = v.requiredKnowledge.includes(slug);
+      return {
+        ...v,
+        requiredKnowledge: has
+          ? v.requiredKnowledge.filter((s) => s !== slug)
+          : [...v.requiredKnowledge, slug],
+      };
+    });
+  };
+
+  const moveKnowledge = (slug: string, direction: -1 | 1) => {
+    setValues((v) => {
+      const idx = v.requiredKnowledge.indexOf(slug);
+      const target = idx + direction;
+      if (idx < 0 || target < 0 || target >= v.requiredKnowledge.length) return v;
+      const next = [...v.requiredKnowledge];
+      const first = next[idx];
+      const second = next[target];
+      next[idx] = second;
+      next[target] = first;
+      return { ...v, requiredKnowledge: next };
+    });
+  };
 
   const dedupedOptions = useMemo(() => {
     const seen = new Set<string>();
@@ -276,6 +485,14 @@ function CatalogFormModal({
   };
 
   const handleSubmit = () => {
+    if (
+      structuredMode &&
+      values.structured.paramsText.trim() !== '' &&
+      parseParamsText(values.structured.paramsText) === null
+    ) {
+      setValidationError(t('namespaces.capabilityParamsInvalid'));
+      return;
+    }
     if (jsonField !== null) {
       const parsed = parseJsonObjectInput(values.jsonText);
       if (!parsed.ok) {
@@ -342,9 +559,7 @@ function CatalogFormModal({
               <span className="mb-1 block font-medium text-slate-700">{t('namespaces.type')}</span>
               <select
                 value={values.type}
-                onChange={(e) =>
-                  setValues((v) => ({ ...v, type: e.target.value as CapabilityType }))
-                }
+                onChange={(e) => handleTypeChange(e.target.value as CapabilityType)}
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
               >
                 {CAPABILITY_TYPES.map((capType) => (
@@ -420,18 +635,135 @@ function CatalogFormModal({
               />
             </label>
           ) : null}
+          {structuredMode ? (
+            <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                {t('namespaces.capabilityStructuredLabel')}
+              </p>
+              {values.type === 'skill' ? (
+                <>
+                  <label className="block text-sm">
+                    <span className="mb-1 block font-medium text-slate-700">
+                      {t('namespaces.capabilitySkillNameLabel')}
+                    </span>
+                    <input
+                      value={values.structured.skillName}
+                      onChange={(e) => setStructuredField('skillName', e.target.value)}
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                    />
+                  </label>
+                  <label className="block text-sm">
+                    <span className="mb-1 block font-medium text-slate-700">
+                      {t('namespaces.capabilitySkillDescriptionLabel')}
+                    </span>
+                    <input
+                      value={values.structured.skillDescription}
+                      onChange={(e) => setStructuredField('skillDescription', e.target.value)}
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                    />
+                  </label>
+                  <label className="block text-sm">
+                    <span className="mb-1 block font-medium text-slate-700">
+                      {t('namespaces.capabilitySkillBodyLabel')}
+                    </span>
+                    <textarea
+                      value={values.structured.skillBody}
+                      onChange={(e) => setStructuredField('skillBody', e.target.value)}
+                      rows={5}
+                      spellCheck={false}
+                      placeholder={t('namespaces.capabilitySkillBodyPlaceholder')}
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 font-mono text-xs outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                    />
+                  </label>
+                </>
+              ) : values.type === 'mcp' ? (
+                <>
+                  <label className="block text-sm">
+                    <span className="mb-1 block font-medium text-slate-700">
+                      {t('namespaces.capabilityMcpCommandLabel')}
+                    </span>
+                    <input
+                      value={values.structured.mcpCommand}
+                      onChange={(e) => setStructuredField('mcpCommand', e.target.value)}
+                      placeholder="npx"
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 font-mono text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                    />
+                  </label>
+                  <label className="block text-sm">
+                    <span className="mb-1 block font-medium text-slate-700">
+                      {t('namespaces.capabilityMcpArgsLabel')}
+                    </span>
+                    <input
+                      value={values.structured.mcpArgsText}
+                      onChange={(e) => setStructuredField('mcpArgsText', e.target.value)}
+                      placeholder="-y @modelcontextprotocol/server-foo"
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 font-mono text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                    />
+                  </label>
+                  <label className="block text-sm">
+                    <span className="mb-1 block font-medium text-slate-700">
+                      {t('namespaces.capabilityMcpEnvLabel')}
+                    </span>
+                    <textarea
+                      value={values.structured.mcpEnvText}
+                      onChange={(e) => setStructuredField('mcpEnvText', e.target.value)}
+                      rows={3}
+                      spellCheck={false}
+                      placeholder="API_KEY=xxx&#10;BASE_URL=https://example.com"
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 font-mono text-xs outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                    />
+                  </label>
+                  <label className="block text-sm">
+                    <span className="mb-1 block font-medium text-slate-700">
+                      {t('namespaces.capabilityMcpTransportLabel')}
+                    </span>
+                    <select
+                      value={values.structured.mcpTransport}
+                      onChange={(e) => setStructuredField('mcpTransport', e.target.value)}
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                    >
+                      <option value="stdio">stdio</option>
+                      <option value="sse">sse</option>
+                      <option value="http">http</option>
+                    </select>
+                  </label>
+                </>
+              ) : (
+                <label className="block text-sm">
+                  <span className="mb-1 block font-medium text-slate-700">
+                    {t('namespaces.capabilityParamsLabel')}
+                  </span>
+                  <textarea
+                    value={values.structured.paramsText}
+                    onChange={(e) => setStructuredField('paramsText', e.target.value)}
+                    rows={5}
+                    spellCheck={false}
+                    placeholder={t('namespaces.capabilityParamsPlaceholder')}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 font-mono text-xs outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                  />
+                </label>
+              )}
+            </div>
+          ) : null}
           {jsonField !== null ? (
-            <label className="block text-sm">
-              <span className="mb-1 block font-medium text-slate-700">{t(jsonLabelKey)}</span>
-              <textarea
-                value={values.jsonText}
-                onChange={(e) => setValues((v) => ({ ...v, jsonText: e.target.value }))}
-                placeholder={t(jsonPlaceholderKey)}
-                rows={4}
-                spellCheck={false}
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 font-mono text-xs outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-              />
-            </label>
+            <div className="space-y-1">
+              <label className="block text-sm">
+                <span className="mb-1 block font-medium text-slate-700">{t(jsonLabelKey)}</span>
+                <textarea
+                  value={values.jsonText}
+                  onChange={(e) => handleRawJsonChange(e.target.value)}
+                  placeholder={t(jsonPlaceholderKey)}
+                  rows={4}
+                  spellCheck={false}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 font-mono text-xs outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                />
+              </label>
+              {structuredMode ? (
+                <p className="text-xs text-slate-500">
+                  {t('namespaces.capabilityJsonAdvancedHint')}
+                </p>
+              ) : null}
+            </div>
           ) : null}
           {showCapabilities ? (
             <fieldset className="block text-sm" data-testid="gene-capabilities-picker">
@@ -500,6 +832,84 @@ function CatalogFormModal({
               </div>
             </fieldset>
           ) : null}
+          {showRequiredKnowledge ? (
+            <fieldset className="block text-sm" data-testid="required-knowledge-picker">
+              <legend className="mb-1 font-medium text-slate-700">
+                {t('namespaces.requiredKnowledgeLabel')}
+              </legend>
+              <p className="mb-2 text-xs text-slate-500">{t('namespaces.requiredKnowledgeHint')}</p>
+              {knowledgeOptions.length === 0 ? (
+                <p className="rounded-lg border border-dashed border-slate-200 px-3 py-2 text-xs text-slate-500">
+                  {t('namespaces.requiredKnowledgeEmpty')}
+                </p>
+              ) : (
+                <ul className="max-h-44 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2">
+                  {knowledgeOptions.map((entry) => {
+                    const checked = values.requiredKnowledge.includes(entry.key);
+                    return (
+                      <li key={entry.key}>
+                        <label className="flex cursor-pointer items-start gap-2 rounded-md px-2 py-1.5 hover:bg-slate-50">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleKnowledge(entry.key)}
+                            className="mt-0.5 rounded border-slate-300"
+                          />
+                          <span className="min-w-0">
+                            <span className="block truncate font-mono text-slate-800">
+                              {entry.key}
+                            </span>
+                            <span className="block truncate text-xs text-slate-500">
+                              {entry.title}
+                            </span>
+                          </span>
+                        </label>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              {values.requiredKnowledge.length > 0 ? (
+                <div
+                  className="mt-2 rounded-lg bg-slate-50 px-3 py-2"
+                  data-testid="required-knowledge-summary"
+                >
+                  <ul className="space-y-1">
+                    {values.requiredKnowledge.map((slug, index) => (
+                      <li
+                        key={slug}
+                        className="flex items-center justify-between gap-2 rounded-md bg-white px-2 py-1 font-mono text-xs text-slate-700 ring-1 ring-slate-200"
+                      >
+                        <span className="truncate">
+                          {index + 1}. {slug}
+                        </span>
+                        <span className="flex shrink-0 items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => moveKnowledge(slug, -1)}
+                            disabled={index === 0}
+                            aria-label={t('namespaces.moveUp')}
+                            className="rounded p-0.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-30"
+                          >
+                            <ArrowUp className="size-3.5" aria-hidden="true" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => moveKnowledge(slug, 1)}
+                            disabled={index === values.requiredKnowledge.length - 1}
+                            aria-label={t('namespaces.moveDown')}
+                            className="rounded p-0.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-30"
+                          >
+                            <ArrowDown className="size-3.5" aria-hidden="true" />
+                          </button>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </fieldset>
+          ) : null}
         </div>
         {validationError ? (
           <p role="alert" className="mt-3 text-sm text-red-600">
@@ -536,12 +946,11 @@ function CatalogFormModal({
 export function DeepSeaGenesPanel({ t }: { readonly t: TFn }) {
   const [genes, setGenes] = useState<readonly AiGeneCatalogItem[]>([]);
   const [capabilityOptions, setCapabilityOptions] = useState<readonly CapabilityInline[]>([]);
+  const [knowledgeOptions, setKnowledgeOptions] = useState<readonly KnowledgeEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [modal, setModal] = useState<
-    | { mode: 'create' }
-    | { mode: 'edit'; gene: AiGeneCatalogItem }
-    | null
+    { mode: 'create' } | { mode: 'edit'; gene: AiGeneCatalogItem } | null
   >(null);
   const [formBusy, setFormBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -584,6 +993,20 @@ export function DeepSeaGenesPanel({ t }: { readonly t: TFn }) {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    fetchKnowledgeEntries({ limit: 200 })
+      .then((page) => {
+        if (!cancelled) setKnowledgeOptions(page.items);
+      })
+      .catch(() => {
+        if (!cancelled) setKnowledgeOptions([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const initialForm = useMemo((): CatalogFormState => {
     if (modal?.mode === 'edit') {
       const echoed = modal.gene.capabilities ?? manifestCapabilities(modal.gene.manifest ?? null);
@@ -595,10 +1018,11 @@ export function DeepSeaGenesPanel({ t }: { readonly t: TFn }) {
         scope: 'org',
         effectScope: 'org',
         tagsText: (modal.gene.tags ?? []).join(', '),
-        jsonText:
-          modal.gene.manifest != null ? JSON.stringify(modal.gene.manifest, null, 2) : '',
+        jsonText: modal.gene.manifest != null ? JSON.stringify(modal.gene.manifest, null, 2) : '',
         checkedCapabilities: echoed.map((cap) => cap.name),
         removedCapabilities: [],
+        requiredKnowledge: manifestRequiredKnowledge(modal.gene.manifest ?? null),
+        structured: emptyStructured(),
       };
     }
     return emptyForm();
@@ -632,7 +1056,10 @@ export function DeepSeaGenesPanel({ t }: { readonly t: TFn }) {
         values.removedCapabilities,
         capabilityOptions,
       );
-      const manifest = stripManifestCapabilities(parsed.value);
+      let manifest = stripManifestCapabilities(parsed.value);
+      if (values.requiredKnowledge.length > 0) {
+        manifest = { ...(manifest ?? {}), required_knowledge: [...values.requiredKnowledge] };
+      }
       if (modal?.mode === 'create') {
         await createAiGene({
           slug: values.slug,
@@ -728,7 +1155,11 @@ export function DeepSeaGenesPanel({ t }: { readonly t: TFn }) {
                       <ScopeBadge scope={gene.scope ?? 'org'} t={t} />
                     </td>
                     <td className="px-4 py-3">
-                      {readonly ? <ReadonlyBadge t={t} /> : <span className="text-slate-400">—</span>}
+                      {readonly ? (
+                        <ReadonlyBadge t={t} />
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-2">
@@ -774,6 +1205,8 @@ export function DeepSeaGenesPanel({ t }: { readonly t: TFn }) {
           jsonField="manifest"
           showCapabilities
           capabilityOptions={capabilityOptions}
+          showRequiredKnowledge
+          knowledgeOptions={knowledgeOptions}
           initial={initialForm}
           busy={formBusy}
           errorMessage={formError}
@@ -791,9 +1224,7 @@ export function HumanGenesPanel({ t }: { readonly t: TFn }) {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [modal, setModal] = useState<
-    | { mode: 'create' }
-    | { mode: 'edit'; gene: CatalogUserGene }
-    | null
+    { mode: 'create' } | { mode: 'edit'; gene: CatalogUserGene } | null
   >(null);
   const [formBusy, setFormBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -828,6 +1259,8 @@ export function HumanGenesPanel({ t }: { readonly t: TFn }) {
         jsonText: '',
         checkedCapabilities: [],
         removedCapabilities: [],
+        requiredKnowledge: [],
+        structured: emptyStructured(),
       };
     }
     return emptyForm();
@@ -934,7 +1367,11 @@ export function HumanGenesPanel({ t }: { readonly t: TFn }) {
                       <ScopeBadge scope={gene.effect_scope} t={t} />
                     </td>
                     <td className="px-4 py-3">
-                      {readonly ? <ReadonlyBadge t={t} /> : <span className="text-slate-400">—</span>}
+                      {readonly ? (
+                        <ReadonlyBadge t={t} />
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-2">
@@ -980,6 +1417,8 @@ export function HumanGenesPanel({ t }: { readonly t: TFn }) {
           jsonField={null}
           showCapabilities={false}
           capabilityOptions={[]}
+          showRequiredKnowledge={false}
+          knowledgeOptions={[]}
           initial={initialForm}
           busy={formBusy}
           errorMessage={formError}
@@ -994,13 +1433,12 @@ export function HumanGenesPanel({ t }: { readonly t: TFn }) {
 
 export function CapabilityMarketTab({ t }: { readonly t: TFn }) {
   const [entries, setEntries] = useState<readonly CapabilityMarketEntry[]>([]);
+  const [knowledgeOptions, setKnowledgeOptions] = useState<readonly KnowledgeEntry[]>([]);
   const [hideSystem, setHideSystem] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [modal, setModal] = useState<
-    | { mode: 'create' }
-    | { mode: 'edit'; entry: CapabilityMarketEntry }
-    | null
+    { mode: 'create' } | { mode: 'edit'; entry: CapabilityMarketEntry } | null
   >(null);
   const [formBusy, setFormBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -1022,6 +1460,20 @@ export function CapabilityMarketTab({ t }: { readonly t: TFn }) {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    let cancelled = false;
+    fetchKnowledgeEntries({ limit: 200 })
+      .then((page) => {
+        if (!cancelled) setKnowledgeOptions(page.items);
+      })
+      .catch(() => {
+        if (!cancelled) setKnowledgeOptions([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const visible = useMemo(
     () => (hideSystem ? entries.filter((e) => e.scope !== 'system') : entries),
     [entries, hideSystem],
@@ -1029,20 +1481,21 @@ export function CapabilityMarketTab({ t }: { readonly t: TFn }) {
 
   const initialForm = useMemo((): CatalogFormState => {
     if (modal?.mode === 'edit') {
+      const template = modal.entry.config_template ?? null;
+      const type = (modal.entry.type as CapabilityType) ?? 'skill';
       return {
         slug: '',
         name: modal.entry.name,
         description: modal.entry.description ?? '',
-        type: (modal.entry.type as CapabilityType) ?? 'skill',
+        type,
         scope: modal.entry.scope === 'namespace' ? 'namespace' : 'org',
         effectScope: 'org',
         tagsText: (modal.entry.tags ?? []).join(', '),
-        jsonText:
-          modal.entry.config_template != null
-            ? JSON.stringify(modal.entry.config_template, null, 2)
-            : '',
+        jsonText: template != null ? JSON.stringify(template, null, 2) : '',
         checkedCapabilities: [],
         removedCapabilities: [],
+        requiredKnowledge: modal.entry.required_knowledge ?? [],
+        structured: structuredFromTemplate(type, template),
       };
     }
     return emptyForm();
@@ -1074,12 +1527,15 @@ export function CapabilityMarketTab({ t }: { readonly t: TFn }) {
         return;
       }
       const configTemplate = parsed.value;
+      const requiredKnowledge =
+        values.requiredKnowledge.length > 0 ? [...values.requiredKnowledge] : null;
       if (modal?.mode === 'create') {
         await createCapability({
           name: values.name.trim(),
           type: values.type,
           description: values.description.trim() || null,
           config_template: configTemplate,
+          required_knowledge: requiredKnowledge,
           tags,
           scope: values.scope,
         });
@@ -1089,6 +1545,7 @@ export function CapabilityMarketTab({ t }: { readonly t: TFn }) {
           type: values.type,
           description: values.description.trim() || null,
           config_template: configTemplate,
+          required_knowledge: requiredKnowledge,
           tags,
         });
       }
@@ -1158,6 +1615,7 @@ export function CapabilityMarketTab({ t }: { readonly t: TFn }) {
               <tr>
                 <th className="px-4 py-3">{t('namespaces.name')}</th>
                 <th className="px-4 py-3">{t('namespaces.type')}</th>
+                <th className="px-4 py-3">{t('namespaces.requiredKnowledgeLabel')}</th>
                 <th className="px-4 py-3">{t('namespaces.scopeLabel')}</th>
                 <th className="px-4 py-3">{t('namespaces.readonly')}</th>
                 <th className="px-4 py-3">{t('namespaces.entityActions')}</th>
@@ -1178,10 +1636,30 @@ export function CapabilityMarketTab({ t }: { readonly t: TFn }) {
                     </td>
                     <td className="px-4 py-3 font-mono text-xs text-slate-600">{entry.type}</td>
                     <td className="px-4 py-3">
+                      {entry.required_knowledge !== null && entry.required_knowledge.length > 0 ? (
+                        <ul className="flex max-w-56 flex-wrap gap-1">
+                          {entry.required_knowledge.map((slug) => (
+                            <li
+                              key={slug}
+                              className="rounded-md bg-blue-50 px-1.5 py-0.5 font-mono text-xs text-blue-800 ring-1 ring-blue-100"
+                            >
+                              {slug}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
                       <ScopeBadge scope={entry.scope} t={t} />
                     </td>
                     <td className="px-4 py-3">
-                      {readonly ? <ReadonlyBadge t={t} /> : <span className="text-slate-400">—</span>}
+                      {readonly ? (
+                        <ReadonlyBadge t={t} />
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-2">
@@ -1217,9 +1695,7 @@ export function CapabilityMarketTab({ t }: { readonly t: TFn }) {
       )}
       {modal !== null ? (
         <CatalogFormModal
-          title={
-            modal.mode === 'create' ? t('namespaces.createCapability') : t('namespaces.edit')
-          }
+          title={modal.mode === 'create' ? t('namespaces.createCapability') : t('namespaces.edit')}
           mode={modal.mode}
           showSlug={false}
           showType
@@ -1229,6 +1705,8 @@ export function CapabilityMarketTab({ t }: { readonly t: TFn }) {
           jsonField="configTemplate"
           showCapabilities={false}
           capabilityOptions={[]}
+          showRequiredKnowledge
+          knowledgeOptions={knowledgeOptions}
           initial={initialForm}
           busy={formBusy}
           errorMessage={formError}

@@ -19,6 +19,7 @@ class EntityCreate(BaseModel):
     display_color: str | None = None
     system_prompt: str | None = None
     config_override: dict | None = None
+    has_knowledge: list[str] | None = None
     # v4.3 D7: cerebellum flag — settable via API (partial-unique enforces
     # at most one per Namespace).
     is_cerebellum: bool = False
@@ -39,6 +40,7 @@ class EntityUpdate(BaseModel):
     display_color: str | None = None
     system_prompt: str | None = None
     config_override: dict | None = None
+    has_knowledge: list[str] | None = None
     # v4.3 D7: flipping this on must still respect the one-per-namespace rule.
     is_cerebellum: bool | None = None
 
@@ -56,6 +58,7 @@ class EntityOut(BaseModel):
     display_color: str | None = None
     system_prompt: str | None = None
     config_override: dict | None = None
+    has_knowledge: list[str] | None = None
     migration_hash: str | None = None
     # v4.0: read-only aggregate DTO filled from the entity_capabilities
     # junction — not a DB column and never a write truth.

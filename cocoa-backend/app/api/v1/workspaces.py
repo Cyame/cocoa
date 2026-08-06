@@ -359,8 +359,15 @@ async def introduce_entity(
     """
     from uuid import uuid4
 
-    from app.core.event_types import INSTANCE_CREATED
+    from app.core.event_types import (
+        INSTANCE_CREATED,
+        INSTANCE_KNOWLEDGE_INCONSISTENT,
+    )
     from app.core.events import emit
+    from app.core.knowledge_spawn import (
+        build_spawn_knowledge_payload,
+        check_knowledge_consistency,
+    )
     from app.core.migration_hash import compute_entity_migration_hash
     from app.core.overlay import resolve_instance_agent_config
     from app.core.permissions import require_workspace_permission
@@ -419,6 +426,12 @@ async def introduce_entity(
     workspace_path = generate_workspace_path(entity.slug, str(uuid4()))
     agent_config = await resolve_instance_agent_config(db, entity)
     runtime_config = {"agent_config": agent_config}
+    knowledge_payload = await build_spawn_knowledge_payload(
+        db, entity=entity, workspace_id=workspace_id
+    )
+    if knowledge_payload is not None:
+        runtime_config["knowledge"] = knowledge_payload
+    consistency_warning = await check_knowledge_consistency(db, entity)
     instance = Instance(
         entity_id=body.entity_id,
         workspace_id=workspace_id,
@@ -470,6 +483,16 @@ async def introduce_entity(
         payload={"workspace_path": workspace_path, "workspace_id": workspace_id},
         session=db,
     )
+    if consistency_warning is not None:
+        await emit(
+            INSTANCE_KNOWLEDGE_INCONSISTENT,
+            actor_type="user",
+            actor_id=current_user.user_id,
+            resource_type="instance",
+            resource_id=instance.id,
+            payload={**consistency_warning, "entity_id": entity.id},
+            session=db,
+        )
     await db.commit()
     await db.refresh(instance)
 
@@ -512,4 +535,9 @@ async def introduce_entity(
         )
 
     out = InstanceOutWithToken.model_validate(instance)
-    return out.model_copy(update={"deploy_record_id": deploy_record_id})
+    return out.model_copy(
+        update={
+            "deploy_record_id": deploy_record_id,
+            "knowledge_consistency_warning": consistency_warning,
+        }
+    )

@@ -76,15 +76,39 @@ const TRANSMUTE_RESPONSE = {
   new_base_class_slug: 'jin-mi-shi',
   new_base_class_name: '金密士',
   manifest_preview: {
-    name: '金密士',
-    slug: 'jin-mi-shi',
-    provider: 'anthropic/claude-3.5',
-    skills: ['workflow-patterns'],
-    tools: ['shell'],
+    provider_config: { provider: 'anthropic', model: 'claude-3.5' },
+    default_model: 'anthropic/claude-3.5',
     commands: ['/plan'],
-    based_on_memory: 23,
+    default_capabilities: [{ name: 'workflow-patterns', type: 'skill', description: null }],
+    default_gene_refs: ['workflow-patterns'],
+    has_knowledge: ['debug-checklist'],
+    system_prompt: 'Act as a research planner.',
   },
   source_entity_id: ENTITY_ID,
+  default_gene_refs: ['workflow-patterns'],
+  has_knowledge: ['debug-checklist'],
+};
+
+const DISTILL_RESPONSE = {
+  status: 'ok',
+  capability_candidates: [
+    {
+      id: 'cap-9',
+      name: 'research-planner',
+      type: 'skill',
+      description: 'Plans multi-step research.',
+      config_template: { name: 'research-planner', description: 'Plans multi-step research.' },
+      required_knowledge: ['debug-checklist'],
+      created_via: 'distill',
+    },
+  ],
+  capability_market_created: 1,
+  gene_suggestion: 'research-planner-gene',
+  engine_used: 'heuristic',
+  warnings: [],
+  aggregated_memory: { experience: 0, lesson: 2, decision: 0, problem: 0, notepad: 0, total: 2 },
+  source_entity_id: ENTITY_ID,
+  source_preset_slug: null,
 };
 
 function openModal(tab: 'basic' | 'distill' | 'instances' = 'basic') {
@@ -119,6 +143,9 @@ beforeEach(() => {
       (init?.method ?? 'GET') === 'POST'
     ) {
       return Promise.resolve(TRANSMUTE_RESPONSE);
+    }
+    if (path === `/learning/entities/${ENTITY_ID}/distill` && (init?.method ?? 'GET') === 'POST') {
+      return Promise.resolve(DISTILL_RESPONSE);
     }
     return Promise.reject(new Error(`Unmocked call: ${init?.method ?? 'GET'} ${path}`));
   });
@@ -207,6 +234,9 @@ describe('EntityDetailModal', () => {
     const resultDialog = await screen.findByTestId('distill-result-modal');
     expect(resultDialog).toBeInTheDocument();
     expect(screen.getByTestId('distill-result-slug')).toHaveTextContent('jin-mi-shi');
+    expect(screen.getByTestId('distill-result-name')).toHaveTextContent('金密士');
+    expect(resultDialog).toHaveTextContent('debug-checklist');
+    expect(resultDialog).toHaveTextContent('workflow-patterns');
 
     const transmuteCall = mockedApi.mock.calls.find(
       ([path, init]) =>
@@ -218,6 +248,68 @@ describe('EntityDetailModal', () => {
     const body = JSON.parse(init.body as string);
     expect(body.target_base_class_slug).toBe('jin-mi-shi');
     expect(body.target_base_class_name).toBe('金密士');
+  });
+
+  it('runs distill (memory to capability) with engine selection and shows candidates', async () => {
+    openModal('distill');
+    renderModal();
+    await screen.findByTestId('entity-modal-title');
+
+    fireEvent.change(screen.getByTestId('distill-skill-slug'), {
+      target: { value: 'research-planner' },
+    });
+    fireEvent.click(screen.getByTestId('distill-engine-llm'));
+    fireEvent.click(screen.getByTestId('distill-submit'));
+
+    expect(await screen.findByTestId('distill-result-view')).toBeInTheDocument();
+    expect(screen.getByTestId('distill-result-view')).toHaveTextContent('research-planner');
+    expect(screen.getByTestId('distill-result-view')).toHaveTextContent('debug-checklist');
+    expect(screen.getByTestId('distill-result-view')).toHaveTextContent('research-planner-gene');
+
+    const distillCall = mockedApi.mock.calls.find(
+      ([path, init]) =>
+        path === `/learning/entities/${ENTITY_ID}/distill` && (init?.method ?? 'GET') === 'POST',
+    );
+    expect(distillCall).toBeDefined();
+    if (distillCall === undefined) throw new Error('expected distill call');
+    const init = distillCall[1] as RequestInit;
+    const body = JSON.parse(init.body as string);
+    expect(body.target_skill_slug).toBe('research-planner');
+    expect(body.engine).toBe('llm');
+  });
+
+  it('shows a degradation warning when the llm engine fell back to heuristic', async () => {
+    const degraded = {
+      ...DISTILL_RESPONSE,
+      engine_used: 'heuristic',
+      warnings: ['llm_unavailable_degraded_to_heuristic'],
+    };
+    mockedApi.mockImplementation((path, init) => {
+      if (path === `/entities/${ENTITY_ID}` && (!init || init.method === undefined)) {
+        return Promise.resolve(ENTITY_RESPONSE);
+      }
+      if (path.startsWith(`/instances?entity_id=${ENTITY_ID}`)) {
+        return Promise.resolve(INSTANCES_RESPONSE);
+      }
+      if (
+        path === `/learning/entities/${ENTITY_ID}/distill` &&
+        (init?.method ?? 'GET') === 'POST'
+      ) {
+        return Promise.resolve(degraded);
+      }
+      return Promise.reject(new Error(`Unmocked call: ${init?.method ?? 'GET'} ${path}`));
+    });
+
+    openModal('distill');
+    renderModal();
+    await screen.findByTestId('entity-modal-title');
+
+    fireEvent.change(screen.getByTestId('distill-skill-slug'), {
+      target: { value: 'research-planner' },
+    });
+    fireEvent.click(screen.getByTestId('distill-submit'));
+
+    expect(await screen.findByTestId('distill-degraded-warning')).toBeInTheDocument();
   });
 
   it('opens gene attach picker when add extra is clicked', async () => {

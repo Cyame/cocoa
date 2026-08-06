@@ -4,7 +4,9 @@ Routes parsed Turn directives to target entities via passage-gated delivery.
 Chains parse_turn → route_message per directive → trigger_on_mention on success.
 """
 
+import re
 from dataclasses import dataclass, field
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,7 +15,6 @@ from app.core.activation import handle_intern_invocation, trigger_on_mention
 from app.core.message_router import MessageDeliveryResult, route_message
 from app.core.preset_registry import is_control_command, is_learning_command
 from app.core.slash_parser import parse_turn
-from app.models.base_class import BaseClass
 from app.models.entity import Entity, EntityRank
 from app.models.workspace import Membership
 from app.schemas.slash import Directive
@@ -25,6 +26,76 @@ class DirectiveResult:
     target_entity: str | None
     cmd: str | None
     results: list[MessageDeliveryResult] = field(default_factory=list)
+    # v4.9.3: distill semantics report the created capability_market rows
+    # plus which engine produced them (heuristic by default).
+    created_capabilities: list[dict[str, Any]] = field(default_factory=list)
+    engine_used: str = "heuristic"
+
+
+# v4.9.3 distill helpers — Entity memory → capability_market candidates.
+_SLUG_NON_ALNUM = re.compile(r"[^a-z0-9]+")
+_DESC_CAP = 200
+
+
+def _slugify_capability_name(text: str) -> str:
+    """Kebab-case capability slug from arbitrary memory text."""
+    slug = _SLUG_NON_ALNUM.sub("-", text.lower().strip()).strip("-")
+    if not slug:
+        return "capability"
+    return slug[:200]
+
+
+def _knowledge_slugs_for_memory(key: str | None) -> list[str] | None:
+    """Required-knowledge slugs a memory-derived capability declares.
+
+    v4.9.3: require-knowledge keys are capability/gene slugs (== Instance
+    env keys). Heuristically, the first hyphen-delimited segment of the
+    memory key names the topic the capability needs to know about.
+    """
+    if not key:
+        return None
+    prefix = key.split("-")[0].strip().lower()
+    return [prefix] if prefix else None
+
+
+async def _distill_memory_candidates(
+    session: AsyncSession,
+    entity_id: str,
+    *,
+    limit: int = 10,
+) -> list[dict[str, Any]]:
+    """Entity memory → capability candidates (v4.9.3 distill semantics).
+
+    Deterministic heuristic (no LLM): each active memory entry becomes one
+    skill-type capability candidate carrying the required-knowledge slugs
+    derived from its key. Mirrors the reap endpoint's memory→capability
+    mapping; persistence is the caller's job (``upsert_capability`` with
+    ``created_via="distill"``).
+    """
+    from app.models.memory import Memory
+
+    result = await session.execute(
+        select(Memory)
+        .where(
+            Memory.entity_id == entity_id,
+            Memory.deleted_at.is_(None),
+        )
+        .order_by(Memory.created_at.asc())
+        .limit(limit)
+    )
+    candidates: list[dict[str, Any]] = []
+    for entry in result.scalars().all():
+        seed_text = entry.key or entry.content or entry.kind
+        description = (entry.content or entry.key or entry.kind)[:_DESC_CAP]
+        candidates.append(
+            {
+                "name": _slugify_capability_name(seed_text),
+                "type": "skill",
+                "description": description,
+                "required_knowledge": _knowledge_slugs_for_memory(entry.key),
+            }
+        )
+    return candidates
 
 
 async def route_turn(
@@ -226,12 +297,15 @@ async def _route_learning_directive(
     target_slug: str | None,
     from_user_id: str,
 ) -> DirectiveResult:
-    """Route a learning command to the AggregatingDistiller.
+    """Route a learning command to the v4.9.3 distill flow.
 
     Bare cmds (target_slug is None) are silently dropped — matching the P5
     bare-cmd semantics. With an explicit @target, we look up the target
-    Entity, run distillation on their memory entries, create a new
-    BaseClass, and emit a LEARNING_DISTILLATION_COMPLETED event.
+    Entity and distill its memory entries into capability_market rows
+    (``created_via="distill"``, org scope) — NOT into a new BaseClass
+    (v4.9.3 distill semantics: memory → capability). Emits a
+    LEARNING_DISTILLATION_COMPLETED event and reports the created
+    capabilities + engine_used on the DirectiveResult.
 
     Returns a ``DirectiveResult`` with the cmd echoed and an empty results
     list (learning commands don't produce ``MessageDeliveryResult`` rows).
@@ -259,43 +333,51 @@ async def _route_learning_directive(
             results=[],
         )
 
-    from app.core.distillation import AggregatingDistiller
+    candidates = await _distill_memory_candidates(session, target_entity.id)
+    if not candidates:
+        return DirectiveResult(
+            directive_raw=directive.raw_text,
+            target_entity=target_slug,
+            cmd=directive.cmd,
+            results=[],
+        )
+
+    from app.core.capabilities import upsert_capability
     from app.core.event_types import LEARNING_DISTILLATION_COMPLETED
     from app.core.events import emit
-    from app.schemas.learning import DistillRequest
+    from app.models.organization import Namespace
 
-    target_skill_slug = (
-        directive.args[0] if directive.args else "default-skill"
-    )
-    request = DistillRequest(
-        target_skill_slug=target_skill_slug,
-        memory_kind_filter=None,
-        source_preset_slug=target_entity.preset_slug,
-        target_preset_name=None,
-    )
-    result = await AggregatingDistiller().distill(
-        target_entity.id, request=request, session=session,
-    )
+    ns = await session.get(Namespace, target_entity.namespace_id)
+    org_id = ns.org_id if ns is not None else None
+    scope = "org" if org_id else "system"
 
-    new_preset = BaseClass(
-        slug=result.new_preset_slug,
-        name=f"Skill: {target_skill_slug}",
-        manifest=result.manifest_preview.model_dump(),
-    )
-    session.add(new_preset)
-    await session.flush()
+    created_capabilities: list[dict[str, Any]] = []
+    for candidate in candidates:
+        cap = await upsert_capability(
+            session,
+            name=candidate["name"],
+            cap_type=candidate["type"],
+            scope=scope,
+            organization_id=org_id,
+            created_via="distill",
+            description=candidate["description"],
+            required_knowledge=candidate["required_knowledge"],
+            source_entity_slug=target_entity.slug,
+        )
+        created_capabilities.append({"name": cap.name, "type": cap.type})
 
     await emit(
-        event_type=LEARNING_DISTILLATION_COMPLETED,
+        LEARNING_DISTILLATION_COMPLETED,
         actor_type="user",
         actor_id=from_user_id,
-        resource_type="base_class",
-        resource_id=new_preset.id,
+        resource_type="entity",
+        resource_id=target_entity.id,
         payload={
             "entity_id": target_entity.id,
-            "new_preset_slug": result.new_preset_slug,
-            "source_preset_slug": target_entity.preset_slug,
-            "aggregated_counts": result.aggregated_memory.model_dump(),
+            "source_entity_slug": target_entity.slug,
+            "capability_names": [cap["name"] for cap in created_capabilities],
+            "capability_count": len(created_capabilities),
+            "engine_used": "heuristic",
         },
         session=session,
     )
@@ -305,4 +387,6 @@ async def _route_learning_directive(
         target_entity=target_slug,
         cmd=directive.cmd,
         results=[],
+        created_capabilities=created_capabilities,
+        engine_used="heuristic",
     )

@@ -14,6 +14,7 @@ class BaseClassCreate(BaseModel):
     name: str
     version: str | None = None
     manifest: dict | None = None
+    has_knowledge: list[str] | None = None
     display_name: str | None = None
     description: str | None = None
     tags: list[str] | None = None
@@ -26,6 +27,7 @@ class BaseClassUpdate(BaseModel):
     name: str | None = None
     version: str | None = None
     manifest: dict | None = None
+    has_knowledge: list[str] | None = None
     display_name: str | None = None
     description: str | None = None
     tags: list[str] | None = None
@@ -53,6 +55,7 @@ class BaseClassOut(BaseModel):
     display_name: str | None = None
     description: str | None = None
     manifest: dict | PresetManifestOut | None = None
+    has_knowledge: list[str] | None = None
     version: str | None = None
     tags: list[str] | None = None
     scope: str = "org"

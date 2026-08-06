@@ -255,15 +255,18 @@ class TestMemorySummary:
 
 
 class TestDistill:
-    """Tests for the distillation endpoint."""
+    """Tests for the distillation endpoint (v4.9.3: memory → capability_market)."""
 
-    def test_distill_creates_preset(
+    async def test_distill_creates_capabilities(
         self,
         client: TestClient,
         auth_token: str,
         auth_user_id: str,
+        session: AsyncSession,
     ) -> None:
-        """POST distill creates a new BaseClass with 201 and correct fields."""
+        """POST distill creates capability_market entries with 201 (not a BaseClass)."""
+        from app.models.capability_market import CapabilityMarketEntry
+
         h = _auth(auth_token)
         workspace_id = _setup_workspace_and_membership(
             client, auth_token, auth_user_id,
@@ -297,28 +300,39 @@ class TestDistill:
         assert resp.status_code == 201, resp.text
         body = resp.json()
 
-        assert body["new_preset_id"]
-        assert body["new_preset_slug"] == "base-skill-my-skill"
-        assert body["new_preset_name"] == "My Distilled Skill"
+        assert body["status"] == "ok"
         assert body["source_entity_id"] == entity_id
         assert body["source_preset_slug"] is None
+        assert body["engine_used"] == "heuristic"
+        assert body["warnings"] == []
 
-        manifest = body["manifest_preview"]
-        assert manifest["model"] == "tbd"
-        assert len(manifest["prompt"]) > 0
-        assert "debug-memory-leak" in manifest["commands"] or "pick-framework" in manifest["commands"]
-        assert manifest["tools"] == []
+        names = {c["name"] for c in body["capability_candidates"]}
+        assert "debug-memory-leak" in names
+        assert "pick-framework" in names
+        assert body["gene_suggestion"] == "debug"
 
         aggregated = body["aggregated_memory"]
         assert aggregated["total"] == 3
 
-    def test_distill_slug_conflict(
+        # The candidates are persisted to the market with created_via=distill.
+        market_result = await session.execute(
+            select(CapabilityMarketEntry).where(
+                CapabilityMarketEntry.name == "debug-memory-leak",
+                CapabilityMarketEntry.deleted_at.is_(None),
+            )
+        )
+        row = market_result.scalar_one()
+        assert row.created_via == "distill"
+        assert row.required_knowledge == ["debug"]
+
+    def test_distill_idempotent_on_repeat(
         self,
         client: TestClient,
         auth_token: str,
         auth_user_id: str,
+        session: AsyncSession,
     ) -> None:
-        """POST distill returns 409 when the generated slug already exists."""
+        """Re-distilling the same skill upserts idempotently (no 409)."""
         h = _auth(auth_token)
         workspace_id = _setup_workspace_and_membership(
             client, auth_token, auth_user_id,
@@ -340,15 +354,14 @@ class TestDistill:
         )
         assert resp1.status_code == 201, resp1.text
 
-        # Second distillation with same target_skill_slug → same generated slug.
+        # Second distillation with same target_skill_slug → idempotent upsert.
         resp2 = client.post(
             f"/api/v1/learning/entities/{entity_id}/distill",
             headers=h,
             json={"target_skill_slug": "my-skill"},
         )
-        assert resp2.status_code == 409, resp2.text
-        body = resp2.json()
-        assert body["error_code"] == "base_class.slug_taken"
+        assert resp2.status_code == 201, resp2.text
+        assert resp2.json()["capability_market_created"] == 0
 
     def test_distill_no_memory(
         self,
@@ -450,13 +463,21 @@ class TestDistill:
 class TestPresetFetch:
     """Tests for the preset fetch endpoint."""
 
-    def test_fetch_preset(
+    async def test_fetch_preset(
         self,
         client: TestClient,
         auth_token: str,
         auth_user_id: str,
+        session: AsyncSession,
     ) -> None:
-        """GET /learning/presets/{preset_id} returns 200 with manifest."""
+        """GET /learning/presets/{preset_id} returns 200 with manifest.
+
+        v4.9.3: distill no longer creates BaseClass presets — this endpoint
+        serves historical distill results (B4 compat), so the fixture seeds
+        a BaseClass row directly.
+        """
+        from app.models.base_class import BaseClass
+
         h = _auth(auth_token)
         workspace_id = _setup_workspace_and_membership(
             client, auth_token, auth_user_id,
@@ -466,26 +487,30 @@ class TestPresetFetch:
             client, auth_token, f"fetch-emp-{uuid.uuid4().hex[:6]}", "Fetch Entity",
         )
         _create_instance(client, auth_token, entity_id, workspace_id)
-        _create_memory(client, auth_token, entity_id, kind="lesson",
-                       key="fetch-lesson", content="B" * 60)
 
-        # First distill to create a preset.
-        distill_resp = client.post(
-            f"/api/v1/learning/entities/{entity_id}/distill",
-            headers=h,
-            json={"target_skill_slug": "fetch-skill", "target_preset_name": "Fetch Skill"},
+        # Historical distill product: a BaseClass with an embedded manifest.
+        bc = BaseClass(
+            slug="base-skill-fetch-skill",
+            name="Fetch Skill",
+            manifest={
+                "model": "tbd",
+                "prompt": "B" * 60,
+                "skills": [],
+                "tools": [],
+                "commands": ["fetch-lesson"],
+                "source_preset_slug": None,
+            },
         )
-        assert distill_resp.status_code == 201, distill_resp.text
-        preset_id = distill_resp.json()["new_preset_id"]
+        session.add(bc)
+        await session.commit()
 
-        # Now fetch it.
         resp = client.get(
-            f"/api/v1/learning/presets/{preset_id}",
+            f"/api/v1/learning/presets/{bc.id}",
             headers=h,
         )
         assert resp.status_code == 200, resp.text
         body = resp.json()
-        assert body["new_preset_id"] == preset_id
+        assert body["new_preset_id"] == bc.id
         assert body["new_preset_slug"] == "base-skill-fetch-skill"
         assert body["new_preset_name"] == "Fetch Skill"
         manifest = body["manifest_preview"]
@@ -516,14 +541,18 @@ class TestP5RouteTurnLearningBranch:
     """Verify that learning commands are correctly routed by the P5 directive router."""
 
     @pytest.mark.asyncio
-    async def test_route_turn_distill_creates_preset(
+    async def test_route_turn_distill_creates_capabilities(
         self,
         client: TestClient,
         auth_token: str,
         auth_user_id: str,
         session: AsyncSession,
     ) -> None:
-        """@target /distill creates new BaseClass and emits LEARNING_DISTILLATION_COMPLETED."""
+        """@target /distill creates capability_market rows (v4.9.3 semantics).
+
+        v4.9.3: distill = Entity memory → capability_market (created_via=
+        distill), no longer a new BaseClass.
+        """
         workspace_id = _setup_workspace_and_membership(
             client, auth_token, auth_user_id,
             workspace_name="RT Distill Workspace",
@@ -544,7 +573,7 @@ class TestP5RouteTurnLearningBranch:
 
         from app.core.directive_router import route_turn
         from app.core.event_types import LEARNING_DISTILLATION_COMPLETED
-        from app.models.base_class import BaseClass
+        from app.models.capability_market import CapabilityMarketEntry
         from app.models.event import Event
 
         raw_text = f"@{entity_slug} /distill my-skill"
@@ -553,28 +582,31 @@ class TestP5RouteTurnLearningBranch:
         assert len(results) == 1
         assert results[0].cmd == "/distill"
         assert results[0].target_entity == entity_slug
+        assert results[0].engine_used == "heuristic"
+        assert results[0].created_capabilities, "expected distilled capabilities"
 
-        preset_result = await session.execute(
-            select(BaseClass).where(
-                BaseClass.slug == "base-skill-my-skill",
-                BaseClass.deleted_at.is_(None),
+        cap_result = await session.execute(
+            select(CapabilityMarketEntry).where(
+                CapabilityMarketEntry.created_via == "distill",
+                CapabilityMarketEntry.deleted_at.is_(None),
             )
         )
-        preset = preset_result.scalars().first()
-        assert preset is not None, "Expected new BaseClass for base-skill-my-skill"
-        assert preset.name == "Skill: my-skill"
-        assert preset.manifest is not None
-        assert isinstance(preset.manifest, dict)
+        caps = cap_result.scalars().all()
+        assert caps, "Expected capability_market rows via distill"
+        distilled_names = {c["name"] for c in results[0].created_capabilities}
+        assert distilled_names == {c.name for c in caps}
+        assert "debug-memory-leak" in distilled_names
 
         event_result = await session.execute(
             select(Event).where(
                 Event.type == LEARNING_DISTILLATION_COMPLETED,
-                Event.resource_id == preset.id,
+                Event.resource_id == entity_id,
             )
         )
         event = event_result.scalars().first()
         assert event is not None, "Expected LEARNING_DISTILLATION_COMPLETED event"
         assert event.payload["entity_id"] == entity_id
+        assert event.payload["engine_used"] == "heuristic"
 
     @pytest.mark.asyncio
     async def test_route_turn_bare_distill_dropped(

@@ -24,6 +24,7 @@ idempotently at app startup.
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from sqlalchemy import and_, or_, select
@@ -67,10 +68,10 @@ SYSTEM_SEEDS: tuple[dict[str, str], ...] = (
 
 
 async def _scope_chain(
-    db: AsyncSession, instance: Instance
+    db: AsyncSession, entity_id: str
 ) -> tuple[str | None, str | None]:
-    """Resolve ``(org_id, namespace_id)`` following instance → entity → namespace."""
-    entity = await db.get(Entity, instance.entity_id)
+    """Resolve ``(org_id, namespace_id)`` following entity → namespace."""
+    entity = await db.get(Entity, entity_id)
     if entity is None or entity.deleted_at is not None:
         return None, None
     namespace = await db.get(Namespace, entity.namespace_id)
@@ -107,20 +108,6 @@ def _visibility_clause(
     )
 
 
-def _binding_clause(instance: Instance):
-    """Unbound rows + rows bound to this instance's own entity / instance."""
-    return and_(
-        or_(
-            KnowledgeEntry.entity_id.is_(None),
-            KnowledgeEntry.entity_id == instance.entity_id,
-        ),
-        or_(
-            KnowledgeEntry.instance_id.is_(None),
-            KnowledgeEntry.instance_id == instance.id,
-        ),
-    )
-
-
 def entry_to_dict(entry: KnowledgeEntry) -> dict[str, Any]:
     """Serialize a resolved entry for the API response."""
     return {
@@ -135,6 +122,64 @@ def entry_to_dict(entry: KnowledgeEntry) -> dict[str, Any]:
         "workspace_id": entry.workspace_id,
         "updated_at": entry.updated_at.isoformat() if entry.updated_at else None,
     }
+
+
+async def resolve_knowledge_winners(
+    db: AsyncSession,
+    *,
+    entity_id: str,
+    workspace_id: str | None,
+    instance_id: str | None = None,
+    keys: set[str] | None = None,
+) -> list[KnowledgeEntry]:
+    """Resolve the winning knowledge rows for one ``(entity, workspace)``.
+
+    Shared core behind :func:`resolve_knowledge_for_instance` (existing
+    instances) and the v4.9.3 spawn-time injection (pre-persist instances:
+    *instance_id* is ``None`` so only unbound rows match the binding filter).
+    Returns at most one row per key — the override winner (highest-priority
+    scope, then most recent ``updated_at``, then ``id``).
+    """
+    org_id, ns_id = await _scope_chain(db, entity_id)
+
+    stmt = (
+        select(KnowledgeEntry)
+        .where(
+            KnowledgeEntry.deleted_at.is_(None),
+            _visibility_clause(org_id, ns_id, workspace_id),
+            or_(
+                KnowledgeEntry.entity_id.is_(None),
+                KnowledgeEntry.entity_id == entity_id,
+            ),
+            or_(
+                KnowledgeEntry.instance_id.is_(None),
+                KnowledgeEntry.instance_id == instance_id,
+            ),
+        )
+        .order_by(
+            KnowledgeEntry.updated_at.desc(),
+            KnowledgeEntry.id.desc(),
+        )
+    )
+    if keys:
+        stmt = stmt.where(KnowledgeEntry.key.in_(sorted(keys)))
+    result = await db.execute(stmt)
+    rows = list(result.scalars().all())
+
+    # Group per key; the query order (updated_at DESC, id DESC) makes the first
+    # candidate at the winning scope the deterministic tie-break winner.
+    groups: dict[str, list[KnowledgeEntry]] = {}
+    for row in rows:
+        groups.setdefault(row.key, []).append(row)
+
+    winners: list[KnowledgeEntry] = []
+    for candidates in groups.values():
+        best_rank = min(SCOPE_PRIORITY.get(c.scope, 99) for c in candidates)
+        for candidate in candidates:
+            if SCOPE_PRIORITY.get(candidate.scope, 99) == best_rank:
+                winners.append(candidate)
+                break
+    return winners
 
 
 async def resolve_knowledge_for_instance(
@@ -153,37 +198,22 @@ async def resolve_knowledge_for_instance(
     else:
         inst = instance
 
-    org_id, ns_id = await _scope_chain(db, inst)
-    ws_id = inst.workspace_id
-
-    result = await db.execute(
-        select(KnowledgeEntry)
-        .where(
-            KnowledgeEntry.deleted_at.is_(None),
-            _visibility_clause(org_id, ns_id, ws_id),
-            _binding_clause(inst),
-        )
-        .order_by(
-            KnowledgeEntry.updated_at.desc(),
-            KnowledgeEntry.id.desc(),
-        )
+    return await resolve_knowledge_winners(
+        db,
+        entity_id=inst.entity_id,
+        workspace_id=inst.workspace_id,
+        instance_id=inst.id,
     )
-    rows = list(result.scalars().all())
 
-    # Group per key; the query order (updated_at DESC, id DESC) makes the first
-    # candidate at the winning scope the deterministic tie-break winner.
-    groups: dict[str, list[KnowledgeEntry]] = {}
-    for row in rows:
-        groups.setdefault(row.key, []).append(row)
 
-    winners: list[KnowledgeEntry] = []
-    for candidates in groups.values():
-        best_rank = min(SCOPE_PRIORITY.get(c.scope, 99) for c in candidates)
-        for candidate in candidates:
-            if SCOPE_PRIORITY.get(candidate.scope, 99) == best_rank:
-                winners.append(candidate)
-                break
-    return winners
+def knowledge_slug_to_env_key(slug: str) -> str:
+    """Pod env var name for a knowledge slug (canonical ``KNOWLEDGE_<SLUG>``).
+
+    Uppercased; every non-alphanumeric character (kebab/dot separators)
+    collapses to ``_`` so ``docs-runbook`` → ``KNOWLEDGE_DOCS_RUNBOOK`` and
+    ``cocoa.collab.passage`` → ``KNOWLEDGE_COCOA_COLLAB_PASSAGE``.
+    """
+    return "KNOWLEDGE_" + re.sub(r"[^A-Za-z0-9]", "_", slug).upper()
 
 
 async def ensure_knowledge_seeds(db: AsyncSession) -> dict[str, KnowledgeEntry]:

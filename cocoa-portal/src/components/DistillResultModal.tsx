@@ -24,8 +24,6 @@ export default function DistillResultModal({ result, onClose }: DistillResultMod
 
   if (result === null) return null;
 
-  // manifest_preview is the distiller's aggregated output (junction-derived
-  // skills/tools/commands), not DB-embedded manifest rows — display only.
   const preview = result.manifest_preview ?? {};
   const fieldValue = (key: string): string => {
     const v = preview[key as keyof typeof preview];
@@ -35,8 +33,7 @@ export default function DistillResultModal({ result, onClose }: DistillResultMod
     if (typeof v === 'number' || typeof v === 'boolean') return String(v);
     return JSON.stringify(v);
   };
-  const memoryCount =
-    typeof preview.based_on_memory === 'number' ? (preview.based_on_memory as number) : 0;
+
   return (
     <div
       role="dialog"
@@ -70,13 +67,29 @@ export default function DistillResultModal({ result, onClose }: DistillResultMod
         </header>
 
         <div className="space-y-5 overflow-y-auto px-5 py-5">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              {t('entityModal.distillResult.newBaseClass')}
-            </p>
-            <p className="mt-1 font-mono text-lg text-slate-950" data-testid="distill-result-slug">
-              {result.new_base_class_slug}
-            </p>
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                {t('entityModal.distillResult.newBaseClass')}
+              </p>
+              <p
+                className="mt-1 font-mono text-lg text-slate-950"
+                data-testid="distill-result-slug"
+              >
+                {result.new_base_class_slug}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                {t('entityModal.distillResult.newBaseClassName')}
+              </p>
+              <p
+                className="mt-1 text-sm font-medium text-slate-900"
+                data-testid="distill-result-name"
+              >
+                {result.new_base_class_name}
+              </p>
+            </div>
           </div>
 
           <section
@@ -90,25 +103,14 @@ export default function DistillResultModal({ result, onClose }: DistillResultMod
               {t('entityModal.distillResult.manifestHeading')}
             </h3>
             <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-              <Row label={t('entityModal.distillResult.fieldName')} value={fieldValue('name')} />
               <Row
-                label={t('entityModal.distillResult.fieldSlug')}
-                value={fieldValue('slug')}
+                label={t('entityModal.distillResult.fieldProviderConfig')}
+                value={fieldValue('provider_config')}
                 mono
               />
               <Row
-                label={t('entityModal.distillResult.fieldProvider')}
-                value={fieldValue('provider')}
-                mono
-              />
-              <Row
-                label={t('entityModal.distillResult.fieldSkills')}
-                value={fieldValue('skills')}
-                mono
-              />
-              <Row
-                label={t('entityModal.distillResult.fieldTools')}
-                value={fieldValue('tools')}
+                label={t('entityModal.distillResult.fieldDefaultModel')}
+                value={fieldValue('default_model')}
                 mono
               />
               <Row
@@ -116,11 +118,48 @@ export default function DistillResultModal({ result, onClose }: DistillResultMod
                 value={fieldValue('commands')}
                 mono
               />
+              <Row
+                label={t('entityModal.distillResult.fieldDefaultCapabilities')}
+                value={fieldValue('default_capabilities')}
+                mono
+              />
+              <Row
+                label={t('entityModal.distillResult.fieldDefaultGeneRefs')}
+                value={fieldValue('default_gene_refs')}
+                mono
+              />
+              <Row
+                label={t('entityModal.distillResult.fieldHasKnowledge')}
+                value={fieldValue('has_knowledge')}
+                mono
+              />
+              <Row
+                label={t('entityModal.distillResult.fieldSystemPrompt')}
+                value={fieldValue('system_prompt')}
+              />
             </dl>
-            <p className="mt-3 text-xs text-slate-500" data-testid="distill-result-based-on">
-              {t('entityModal.distillResult.basedOnMemory', { count: memoryCount })}
-            </p>
           </section>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                {t('entityModal.distillResult.genesWritten')}
+              </p>
+              <ChipList
+                values={result.default_gene_refs ?? []}
+                emptyText={t('entityModal.distillResult.none')}
+              />
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                {t('entityModal.distillResult.knowledgeMounted')}
+              </p>
+              <ChipList
+                values={result.has_knowledge ?? []}
+                emptyText={t('entityModal.distillResult.none')}
+              />
+            </div>
+          </div>
         </div>
 
         <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3">
@@ -167,7 +206,33 @@ function Row({
   return (
     <>
       <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</dt>
-      <dd className={cn('text-sm text-slate-900', mono ? 'font-mono break-words' : '')}>{value}</dd>
+      <dd className={cn('text-sm text-slate-900', mono ? 'font-mono break-words' : 'break-words')}>
+        {value}
+      </dd>
     </>
+  );
+}
+
+function ChipList({
+  values,
+  emptyText,
+}: {
+  readonly values: readonly string[];
+  readonly emptyText: string;
+}) {
+  if (values.length === 0) {
+    return <p className="mt-1.5 text-xs text-slate-500">{emptyText}</p>;
+  }
+  return (
+    <ul className="mt-1.5 flex flex-wrap gap-1">
+      {values.map((value) => (
+        <li
+          key={value}
+          className="inline-flex items-center rounded-md bg-white px-2 py-0.5 font-mono text-xs text-slate-700 ring-1 ring-slate-200"
+        >
+          {value}
+        </li>
+      ))}
+    </ul>
   );
 }

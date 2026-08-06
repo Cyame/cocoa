@@ -9,6 +9,8 @@ export type CapabilityMarketEntry = {
   readonly type: CapabilityType | string;
   readonly description: string | null;
   readonly config_template: Record<string, unknown> | null;
+  /** v4.9.3: knowledge slugs this capability requires (== Instance env keys). */
+  readonly required_knowledge: readonly string[] | null;
   readonly tags: readonly string[] | null;
   readonly scope: CapabilityScope | string;
   readonly organization_id: string | null;
@@ -29,9 +31,7 @@ type OffsetPage<T> = {
 };
 
 export function listCapabilityMarket(limit = 200): Promise<OffsetPage<CapabilityMarketEntry>> {
-  return api<OffsetPage<CapabilityMarketEntry>>(
-    `/capability-market?limit=${limit}&offset=0`,
-  );
+  return api<OffsetPage<CapabilityMarketEntry>>(`/capability-market?limit=${limit}&offset=0`);
 }
 
 export function createCapability(body: {
@@ -39,6 +39,7 @@ export function createCapability(body: {
   readonly type?: CapabilityType;
   readonly description?: string | null;
   readonly config_template?: Record<string, unknown> | null;
+  readonly required_knowledge?: readonly string[] | null;
   readonly scope?: CapabilityScope;
   readonly organization_id?: string | null;
   readonly namespace_id?: string | null;
@@ -57,6 +58,7 @@ export function updateCapability(
     readonly type?: CapabilityType;
     readonly description?: string | null;
     readonly config_template?: Record<string, unknown> | null;
+    readonly required_knowledge?: readonly string[] | null;
     readonly tags?: readonly string[] | null;
   },
 ): Promise<CapabilityMarketEntry> {

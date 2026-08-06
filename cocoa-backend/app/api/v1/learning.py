@@ -1,14 +1,22 @@
-"""Learning API routes (P10 Wave 2 + phase-15f capability lifecycle).
+"""Learning API routes (P10 Wave 2 + phase-15f capability lifecycle + v4.9.3).
 
-Endpoints for the skill-distillation and capability-lifecycle flows:
+Endpoints for the skill-distillation and capability-lifecycle flows.
+v4.9.3 炼化 chain — three-role division:
 
-- GET  /learning/memories/{entity_id}/summary       — aggregated memory counts
-- POST /learning/entities/{entity_id}/distill      — distill memories into a new preset (201)
-- GET  /learning/presets/{preset_id}                  — fetch a distilled preset result
-- POST /learning/instances/{iid}/reap                 — memory → capability (instance-private)
-- POST /learning/entities/{eid}/promote               — instance cap → entity shared
-- POST /learning/entities/{eid}/distill?action=transmute — entity → base class
-- POST /learning/capabilities/combine                 — N capabilities → 1 gene
+- **reap** = Instance memory → capability draft (instance-private)
+  ``POST /learning/instances/{iid}/reap``
+- **distill** = Entity memory → org-level **capability_market** entries
+  (``created_via="distill"``, required_knowledge declared, no has)
+  ``POST /learning/entities/{eid}/distill``
+- **promote** = Instance → Entity (回魂/派生), aggregates has_knowledge
+  ``POST /learning/entities/{eid}/promote``
+- **transmute** = Entity → BaseClass (神职), genes + has_knowledge mount
+  ``POST /learning/entities/{eid}/transmute``
+
+Other endpoints:
+- GET  /learning/memories/{entity_id}/summary  — aggregated memory counts
+- GET  /learning/presets/{preset_id}           — historical distill result (B4 compat)
+- POST /learning/capabilities/combine          — N capabilities → 1 gene
 """
 
 from __future__ import annotations
@@ -21,7 +29,15 @@ from fastapi import APIRouter, Query, status
 from sqlalchemy import func, select
 
 from app.api.deps import DB, CurrentUserDep, XOrgIdHeader
-from app.core.distillation import AggregatingDistiller, DistillationError
+from app.core.capabilities import upsert_capability
+from app.core.distillation import (
+    AggregatingDistiller,
+    CapabilityCandidate,
+    DistillationError,
+    DistillResult,
+    LLMDistiller,
+    aggregate_memory_counts,
+)
 from app.core.errors import ConflictError, NotFoundError, ValidationError
 from app.core.event_types import (
     LEARNING_COMPOSED,
@@ -49,6 +65,7 @@ from app.models.instance import Instance
 from app.models.memory import Memory
 from app.schemas.learning import (
     AggregatedMemoryCount,
+    CapabilityCandidateOut,
     CombineRequest,
     CombineResultOut,
     DistillRequest,
@@ -72,6 +89,7 @@ add_error_responses(router)
 # DB column (255 minus a buffer).
 _SLUG_NON_ALNUM = re.compile(r"[^a-z0-9]+")
 _REAP_DESC_CAP = 200
+_MAX_COMMANDS_CANDIDATES = 10
 
 
 # ---------------------------------------------------------------------------
@@ -98,6 +116,90 @@ async def _get_workspace_id_for_entity(db: DB, entity_id: str) -> str:
             f"Entity {entity_id!r} is not associated with any workspace",
         )
     return workspace_id
+
+
+async def _get_first_instance_for_entity(
+    db: DB, entity_id: str
+) -> Instance | None:
+    """Return the first active Instance of *entity_id* (or None)."""
+    result = await db.execute(
+        select(Instance)
+        .where(
+            Instance.entity_id == entity_id,
+            Instance.deleted_at.is_(None),
+        )
+        .order_by(Instance.created_at.asc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+def _manifest_to_candidates(manifest: dict) -> list[CapabilityCandidate]:
+    """Convert an LLM manifest dict into capability candidates.
+
+    The LLM returns ``{commands, skills, tools, prompt, model}``; each list
+    becomes market candidates typed by its list (command / skill / tool).
+    ``prompt`` is carried as the skill candidates' ``config_template`` —
+    a capability config, not a manifest embed. Candidates are deduplicated
+    by name (upsert key) and capped like the heuristic engine.
+    """
+    candidates: list[CapabilityCandidate] = []
+    seen: set[str] = set()
+    prompt = manifest.get("prompt") or ""
+    for name in (manifest.get("commands") or [])[:_MAX_COMMANDS_CANDIDATES]:
+        if name and name not in seen:
+            candidates.append(CapabilityCandidate(name=name, type="command"))
+            seen.add(name)
+    for name in (manifest.get("skills") or [])[:_MAX_COMMANDS_CANDIDATES]:
+        if name and name not in seen:
+            candidates.append(
+                CapabilityCandidate(
+                    name=name,
+                    type="skill",
+                    description=prompt or None,
+                    config_template={"prompt": prompt} if prompt else None,
+                )
+            )
+            seen.add(name)
+    for name in (manifest.get("tools") or [])[:_MAX_COMMANDS_CANDIDATES]:
+        if name and name not in seen:
+            candidates.append(CapabilityCandidate(name=name, type="tool"))
+            seen.add(name)
+    return candidates
+
+
+async def _result_from_llm_manifest(
+    db: DB,
+    entity_id: str,
+    request: DistillRequest,
+    manifest: dict,
+) -> DistillResult:
+    """Wrap an LLM manifest dict in a DistillResult (aggregation + candidates).
+
+    Raises the standard ``learning.no_memory`` DistillationError when the
+    entity has no memory entries, keeping the 422 contract across engines.
+    """
+    result = await db.execute(
+        select(Memory).where(
+            Memory.entity_id == entity_id,
+            Memory.deleted_at.is_(None),
+        )
+    )
+    entries = list(result.scalars().all())
+    if not entries:
+        raise DistillationError(
+            code="learning.no_memory",
+            message_key="errors.learning.no_memory",
+            message="No memory entries for distillation",
+        )
+    skills = manifest.get("skills") or []
+    return DistillResult(
+        capability_candidates=_manifest_to_candidates(manifest),
+        gene_suggestion=skills[0] if skills else None,
+        aggregated_memory=aggregate_memory_counts(entries),
+        source_entity_id=entity_id,
+        source_preset_slug=request.source_preset_slug,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -233,11 +335,21 @@ async def distill_entity(
     current_user: CurrentUserDep,
     x_organization_id: XOrgIdHeader = None,
 ) -> DistillResultOut:
-    """Distill an entity's memory entries into a new BaseClass.
+    """Distill an entity's memory into org-level capability_market entries.
+
+    v4.9.3 炼化 chain: **distill = Entity memory → capability** (content
+    chain source). Each distilled candidate is upserted into the
+    capability_market with ``created_via="distill"`` (org scope) and its
+    ``required_knowledge`` slug declaration; no BaseClass is created and
+    no has_knowledge is attached (promote / transmute own that).
+
+    ``engine=llm`` resolves an org provider for the entity's instance; when
+    no provider is configured the request degrades to the heuristic engine
+    and reports ``engine_used="heuristic"`` + a warning (never 422/500 on
+    a missing provider).
 
     Requires ``editor`` role in the entity's workspace.
     Emits ``LEARNING_DISTILLATION_COMPLETED`` inside the transaction.
-    Returns 201 with the new preset identity and manifest preview.
     """
     # 1. Find Entity.
     emp = await db.get(Entity, entity_id)
@@ -258,59 +370,114 @@ async def distill_entity(
         x_organization_id=x_organization_id,
     )
 
-    # 3. Run distillation.
+    # 3. Resolve org scope for the market writes.
+    from app.models.organization import Namespace
+
+    ns = await db.get(Namespace, emp.namespace_id)
+    entity_org_id = ns.org_id if ns is not None else None
+    scope = "org" if entity_org_id else "system"
+
+    # 4. Engine dispatch (Q5: engine=llm degrades to heuristic when the
+    #    instance has no org provider configured).
+    engine_used = body.engine
+    warnings: list[str] = []
     try:
-        result = await AggregatingDistiller().distill(
-            entity_id,
-            request=body,
-            session=db,
-        )
+        if body.engine == "llm":
+            instance = await _get_first_instance_for_entity(db, entity_id)
+            provider = None
+            model = None
+            if instance is not None:
+                from app.services.llm.instance_pi_env import (
+                    resolve_provider_for_instance,
+                )
+
+                provider, model = await resolve_provider_for_instance(
+                    db, instance.id
+                )
+            if provider is None:
+                engine_used = "heuristic"
+                warnings.append("llm_unavailable_degraded_to_heuristic")
+                result = await AggregatingDistiller().distill(
+                    entity_id, request=body, session=db
+                )
+            else:
+                from app.services.llm.org_provider import (
+                    build_llm_client_from_org_provider,
+                )
+
+                llm_client = build_llm_client_from_org_provider(
+                    provider, model=model
+                )
+                manifest = await LLMDistiller(llm_client).distill(
+                    entity_id, session=db
+                )
+                result = await _result_from_llm_manifest(
+                    db, entity_id, body, manifest
+                )
+        else:
+            result = await AggregatingDistiller().distill(
+                entity_id, request=body, session=db
+            )
     except DistillationError as exc:
         if exc.code == "entity.not_found":
             raise NotFoundError(exc.code, exc.message_key, exc.message) from exc
         raise ValidationError(exc.code, exc.message_key, exc.message) from exc
 
-    # 4. Slug uniqueness check.
-    slug = result.new_preset_slug
-    existing = await db.execute(
-        select(BaseClass).where(
-            BaseClass.slug == slug,
-            BaseClass.deleted_at.is_(None),
+    # 5. Persist candidates to capability_market (idempotent by name).
+    candidate_names = [c.name for c in result.capability_candidates]
+    existing_names: set[str] = set()
+    if candidate_names:
+        market_q = await db.execute(
+            select(CapabilityMarketEntry.name).where(
+                CapabilityMarketEntry.name.in_(candidate_names),
+                CapabilityMarketEntry.deleted_at.is_(None),
+            )
         )
-    )
-    if existing.scalar_one_or_none() is not None:
-        raise ConflictError(
-            "base_class.slug_taken",
-            "errors.base_class.slug_taken",
-            f"BaseClass slug {slug!r} is already taken",
+        existing_names = {row[0] for row in market_q}
+
+    created_caps: list[CapabilityCandidateOut] = []
+    created_count = 0
+    for cand in result.capability_candidates:
+        market = await upsert_capability(
+            db,
+            name=cand.name,
+            cap_type=cand.type,
+            scope=scope,
+            organization_id=entity_org_id,
+            created_via=CapabilityCreatedVia.distill.value,
+            description=cand.description,
+            config_template=cand.config_template,
+            required_knowledge=cand.required_knowledge,
+            source_entity_slug=emp.slug,
         )
-
-    # 5. Create new preset inside transaction.
-    preset_name = body.target_preset_name or f"Skill: {body.target_skill_slug}"
-    manifest_dict = result.manifest_preview.model_dump()
-    # Store source info in manifest for future reference.
-    if result.source_preset_slug:
-        manifest_dict["source_preset_slug"] = result.source_preset_slug
-
-    new_preset = BaseClass(
-        slug=slug,
-        name=preset_name,
-        manifest=manifest_dict,
-    )
-    db.add(new_preset)
-    await db.flush()
+        if cand.name not in existing_names:
+            created_count += 1
+            existing_names.add(cand.name)
+        created_caps.append(
+            CapabilityCandidateOut(
+                id=market.id,
+                name=market.name,
+                type=market.type,
+                description=market.description,
+                config_template=market.config_template,
+                required_knowledge=market.required_knowledge or [],
+                created_via=market.created_via,
+            )
+        )
 
     # 6. Emit event within the same transaction.
     await emit(
         LEARNING_DISTILLATION_COMPLETED,
         actor_type="user",
         actor_id=current_user.user_id,
-        resource_type="base_class",
-        resource_id=new_preset.id,
+        resource_type="capability_market",
+        resource_id=entity_id,
         payload={
             "entity_id": entity_id,
-            "new_preset_slug": slug,
-            "source_preset_slug": result.source_preset_slug,
+            "capabilities_count": len(created_caps),
+            "capability_market_created": created_count,
+            "gene_suggestion": result.gene_suggestion,
+            "engine_used": engine_used,
             "aggregated_counts": {
                 "experience": result.aggregated_memory.experience,
                 "lesson": result.aggregated_memory.lesson,
@@ -323,15 +490,15 @@ async def distill_entity(
         session=db,
     )
 
-    # 7. Commit and refresh.
+    # 7. Commit.
     await db.commit()
-    await db.refresh(new_preset)
 
     return DistillResultOut(
-        new_preset_id=new_preset.id,
-        new_preset_slug=new_preset.slug,
-        new_preset_name=new_preset.name,
-        manifest_preview=result.manifest_preview,
+        capability_candidates=created_caps,
+        capability_market_created=created_count,
+        gene_suggestion=result.gene_suggestion,
+        engine_used=engine_used,
+        warnings=warnings,
         aggregated_memory=result.aggregated_memory,
         source_entity_id=entity_id,
         source_preset_slug=result.source_preset_slug,
@@ -421,10 +588,15 @@ async def reap_instance(
 ) -> ReapResultOut:
     """Reap reusable capabilities from an instance's Memory log.
 
+    v4.9.3 炼化 chain division: **reap = Instance-level memory → capability
+    draft**; the Entity row is NOT mutated (``entity_changed: false``).
+    Distilled drafts are promoted to the Entity by ``promote`` and
+    settled into the org market by ``distill`` — the three endpoints never
+    overlap: reap (draft) / promote (Instance→Entity) / distill (Entity→market).
+
     Per PRD §13.6.3: distil memory entries into capability dicts, write
     them to the L1 capability_market (via ``created_via="reap"``) and to
-    the instance's local runtime_config. The Entity row is NOT
-    mutated (``entity_changed: false``).
+    the instance's local runtime_config.
     """
     instance = await db.get(Instance, instance_id)
     if instance is None or instance.deleted_at is not None:
@@ -670,6 +842,13 @@ async def promote_entity(
         existing_names.add(name)
         promoted_now += 1
 
+    # 3b. v4.9.3 has-knowledge aggregate — union of the Entity's current
+    #     knowledge and the source instance's runtime_config knowledge env
+    #     keys (化身→眷族 direction). Atomic with the capability writes.
+    knowledge_env = (instance_runtime.get("knowledge") or {}).get("env") or {}
+    env_keys = {str(k) for k in knowledge_env.keys() if k}
+    has_knowledge_aggregate = sorted(set(entity.has_knowledge or []) | env_keys)
+
     # 4. Decide prompt snapshot (prefer Entity.system_prompt overlay).
     prompt_regen = entity.system_prompt
     if body.include_prompt_regen:
@@ -695,6 +874,7 @@ async def promote_entity(
             new_prompt_preview=prompt_regen or "",
             outdated_instances_count=0,
             capability_market_uploaded=0,
+            has_knowledge=has_knowledge_aggregate,
         )
 
     if body.mode == "fork":
@@ -708,6 +888,7 @@ async def promote_entity(
             display_color=entity.display_color,
             system_prompt=prompt_regen if body.include_prompt_regen else entity.system_prompt,
             config_override=entity.config_override,
+            has_knowledge=has_knowledge_aggregate,
         )
         db.add(new_entity)
         await db.flush()
@@ -764,6 +945,7 @@ async def promote_entity(
             new_prompt_preview=prompt_regen or "",
             outdated_instances_count=0,
             capability_market_uploaded=0,
+            has_knowledge=has_knowledge_aggregate,
         )
 
     # 6. Persist via junction (v4.0 §6.4 — JSONB write path removed).
@@ -788,6 +970,7 @@ async def promote_entity(
         )
     if body.include_prompt_regen and prompt_regen:
         entity.system_prompt = prompt_regen
+    entity.has_knowledge = has_knowledge_aggregate
     new_migration_hash = await compute_entity_migration_hash(db, entity)
     entity.migration_hash = new_migration_hash
 
@@ -836,6 +1019,7 @@ async def promote_entity(
         new_prompt_preview=prompt_regen or "",
         outdated_instances_count=outdated_count,
         capability_market_uploaded=market_uploaded,
+        has_knowledge=has_knowledge_aggregate,
     )
 
 
@@ -893,15 +1077,23 @@ async def transmute_entity(
         x_organization_id=x_organization_id,
     )
 
-    # 1. Build the new manifest (v4.0: capability truth is the junction).
+    # 1. Build the new manifest (v4.0: capability truth is the junction;
+    #    v4.9.3: default_gene_refs come from the Entity's attached genes).
     from app.core.capabilities import (
+        attach_base_class_ai_gene,
         attach_base_class_capability,
+        load_entity_ai_gene_dicts,
         load_entity_capability_dicts,
         upsert_capability,
     )
     from app.models.organization import Namespace
 
     entity_caps = await load_entity_capability_dicts(db, entity.id)
+    gene_refs = [
+        g["slug"] for g in await load_entity_ai_gene_dicts(db, entity)
+        if g.get("slug")
+    ]
+    entity_has_knowledge = sorted(set(entity.has_knowledge or []))
     ns = await db.get(Namespace, entity.namespace_id)
     entity_org_id = ns.org_id if ns is not None else None
     manifest = {
@@ -909,7 +1101,8 @@ async def transmute_entity(
         "default_model": "tbd",
         "commands": [],
         "default_capabilities": list(entity_caps),
-        "default_gene_refs": [],
+        "default_gene_refs": list(gene_refs),
+        "has_knowledge": entity_has_knowledge,
         "system_prompt": entity.system_prompt or "",
     }
 
@@ -935,9 +1128,12 @@ async def transmute_entity(
             new_base_class_name=body.target_base_class_name,
             manifest_preview=manifest,
             source_entity_id=entity_id,
+            default_gene_refs=list(gene_refs),
+            has_knowledge=entity_has_knowledge,
         )
 
-    # 4. Create BaseClass (org scope) + base_class_capabilities junction (§6.4).
+    # 4. Create BaseClass (org scope) + base_class_capabilities junction
+    #    (§6.4) + base_class_ai_genes junction + has_knowledge mount.
     new_bc = BaseClass(
         slug=body.target_base_class_slug,
         name=body.target_base_class_name,
@@ -945,6 +1141,7 @@ async def transmute_entity(
         scope="org" if entity_org_id else "system",
         organization_id=entity_org_id,
         version="0.1.0",
+        has_knowledge=entity_has_knowledge,
     )
     db.add(new_bc)
     await db.flush()
@@ -965,6 +1162,17 @@ async def transmute_entity(
         await attach_base_class_capability(
             db, base_class_id=new_bc.id, capability_id=market.id
         )
+    if gene_refs:
+        gene_q = await db.execute(
+            select(AiGene).where(
+                AiGene.slug.in_(gene_refs),
+                AiGene.deleted_at.is_(None),
+            )
+        )
+        for gene in gene_q.scalars().all():
+            await attach_base_class_ai_gene(
+                db, base_class_id=new_bc.id, ai_gene_id=gene.id
+            )
 
     # 5. Emit event.
     await emit(
@@ -990,6 +1198,8 @@ async def transmute_entity(
         new_base_class_name=new_bc.name,
         manifest_preview=manifest,
         source_entity_id=entity_id,
+        default_gene_refs=list(gene_refs),
+        has_knowledge=entity_has_knowledge,
     )
 
 

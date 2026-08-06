@@ -240,19 +240,43 @@ def _instance_pod_env(instance_id: str, proxy_token: str, extra: dict[str, str])
     return env
 
 
+async def _knowledge_env_for_instance(
+    db: AsyncSession, instance_id: str
+) -> dict[str, str]:
+    """Splice ``runtime_config["knowledge"]["env"]`` as ``KNOWLEDGE_<SLUG>`` vars."""
+    from app.core.knowledge import knowledge_slug_to_env_key
+
+    instance = await db.get(Instance, instance_id)
+    if instance is None or not isinstance(instance.runtime_config, dict):
+        return {}
+    knowledge = instance.runtime_config.get("knowledge")
+    if not isinstance(knowledge, dict):
+        return {}
+    env = knowledge.get("env")
+    if not isinstance(env, dict):
+        return {}
+    return {
+        knowledge_slug_to_env_key(slug): value
+        for slug, value in env.items()
+        if isinstance(value, str)
+    }
+
+
 async def _instance_pod_env_async(
     db: AsyncSession,
     instance_id: str,
     proxy_token: str,
     extra: dict[str, str] | None = None,
 ) -> dict[str, str]:
-    """Like ``_instance_pod_env`` plus resolved OrganizationProvider → pi env."""
+    """Like ``_instance_pod_env`` plus resolved pi env + knowledge env vars."""
     from app.services.llm.instance_pi_env import resolve_pi_env_for_instance
 
     base = _instance_pod_env(instance_id, proxy_token, extra or {})
     pi_env = await resolve_pi_env_for_instance(db, instance_id)
-    # Caller extras / COCOA_* win over pi defaults if both set.
-    return {**pi_env, **base}
+    knowledge_env = await _knowledge_env_for_instance(db, instance_id)
+    # Caller extras / COCOA_* win over pi defaults; knowledge vars never
+    # override the caller's explicit COCOA_*/KNOWLEDGE_* settings.
+    return {**pi_env, **knowledge_env, **base}
 
 
 # ---------------------------------------------------------------------------

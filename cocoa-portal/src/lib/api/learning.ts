@@ -1,8 +1,33 @@
 import { api } from '@/lib/api';
-import type { CombineResult, ReapResult } from '@/lib/types';
+import type {
+  CombineResult,
+  DistillEngine,
+  DistillResultOut,
+  MemoryKind,
+  ReapResult,
+} from '@/lib/types';
 
 export function fetchMemorySummary(employeeId: string): Promise<unknown> {
   return api(`/learning/memories/${encodeURIComponent(employeeId)}/summary`);
+}
+
+/** v4.9.3: distill = Entity memory → capability_market (not a BaseClass). */
+export function distillEntity(
+  entityId: string,
+  targetSkillSlug: string,
+  engine: DistillEngine,
+  memoryKindFilter: readonly MemoryKind[] | null = null,
+): Promise<DistillResultOut> {
+  return api<DistillResultOut>(`/learning/entities/${encodeURIComponent(entityId)}/distill`, {
+    method: 'POST',
+    body: JSON.stringify({
+      target_skill_slug: targetSkillSlug,
+      engine,
+      memory_kind_filter: memoryKindFilter,
+      source_preset_slug: null,
+      snapshot_only: false,
+    }),
+  });
 }
 
 export function reapInstance(

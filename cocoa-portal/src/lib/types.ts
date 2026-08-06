@@ -76,6 +76,8 @@ export type Entity = {
   readonly display_color: string | null;
   readonly created_at: string;
   readonly updated_at: string;
+  /** v4.9.3: real knowledge assets held by this entity (slug list). */
+  readonly has_knowledge?: readonly string[] | null;
 };
 
 /** @deprecated Use Entity */
@@ -310,19 +312,39 @@ export type DistillRequest = {
   readonly memory_kind_filter?: readonly MemoryKind[] | null;
   readonly source_preset_slug?: string | null;
   readonly target_preset_name?: string | null;
+  /** v4.9.3: distillation engine — ``heuristic`` (default) or ``llm`` (degrades on missing provider). */
+  readonly engine?: 'heuristic' | 'llm';
 };
 
+export type DistillEngine = 'heuristic' | 'llm';
+
+/** One capability distilled from entity memory into the capability_market (v4.9.3). */
+export type CapabilityCandidate = {
+  readonly id?: string;
+  readonly name: string;
+  readonly type: string;
+  readonly description: string | null;
+  readonly config_template: JsonObject | null;
+  /** Slugs the capability needs to function (== knowledge_entries keys == Instance env keys). */
+  readonly required_knowledge: readonly string[];
+  readonly created_via?: string;
+};
+
+/** Response for ``POST /api/v1/learning/entities/{eid}/distill`` (v4.9.3). */
 export type DistillResultOut = {
-  readonly new_preset_id: string;
-  readonly new_preset_slug: string;
-  readonly new_preset_name: string;
-  readonly manifest_preview: SkillManifestPreview;
+  readonly status: string;
+  readonly capability_candidates: readonly CapabilityCandidate[];
+  readonly capability_market_created: number;
+  readonly gene_suggestion: string | null;
+  /** Engine actually used (``llm`` degrades to ``heuristic``). */
+  readonly engine_used: DistillEngine | string;
+  readonly warnings: readonly string[];
   readonly aggregated_memory: AggregatedMemoryCount;
   readonly source_entity_id: string;
   readonly source_preset_slug: string | null;
 };
 
-export type CapabilityType = 'skill' | 'tool' | 'mcp' | 'lsp';
+export type CapabilityType = 'skill' | 'tool' | 'mcp' | 'lsp' | 'command';
 
 export type CapabilitySource = 'from_base_class' | 'extra_added';
 
@@ -357,6 +379,8 @@ export type BaseClass = {
   readonly version: string | null;
   readonly tags: readonly string[] | null;
   readonly created_at: string;
+  /** v4.9.3: real knowledge assets held by this base class (slug list). */
+  readonly has_knowledge?: readonly string[] | null;
 };
 
 export type EntityInstanceStatus = {
@@ -395,6 +419,8 @@ export type PromoteResult = {
   readonly outdated_instances_count: number;
   readonly capability_market_uploaded: number;
   readonly new_entity_id?: string | null;
+  /** v4.9.3: entity has_knowledge after the promote aggregate (union with source instance env keys). */
+  readonly has_knowledge: readonly string[];
 };
 
 export type TransmuteResult = {
@@ -403,6 +429,10 @@ export type TransmuteResult = {
   readonly new_base_class_name: string;
   readonly manifest_preview: JsonObject;
   readonly source_entity_id: string;
+  /** v4.9.3: AiGene slugs written to the base_class_ai_genes junction. */
+  readonly default_gene_refs: readonly string[];
+  /** v4.9.3: has_knowledge mounted from the source Entity. */
+  readonly has_knowledge: readonly string[];
 };
 
 export type ReapResult = {

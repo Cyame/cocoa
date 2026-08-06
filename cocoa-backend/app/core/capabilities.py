@@ -313,6 +313,7 @@ async def upsert_capability(
     created_via: str = "manual",
     description: str | None = None,
     config_template: dict | None = None,
+    required_knowledge: list[str] | None = None,
     source_entity_slug: str | None = None,
 ) -> CapabilityMarketEntry:
     """Idempotent upsert keyed on active ``name`` (partial unique)."""
@@ -334,6 +335,7 @@ async def upsert_capability(
         created_via=created_via,
         description=description,
         config_template=config_template,
+        required_knowledge=required_knowledge,
         source_entity_slug=source_entity_slug,
     )
     db.add(cap)

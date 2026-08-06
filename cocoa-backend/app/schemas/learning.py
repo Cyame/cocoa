@@ -29,23 +29,33 @@ _VALID_MEMORY_KINDS = frozenset(
 
 
 class DistillRequest(BaseModel):
-    """Payload for ``POST /api/v1/learning/distill``.
+    """Payload for ``POST /api/v1/learning/entities/{eid}/distill``.
 
-    Triggers a skill-distillation job: collect memories matching
-    ``memory_kind_filter`` from the source entity/preset, extract a
-    reusable skill at ``target_skill_slug``, and create a new preset
-    (optionally naming it via ``target_preset_name``).
+    Triggers a distillation job: collect memories matching
+    ``memory_kind_filter`` from the source entity, extract structured
+    capability candidates (``capability_candidates``) into the org-level
+    capability_market, and suggest a gene slug.
+
+    v4.9.3: distill is the **memory → capability** link of the 炼化 chain
+    (reap = Instance draft / promote = Instance→Entity / transmute =
+    Entity→BaseClass). The engine selector chooses the extraction
+    implementation; ``engine=llm`` degrades to heuristic when no org
+    provider is configured (never an error).
 
     Attributes:
         memory_kind_filter: Which memory kinds to include (None = all).
             Recognised values: ``experience``, ``lesson``, ``decision``,
-            ``problem``.
+            ``problem``, ``notepad``.
         target_skill_slug: Slug for the extracted skill.
             Must match ``/^[a-z][a-z0-9-]*$/``.
         source_preset_slug: Source BaseClass slug whose memories to
             mine.  ``None`` means mine the entity's own memories.
-        target_preset_name: Human-readable name for the new preset.
-            ``None`` lets the system auto-generate one.
+        target_preset_name: Kept for API stability; unused in v4.9.3
+            (distill no longer creates a preset).
+        engine: ``heuristic`` (default) or ``llm``. ``llm`` resolves an
+            org provider for the entity's instance; when none is
+            available the endpoint degrades to the heuristic engine and
+            reports ``engine_used="heuristic"`` + a warning.
     """
 
     memory_kind_filter: list[str] | None = Field(
@@ -63,7 +73,11 @@ class DistillRequest(BaseModel):
     )
     target_preset_name: str | None = Field(
         default=None,
-        description="Human-readable name for the new preset (auto-generated if None).",
+        description="Kept for API stability; unused in v4.9.3.",
+    )
+    engine: Literal["heuristic", "llm"] = Field(
+        default="heuristic",
+        description="Distillation engine: heuristic rules or LLM (degrades on missing provider).",
     )
 
     @field_validator("memory_kind_filter")
@@ -174,31 +188,91 @@ class SkillManifestPreview(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class DistillResultOut(BaseModel):
-    """Response for ``POST /api/v1/learning/distill``.
+class CapabilityCandidateOut(BaseModel):
+    """One distilled capability candidate persisted to the capability_market.
 
-    Contains everything needed to confirm a successful distillation:
-    the new preset identity, a manifest preview, aggregated memory stats,
-    and a trail back to the source entity/preset.
+    v4.9.3: distill = Entity memory → capability. Each candidate is a
+    market entry with ``created_via="distill"`` (org scope) declaring its
+    ``required_knowledge`` slugs (== knowledge_entries keys == Instance
+    env keys). It carries **no** has_knowledge — real knowledge assets
+    are attached by promote / transmute.
 
     Attributes:
-        new_preset_id: UUID of the freshly created BaseClass.
-        new_preset_slug: Slug of the new preset.
-        new_preset_name: Human-readable name of the new preset.
-        manifest_preview: Preview of the new preset's manifest.
-        aggregated_memory: Per-kind memory counts from the source.
-        source_entity_id: UUID of the source entity.
-        source_preset_slug: Slug of the source preset, or ``None`` if
-            entity-own memories were used.
+        id: capability_market row UUID (empty in preview-only paths).
+        name: Market slug of the capability.
+        type: Capability type (skill / tool / mcp / lsp / command).
+        description: Human-readable description.
+        config_template: Structured config for the capability (None when
+            the heuristic cannot infer one).
+        required_knowledge: Slugs the capability needs to function.
+        created_via: How the row entered the market (``distill``).
     """
 
-    new_preset_id: str
-    new_preset_slug: str
-    new_preset_name: str
-    manifest_preview: SkillManifestPreview
-    aggregated_memory: AggregatedMemoryCount
-    source_entity_id: str
+    id: str = ""
+    name: str
+    type: str = "skill"
+    description: str | None = None
+    config_template: dict | None = None
+    required_knowledge: list[str] = Field(default_factory=list)
+    created_via: str = "distill"
+
+
+class DistillResultOut(BaseModel):
+    """Response for ``POST /api/v1/learning/entities/{eid}/distill``.
+
+    v4.9.3: distill writes **capability_market** entries (not a BaseClass).
+    The response exposes the created capabilities, the gene suggestion,
+    the engine used and any degradation warnings.
+
+    Attributes:
+        capability_candidates: Capabilities persisted to the market.
+        capability_market_created: Count of new market rows written
+            (idempotent upsert by name — repeats are 0).
+        gene_suggestion: Suggested AiGene slug packaging the candidates.
+        engine_used: ``heuristic`` or ``llm`` (after degradation resolves).
+        warnings: Non-blocking notices (e.g.
+            ``llm_unavailable_degraded_to_heuristic``).
+        aggregated_memory: Per-kind memory counts from the source.
+        source_entity_id: UUID of the source entity.
+        source_preset_slug: Slug of the source preset, or ``None``.
+        new_preset_id / new_preset_slug / new_preset_name /
+        manifest_preview: Legacy BaseClass distill fields — kept for the
+            historical ``GET /learning/presets/{id}`` compatibility path
+            (B4); unused by the new distill endpoint.
+    """
+
+    status: str = "ok"
+    capability_candidates: list[CapabilityCandidateOut] = Field(
+        default_factory=list,
+        description="Capabilities distilled into the capability_market.",
+    )
+    capability_market_created: int = Field(
+        default=0,
+        description="New capability_market rows written (0 = all names already existed).",
+    )
+    gene_suggestion: str | None = Field(
+        default=None,
+        description="Suggested AiGene slug for the distilled capabilities.",
+    )
+    engine_used: str = Field(
+        default="heuristic",
+        description="Engine actually used (llm degrades to heuristic).",
+    )
+    warnings: list[str] = Field(
+        default_factory=list,
+        description="Non-blocking degradation / consistency warnings.",
+    )
+    aggregated_memory: AggregatedMemoryCount = Field(
+        default_factory=AggregatedMemoryCount,
+    )
+    source_entity_id: str = ""
     source_preset_slug: str | None = None
+    # Legacy (B4): historical BaseClass-based distill results via
+    # GET /learning/presets/{preset_id}.
+    new_preset_id: str | None = None
+    new_preset_slug: str | None = None
+    new_preset_name: str | None = None
+    manifest_preview: SkillManifestPreview | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -321,6 +395,12 @@ class PromoteResultOut(BaseModel):
     outdated_instances_count: int
     capability_market_uploaded: int
     new_entity_id: str | None = None
+    # v4.9.3: has-knowledge aggregate — union of the entity's knowledge
+    # and the source instance's runtime_config["knowledge"]["env"] keys.
+    has_knowledge: list[str] = Field(
+        default_factory=list,
+        description="Entity has_knowledge after the promote aggregate.",
+    )
 
 
 class TransmuteRequest(BaseModel):
@@ -366,6 +446,16 @@ class TransmuteResultOut(BaseModel):
     new_base_class_name: str
     manifest_preview: dict
     source_entity_id: str
+    # v4.9.3: real gene refs (from the Entity's attached genes) and the
+    # mounted has-knowledge slug list.
+    default_gene_refs: list[str] = Field(
+        default_factory=list,
+        description="AiGene slugs written to the base_class_ai_genes junction.",
+    )
+    has_knowledge: list[str] = Field(
+        default_factory=list,
+        description="has_knowledge mounted from the source Entity.",
+    )
 
 
 class CombineRequest(BaseModel):

@@ -125,6 +125,10 @@ HARNESS_REPORT_RECEIVED = "harness.report_received"
 # is the operator-initiated batch re-sync event payload.
 INSTANCE_BATCH_RESTARTED = "instance.batch_restarted"
 
+# v4.9.3 spawn-time self-consistency hint: has-knowledge ⊉ required-knowledge
+# at spawn — non-blocking, payload carries {"missing": [slug, ...]}.
+INSTANCE_KNOWLEDGE_INCONSISTENT = "instance.knowledge_inconsistent"
+
 # ---------------------------------------------------------------------------
 # Clone operations (v4.4)
 # ---------------------------------------------------------------------------

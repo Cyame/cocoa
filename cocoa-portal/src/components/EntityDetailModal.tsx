@@ -28,13 +28,16 @@ import {
   promoteEntity,
   transmuteEntity,
 } from '@/lib/api/entities';
-import { listInstancesForEntity } from '@/lib/api/learning';
-import {
-  deleteInstanceById,
-  restartInstance,
-  stopInstance,
-} from '@/lib/api/instances';
-import type { AvatarDisplayStatus, EntityInstanceStatus, MemoryKind, TransmuteResult } from '@/lib/types';
+import { deleteInstanceById, restartInstance, stopInstance } from '@/lib/api/instances';
+import { distillEntity, listInstancesForEntity } from '@/lib/api/learning';
+import type {
+  AvatarDisplayStatus,
+  DistillEngine,
+  DistillResultOut,
+  EntityInstanceStatus,
+  MemoryKind,
+  TransmuteResult,
+} from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { type EntityModalTabId, useEntityModalStore } from '@/stores/entityModalStore';
 import { useSelectedStore } from '@/stores/selected';
@@ -264,6 +267,16 @@ export default function EntityDetailModal({ onClose }: EntityDetailModalProps) {
     [entityId],
   );
 
+  const handleDistill = useCallback(
+    async (targetSkillSlug: string, engine: DistillEngine): Promise<DistillResultOut> => {
+      if (entityId === null) {
+        throw new Error(t('entityModal.entityIdMissing'));
+      }
+      return distillEntity(entityId, targetSkillSlug, engine);
+    },
+    [entityId, t],
+  );
+
   const handleReap = useCallback(
     async (inst: EntityInstanceStatus) => {
       const ok = window.confirm(
@@ -391,12 +404,9 @@ export default function EntityDetailModal({ onClose }: EntityDetailModalProps) {
     await loadEntity(entityId);
   }, [entityId, loadEntity]);
 
-  const handleGeneNotify = useCallback(
-    (kind: 'success' | 'error', message: string) => {
-      setToast({ kind, message });
-    },
-    [],
-  );
+  const handleGeneNotify = useCallback((kind: 'success' | 'error', message: string) => {
+    setToast({ kind, message });
+  }, []);
 
   const headerTitle = useMemo(() => {
     if (entity === null) return t('entityModal.title');
@@ -553,7 +563,12 @@ export default function EntityDetailModal({ onClose }: EntityDetailModalProps) {
               onGoWorkspace={handleGoWorkspace}
             />
           ) : (
-            <DistillTab entity={entity} canTransmute={canTransmute} onTransmute={handleTransmute} />
+            <DistillTab
+              entity={entity}
+              canTransmute={canTransmute}
+              onTransmute={handleTransmute}
+              onDistill={handleDistill}
+            />
           )}
         </div>
 
@@ -620,4 +635,3 @@ export default function EntityDetailModal({ onClose }: EntityDetailModalProps) {
     </div>
   );
 }
-

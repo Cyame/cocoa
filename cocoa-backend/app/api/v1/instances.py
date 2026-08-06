@@ -32,12 +32,17 @@ from app.core.event_types import (
     INSTANCE_DELETED,
     INSTANCE_DEPLOYED,
     INSTANCE_FAILED,
+    INSTANCE_KNOWLEDGE_INCONSISTENT,
     INSTANCE_STARTED,
     INSTANCE_STOPPED,
 )
 from app.core.events import emit
 from app.core.inject_queue import enqueue_inject
 from app.core.knowledge import entry_to_dict, resolve_knowledge_for_instance
+from app.core.knowledge_spawn import (
+    build_spawn_knowledge_payload,
+    check_knowledge_consistency,
+)
 from app.core.migration_hash import compute_entity_migration_hash
 from app.core.openapi import add_error_responses
 from app.core.overlay import resolve_instance_agent_config
@@ -102,16 +107,47 @@ def _instance_out(instance: Instance) -> InstanceOut:
     )
 
 
-async def _refresh_instance_agent_config(db: DB, instance: Instance) -> None:
-    """Resolve BaseClass ⊕ Entity overlay into ``runtime_config.agent_config``."""
+async def _refresh_instance_agent_config(
+    db: DB, instance: Instance, *, actor_id: str | None = None
+) -> dict | None:
+    """Resolve BaseClass ⊕ Entity overlay into ``runtime_config.agent_config``.
+
+    Also runs the v4.9.3 self-consistency check (has ⊇ required) and emits
+    ``instance.knowledge_inconsistent`` when slugs are missing — the hint is
+    non-blocking. Returns the warning dict (``{"missing": [...]}``) so the
+    caller can attach it to the response, or ``None`` when consistent.
+    """
     entity = await db.get(Entity, instance.entity_id)
     if entity is None or entity.deleted_at is not None:
-        return
+        return None
     agent_config = await resolve_instance_agent_config(db, entity)
     runtime_config = dict(instance.runtime_config or {})
     runtime_config["agent_config"] = agent_config
     instance.runtime_config = runtime_config
     instance.active_hash = await compute_entity_migration_hash(db, entity)
+    return await _check_and_warn(db, entity, instance, actor_id=actor_id)
+
+
+async def _check_and_warn(
+    db: DB,
+    entity: Entity,
+    instance: Instance,
+    *,
+    actor_id: str | None = None,
+) -> dict | None:
+    """v4.9.3 spawn hint: emit warning event + return it (never blocks)."""
+    warning = await check_knowledge_consistency(db, entity)
+    if warning is not None:
+        await emit(
+            INSTANCE_KNOWLEDGE_INCONSISTENT,
+            actor_type="user",
+            actor_id=actor_id,
+            resource_type="instance",
+            resource_id=instance.id,
+            payload={**warning, "entity_id": entity.id},
+            session=db,
+        )
+    return warning
 
 
 class FailBody(BaseModel):
@@ -134,6 +170,9 @@ class DeployRecordOut(BaseModel):
     action: str
     status: str
     image_version: str | None = None
+    # v4.9.3 non-blocking spawn hint (set when the entity's has-knowledge
+    # does not cover its required-knowledge): {"missing": [slug, ...]}.
+    knowledge_consistency_warning: dict | None = None
 
 
 class InjectEnqueueBody(InjectEnqueueRequest):
@@ -295,7 +334,7 @@ async def create_instance(
     db: DB,
     current_user: CurrentUserDep,
     x_organization_id: XOrgIdHeader = None,
-) -> Instance:
+) -> InstanceOutWithToken:
     """Create a new instance.
 
     Validates that the referenced entity and workspace exist (404 if not).
@@ -335,6 +374,14 @@ async def create_instance(
     agent_config = await resolve_instance_agent_config(db, entity)
     runtime_config = dict(body.runtime_config or {})
     runtime_config["agent_config"] = agent_config
+    # v4.9.3: inject has-knowledge (BaseClass ∪ Entity) as env/files.
+    knowledge_payload = await build_spawn_knowledge_payload(
+        db, entity=entity, workspace_id=body.workspace_id
+    )
+    if knowledge_payload is not None:
+        runtime_config["knowledge"] = knowledge_payload
+    # v4.9.3 Q4: self-consistency hint — non-blocking, never rejects spawn.
+    consistency_warning = await check_knowledge_consistency(db, entity)
 
     instance = Instance(
         entity_id=body.entity_id,
@@ -390,6 +437,16 @@ async def create_instance(
         payload={"workspace_path": workspace_path, "workspace_id": body.workspace_id},
         session=db,
     )
+    if consistency_warning is not None:
+        await emit(
+            INSTANCE_KNOWLEDGE_INCONSISTENT,
+            actor_type="user",
+            actor_id=current_user.user_id,
+            resource_type="instance",
+            resource_id=instance.id,
+            payload={**consistency_warning, "entity_id": entity.id},
+            session=db,
+        )
     try:
         await db.commit()
     except IntegrityError:
@@ -400,7 +457,9 @@ async def create_instance(
             "Instance path taken or entity already introduced in this workspace",
         )
     await db.refresh(instance)
-    return instance
+    out = InstanceOutWithToken.model_validate(instance)
+    out.knowledge_consistency_warning = consistency_warning
+    return out
 
 
 @router.patch("/{instance_id}", response_model=InstanceOut)
@@ -626,7 +685,11 @@ async def deploy_instance(
             "can_edit_workspace",
             x_organization_id=x_organization_id,
         )
-        await _refresh_instance_agent_config(db, instance)
+        # Emits instance.knowledge_inconsistent when has ⊉ required (event-only
+        # on this legacy path — the response is the P7 InstanceOut contract).
+        await _refresh_instance_agent_config(
+            db, instance, actor_id=current_user.user_id
+        )
         await db.flush()
         # P7 fallback: in-process DB transition (no K8s cluster reachable).
         return await _transition(
@@ -658,7 +721,9 @@ async def deploy_instance(
         x_organization_id=x_organization_id,
     )
 
-    await _refresh_instance_agent_config(db, instance)
+    consistency_warning = await _refresh_instance_agent_config(
+        db, instance, actor_id=current_user.user_id
+    )
 
     record_id, ctx = await svc_deploy_existing_instance(
         instance_id,
@@ -676,6 +741,7 @@ async def deploy_instance(
         action="deploy",
         status="running",
         image_version=ctx.image_version,
+        knowledge_consistency_warning=consistency_warning,
     )
 
 

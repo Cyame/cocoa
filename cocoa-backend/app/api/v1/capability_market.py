@@ -169,6 +169,7 @@ async def create_capability_market_entry(
         namespace_id=ns_id,
         description=body.description,
         config_template=body.config_template,
+        required_knowledge=body.required_knowledge,
         tags=body.tags,
         created_via=CapabilityCreatedVia.manual.value,
         created_by_user_id=current_user.user_id,

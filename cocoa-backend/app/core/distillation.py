@@ -1,17 +1,27 @@
-"""Distillation engine — converts entity memory entries into preset manifests.
+"""Distillation engine — converts entity memory entries into capabilities.
 
-A DistillationEngine reads an entity's Memory records and produces a
-DistillResult containing a PresetManifest blueprint. The AggregatingDistiller is
-the default heuristic implementation; callers can swap in other engines
-(e.g. an LLM-based distiller) by conforming to the DistillationEngine Protocol.
+A DistillationEngine reads an Entity's Memory records and produces a
+DistillResult containing capability candidates (pure data, no DB writes —
+persistence belongs to the caller).
 
-The engine does NOT write to the database — it returns a pure DistillResult
-that callers handle persistence for.
+v4.9.3 炼化 chain (three-role division, documented here as the engine
+contract):
+
+- **reap** = Instance memory → capability draft (instance-private)
+- **distill** = Entity memory → org-level capability_market entries
+  (``created_via="distill"``; each candidate declares ``required_knowledge``
+  slugs; carries **no** has_knowledge)
+- **promote** = Instance → Entity (回魂/派生)
+- **transmute** = Entity → BaseClass (神职)
+
+The AggregatingDistiller is the default heuristic implementation; callers
+can swap in other engines (e.g. LLMDistiller) by conforming to the
+DistillationEngine Protocol.
 
 P14a adds :class:`LLMDistiller`, an LLM-powered alternative that calls
-``LLMClient.complete()`` with a manifest-generation prompt and parses
+``LLMClient.complete()`` with a candidate-generation prompt and parses
 the JSON response. On ``LLMError`` or invalid JSON, it falls back to
-:class:`AggregatingDistiller` so the caller never sees an exception.
+a heuristic manifest dict so the caller never sees an exception.
 """
 
 from __future__ import annotations
@@ -19,16 +29,15 @@ from __future__ import annotations
 import json
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.base_class import BaseClass
 from app.models.entity import Entity
 from app.models.memory import Memory, MemoryKind
-from app.schemas.learning import AggregatedMemoryCount, DistillRequest, SkillManifestPreview
+from app.schemas.learning import AggregatedMemoryCount, DistillRequest
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +50,7 @@ _MIN_PROMPT_CHARS = 50
 # Maximum length for truncated prompt text (before "...").
 _MAX_PROMPT_CHARS = 200
 
-# Maximum number of commands to extract from memory keys.
+# Maximum number of candidates to extract from memory keys.
 _MAX_COMMANDS = 10
 
 
@@ -51,15 +60,34 @@ _MAX_COMMANDS = 10
 
 
 @dataclass
+class CapabilityCandidate:
+    """One distilled capability candidate (memory → capability_market).
+
+    Mirrors the capability_market row shape: ``name`` / ``type`` /
+    ``description`` / ``config_template`` plus the v4.9.3
+    ``required_knowledge`` slug declaration (keys == knowledge_entries
+    keys == Instance env keys). Candidates never carry has_knowledge —
+    real knowledge assets are attached by promote / transmute.
+    """
+
+    name: str
+    type: str = "skill"
+    description: str | None = None
+    config_template: dict[str, Any] | None = None
+    required_knowledge: list[str] = field(default_factory=list)
+
+
+@dataclass
 class DistillResult:
     """Output from DistillationEngine.distill() — pure data, no DB side effects.
 
-    The engine computes the manifest and aggregated memory counts; callers
-    handle persistence (creating an BaseClass row, emitting events, etc.).
+    v4.9.3: the engine computes capability candidates + a gene suggestion
+    and aggregated memory counts; callers handle persistence (writing
+    capability_market rows, emitting events, etc.).
     """
 
-    new_preset_slug: str
-    manifest_preview: SkillManifestPreview
+    capability_candidates: list[CapabilityCandidate]
+    gene_suggestion: str | None
     aggregated_memory: AggregatedMemoryCount
     source_entity_id: str
     source_preset_slug: str | None
@@ -95,8 +123,8 @@ class DistillationEngine(Protocol):
     """Interface for distillation engines.
 
     Implementations read an entity's memory entries and produce a
-    DistillResult containing a PresetManifest. The engine does NOT persist
-    anything — that responsibility belongs to the caller.
+    DistillResult containing capability candidates. The engine does NOT
+    persist anything — that responsibility belongs to the caller.
 
     Usage::
 
@@ -140,6 +168,28 @@ def _extract_key_prefix(key: str) -> str:
     return key.split("-")[0]
 
 
+def aggregate_memory_counts(entries: list[Memory]) -> AggregatedMemoryCount:
+    """Per-kind memory counts + total for a list of Memory rows."""
+    kind_counts: dict[str, int] = {
+        "experience": 0,
+        "lesson": 0,
+        "decision": 0,
+        "problem": 0,
+        "notepad": 0,
+    }
+    for e in entries:
+        if e.kind in kind_counts:
+            kind_counts[e.kind] += 1
+    return AggregatedMemoryCount(
+        experience=kind_counts["experience"],
+        lesson=kind_counts["lesson"],
+        decision=kind_counts["decision"],
+        problem=kind_counts["problem"],
+        notepad=kind_counts["notepad"],
+        total=sum(kind_counts.values()),
+    )
+
+
 class AggregatingDistiller:
     """Heuristic distillation engine — stateless, no DB writes.
 
@@ -150,14 +200,16 @@ class AggregatingDistiller:
        excluding soft-deleted rows.
     3. Aggregate counts by ``MemoryKind`` → ``AggregatedMemoryCount``.
     4. Extract kebab-case keys from ``lesson`` / ``decision`` entries →
-       commands list (deduplicated, max 10).
-    5. Find the longest lesson content (≥ 50 chars) → truncate to 200 chars
-       + ``"..."`` → becomes the prompt.
-    6. Extract the first segment of each key (split on ``-``) from all
-       entries → deduplicate → skills list.
-    7. Model: inherit from ``source_preset.manifest["model"]`` or ``"tbd"``.
-    8. Tools: left empty (cannot infer from memory).
-    9. Slug: ``{source_preset_slug or 'base'}-skill-{target_skill_slug}``.
+       capability candidates (deduplicated, max 10). Each candidate is
+       a ``CapabilityCandidate`` named by its memory key, typed ``skill``,
+       described by the truncated entry content, and declaring the key's
+       first segment as its ``required_knowledge`` slug.
+    5. Count key-prefix frequency across the candidate-source entries
+       (``lesson`` / ``decision``, never notepad) → the most frequent
+       prefix becomes the ``gene_suggestion`` (the skill domain the
+       candidates cluster around).
+    6. Notepad mirror keys (``notepad/<plan>/<name>``) are internal
+       bookkeeping — never distilled into candidates or the suggestion.
     """
 
     async def distill(
@@ -195,94 +247,52 @@ class AggregatingDistiller:
             )
 
         # 3. Aggregate by kind.
-        kind_counts: dict[str, int] = {
-            "experience": 0,
-            "lesson": 0,
-            "decision": 0,
-            "problem": 0,
-            "notepad": 0,
-        }
-        for e in entries:
-            if e.kind in kind_counts:
-                kind_counts[e.kind] += 1
+        aggregated = aggregate_memory_counts(entries)
 
-        total = sum(kind_counts.values())
-        aggregated = AggregatedMemoryCount(
-            experience=kind_counts["experience"],
-            lesson=kind_counts["lesson"],
-            decision=kind_counts["decision"],
-            problem=kind_counts["problem"],
-            notepad=kind_counts["notepad"],
-            total=total,
-        )
-
-        # 4. Extract kebab-case keys from lesson/decision → commands.
-        commands: list[str] = []
-        seen_cmds: set[str] = set()
+        # 4. Kebab-case keys from lesson/decision → capability candidates.
+        candidates: list[CapabilityCandidate] = []
+        seen_names: set[str] = set()
         for e in entries:
             if e.kind not in (MemoryKind.lesson.value, MemoryKind.decision.value):
                 continue
-            if e.key and _is_kebab_case(e.key) and e.key not in seen_cmds:
-                commands.append(e.key)
-                seen_cmds.add(e.key)
-                if len(commands) >= _MAX_COMMANDS:
-                    break
-
-        # 5. Longest lesson content → prompt.
-        prompt = "TODO P8"
-        longest_lesson = ""
-        for e in entries:
-            if e.kind == MemoryKind.lesson.value and e.content:
-                if len(e.content) > len(longest_lesson):
-                    longest_lesson = e.content
-        if len(longest_lesson) >= _MIN_PROMPT_CHARS:
-            prompt = _truncate_content(longest_lesson)
-
-        # 6. Key prefix dedup → skills. v4.6: notepad mirror keys
-        #    (``notepad/<plan>/<name>``) are internal bookkeeping, not
-        #    distilled skills.
-        skills: list[str] = []
-        seen_skills: set[str] = set()
-        for e in entries:
-            if e.kind == MemoryKind.notepad.value:
+            if not e.key or not _is_kebab_case(e.key) or e.key in seen_names:
                 continue
-            if e.key:
-                prefix = _extract_key_prefix(e.key)
-                if prefix and prefix not in seen_skills:
-                    skills.append(prefix)
-                    seen_skills.add(prefix)
-
-        # 7. Model from source preset or "tbd".
-        model = "tbd"
-        source_preset_slug = request.source_preset_slug
-        if source_preset_slug:
-            preset_q = select(BaseClass).where(
-                BaseClass.slug == source_preset_slug,
-                BaseClass.deleted_at.is_(None),
+            seen_names.add(e.key)
+            prefix = _extract_key_prefix(e.key)
+            candidates.append(
+                CapabilityCandidate(
+                    name=e.key,
+                    type="skill",
+                    description=_truncate_content(e.content or e.key),
+                    required_knowledge=[prefix] if prefix else [],
+                )
             )
-            preset_result = await session.execute(preset_q)
-            source_preset = preset_result.scalar_one_or_none()
-            if source_preset is not None and isinstance(source_preset.manifest, dict):
-                model = source_preset.manifest.get("model", "tbd")
+            if len(candidates) >= _MAX_COMMANDS:
+                break
 
-        # 8. Slug generation.
-        base = source_preset_slug or "base"
-        new_preset_slug = f"{base}-skill-{request.target_skill_slug}"
-
-        manifest = SkillManifestPreview(
-            model=model,
-            prompt=prompt,
-            skills=skills,
-            tools=[],
-            commands=commands,
+        # 5. Key-prefix frequency among candidate sources (lesson/decision,
+        #    excluding notepad) → gene suggestion. The suggestion clusters
+        #    around the same entries the candidates came from.
+        prefix_counts: dict[str, int] = {}
+        for e in entries:
+            if e.kind not in (
+                MemoryKind.lesson.value,
+                MemoryKind.decision.value,
+            ) or not e.key:
+                continue
+            prefix = _extract_key_prefix(e.key)
+            if prefix:
+                prefix_counts[prefix] = prefix_counts.get(prefix, 0) + 1
+        gene_suggestion = (
+            max(prefix_counts, key=prefix_counts.get) if prefix_counts else None
         )
 
         return DistillResult(
-            new_preset_slug=new_preset_slug,
-            manifest_preview=manifest,
+            capability_candidates=candidates,
+            gene_suggestion=gene_suggestion,
             aggregated_memory=aggregated,
             source_entity_id=entity_id,
-            source_preset_slug=source_preset_slug,
+            source_preset_slug=request.source_preset_slug,
         )
 
 

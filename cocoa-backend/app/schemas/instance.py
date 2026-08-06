@@ -51,3 +51,6 @@ class InstanceOutWithToken(InstanceOut):
     proxy_token: str | None = None
     # Set when introduce/deploy kicks off a K8s pipeline (portal progress UI).
     deploy_record_id: str | None = None
+    # v4.9.3 non-blocking spawn hint: {"missing": [slug, ...]} when the
+    # entity's has-knowledge does not cover its required-knowledge.
+    knowledge_consistency_warning: dict | None = None

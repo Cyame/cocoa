@@ -19,6 +19,7 @@ class CapabilityMarketEntryOut(BaseModel):
     type: str
     description: str | None = None
     config_template: dict | None = None
+    required_knowledge: list[str] | None = None
     tags: list[str] | None = None
     scope: str
     organization_id: str | None = None
@@ -40,6 +41,7 @@ class CapabilityMarketEntryCreate(BaseModel):
     type: CapabilityTypeLiteral = "skill"
     description: str | None = None
     config_template: dict | None = None
+    required_knowledge: list[str] | None = None
     tags: list[str] | None = None
     scope: ScopeLiteral = "org"
     organization_id: str | None = None
@@ -51,4 +53,5 @@ class CapabilityMarketEntryUpdate(BaseModel):
     type: CapabilityTypeLiteral | None = None
     description: str | None = None
     config_template: dict | None = None
+    required_knowledge: list[str] | None = None
     tags: list[str] | None = None

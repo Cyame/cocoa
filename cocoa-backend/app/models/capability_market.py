@@ -45,6 +45,7 @@ class CapabilityCreatedVia(str, Enum):
     reap = "reap"        # reserved for future reaper flow (per PRD §13.6.2)
     promote = "promote"  # produced by an Entity promotion
     manual = "manual"    # admin hand-created
+    distill = "distill"  # v4.9.3: Entity memory distilled into the market
 
 
 class CapabilityMarketEntry(BaseModel, Base):
@@ -91,6 +92,10 @@ class CapabilityMarketEntry(BaseModel, Base):
     )
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     config_template: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # v4.9.3 knowledge dual-dimension: required knowledge slugs (== env key).
+    required_knowledge: Mapped[list[str] | None] = mapped_column(
+        JSONB, nullable=True
+    )
     tags: Mapped[list[str] | None] = mapped_column(
         ARRAY(String), nullable=True, default=list
     )

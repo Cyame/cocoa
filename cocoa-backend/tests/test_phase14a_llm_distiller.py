@@ -13,9 +13,31 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from pydantic import ValidationError
 
 from app.core.distillation import LLMDistiller
+from app.schemas.learning import DistillRequest
 from app.services.llm.llm_client import LLMResponse
+
+# ── 0. Engine selection (v4.9.3) ─────────────────────────────────────────
+
+
+def test_distill_request_engine_defaults_to_heuristic() -> None:
+    """engine is optional and defaults to heuristic."""
+    req = DistillRequest(target_skill_slug="test-skill")
+    assert req.engine == "heuristic"
+
+
+def test_distill_request_accepts_llm_engine() -> None:
+    """engine='llm' is accepted by the schema."""
+    req = DistillRequest(target_skill_slug="test-skill", engine="llm")
+    assert req.engine == "llm"
+
+
+def test_distill_request_rejects_unknown_engine() -> None:
+    """engine values outside heuristic|llm are rejected."""
+    with pytest.raises(ValidationError):
+        DistillRequest(target_skill_slug="test-skill", engine="magic")
 
 # ── 1. Successful LLM call returns parsed manifest dict ─────────────────
 

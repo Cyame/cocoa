@@ -66,6 +66,8 @@ class BaseClass(BaseModel, Base):
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     manifest: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # v4.9.3 knowledge dual-dimension: has knowledge slugs (real DB assets).
+    has_knowledge: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
     # v4.0 D15 scope triple (see CapabilityMarketEntry).
     scope: Mapped[str] = mapped_column(
         String(20), nullable=False, default="org", server_default="org"
