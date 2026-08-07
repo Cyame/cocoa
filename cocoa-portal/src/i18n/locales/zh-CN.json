@@ -931,6 +931,7 @@
     "capabilityCreate": "创建",
     "capabilityDistill": "蒸馏",
     "transmute": "炼化",
+    "distillTransmute": "炼化/蒸馏",
     "tag": {
       "planning": "策划",
       "execution": "执行",

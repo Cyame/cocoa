@@ -83,7 +83,7 @@ export default function DistillTab({
               {t('entityModal.distillTab.distill.intro')}
             </p>
 
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <div className="mt-3 grid items-start gap-3 sm:grid-cols-2">
               <div>
                 <label
                   htmlFor="distill-skill-slug"
@@ -98,7 +98,7 @@ export default function DistillTab({
                   onChange={(e) => setTargetSlug(e.target.value)}
                   placeholder={t('entityModal.distillTab.distill.skillSlugPlaceholder')}
                   data-testid="distill-skill-slug"
-                  className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  className="mt-1.5 h-[38px] w-full rounded-lg border border-slate-300 px-3 font-mono text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                 />
                 {!slugValid && targetSlug.length > 0 ? (
                   <p className="mt-1 text-xs text-red-700">
@@ -115,7 +115,7 @@ export default function DistillTab({
                     <label
                       key={value}
                       className={cn(
-                        'flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm',
+                        'flex h-[38px] cursor-pointer items-center gap-2 rounded-lg border px-3 text-sm',
                         engine === value
                           ? 'border-blue-500 bg-blue-50 text-blue-900'
                           : 'border-slate-200 bg-white text-slate-700',

@@ -1098,6 +1098,7 @@
     "capabilityCreate": "Create",
     "capabilityDistill": "Distill",
     "transmute": "Transmute",
+    "distillTransmute": "Distill / Transmute",
     "tag": {
       "planning": "Planning",
       "execution": "Execution",

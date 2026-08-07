@@ -132,7 +132,7 @@ export default function NamespaceEntitiesPage() {
             className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50 disabled:opacity-50"
           >
             <FlaskConical className="size-4" aria-hidden="true" />
-            {t('namespaces.transmute')}
+            {t('namespaces.distillTransmute')}
           </button>
         </div>
       </header>
@@ -263,7 +263,7 @@ function EntitiesList({
                     data-testid={`entity-transmute-${entity.id}`}
                   >
                     <FlaskConical className="size-3.5" aria-hidden="true" />
-                    {t('transmuteModal.open')}
+                    {t('namespaces.distillTransmute')}
                   </button>
                   {canClone ? (
                     <button
