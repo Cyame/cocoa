@@ -19,6 +19,7 @@ from app.core.errors import ForbiddenError, NotFoundError
 from app.core.openapi import add_error_responses
 from app.core.org_scope import resolve_current_org_id
 from app.core.permissions import require_permission, require_workspace_permission
+from app.core.preset_registry import registry
 from app.models.base_class import BaseClass
 from app.models.entity import Entity
 from app.models.organization import Organization
@@ -92,6 +93,10 @@ async def clone_base_class_route(
     )
     await db.commit()
     await db.refresh(new_bc)
+    # The in-memory preset registry caches active BaseClass rows; a freshly
+    # cloned BaseClass would otherwise be absent from registry.get(), making
+    # POST /entities with its preset_slug fail 422 "preset not found".
+    await registry.reload(db)
     from app.api.v1.base_classes import _base_class_out
 
     return await _base_class_out(db, new_bc)
@@ -162,6 +167,10 @@ async def clone_organization_route(
     )
     await db.commit()
     await db.refresh(new_org)
+    # clone_organization deep-copies org-scoped BaseClass rows (services/
+    # clone.py clone_organization), so refresh the preset registry to include
+    # the cloned slugs before returning.
+    await registry.reload(db)
     return OrganizationOut.model_validate(new_org)
 
 

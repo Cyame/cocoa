@@ -381,6 +381,8 @@ export type BaseClass = {
   readonly created_at: string;
   /** v4.9.3: real knowledge assets held by this base class (slug list). */
   readonly has_knowledge?: readonly string[] | null;
+  /** v4.9.4: ownership scope ('system' | 'org' | 'namespace'). System = built-in preset. */
+  readonly scope?: string | null;
 };
 
 export type EntityInstanceStatus = {

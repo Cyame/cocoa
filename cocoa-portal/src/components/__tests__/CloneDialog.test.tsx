@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import CloneDialog from '@/components/CloneDialog';
+import { toSlug } from '@/lib/slug';
 
 const defaultProps = {
   open: true,
@@ -90,5 +91,37 @@ describe('CloneDialog', () => {
   it('disables confirm button when busy', () => {
     render(<CloneDialog {...defaultProps} busy />);
     expect(screen.getByTestId('clone-dialog-confirm')).toBeDisabled();
+  });
+
+  it('auto-fills the slug as pinyin kebab when a Chinese name is typed', () => {
+    render(<CloneDialog {...defaultProps} />);
+    fireEvent.change(screen.getByTestId('clone-dialog-name'), {
+      target: { value: '测试神职' },
+    });
+    expect((screen.getByTestId('clone-dialog-slug') as HTMLInputElement).value).toBe(
+      toSlug('测试神职'),
+    );
+  });
+
+  it('does not overwrite the slug after the user manually edits it', () => {
+    render(<CloneDialog {...defaultProps} />);
+    fireEvent.change(screen.getByTestId('clone-dialog-slug'), {
+      target: { value: 'my-slug' },
+    });
+    fireEvent.change(screen.getByTestId('clone-dialog-name'), {
+      target: { value: '测试神职' },
+    });
+    expect((screen.getByTestId('clone-dialog-slug') as HTMLInputElement).value).toBe('my-slug');
+  });
+
+  it('clears the auto-filled slug when the name is cleared', () => {
+    render(<CloneDialog {...defaultProps} />);
+    fireEvent.change(screen.getByTestId('clone-dialog-name'), {
+      target: { value: '测试神职' },
+    });
+    fireEvent.change(screen.getByTestId('clone-dialog-name'), {
+      target: { value: '' },
+    });
+    expect((screen.getByTestId('clone-dialog-slug') as HTMLInputElement).value).toBe('');
   });
 });

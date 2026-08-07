@@ -893,6 +893,8 @@
       "platform": "平台",
       "workspace": "空间"
     },
+    "preset": "预置",
+    "custom": "自定义",
     "tabs": {
       "workspace": "空间",
       "baseClasses": "神职",

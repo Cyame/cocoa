@@ -2,7 +2,7 @@ import { Copy, LoaderCircle, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ClonePayload } from '@/lib/api/clone';
-import { isValidKebabSlug } from '@/lib/slug';
+import { isValidKebabSlug, toSlug } from '@/lib/slug';
 import { cn } from '@/lib/utils';
 
 type CloneDialogProps = {
@@ -27,13 +27,21 @@ export default function CloneDialog({
   const { t } = useTranslation();
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
+  const [slugDirty, setSlugDirty] = useState(false);
 
   useEffect(() => {
     if (open) {
       setName('');
       setSlug('');
+      setSlugDirty(false);
     }
   }, [open]);
+
+  // Auto-fill slug from name (pinyin kebab) only until the user manually edits slug.
+  useEffect(() => {
+    if (slugDirty) return;
+    setSlug(toSlug(name));
+  }, [name, slugDirty]);
 
   useEffect(() => {
     if (!open) return;
@@ -113,7 +121,10 @@ export default function CloneDialog({
               type="text"
               value={slug}
               disabled={busy}
-              onChange={(e) => setSlug(e.target.value)}
+              onChange={(e) => {
+                setSlug(e.target.value);
+                setSlugDirty(true);
+              }}
               placeholder={t('clone.dialog.slugPlaceholder')}
               data-testid="clone-dialog-slug"
               className={cn(

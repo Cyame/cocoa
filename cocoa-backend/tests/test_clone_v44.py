@@ -1232,6 +1232,119 @@ class TestCloneWorkspace:
 
 
 # ---------------------------------------------------------------------------
+# Clone -> preset registry
+# ---------------------------------------------------------------------------
+
+
+class TestCloneReloadsPresetRegistry:
+    """A cloned BaseClass must be visible to the in-memory preset registry so
+    POST /entities with its slug does not fail 422 'preset not found'."""
+
+    @pytest.mark.asyncio
+    async def test_base_class_clone_populates_registry(
+        self, client: TestClient, session: AsyncSession, create_org_bundle
+    ) -> None:
+        import app.core.preset_registry as pr
+
+        _register(client, f"rg-sa-{_uid()}", f"rg-sa-{_uid()}@t.co")
+        token, member_id = _register(client, f"rg-m-{_uid()}", f"rg-m-{_uid()}@t.co")
+        bundle = await create_org_bundle(
+            member_id, atoms=("can_clone_base_class", "can_manage_organization")
+        )
+        headers = {**_auth(token), "X-Organization-Id": bundle.org.id}
+
+        bc = client.post(
+            "/api/v1/base-classes", headers=headers,
+            json={"slug": f"rgreg-{_uid()}", "name": "Source BC", "scope": "org"},
+        )
+        assert bc.status_code == 201, bc.text
+
+        resp = client.post(
+            f"/api/v1/base-classes/{bc.json()['id']}/clone", headers=headers, json={}
+        )
+        assert resp.status_code == 201, resp.text
+        cloned_slug = resp.json()["slug"]
+
+        assert pr.registry.get(cloned_slug) is not None
+        assert pr.registry.get(cloned_slug).id == resp.json()["id"]
+
+    @pytest.mark.asyncio
+    async def test_cloned_base_class_can_create_entity(
+        self, client: TestClient, session: AsyncSession, create_org_bundle,
+        namespace_factory,
+    ) -> None:
+        _register(client, f"rg-e-sa-{_uid()}", f"rg-e-sa-{_uid()}@t.co")
+        token, member_id = _register(client, f"rg-e-m-{_uid()}", f"rg-e-m-{_uid()}@t.co")
+        ns = await namespace_factory()
+        bundle = await create_org_bundle(
+            member_id,
+            atoms=("can_clone_base_class", "can_manage_organization", "can_manage_namespace"),
+            namespace=ns,
+        )
+        headers = {**_auth(token), "X-Organization-Id": bundle.org.id}
+
+        bc = client.post(
+            "/api/v1/base-classes", headers=headers,
+            json={"slug": f"rgent-{_uid()}", "name": "Source BC", "scope": "org"},
+        )
+        assert bc.status_code == 201, bc.text
+
+        resp = client.post(
+            f"/api/v1/base-classes/{bc.json()['id']}/clone", headers=headers, json={}
+        )
+        assert resp.status_code == 201, resp.text
+        cloned_slug = resp.json()["slug"]
+
+        ent = client.post(
+            "/api/v1/entities", headers=_auth(token),
+            json={
+                "namespace_id": ns.id,
+                "slug": f"rg-emp-{_uid()}",
+                "name": "Cloned Preset Entity",
+                "rank": "intern",
+                "preset_slug": cloned_slug,
+            },
+        )
+        assert ent.status_code == 201, ent.text
+        assert ent.json()["preset_slug"] == cloned_slug
+
+    @pytest.mark.asyncio
+    async def test_org_clone_copied_base_class_in_registry(
+        self, client: TestClient, session: AsyncSession, create_org_bundle
+    ) -> None:
+        import app.core.preset_registry as pr
+        from app.models.base_class import BaseClass
+
+        _register(client, f"rg-o-sa-{_uid()}", f"rg-o-sa-{_uid()}@t.co")
+        token, member_id = _register(client, f"rg-o-m-{_uid()}", f"rg-o-m-{_uid()}@t.co")
+        bundle = await create_org_bundle(
+            member_id, atoms=("can_clone_organization", "can_manage_organization")
+        )
+        headers = {**_auth(token), "X-Organization-Id": bundle.org.id}
+
+        bc = BaseClass(slug=f"rgor-{_uid()}", name="Org BC", scope="org",
+                       organization_id=bundle.org.id)
+        session.add(bc)
+        await session.flush()
+        await session.commit()
+
+        resp = client.post(
+            f"/api/v1/organizations/{bundle.org.id}/clone", headers=headers, json={}
+        )
+        assert resp.status_code == 201, resp.text
+        new_org_id = resp.json()["id"]
+
+        copied = await session.execute(
+            select(BaseClass).where(
+                BaseClass.organization_id == new_org_id, BaseClass.deleted_at.is_(None)
+            )
+        )
+        copied_bc = copied.scalars().one()
+        assert copied_bc.slug != bc.slug
+        assert pr.registry.get(copied_bc.slug) is not None
+
+
+# ---------------------------------------------------------------------------
 # Instance clone rejected
 # ---------------------------------------------------------------------------
 
