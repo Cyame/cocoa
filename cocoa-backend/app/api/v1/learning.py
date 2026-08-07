@@ -856,8 +856,8 @@ async def promote_entity(
             (entity.slug + "|" + ",".join(sorted(existing_names))).encode("utf-8"),
         ).hexdigest()[:12]
         prompt_regen = (
-            f"You are {entity.name}, an upgraded template (seed={seed}). "
-            f"Capabilities: {', '.join(sorted(existing_names))}."
+            f"你是眷族「{entity.name}」，由炼化晋升而来（seed={seed}）。"
+            f"已接入能力：{', '.join(sorted(existing_names))}。"
         )
 
     # 5. snapshot_only → preview without writing.

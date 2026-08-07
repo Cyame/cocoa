@@ -180,7 +180,7 @@ def upgrade() -> None:
             id=str(uuid.uuid4()),
             manifest=json.dumps(
                 {
-                    "system_prompt": "You are the Workspace cerebellum: aggregate hub state, monitor health, run scheduled hub tasks.",
+                    "system_prompt": "你是世界中枢的小脑：聚合各中枢状态、监控健康、执行定时调度任务。",
                     "commands": [],
                     "tools": [],
                 }

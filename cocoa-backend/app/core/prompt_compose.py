@@ -143,7 +143,7 @@ async def compose_system_prompt_with_world_hub(
         )
         resp = await client.complete(
             messages=[
-                {"role": "system", "content": "You organize Cocoa Instance SYSTEM prompts."},
+                {"role": "system", "content": "你是 Cocoa 世界中枢，负责整理实例（Instance）的 SYSTEM 提示词。"},
                 {"role": "user", "content": user_content},
             ],
             model=model or provider.default_model,
