@@ -44,6 +44,7 @@
     "knowledge": "知识",
     "namespaces": "区域",
     "workspaces": "生境",
+    "backToWorldDashboard": "返回大陆仪表盘",
     "currentNamespace": "当前区域",
     "pending": "内容迁移中"
   },

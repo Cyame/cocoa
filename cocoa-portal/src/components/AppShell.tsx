@@ -223,43 +223,45 @@ export default function AppShell() {
           ) : null}
 
           {activeOrgId !== null && activeNamespaceId !== null ? (
-            <section aria-label={t('nav.currentNamespace')}>
-              <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                {t('nav.currentNamespace')}
-              </p>
-              <div className="mb-2 px-1">
-                <NamespaceSwitcher orgId={activeOrgId} />
-              </div>
-              <div className="flex flex-col gap-1">
-                <NavLink
-                  to={`/orgs/${activeOrgId}`}
-                  end
-                  className={() =>
-                    cn(DESKTOP_LINK_CLASS, 'text-slate-300 hover:bg-slate-800 hover:text-white')
-                  }
-                >
-                  <LayoutDashboard className="size-4 shrink-0" aria-hidden="true" />
-                  <span className="truncate">{t('nav.world')}</span>
-                </NavLink>
-                {namespaceItems.map((item) => (
-                  <NavLink
-                    key={item.labelKey}
-                    to={item.to}
-                    className={() =>
-                      cn(
-                        DESKTOP_LINK_CLASS,
-                        navActive(item, location.pathname)
-                          ? 'bg-blue-600 text-white'
-                          : 'text-slate-300 hover:bg-slate-800 hover:text-white',
-                      )
-                    }
-                  >
-                    <item.Icon className="size-4 shrink-0" aria-hidden="true" />
-                    <span className="truncate">{t(item.labelKey)}</span>
-                  </NavLink>
-                ))}
-              </div>
-            </section>
+            <>
+              <NavLink
+                to={`/orgs/${activeOrgId}`}
+                end
+                className={() =>
+                  cn(DESKTOP_LINK_CLASS, 'text-slate-300 hover:bg-slate-800 hover:text-white')
+                }
+              >
+                <LayoutDashboard className="size-4 shrink-0" aria-hidden="true" />
+                <span className="truncate">{t('nav.backToWorldDashboard')}</span>
+              </NavLink>
+              <section aria-label={t('nav.currentNamespace')}>
+                <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                  {t('nav.currentNamespace')}
+                </p>
+                <div className="mb-2 px-1">
+                  <NamespaceSwitcher orgId={activeOrgId} />
+                </div>
+                <div className="flex flex-col gap-1">
+                  {namespaceItems.map((item) => (
+                    <NavLink
+                      key={item.labelKey}
+                      to={item.to}
+                      className={() =>
+                        cn(
+                          DESKTOP_LINK_CLASS,
+                          navActive(item, location.pathname)
+                            ? 'bg-blue-600 text-white'
+                            : 'text-slate-300 hover:bg-slate-800 hover:text-white',
+                        )
+                      }
+                    >
+                      <item.Icon className="size-4 shrink-0" aria-hidden="true" />
+                      <span className="truncate">{t(item.labelKey)}</span>
+                    </NavLink>
+                  ))}
+                </div>
+              </section>
+            </>
           ) : null}
 
           <section aria-label={t('nav.account')}>
@@ -374,7 +376,7 @@ export default function AppShell() {
                       )
                     }
                   >
-                    {t('nav.world')}
+                    {t('nav.backToWorldDashboard')}
                   </NavLink>
                 ) : null,
                 ...namespaceItems.map((item) => (
