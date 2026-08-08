@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ApiError, api } from '@/lib/api';
+import { api } from '@/lib/api';
 import {
   cancelMeeting,
   createMeeting,
@@ -17,6 +17,7 @@ import {
   fetchMeetings,
   startMeeting,
 } from '@/lib/api/meetings';
+import { resolveError } from '@/lib/apiError';
 import type { Meeting, MeetingStatus, Membership } from '@/lib/types';
 
 const MEETING_STATUS_BADGE: Readonly<Record<MeetingStatus, string>> = {
@@ -80,7 +81,7 @@ export default function MeetingPanel({ workspaceId }: { readonly workspaceId: st
       setTotal(meetingPage.total);
       setMemberships(membershipPage.items);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t('errors.network'));
+      setError(resolveError(t, err));
       setMeetings([]);
       setTotal(0);
       setMemberships([]);
@@ -98,27 +99,6 @@ export default function MeetingPanel({ workspaceId }: { readonly workspaceId: st
     for (const m of memberships) map.set(m.id, m);
     return map;
   }, [memberships]);
-
-  const resolveError = useCallback(
-    (error: unknown, fallbackKey: string): string => {
-      if (error instanceof ApiError) {
-        const payload = error.payload;
-        if (
-          typeof payload === 'object' &&
-          payload !== null &&
-          'message_key' in payload &&
-          typeof (payload as { message_key: unknown }).message_key === 'string'
-        ) {
-          const key = (payload as { message_key: string }).message_key;
-          const translated = t(key, { defaultValue: '' });
-          if (translated.length > 0) return translated;
-        }
-        return error.message;
-      }
-      return t(fallbackKey);
-    },
-    [t],
-  );
 
   const applyMeeting = useCallback((next: Meeting) => {
     setMeetings((prev) => {
@@ -155,11 +135,11 @@ export default function MeetingPanel({ workspaceId }: { readonly workspaceId: st
       setParticipantIds(new Set());
       setScheduledAt(toDatetimeLocalValue(new Date(Date.now() + 60 * 60 * 1000)));
     } catch (err) {
-      setFormError(resolveError(err, 'meetings.failed'));
+      setFormError(resolveError(t, err, 'meetings.failed'));
     } finally {
       setCreating(false);
     }
-  }, [agenda, applyMeeting, participantIds, resolveError, scheduledAt, t, title, workspaceId]);
+  }, [agenda, applyMeeting, participantIds, scheduledAt, t, title, workspaceId]);
 
   const runAction = useCallback(
     async (meeting: Meeting, action: 'start' | 'end' | 'cancel') => {
@@ -179,12 +159,12 @@ export default function MeetingPanel({ workspaceId }: { readonly workspaceId: st
         applyMeeting(next);
         await load();
       } catch (err) {
-        setError(resolveError(err, 'meetings.failed'));
+        setError(resolveError(t, err, 'meetings.failed'));
       } finally {
         setBusyId(null);
       }
     },
-    [applyMeeting, load, resolveError, t],
+    [applyMeeting, load, t],
   );
 
   const toggleParticipant = useCallback((membershipId: string) => {

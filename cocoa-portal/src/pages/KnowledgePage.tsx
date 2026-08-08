@@ -2,7 +2,6 @@ import { AlertCircle, BookOpen, LoaderCircle, Pencil, Plus, Tag, Trash2, X } fro
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
-import { ApiError } from '@/lib/api';
 import {
   createKnowledgeDimension,
   createKnowledgeEntry,
@@ -17,6 +16,7 @@ import {
 import { fetchNamespaces } from '@/lib/api/namespaces';
 import { fetchOrganization } from '@/lib/api/organizations';
 import { fetchWorkspaces } from '@/lib/api/workspaces';
+import { resolveError } from '@/lib/apiError';
 import type { Namespace, Workspace } from '@/lib/types';
 
 type TFn = ReturnType<typeof useTranslation>['t'];
@@ -125,7 +125,7 @@ export default function KnowledgePage() {
       setNamespaces(nsPage.items);
       setWorkspaces(wsPage.items);
     } catch (loadError) {
-      setError(loadError instanceof ApiError ? loadError.message : t('errors.network'));
+      setError(resolveError(t, loadError));
     } finally {
       setIsLoading(false);
     }
@@ -226,7 +226,7 @@ export default function KnowledgePage() {
       closeForm();
       await load();
     } catch (submitError) {
-      setFormError(submitError instanceof ApiError ? submitError.message : t('errors.network'));
+      setFormError(resolveError(t, submitError));
       setFormBusy(false);
     }
   };
@@ -239,7 +239,7 @@ export default function KnowledgePage() {
       setDeleteTarget(null);
       await load();
     } catch (deleteError) {
-      setError(deleteError instanceof ApiError ? deleteError.message : t('errors.network'));
+      setError(resolveError(t, deleteError));
     } finally {
       setDeleteBusy(false);
     }
@@ -267,7 +267,7 @@ export default function KnowledgePage() {
       setDimCreateOpen(false);
       await load();
     } catch (createError) {
-      setDimError(createError instanceof ApiError ? createError.message : t('errors.network'));
+      setDimError(resolveError(t, createError));
     } finally {
       setDimBusy(false);
     }

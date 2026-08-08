@@ -1,7 +1,6 @@
 import { AlertCircle, LoaderCircle, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ApiError } from '@/lib/api';
 import {
   createNamespace,
   deleteNamespace,
@@ -15,6 +14,7 @@ import {
   type Organization,
   updateDefaultOrganization,
 } from '@/lib/api/providers';
+import { resolveError } from '@/lib/apiError';
 import { toSlug } from '@/lib/slug';
 
 type WorldProps = {
@@ -42,7 +42,7 @@ export function OrganizationWorldPanel({ canWrite, orgId }: WorldProps) {
       setName(data.name);
       setDescription(data.description ?? '');
     } catch (error) {
-      setErrorMessage(error instanceof ApiError ? error.message : t('errors.network'));
+      setErrorMessage(resolveError(t, error));
     } finally {
       setIsLoading(false);
     }
@@ -68,7 +68,7 @@ export function OrganizationWorldPanel({ canWrite, orgId }: WorldProps) {
       setOrg(next);
       setNotice(t('organization.world.saved'));
     } catch (error) {
-      setErrorMessage(error instanceof ApiError ? error.message : t('errors.network'));
+      setErrorMessage(resolveError(t, error));
     } finally {
       setBusy(false);
     }
@@ -86,7 +86,7 @@ export function OrganizationWorldPanel({ canWrite, orgId }: WorldProps) {
       });
       setDescription(out.description);
     } catch (error) {
-      setErrorMessage(error instanceof ApiError ? error.message : t('errors.network'));
+      setErrorMessage(resolveError(t, error));
     } finally {
       setGenerating(false);
     }
@@ -207,7 +207,7 @@ export function OrganizationNamespacesPanel({ canWrite, orgId, onOpenNamespace }
       const page = await fetchNamespaces();
       setItems(page.items);
     } catch (error) {
-      setErrorMessage(error instanceof ApiError ? error.message : t('errors.network'));
+      setErrorMessage(resolveError(t, error));
     } finally {
       setIsLoading(false);
     }
@@ -244,7 +244,7 @@ export function OrganizationNamespacesPanel({ canWrite, orgId, onOpenNamespace }
       });
       setDraft({ ...draft, description: out.description });
     } catch (error) {
-      setErrorMessage(error instanceof ApiError ? error.message : t('errors.network'));
+      setErrorMessage(resolveError(t, error));
     } finally {
       setGenerating(false);
     }
@@ -271,7 +271,7 @@ export function OrganizationNamespacesPanel({ canWrite, orgId, onOpenNamespace }
       setDraft(null);
       await load();
     } catch (error) {
-      setErrorMessage(error instanceof ApiError ? error.message : t('errors.network'));
+      setErrorMessage(resolveError(t, error));
     } finally {
       setBusy(false);
     }

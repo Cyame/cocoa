@@ -32,6 +32,7 @@ import TopologyGlowDefs, {
 import { ApiError, api } from '@/lib/api';
 import { deleteInstanceById, deleteMembership, deletePassage } from '@/lib/api/instances';
 import { fetchTopologyLiveStatus } from '@/lib/api/topology';
+import { resolveError } from '@/lib/apiError';
 import { fitNodes } from '@/lib/topologyFit';
 import type {
   Event,
@@ -147,26 +148,6 @@ function intensityStrokeOpacity(intensity: GlowIntensity): number {
   // Slightly stronger so the inner ring remains visible against the halo
   if (intensity === 'static') return 0.4;
   return Math.min(1, GLOW_INTENSITY_OPACITY[intensity] + 0.2);
-}
-
-type TranslateFn = (key: string, options?: { readonly defaultValue?: string }) => string;
-
-function resolveErrorMessage(error: unknown, translate: TranslateFn, fallbackKey: string): string {
-  if (error instanceof ApiError) {
-    const payload = error.payload;
-    if (
-      typeof payload === 'object' &&
-      payload !== null &&
-      'message_key' in payload &&
-      typeof (payload as { message_key: unknown }).message_key === 'string'
-    ) {
-      const key = (payload as { message_key: string }).message_key;
-      const translated = translate(key, { defaultValue: '' });
-      if (translated.length > 0) return translated;
-    }
-    return error.message;
-  }
-  return translate(fallbackKey);
 }
 
 function userFillColor(): string {
@@ -291,7 +272,7 @@ export default function TopologyPage({
         }
       } catch (error) {
         if (isActive) {
-          const message = error instanceof Error ? error.message : t('topology.failedLoad');
+          const message = resolveError(t, error, 'topology.failedLoad');
           setErrorMessage(message);
         }
       } finally {
@@ -552,7 +533,7 @@ export default function TopologyPage({
           workspaceId,
         });
       } catch (error) {
-        const message = error instanceof Error ? error.message : t('topology.failedCreate');
+        const message = resolveError(t, error, 'topology.failedCreate');
         setActionError(message);
       }
     },
@@ -735,7 +716,7 @@ export default function TopologyPage({
         setActionError(null);
       } catch (error) {
         if (cancelled) return;
-        const message = error instanceof Error ? error.message : t('topology.failedCreate');
+        const message = resolveError(t, error, 'topology.failedCreate');
         setActionError(message);
       }
     }
@@ -770,11 +751,7 @@ export default function TopologyPage({
         setSelectedNode(null);
         setActionError(null);
       } catch (error) {
-        const message = resolveErrorMessage(
-          error,
-          (key, options) => t(key, options),
-          'topology.failedDelete',
-        );
+        const message = resolveError(t, error, 'topology.failedDelete');
         setActionError(message);
         throw error;
       }
@@ -798,11 +775,7 @@ export default function TopologyPage({
       setSelectedPassage(null);
       setActionError(null);
     } catch (error) {
-      const message = resolveErrorMessage(
-        error,
-        (key, options) => t(key, options),
-        'topology.failedDeletePassage',
-      );
+      const message = resolveError(t, error, 'topology.failedDeletePassage');
       setActionError(message);
     }
   }, [selectedPassage, workspaceId, membershipLabelById, t]);
@@ -927,9 +900,7 @@ export default function TopologyPage({
         const message =
           error instanceof ApiError && error.status === 409
             ? `Position (${patchBody.posx}, ${patchBody.posy}) is already used in this workspace`
-            : error instanceof Error
-              ? error.message
-              : t('topology.failedMove');
+            : resolveError(t, error, 'topology.failedMove');
         setActionError(message);
       }
     }

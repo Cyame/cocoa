@@ -2,6 +2,7 @@ import { Bug, Download, Filter, LoaderCircle, RefreshCw } from 'lucide-react';
 import { Fragment, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ApiError, api } from '@/lib/api';
+import { resolveError } from '@/lib/apiError';
 import type { Event, JsonObject } from '@/lib/types';
 
 const POLL_INTERVAL_MS = 5000;
@@ -98,12 +99,8 @@ export default function DebugPage({ embedded: _embedded = false }: DebugPageProp
         setLastUpdated(new Date().toISOString());
         setErrorMessage(null);
       } catch (error) {
-        if (error instanceof ApiError) {
-          if (error.status === 401) return;
-          setErrorMessage(error.message);
-        } else {
-          setErrorMessage(t('errors.network'));
-        }
+        if (error instanceof ApiError && error.status === 401) return;
+        setErrorMessage(resolveError(t, error));
       } finally {
         setIsLoading(false);
       }

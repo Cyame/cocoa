@@ -20,7 +20,6 @@ import CapabilitiesTab from '@/components/entity-tabs/CapabilitiesTab';
 import DistillTab from '@/components/entity-tabs/DistillTab';
 import InstancesTab from '@/components/entity-tabs/InstancesTab';
 import PromoteModal from '@/components/PromoteModal';
-import { ApiError } from '@/lib/api';
 import {
   deleteEntity,
   type EntityDetail,
@@ -30,6 +29,7 @@ import {
 } from '@/lib/api/entities';
 import { deleteInstanceById, restartInstance, stopInstance } from '@/lib/api/instances';
 import { distillEntity, listInstancesForEntity } from '@/lib/api/learning';
+import { resolveError } from '@/lib/apiError';
 import type {
   AvatarDisplayStatus,
   DistillEngine,
@@ -104,11 +104,7 @@ export default function EntityDetailModal({ onClose }: EntityDetailModalProps) {
         const next = await fetchEntity(id);
         setEntity(next);
       } catch (error) {
-        if (error instanceof ApiError) {
-          setLoadError(error.message);
-          return;
-        }
-        setLoadError(t('entityModal.loadFailed'));
+        setLoadError(resolveError(t, error, 'entityModal.loadFailed'));
       }
     },
     [t],
@@ -139,11 +135,7 @@ export default function EntityDetailModal({ onClose }: EntityDetailModalProps) {
         }));
         setInstances(items);
       } catch (error) {
-        if (error instanceof ApiError) {
-          setInstancesError(error.message);
-          return;
-        }
-        setInstancesError(t('errors.network'));
+        setInstancesError(resolveError(t, error));
       } finally {
         setInstancesLoading(false);
       }
@@ -219,22 +211,7 @@ export default function EntityDetailModal({ onClose }: EntityDetailModalProps) {
       closeModal();
       onClose();
     } catch (error) {
-      let message = t('entityModal.errors.delete');
-      if (error instanceof ApiError) {
-        const payload = error.payload;
-        if (
-          typeof payload === 'object' &&
-          payload !== null &&
-          'message_key' in payload &&
-          typeof (payload as { message_key: unknown }).message_key === 'string'
-        ) {
-          const key = (payload as { message_key: string }).message_key;
-          const translated = t(key, { defaultValue: '' });
-          message = translated.length > 0 ? translated : error.message;
-        } else {
-          message = error.message;
-        }
-      }
+      const message = resolveError(t, error, 'entityModal.errors.delete');
       setToast({ kind: 'error', message });
     } finally {
       setDeletingEntity(false);
@@ -289,7 +266,7 @@ export default function EntityDetailModal({ onClose }: EntityDetailModalProps) {
         setToast({ kind: 'success', message: t('entityModal.instancesTab.reapSuccess') });
         void loadInstances(inst.entity_id);
       } catch (error) {
-        const message = error instanceof ApiError ? error.message : t('entityModal.errors.reap');
+        const message = resolveError(t, error, 'entityModal.errors.reap');
         setToast({ kind: 'error', message });
       }
     },
@@ -307,7 +284,7 @@ export default function EntityDetailModal({ onClose }: EntityDetailModalProps) {
         setInstances((prev) => prev.filter((it) => it.id !== inst.id));
         setToast({ kind: 'success', message: t('entityModal.instancesTab.deleteSuccess') });
       } catch (error) {
-        const message = error instanceof ApiError ? error.message : t('entityModal.errors.reap');
+        const message = resolveError(t, error, 'entityModal.errors.reap');
         setToast({ kind: 'error', message });
       }
     },
@@ -328,7 +305,7 @@ export default function EntityDetailModal({ onClose }: EntityDetailModalProps) {
         setToast({ kind: 'success', message: t('entityModal.instancesTab.stopSuccess') });
         void loadInstances(inst.entity_id);
       } catch (error) {
-        const message = error instanceof ApiError ? error.message : t('entityModal.errors.reap');
+        const message = resolveError(t, error, 'entityModal.errors.reap');
         setToast({ kind: 'error', message });
       }
     },
@@ -346,7 +323,7 @@ export default function EntityDetailModal({ onClose }: EntityDetailModalProps) {
         setToast({ kind: 'success', message: t('entityModal.instancesTab.restartSuccess') });
         void loadInstances(inst.entity_id);
       } catch (error) {
-        const message = error instanceof ApiError ? error.message : t('entityModal.errors.reap');
+        const message = resolveError(t, error, 'entityModal.errors.reap');
         setToast({ kind: 'error', message });
       }
     },

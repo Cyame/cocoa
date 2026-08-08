@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import TransmuteModal from '@/components/TransmuteModal';
 import type { EntityDetail } from '@/lib/api/entities';
+import { resolveError } from '@/lib/apiError';
 import type { DistillEngine, DistillResultOut, MemoryKind } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
@@ -45,9 +46,7 @@ export default function DistillTab({
       const out = await onDistill(targetSlug.trim(), engine);
       setResult(out);
     } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : t('entityModal.distillTab.distill.error'),
-      );
+      setErrorMessage(resolveError(t, error, 'entityModal.distillTab.distill.error'));
     } finally {
       setSubmitting(false);
     }

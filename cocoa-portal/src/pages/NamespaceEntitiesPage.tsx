@@ -6,6 +6,7 @@ import CloneDialog from '@/components/CloneDialog';
 import { ApiError, api } from '@/lib/api';
 import { fetchMe } from '@/lib/api/auth';
 import { type ClonePayload, cloneEntity } from '@/lib/api/clone';
+import { resolveError } from '@/lib/apiError';
 import type { Entity, OrgIdentity } from '@/lib/types';
 import { useEntityModalStore } from '@/stores/entityModalStore';
 import { useOnboardingModalStore } from '@/stores/onboardingModalStore';
@@ -66,10 +67,8 @@ export default function NamespaceEntitiesPage() {
           setIsUnauthorized(true);
           return;
         }
-        setErrorMessage(error.message);
-        return;
       }
-      setErrorMessage(t('errors.network'));
+      setErrorMessage(resolveError(t, error));
     } finally {
       setIsLoading(false);
     }
@@ -87,7 +86,7 @@ export default function NamespaceEntitiesPage() {
         await cloneEntity(entity.id, payload);
         await refresh();
       } catch (error) {
-        setErrorMessage(error instanceof ApiError ? error.message : t('clone.error'));
+        setErrorMessage(resolveError(t, error, 'clone.error'));
       } finally {
         setCloningId(null);
         setCloneTarget(null);

@@ -1,13 +1,13 @@
 import { AlertCircle, KeyRound, LoaderCircle, User } from 'lucide-react';
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ApiError } from '@/lib/api';
 import {
   type AccountProfile,
   changeAccountPassword,
   fetchAccount,
   updateAccount,
 } from '@/lib/api/users';
+import { resolveError } from '@/lib/apiError';
 
 const IDENTITY_LABEL_KEYS: Record<string, string> = {
   system: 'identity.system',
@@ -39,7 +39,7 @@ export default function AccountPage() {
       setEmail(data.email);
       setNickname(data.nickname ?? '');
     } catch (error) {
-      setErrorMessage(error instanceof ApiError ? error.message : t('errors.network'));
+      setErrorMessage(resolveError(t, error));
     } finally {
       setIsLoading(false);
     }
@@ -63,7 +63,7 @@ export default function AccountPage() {
       setNickname(next.nickname ?? '');
       setNotice(t('account.saved'));
     } catch (error) {
-      setErrorMessage(error instanceof ApiError ? error.message : t('errors.network'));
+      setErrorMessage(resolveError(t, error));
     } finally {
       setSaving(false);
     }
@@ -83,7 +83,7 @@ export default function AccountPage() {
       setNewPassword('');
       setNotice(t('account.passwordChanged'));
     } catch (error) {
-      setErrorMessage(error instanceof ApiError ? error.message : t('errors.network'));
+      setErrorMessage(resolveError(t, error));
     } finally {
       setPasswordBusy(false);
     }

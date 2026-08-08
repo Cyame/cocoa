@@ -16,6 +16,7 @@ import { ApiError } from '@/lib/api';
 import { fetchMe } from '@/lib/api/auth';
 import { fetchBaseClassesPage } from '@/lib/api/baseClasses';
 import { type ClonePayload, cloneBaseClass } from '@/lib/api/clone';
+import { resolveError } from '@/lib/apiError';
 import { translateBaseClassTag } from '@/lib/baseClassTags';
 import type { BaseClass, OrgIdentity } from '@/lib/types';
 import { useOnboardingModalStore } from '@/stores/onboardingModalStore';
@@ -75,10 +76,8 @@ export default function BaseClassesPage() {
           setIsUnauthorized(true);
           return;
         }
-        setErrorMessage(error.message);
-        return;
       }
-      setErrorMessage(t('errors.network'));
+      setErrorMessage(resolveError(t, error));
     } finally {
       setIsLoading(false);
     }
@@ -96,7 +95,7 @@ export default function BaseClassesPage() {
         await cloneBaseClass(baseClass.id, payload);
         await refresh();
       } catch (error) {
-        setErrorMessage(error instanceof ApiError ? error.message : t('clone.error'));
+        setErrorMessage(resolveError(t, error, 'clone.error'));
       } finally {
         setCloningId(null);
         setCloneTarget(null);

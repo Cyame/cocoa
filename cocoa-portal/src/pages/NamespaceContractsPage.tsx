@@ -2,12 +2,12 @@ import { AlertCircle, Fingerprint, LoaderCircle, Plus, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
-import { ApiError } from '@/lib/api';
 import {
   listNamespaceContractDetails,
   type NamespaceContractDetail,
   updateNamespaceContractAtoms,
 } from '@/lib/api/contracts';
+import { resolveError } from '@/lib/apiError';
 import { cn } from '@/lib/utils';
 import { WORLD_ATOM_CATALOG } from '@/pages/WorldMembersPage';
 
@@ -34,7 +34,7 @@ export default function NamespaceContractsPage() {
       const page = await listNamespaceContractDetails(nsId, { includeInherited: true });
       setContracts(page.items);
     } catch (error) {
-      setLoadError(error instanceof ApiError ? error.message : t('errors.network'));
+      setLoadError(resolveError(t, error));
     } finally {
       setIsLoading(false);
     }
@@ -57,7 +57,7 @@ export default function NamespaceContractsPage() {
       await updateNamespaceContractAtoms(nsId, contract.contract_id, nextSlugs);
       await load();
     } catch (error) {
-      setActionError(error instanceof ApiError ? error.message : t('errors.network'));
+      setActionError(resolveError(t, error));
     } finally {
       setPendingContractId(null);
     }

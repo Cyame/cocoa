@@ -12,6 +12,7 @@ import { Fragment, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ApiError, api } from '@/lib/api';
 import { injectInstance } from '@/lib/api/instances';
+import { resolveError } from '@/lib/apiError';
 import {
   buildInjectPayload,
   buildInstanceEventsPath,
@@ -205,12 +206,8 @@ function InstanceDetailSection({
         setErrorMessage(null);
       } catch (error) {
         if (!active) return;
-        if (error instanceof ApiError) {
-          if (error.status === 401) return;
-          setErrorMessage(error.message);
-        } else {
-          setErrorMessage(t('errors.network'));
-        }
+        if (error instanceof ApiError && error.status === 401) return;
+        setErrorMessage(resolveError(t, error));
       } finally {
         if (active) setIsLoading(false);
       }
@@ -333,27 +330,6 @@ function InjectForm({ instanceId, instanceTitle, onClose, onSubmitted }: InjectF
     null,
   );
 
-  const resolveError = useCallback(
-    (error: unknown): string => {
-      if (error instanceof ApiError) {
-        const payload = error.payload;
-        if (
-          typeof payload === 'object' &&
-          payload !== null &&
-          'message_key' in payload &&
-          typeof (payload as { message_key: unknown }).message_key === 'string'
-        ) {
-          const key = (payload as { message_key: string }).message_key;
-          const translated = t(key, { defaultValue: '' });
-          if (translated.length > 0) return translated;
-        }
-        return error.message;
-      }
-      return t('instanceDetail.inject.failed');
-    },
-    [t],
-  );
-
   async function handleSubmit() {
     setSubmitting(true);
     setFeedback(null);
@@ -363,7 +339,7 @@ function InjectForm({ instanceId, instanceTitle, onClose, onSubmitted }: InjectF
       setTldr('');
       onSubmitted();
     } catch (error) {
-      setFeedback({ tone: 'error', text: resolveError(error) });
+      setFeedback({ tone: 'error', text: resolveError(t, error, 'instanceDetail.inject.failed') });
     } finally {
       setSubmitting(false);
     }

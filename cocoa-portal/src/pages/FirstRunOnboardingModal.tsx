@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { ApiError } from '@/lib/api';
 import { fetchBaseClassesPage } from '@/lib/api/baseClasses';
 import { summonEntity } from '@/lib/api/onboarding';
+import { resolveError } from '@/lib/apiError';
 import type { Employee } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import Step1DivinityCards from '@/pages/onboarding/Step1DivinityCards';
@@ -160,7 +161,7 @@ export default function FirstRunOnboardingModal({
       setSubmitStatus('success');
     } catch (error) {
       if (error instanceof ApiError) {
-        setSubmitErrorMessage(error.message);
+        setSubmitErrorMessage(resolveError(t, error));
         if (networkLikeError(error)) {
           setSubmitError(t('onboarding.networkError'));
         } else if (error.status === 409) {

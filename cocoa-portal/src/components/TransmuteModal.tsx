@@ -2,6 +2,7 @@ import { AlertCircle, FlaskConical, LoaderCircle, X } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { EntityDetail } from '@/lib/api/entities';
+import { resolveError } from '@/lib/apiError';
 import type { MemoryKind } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
@@ -55,7 +56,7 @@ export default function TransmuteModal({ entity, onClose, onSubmit }: TransmuteM
       await onSubmit(targetSlug.trim(), targetName.trim(), kinds);
       onClose();
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : t('entityModal.errors.transmute'));
+      setErrorMessage(resolveError(t, error, 'entityModal.errors.transmute'));
     } finally {
       setSubmitting(false);
     }

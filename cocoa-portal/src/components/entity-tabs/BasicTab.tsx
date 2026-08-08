@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '@/lib/api';
 import { type EntityDetail, patchEntity } from '@/lib/api/entities';
+import { resolveError } from '@/lib/apiError';
 import { cn } from '@/lib/utils';
 
 const DISPLAY_NAME_MAX = 32;
@@ -96,7 +97,7 @@ export default function BasicTab({ entity, canEdit, onUpdated, onFindInWorkspace
           setToast({ kind: 'error', message: t('entityModal.errors.notFound') });
           return;
         }
-        setToast({ kind: 'error', message: error.message });
+        setToast({ kind: 'error', message: resolveError(t, error) });
         return;
       }
       setToast({ kind: 'error', message: t('entityModal.errors.save') });

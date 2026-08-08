@@ -2,6 +2,7 @@ import { AlertCircle, Info, LoaderCircle, Sparkles, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { EntityDetail, PromotePayload } from '@/lib/api/entities';
+import { resolveError } from '@/lib/apiError';
 import { cn } from '@/lib/utils';
 
 type PromoteModalProps = {
@@ -54,7 +55,7 @@ export default function PromoteModal({
       await onSubmit(payload);
       onClose();
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : t('entityModal.errors.promote'));
+      setErrorMessage(resolveError(t, error, 'entityModal.errors.promote'));
     } finally {
       setSubmitting(false);
     }

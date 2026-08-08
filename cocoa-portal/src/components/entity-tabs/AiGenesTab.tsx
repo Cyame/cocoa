@@ -1,7 +1,6 @@
 import { LoaderCircle, Lock, Plus, Search, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ApiError } from '@/lib/api';
 import {
   type AiGeneCatalogItem,
   attachAiGeneToEntity,
@@ -9,6 +8,7 @@ import {
   listAiGenes,
 } from '@/lib/api/aiGenes';
 import type { EntityDetail } from '@/lib/api/entities';
+import { resolveError } from '@/lib/apiError';
 import type { AiGene, AiGeneKind } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
@@ -45,7 +45,7 @@ export default function AiGenesTab({ entity, onRefresh, onNotify }: AiGenesTabPr
       const page = await listAiGenes();
       setCatalog(page.items);
     } catch (error) {
-      setCatalogError(error instanceof ApiError ? error.message : t('errors.network'));
+      setCatalogError(resolveError(t, error));
     } finally {
       setCatalogLoading(false);
     }
@@ -104,10 +104,7 @@ export default function AiGenesTab({ entity, onRefresh, onNotify }: AiGenesTabPr
       await onRefresh();
       onNotify('success', t('entityModal.aiGenesTab.attachSuccess'));
     } catch (error) {
-      onNotify(
-        'error',
-        error instanceof ApiError ? error.message : t('entityModal.aiGenesTab.attachFailed'),
-      );
+      onNotify('error', resolveError(t, error, 'entityModal.aiGenesTab.attachFailed'));
     } finally {
       setAttachBusy(null);
     }
@@ -134,10 +131,7 @@ export default function AiGenesTab({ entity, onRefresh, onNotify }: AiGenesTabPr
       await onRefresh();
       onNotify('success', t('entityModal.aiGenesTab.detachSuccess'));
     } catch (error) {
-      onNotify(
-        'error',
-        error instanceof ApiError ? error.message : t('entityModal.aiGenesTab.detachFailed'),
-      );
+      onNotify('error', resolveError(t, error, 'entityModal.aiGenesTab.detachFailed'));
     }
   };
 

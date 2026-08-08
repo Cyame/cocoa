@@ -2,9 +2,9 @@ import { AlertCircle, ArrowRight, Building2, Layers, LoaderCircle, UserPlus } fr
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router';
-import { ApiError } from '@/lib/api';
 import { fetchNamespaces, type NamespaceWithStats } from '@/lib/api/namespaces';
 import { fetchOrganization, fetchOrganizationMembers } from '@/lib/api/organizations';
+import { resolveError } from '@/lib/apiError';
 import type { Organization, OrgMember } from '@/lib/types';
 
 const RECENT_NAMESPACE_LIMIT = 5;
@@ -35,7 +35,7 @@ export default function DashboardPage() {
       setNamespaces(namespacePage.items);
       setMembers(memberPage.items);
     } catch (fetchError) {
-      setError(fetchError instanceof ApiError ? fetchError.message : t('errors.network'));
+      setError(resolveError(t, fetchError));
     } finally {
       setIsLoading(false);
     }

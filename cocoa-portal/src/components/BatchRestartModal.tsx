@@ -2,6 +2,7 @@ import { AlertTriangle, ArrowDownUp, CheckCircle2, LoaderCircle, RefreshCw, X } 
 import { type ReactElement, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '@/lib/api';
+import { resolveError } from '@/lib/apiError';
 import type { LoopStatus } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
@@ -198,7 +199,7 @@ export default function BatchRestartModal({
       if (error instanceof ApiError && error.status === 409) {
         setErrorMessage(t('batchRestart.runningConflict'));
       } else {
-        setErrorMessage(error instanceof Error ? error.message : t('batchRestart.errorGeneric'));
+        setErrorMessage(resolveError(t, error, 'batchRestart.errorGeneric'));
       }
     } finally {
       setIsSubmitting(false);

@@ -26,7 +26,7 @@ import IntroduceInstanceModal from '@/components/IntroduceInstanceModal';
 import MeetingPanel from '@/components/MeetingPanel';
 import { ModelInputCombobox } from '@/components/ModelInputCombobox';
 import SchedulesPanel from '@/components/SchedulesPanel';
-import { ApiError, api } from '@/lib/api';
+import { api } from '@/lib/api';
 import {
   archiveFornixFile,
   createFornixFile,
@@ -53,6 +53,7 @@ import {
   patchWorkspaceCerebellum,
 } from '@/lib/api/providers';
 import { fetchWorkspace } from '@/lib/api/workspaces';
+import { resolveError } from '@/lib/apiError';
 import type {
   Entity,
   Instance,
@@ -159,11 +160,7 @@ export default function WorkspaceIdePage() {
       if (cerebellumAgent !== null) setCerebellum(cerebellumAgent);
       if (defaults !== null) setWorldCerebellumDefaults(defaults);
     } catch (error) {
-      if (error instanceof ApiError) {
-        setErrorMessage(error.message);
-      } else {
-        setErrorMessage(t('errors.network'));
-      }
+      setErrorMessage(resolveError(t, error));
     } finally {
       setIsLoading(false);
     }
@@ -200,27 +197,6 @@ export default function WorkspaceIdePage() {
     };
   }, [id, activeTab]);
 
-  const resolveActionError = useCallback(
-    (error: unknown, fallbackKey: string) => {
-      if (error instanceof ApiError) {
-        const payload = error.payload;
-        if (
-          typeof payload === 'object' &&
-          payload !== null &&
-          'message_key' in payload &&
-          typeof (payload as { message_key: unknown }).message_key === 'string'
-        ) {
-          const key = (payload as { message_key: string }).message_key;
-          const translated = t(key, { defaultValue: '' });
-          if (translated.length > 0) return translated;
-        }
-        return error.message;
-      }
-      return t(fallbackKey);
-    },
-    [t],
-  );
-
   const handleRemoveMembership = useCallback(
     async (membershipId: string, label: string) => {
       const ok = window.confirm(t('workspace.removeAwakenedConfirm', { name: label }));
@@ -230,10 +206,10 @@ export default function WorkspaceIdePage() {
         setTopologyRefreshKey((k) => k + 1);
         await loadData();
       } catch (error) {
-        setErrorMessage(resolveActionError(error, 'workspace.removeFailed'));
+        setErrorMessage(resolveError(t, error, 'workspace.removeFailed'));
       }
     },
-    [loadData, resolveActionError, t],
+    [loadData, t],
   );
 
   const handleRemoveInstance = useCallback(
@@ -245,10 +221,10 @@ export default function WorkspaceIdePage() {
         setTopologyRefreshKey((k) => k + 1);
         await loadData();
       } catch (error) {
-        setErrorMessage(resolveActionError(error, 'workspace.removeFailed'));
+        setErrorMessage(resolveError(t, error, 'workspace.removeFailed'));
       }
     },
-    [loadData, resolveActionError, t],
+    [loadData, t],
   );
 
   const healthKey = useMemo(() => deriveHealth(liveStatus), [liveStatus]);
@@ -570,7 +546,7 @@ function FornixPanel({
         setItems(page.items);
         setTotal(page.total);
       } catch (err) {
-        setError(err instanceof ApiError ? err.message : t('errors.network'));
+        setError(resolveError(t, err));
         setItems([]);
         setTotal(0);
       } finally {
@@ -603,7 +579,7 @@ function FornixPanel({
       const detail = await fetchFornixFile(workspaceId, file.id);
       setViewContent(detail.content);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t('errors.network'));
+      setError(resolveError(t, err));
     } finally {
       setViewingLoading(false);
     }
@@ -626,7 +602,7 @@ function FornixPanel({
       setCreateContent('');
       onMutated();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t('errors.network'));
+      setError(resolveError(t, err));
     } finally {
       setBusy(false);
     }
@@ -642,7 +618,7 @@ function FornixPanel({
       if (viewing?.id === file.id) setViewing(null);
       onMutated();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t('errors.network'));
+      setError(resolveError(t, err));
     } finally {
       setBusy(false);
     }
@@ -658,7 +634,7 @@ function FornixPanel({
       if (viewing?.id === file.id) setViewing(null);
       onMutated();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t('errors.network'));
+      setError(resolveError(t, err));
     } finally {
       setBusy(false);
     }
@@ -676,7 +652,7 @@ function FornixPanel({
       setEditing(null);
       onMutated();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t('errors.network'));
+      setError(resolveError(t, err));
     } finally {
       setBusy(false);
     }
@@ -1010,7 +986,7 @@ function VaultPanel({
         setEntries(page.items);
         setTotal(page.total);
       } catch (err) {
-        setError(err instanceof ApiError ? err.message : t('errors.network'));
+        setError(resolveError(t, err));
         setEntries([]);
         setTotal(0);
       } finally {
@@ -1035,7 +1011,7 @@ function VaultPanel({
       await restoreVaultEntry(workspaceId, entry.id);
       onMutated();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t('errors.network'));
+      setError(resolveError(t, err));
     } finally {
       setBusyId(null);
     }
@@ -1193,7 +1169,7 @@ function CerebellumPanel({
       });
       onUpdated(next);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t('errors.network'));
+      setError(resolveError(t, err));
     } finally {
       setSaving(false);
     }

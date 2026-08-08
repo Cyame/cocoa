@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { ApiError, api } from '@/lib/api';
+import { resolveError } from '@/lib/apiError';
 import { useSessionStore } from '@/stores/session';
 
 type TokenResponse = {
@@ -73,14 +74,7 @@ export default function LoginPage() {
       navigate('/orgs/picker', { replace: true });
     } catch (error) {
       if (error instanceof ApiError) {
-        const apiMessage =
-          typeof error.payload === 'object' &&
-          error.payload !== null &&
-          'message' in error.payload &&
-          typeof error.payload.message === 'string'
-            ? error.payload.message
-            : error.message;
-        setErrorMessage(apiMessage);
+        setErrorMessage(resolveError(t, error));
         return;
       }
       throw error;

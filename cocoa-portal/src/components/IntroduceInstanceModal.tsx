@@ -1,8 +1,9 @@
 import { AlertCircle, Cpu, LoaderCircle, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ApiError, api } from '@/lib/api';
+import { api } from '@/lib/api';
 import { introduceEntityIntoWorkspace } from '@/lib/api/instances';
+import { resolveError } from '@/lib/apiError';
 import type { Entity } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { useDeployProgressStore } from '@/stores/deployProgressStore';
@@ -44,7 +45,7 @@ export default function IntroduceInstanceModal({
       })
       .catch((error) => {
         if (cancelled) return;
-        setErrorMessage(error instanceof ApiError ? error.message : t('errors.network'));
+        setErrorMessage(resolveError(t, error));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -70,7 +71,7 @@ export default function IntroduceInstanceModal({
         });
       }
     } catch (error) {
-      setErrorMessage(error instanceof ApiError ? error.message : t('workspace.introduceFailed'));
+      setErrorMessage(resolveError(t, error, 'workspace.introduceFailed'));
     } finally {
       setSubmitting(false);
     }

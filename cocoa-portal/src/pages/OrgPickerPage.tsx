@@ -3,8 +3,8 @@ import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Navigate, useNavigate } from 'react-router';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
-import { ApiError } from '@/lib/api';
 import { createOrganization, fetchOrganizations } from '@/lib/api/organizations';
+import { resolveError } from '@/lib/apiError';
 import { toSlug } from '@/lib/slug';
 import type { Organization } from '@/lib/types';
 import { useSessionStore } from '@/stores/session';
@@ -43,7 +43,7 @@ export default function OrgPickerPage() {
       }
       setOrgs(page.items);
     } catch (error) {
-      setLoadError(error instanceof ApiError ? error.message : t('errors.network'));
+      setLoadError(resolveError(t, error));
     } finally {
       setIsLoading(false);
     }
@@ -92,7 +92,7 @@ export default function OrgPickerPage() {
       setCurrentOrg(created.id);
       navigate(`/orgs/${created.id}`, { replace: true });
     } catch (error) {
-      setCreateError(error instanceof ApiError ? error.message : t('errors.network'));
+      setCreateError(resolveError(t, error));
     } finally {
       setCreating(false);
     }

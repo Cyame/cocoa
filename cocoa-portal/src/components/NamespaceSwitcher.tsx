@@ -2,8 +2,8 @@ import { AlertCircle, Check, ChevronDown, Layers, LoaderCircle } from 'lucide-re
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
-import { ApiError } from '@/lib/api';
 import { fetchNamespaces, type NamespaceWithStats } from '@/lib/api/namespaces';
+import { resolveError } from '@/lib/apiError';
 import { cn } from '@/lib/utils';
 import { useSessionStore } from '@/stores/session';
 
@@ -37,7 +37,7 @@ export default function NamespaceSwitcher({ orgId }: NamespaceSwitcherProps) {
       const page = await fetchNamespaces();
       setNamespaces(page.items);
     } catch (loadError) {
-      setError(loadError instanceof ApiError ? loadError.message : t('errors.network'));
+      setError(resolveError(t, loadError));
     } finally {
       setLoading(false);
     }

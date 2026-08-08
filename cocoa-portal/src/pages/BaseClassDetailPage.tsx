@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 import { ModelInputCombobox } from '@/components/ModelInputCombobox';
-import { ApiError } from '@/lib/api';
 import { fetchBaseClass } from '@/lib/api/entities';
 import {
   fetchBaseClassProviderDefault,
@@ -12,6 +11,7 @@ import {
   type OrganizationProvider,
   updateBaseClassProviderDefault,
 } from '@/lib/api/providers';
+import { resolveError } from '@/lib/apiError';
 import type { BaseClass } from '@/lib/types';
 import { useOnboardingModalStore } from '@/stores/onboardingModalStore';
 import { useSessionStore } from '@/stores/session';
@@ -51,7 +51,7 @@ export default function BaseClassDetailPage() {
         }
       } catch (error) {
         if (!isActive) return;
-        setErrorMessage(error instanceof ApiError ? error.message : t('errors.network'));
+        setErrorMessage(resolveError(t, error));
       } finally {
         if (isActive) setIsLoading(false);
       }
@@ -91,7 +91,7 @@ export default function BaseClassDetailPage() {
       });
       setSaveMsg(t('baseClass.providerDefaultSaved'));
     } catch (error) {
-      setSaveMsg(error instanceof ApiError ? error.message : t('errors.network'));
+      setSaveMsg(resolveError(t, error));
     } finally {
       setIsSaving(false);
     }

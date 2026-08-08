@@ -11,8 +11,9 @@ import {
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router';
-import { ApiError, api } from '@/lib/api';
+import { api } from '@/lib/api';
 import type { NamespaceWithStats } from '@/lib/api/namespaces';
+import { resolveError } from '@/lib/apiError';
 
 export default function NamespaceOverviewPage() {
   const { t } = useTranslation();
@@ -30,7 +31,7 @@ export default function NamespaceOverviewPage() {
       const data = await api<NamespaceWithStats>(`/namespaces/${encodeURIComponent(nsId)}`);
       setNamespace(data);
     } catch (error) {
-      setErrorMessage(error instanceof ApiError ? error.message : t('errors.network'));
+      setErrorMessage(resolveError(t, error));
     } finally {
       setIsLoading(false);
     }

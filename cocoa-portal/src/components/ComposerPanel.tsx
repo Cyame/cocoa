@@ -8,8 +8,9 @@ import {
   extractThinkingBlocks,
   stripAgentThinkingBlocks,
 } from '@/lib/agentOutput';
-import { ApiError, api } from '@/lib/api';
+import { api } from '@/lib/api';
 import { introduceEntityIntoWorkspace } from '@/lib/api/instances';
+import { resolveError } from '@/lib/apiError';
 import { streamComposerTurn } from '@/lib/composerStream';
 import {
   buildOptimisticUserBubbles,
@@ -375,7 +376,7 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
       setMentionRefreshKey((k) => k + 1);
       setIntroduceTarget(null);
     } catch (e) {
-      setIntroduceError(e instanceof ApiError ? e.message : t('workspace.introduceFailed'));
+      setIntroduceError(resolveError(t, e, 'workspace.introduceFailed'));
     } finally {
       setIntroducing(false);
     }
@@ -541,7 +542,7 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
         setLanes([]);
       }
     } catch (e) {
-      setSendError(e instanceof ApiError ? e.message : t('composer.sendFailed'));
+      setSendError(resolveError(t, e, 'composer.sendFailed'));
     } finally {
       setSending(false);
     }

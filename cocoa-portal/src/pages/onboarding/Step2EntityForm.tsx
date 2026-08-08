@@ -14,7 +14,6 @@ import {
 import { type ChangeEvent, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ModelInputCombobox } from '@/components/ModelInputCombobox';
-import { ApiError } from '@/lib/api';
 import {
   type CatalogModel,
   fetchBaseClassProviderDefault,
@@ -24,6 +23,7 @@ import {
   listOrganizationProviders,
   type OrganizationProvider,
 } from '@/lib/api/providers';
+import { resolveError } from '@/lib/apiError';
 import { cn } from '@/lib/utils';
 import { isValidSlug, useOnboardingStore } from '@/stores/onboardingStore';
 
@@ -197,7 +197,7 @@ export default function Step2EntityForm({
       });
       setDescription(result.description);
     } catch (error) {
-      setGenerateError(error instanceof ApiError ? error.message : t('errors.network'));
+      setGenerateError(resolveError(t, error));
     } finally {
       setGenerateLoading(false);
     }

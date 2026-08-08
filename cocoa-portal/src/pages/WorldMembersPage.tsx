@@ -10,6 +10,7 @@ import {
   searchUsers,
   updateOrganizationMember,
 } from '@/lib/api/organizations';
+import { resolveError as sharedResolveError } from '@/lib/apiError';
 import type { OrgMember, UserBrief } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
@@ -80,6 +81,7 @@ export default function WorldMembersPage() {
   const [selectedAtomSlugs, setSelectedAtomSlugs] = useState<readonly string[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: resolveError captures t via closure
   const load = useCallback(async () => {
     if (orgId === undefined) return;
     setIsLoading(true);
@@ -88,7 +90,7 @@ export default function WorldMembersPage() {
       const page = await fetchOrganizationMembers(orgId);
       setMembers(page.items);
     } catch (error) {
-      setLoadError(error instanceof ApiError ? error.message : t('errors.network'));
+      setLoadError(resolveError(error, 'errors.network'));
     } finally {
       setIsLoading(false);
     }
@@ -120,7 +122,7 @@ export default function WorldMembersPage() {
     if (isSelfLockError(error)) {
       return t('worldMembers.selfLockError');
     }
-    return error instanceof ApiError ? error.message : t(fallbackKey);
+    return sharedResolveError(t, error, fallbackKey);
   }
 
   async function handleToggleAtom(member: OrgMember, slug: string): Promise<void> {

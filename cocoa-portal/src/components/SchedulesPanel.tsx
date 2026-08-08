@@ -1,13 +1,13 @@
 import { AlertCircle, CalendarClock, LoaderCircle, Pencil, Plus, Trash } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ApiError } from '@/lib/api';
 import {
   createSchedule,
   deleteSchedule,
   fetchSchedules,
   updateSchedule,
 } from '@/lib/api/schedules';
+import { resolveError } from '@/lib/apiError';
 import type { BrainstemSchedule, JsonObject } from '@/lib/types';
 
 const CRON_FIELD_COUNT = 5;
@@ -85,7 +85,7 @@ function ScheduleForm({ workspaceId, editing, onDone, onFailed }: ScheduleFormPr
         onDone('schedules.created');
       }
     } catch (error) {
-      onFailed(error instanceof ApiError ? error.message : t('schedules.failed'));
+      onFailed(resolveError(t, error, 'schedules.failed'));
     } finally {
       setSubmitting(false);
     }
@@ -202,7 +202,7 @@ export default function SchedulesPanel({ workspaceId }: { readonly workspaceId: 
       setItems(page.items);
       setTotal(page.total);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t('errors.network'));
+      setError(resolveError(t, err));
       setItems([]);
       setTotal(0);
     } finally {
@@ -213,27 +213,6 @@ export default function SchedulesPanel({ workspaceId }: { readonly workspaceId: 
   useEffect(() => {
     void load();
   }, [load]);
-
-  const resolveError = useCallback(
-    (error: unknown): string => {
-      if (error instanceof ApiError) {
-        const payload = error.payload;
-        if (
-          typeof payload === 'object' &&
-          payload !== null &&
-          'message_key' in payload &&
-          typeof (payload as { message_key: unknown }).message_key === 'string'
-        ) {
-          const key = (payload as { message_key: string }).message_key;
-          const translated = t(key, { defaultValue: '' });
-          if (translated.length > 0) return translated;
-        }
-        return error.message;
-      }
-      return t('schedules.failed');
-    },
-    [t],
-  );
 
   const handleFormDone = useCallback(
     (messageKey: string) => {
@@ -261,12 +240,12 @@ export default function SchedulesPanel({ workspaceId }: { readonly workspaceId: 
         setFormOpen(false);
         void load();
       } catch (err) {
-        setError(resolveError(err));
+        setError(resolveError(t, err, 'schedules.failed'));
       } finally {
         setBusyId(null);
       }
     },
-    [load, resolveError, t, workspaceId],
+    [load, t, workspaceId],
   );
 
   const handleToggleEnabled = useCallback(
@@ -277,12 +256,12 @@ export default function SchedulesPanel({ workspaceId }: { readonly workspaceId: 
         await updateSchedule(workspaceId, schedule.id, { enabled: !schedule.enabled });
         void load();
       } catch (err) {
-        setError(resolveError(err));
+        setError(resolveError(t, err, 'schedules.failed'));
       } finally {
         setBusyId(null);
       }
     },
-    [load, resolveError, workspaceId],
+    [load, t, workspaceId],
   );
 
   return (

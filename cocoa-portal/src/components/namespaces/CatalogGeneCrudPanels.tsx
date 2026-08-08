@@ -1,7 +1,6 @@
 import type { TFunction } from 'i18next';
 import { ArrowDown, ArrowUp, LoaderCircle, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ApiError } from '@/lib/api';
 import {
   type AiGeneCatalogItem,
   type CapabilityInline,
@@ -26,6 +25,7 @@ import {
   listUserGenes,
   updateUserGene,
 } from '@/lib/api/users';
+import { resolveError } from '@/lib/apiError';
 import { toSlug } from '@/lib/slug';
 
 type TFn = TFunction;
@@ -962,11 +962,11 @@ export function DeepSeaGenesPanel({ t }: { readonly t: TFn }) {
       const page = await listAiGenes();
       setGenes(page.items);
     } catch (error) {
-      setErrorMessage(error instanceof ApiError ? error.message : String(error));
+      setErrorMessage(resolveError(t, error));
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -1036,7 +1036,7 @@ export function DeepSeaGenesPanel({ t }: { readonly t: TFn }) {
       await deleteAiGene(gene.id);
       await load();
     } catch (error) {
-      setErrorMessage(error instanceof ApiError ? error.message : String(error));
+      setErrorMessage(resolveError(t, error));
     }
   };
 
@@ -1082,7 +1082,7 @@ export function DeepSeaGenesPanel({ t }: { readonly t: TFn }) {
       setModal(null);
       await load();
     } catch (error) {
-      setFormError(error instanceof ApiError ? error.message : String(error));
+      setFormError(resolveError(t, error));
     } finally {
       setFormBusy(false);
     }
@@ -1236,11 +1236,11 @@ export function HumanGenesPanel({ t }: { readonly t: TFn }) {
       const genePage = await listUserGenes();
       setGenes(genePage.items);
     } catch (error) {
-      setErrorMessage(error instanceof ApiError ? error.message : String(error));
+      setErrorMessage(resolveError(t, error));
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -1276,7 +1276,7 @@ export function HumanGenesPanel({ t }: { readonly t: TFn }) {
       await deleteUserGene(gene.id);
       await load();
     } catch (error) {
-      setErrorMessage(error instanceof ApiError ? error.message : String(error));
+      setErrorMessage(resolveError(t, error));
     }
   };
 
@@ -1301,7 +1301,7 @@ export function HumanGenesPanel({ t }: { readonly t: TFn }) {
       setModal(null);
       await load();
     } catch (error) {
-      setFormError(error instanceof ApiError ? error.message : String(error));
+      setFormError(resolveError(t, error));
     } finally {
       setFormBusy(false);
     }
@@ -1450,11 +1450,11 @@ export function CapabilityMarketTab({ t }: { readonly t: TFn }) {
       const page = await listCapabilityMarket();
       setEntries(page.items);
     } catch (error) {
-      setErrorMessage(error instanceof ApiError ? error.message : String(error));
+      setErrorMessage(resolveError(t, error));
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -1512,7 +1512,7 @@ export function CapabilityMarketTab({ t }: { readonly t: TFn }) {
       await deleteCapability(entry.id);
       await load();
     } catch (error) {
-      setErrorMessage(error instanceof ApiError ? error.message : String(error));
+      setErrorMessage(resolveError(t, error));
     }
   };
 
@@ -1552,7 +1552,7 @@ export function CapabilityMarketTab({ t }: { readonly t: TFn }) {
       setModal(null);
       await load();
     } catch (error) {
-      setFormError(error instanceof ApiError ? error.message : String(error));
+      setFormError(resolveError(t, error));
     } finally {
       setFormBusy(false);
     }

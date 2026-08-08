@@ -3,10 +3,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router';
 import CloneDialog from '@/components/CloneDialog';
-import { ApiError, api } from '@/lib/api';
+import { api } from '@/lib/api';
 import { fetchMe } from '@/lib/api/auth';
 import { type ClonePayload, cloneOrganization } from '@/lib/api/clone';
 import { fetchOrganization } from '@/lib/api/organizations';
+import { resolveError } from '@/lib/apiError';
 import type { Organization, OrgIdentity } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { OrganizationProvidersPanel } from '@/pages/organization/OrganizationProvidersPanel';
@@ -73,7 +74,7 @@ export default function WorldSettingsPage() {
       setProxyUsername(data.proxy_username ?? '');
       setProxyPassword(data.proxy_password ?? '');
     } catch (error) {
-      setErrorMessage(error instanceof ApiError ? error.message : t('errors.network'));
+      setErrorMessage(resolveError(t, error));
     } finally {
       setIsLoading(false);
     }
@@ -92,7 +93,7 @@ export default function WorldSettingsPage() {
       await cloneOrganization(orgId, payload);
       navigate('/orgs/picker');
     } catch (error) {
-      setErrorMessage(error instanceof ApiError ? error.message : t('clone.error'));
+      setErrorMessage(resolveError(t, error, 'clone.error'));
     } finally {
       setBusy(false);
       setCloneTarget(false);
@@ -115,7 +116,7 @@ export default function WorldSettingsPage() {
       setOrgName(next.name);
       setNotice(t('organization.world.nameSaved'));
     } catch (error) {
-      setErrorMessage(error instanceof ApiError ? error.message : t('errors.network'));
+      setErrorMessage(resolveError(t, error));
     } finally {
       setBusy(false);
     }
@@ -140,7 +141,7 @@ export default function WorldSettingsPage() {
       setOrg(next);
       setNotice(t('organization.world.saved'));
     } catch (error) {
-      setErrorMessage(error instanceof ApiError ? error.message : t('errors.network'));
+      setErrorMessage(resolveError(t, error));
     } finally {
       setBusy(false);
     }

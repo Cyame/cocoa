@@ -5,20 +5,18 @@ const API_BASE_URL = (import.meta.env.VITE_API_BASE ?? '/api/v1').replace(/\/$/,
 export class ApiError extends Error {
   readonly status: number;
   readonly payload: unknown;
+  readonly messageKey: string | null;
 
   constructor(status: number, payload: unknown) {
+    const isObj = typeof payload === 'object' && payload !== null;
+    const p = isObj ? (payload as Record<string, unknown>) : {};
     const message =
-      typeof payload === 'object' &&
-      payload !== null &&
-      'message' in payload &&
-      typeof payload.message === 'string'
-        ? payload.message
-        : `API request failed with status ${status}`;
-
+      typeof p.message === 'string' ? p.message : `API request failed with status ${status}`;
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.payload = payload;
+    this.messageKey = typeof p.message_key === 'string' ? p.message_key : null;
   }
 }
 

@@ -11,7 +11,6 @@ import {
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ModelInputCombobox } from '@/components/ModelInputCombobox';
-import { ApiError } from '@/lib/api';
 import { fetchBaseClassesPage } from '@/lib/api/baseClasses';
 import {
   type CatalogModel,
@@ -33,6 +32,7 @@ import {
   updateOrganizationProvider,
   updateSystemHub,
 } from '@/lib/api/providers';
+import { resolveError } from '@/lib/apiError';
 import type { BaseClass } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
@@ -89,7 +89,7 @@ export function OrganizationProvidersPanel({ canWrite, orgId }: ProvidersPanelPr
       setCerebellumProviderId(cerebellum.provider_id ?? '');
       setCerebellumModel(cerebellum.model ?? '');
     } catch (error) {
-      setErrorMessage(error instanceof ApiError ? error.message : t('errors.network'));
+      setErrorMessage(resolveError(t, error));
     } finally {
       setIsLoading(false);
     }
@@ -107,7 +107,7 @@ export function OrganizationProvidersPanel({ canWrite, orgId }: ProvidersPanelPr
       await testOrganizationProvider(providerId, orgId);
       await loadAll();
     } catch (error) {
-      setActionError(error instanceof ApiError ? error.message : t('errors.network'));
+      setActionError(resolveError(t, error));
     } finally {
       setTestingId(null);
     }
@@ -120,7 +120,7 @@ export function OrganizationProvidersPanel({ canWrite, orgId }: ProvidersPanelPr
       await updateOrganizationProvider(provider.id, { enabled: !provider.enabled }, orgId);
       await loadAll();
     } catch (error) {
-      setActionError(error instanceof ApiError ? error.message : t('errors.network'));
+      setActionError(resolveError(t, error));
     }
   }
 
@@ -131,7 +131,7 @@ export function OrganizationProvidersPanel({ canWrite, orgId }: ProvidersPanelPr
       await deleteOrganizationProvider(providerId, orgId);
       await loadAll();
     } catch (error) {
-      setActionError(error instanceof ApiError ? error.message : t('errors.network'));
+      setActionError(resolveError(t, error));
     }
   }
 
@@ -149,7 +149,7 @@ export function OrganizationProvidersPanel({ canWrite, orgId }: ProvidersPanelPr
       );
       await loadAll();
     } catch (error) {
-      setHubError(error instanceof ApiError ? error.message : t('errors.network'));
+      setHubError(resolveError(t, error));
     } finally {
       setHubSaving(false);
     }
@@ -169,7 +169,7 @@ export function OrganizationProvidersPanel({ canWrite, orgId }: ProvidersPanelPr
       );
       await loadAll();
     } catch (error) {
-      setCerebellumError(error instanceof ApiError ? error.message : t('errors.network'));
+      setCerebellumError(resolveError(t, error));
     } finally {
       setCerebellumSaving(false);
     }
@@ -586,7 +586,7 @@ function EnableCatalogModal({
         setEntries(page.items);
         setDegraded(page.degraded);
       })
-      .catch((err) => setError(err instanceof ApiError ? err.message : t('errors.network')))
+      .catch((err) => setError(resolveError(t, err)))
       .finally(() => setLoading(false));
   }, [t]);
 
@@ -616,7 +616,7 @@ function EnableCatalogModal({
       if (page.error) setError(page.error);
       if (!defaultModel && page.items[0]) setDefaultModel(page.items[0].id);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t('errors.network'));
+      setError(resolveError(t, err));
     } finally {
       setFetchingModels(false);
     }
@@ -641,7 +641,7 @@ function EnableCatalogModal({
       );
       onCreated();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t('errors.network'));
+      setError(resolveError(t, err));
     } finally {
       setSubmitting(false);
     }
@@ -791,7 +791,7 @@ function CustomProviderModal({
       if (page.error) setError(page.error);
       if (!defaultModel && page.items[0]) setDefaultModel(page.items[0].id);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t('errors.network'));
+      setError(resolveError(t, err));
     } finally {
       setFetchingModels(false);
     }
@@ -816,7 +816,7 @@ function CustomProviderModal({
       );
       onCreated();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t('errors.network'));
+      setError(resolveError(t, err));
     } finally {
       setSubmitting(false);
     }
@@ -986,7 +986,7 @@ function SetDefaultModal({
       if (page.error) setError(page.error);
       if (page.default_model) setModel(page.default_model);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t('errors.network'));
+      setError(resolveError(t, err));
     } finally {
       setFetchingModels(false);
     }
@@ -1009,7 +1009,7 @@ function SetDefaultModal({
       );
       onSaved();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t('errors.network'));
+      setError(resolveError(t, err));
     } finally {
       setSubmitting(false);
     }

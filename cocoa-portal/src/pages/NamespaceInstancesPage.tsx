@@ -6,6 +6,7 @@ import PromoteModal from '@/components/PromoteModal';
 import { ApiError, api } from '@/lib/api';
 import { type EntityDetail, fetchEntity, promoteEntity } from '@/lib/api/entities';
 import { listInstances } from '@/lib/api/instances';
+import { resolveError } from '@/lib/apiError';
 import type { Entity, Instance } from '@/lib/types';
 import { useEntityModalStore } from '@/stores/entityModalStore';
 
@@ -53,10 +54,8 @@ export default function NamespaceInstancesPage() {
           setIsUnauthorized(true);
           return;
         }
-        setErrorMessage(error.message);
-        return;
       }
-      setErrorMessage(t('errors.network'));
+      setErrorMessage(resolveError(t, error));
     } finally {
       setIsLoading(false);
     }
@@ -114,7 +113,7 @@ export default function NamespaceInstancesPage() {
               const detail = await fetchEntity(entityId);
               setPromoteEntityDetail(detail);
             } catch (error) {
-              setErrorMessage(error instanceof ApiError ? error.message : t('errors.network'));
+              setErrorMessage(resolveError(t, error));
               setPromoteTarget(null);
             }
           }}

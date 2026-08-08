@@ -2,8 +2,8 @@ import { AlertCircle, Check, ChevronDown, Globe2, LoaderCircle } from 'lucide-re
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
-import { ApiError } from '@/lib/api';
 import { fetchOrganizations } from '@/lib/api/organizations';
+import { resolveError } from '@/lib/apiError';
 import type { Organization } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { useSelectedStore } from '@/stores/selected';
@@ -49,7 +49,7 @@ export default function OrgSwitcher({ variant = 'header' }: OrgSwitcherProps) {
       }
       setOrgs(page.items);
     } catch (loadError) {
-      setError(loadError instanceof ApiError ? loadError.message : t('errors.network'));
+      setError(resolveError(t, loadError));
     } finally {
       setLoading(false);
     }

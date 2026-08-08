@@ -8,6 +8,7 @@ import { fetchMe } from '@/lib/api/auth';
 import { type ClonePayload, cloneWorkspace } from '@/lib/api/clone';
 import { listMemberships } from '@/lib/api/instances';
 import { createWorkspace, fetchWorkspaces } from '@/lib/api/workspaces';
+import { resolveError } from '@/lib/apiError';
 import { toSlug } from '@/lib/slug';
 import type { OrgIdentity, Workspace } from '@/lib/types';
 import { useSessionStore } from '@/stores/session';
@@ -93,10 +94,8 @@ export default function NamespaceWorkspacesPage() {
           setIsUnauthorized(true);
           return;
         }
-        setErrorMessage(error.message);
-        return;
       }
-      setErrorMessage(t('errors.network'));
+      setErrorMessage(resolveError(t, error));
     } finally {
       setIsLoading(false);
     }
@@ -115,7 +114,7 @@ export default function NamespaceWorkspacesPage() {
       const cloned = await cloneWorkspace(workspace.id, payload);
       navigate(`/orgs/${orgId ?? ''}/workspaces/${cloned.id}`);
     } catch (error) {
-      setErrorMessage(error instanceof ApiError ? error.message : t('clone.error'));
+      setErrorMessage(resolveError(t, error, 'clone.error'));
     } finally {
       setCloningId(null);
       setCloneTarget(null);
@@ -142,7 +141,7 @@ export default function NamespaceWorkspacesPage() {
       setCreateSlug('');
       await loadWorkspaces();
     } catch (error) {
-      setCreateError(error instanceof ApiError ? error.message : t('errors.network'));
+      setCreateError(resolveError(t, error));
     } finally {
       setCreateBusy(false);
     }

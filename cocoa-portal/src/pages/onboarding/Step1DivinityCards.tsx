@@ -14,6 +14,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '@/lib/api';
 import { fetchBaseClasses } from '@/lib/api/onboarding';
+import { resolveError } from '@/lib/apiError';
 import { normalizeBaseClassTags, translateBaseClassTag } from '@/lib/baseClassTags';
 import type { BaseClass, JsonObject } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -124,8 +125,9 @@ export default function Step1DivinityCards({ onLoadingChange, onErrorChange }: S
       } catch (error) {
         if (!isActive) return;
         if (error instanceof ApiError) {
-          setErrorMessage(error.message);
-          if (onErrorChange) onErrorChange(error.message);
+          const msg = resolveError(t, error);
+          setErrorMessage(msg);
+          if (onErrorChange) onErrorChange(msg);
         } else {
           setErrorMessage(t('onboarding.loadBaseClassesFailed'));
           if (onErrorChange) onErrorChange(t('onboarding.loadBaseClassesFailed'));
@@ -220,11 +222,7 @@ export default function Step1DivinityCards({ onLoadingChange, onErrorChange }: S
                   const items = await fetchBaseClasses();
                   setClasses(items);
                 } catch (error) {
-                  setErrorMessage(
-                    error instanceof ApiError
-                      ? error.message
-                      : t('onboarding.loadBaseClassesFailed'),
-                  );
+                  setErrorMessage(resolveError(t, error, 'onboarding.loadBaseClassesFailed'));
                 } finally {
                   setIsLoading(false);
                 }
