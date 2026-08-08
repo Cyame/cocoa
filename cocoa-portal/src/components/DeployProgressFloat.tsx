@@ -2,11 +2,7 @@ import { AlertCircle, CheckCircle2, LoaderCircle, Square, XCircle } from 'lucide
 import { useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
-import {
-  cancelDeploy,
-  fetchDeploySnapshot,
-  streamDeployProgress,
-} from '@/lib/api/deploy';
+import { cancelDeploy, fetchDeploySnapshot, streamDeployProgress } from '@/lib/api/deploy';
 import { cn } from '@/lib/utils';
 import { useDeployProgressStore } from '@/stores/deployProgressStore';
 import { useSessionStore } from '@/stores/session';
@@ -106,9 +102,6 @@ export default function DeployProgressFloat() {
             } else if (frame.step === 9 && frame.status === 'done') {
               finished = true;
               patch({ phase: 'success', currentStep: 9, stepStatus: 'done' });
-            } else if (frame.step === 0 && frame.status === 'failed') {
-              finished = true;
-              patch({ phase: 'failed', message: frame.message ?? t('deploy.failed') });
             }
           },
           ac.signal,
@@ -132,7 +125,7 @@ export default function DeployProgressFloat() {
       window.clearTimeout(timeoutId);
       ac.abort();
     };
-  }, [job?.recordId, job?.phase, patch, t, token]);
+  }, [job?.recordId, job?.phase, patch, t, token, job]);
 
   const steps = useMemo(() => job?.stepNames ?? [], [job?.stepNames]);
 
@@ -181,7 +174,10 @@ export default function DeployProgressFloat() {
             const stepNum = index + 1;
             let state: 'pending' | 'running' | 'done' | 'failed' = 'pending';
             if (job.phase === 'failed' && stepNum === job.currentStep) state = 'failed';
-            else if (job.currentStep > stepNum || (job.currentStep === stepNum && job.stepStatus === 'done'))
+            else if (
+              job.currentStep > stepNum ||
+              (job.currentStep === stepNum && job.stepStatus === 'done')
+            )
               state = 'done';
             else if (job.currentStep === stepNum && job.phase === 'running') state = 'running';
             else if (job.phase === 'success') state = 'done';

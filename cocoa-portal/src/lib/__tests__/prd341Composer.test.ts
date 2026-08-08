@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { fitNodes } from '@/lib/topologyFit';
 import { parse_directive, parse_turn } from '@/lib/slash-parser';
+import { fitNodes } from '@/lib/topologyFit';
 
 describe('slash-parser mention chat', () => {
   it('parses @slug text without /cmd', () => {

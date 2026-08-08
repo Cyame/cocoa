@@ -3,10 +3,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '@/lib/api';
 import {
+  type AiGeneCatalogItem,
   attachAiGeneToEntity,
   detachAiGeneFromEntity,
   listAiGenes,
-  type AiGeneCatalogItem,
 } from '@/lib/api/aiGenes';
 import type { EntityDetail } from '@/lib/api/entities';
 import type { AiGene, AiGeneKind } from '@/lib/types';
@@ -36,10 +36,7 @@ export default function AiGenesTab({ entity, onRefresh, onNotify }: AiGenesTabPr
   const [pickerQuery, setPickerQuery] = useState('');
 
   const geneLookup = useMemo(() => buildGeneLookup(entity), [entity]);
-  const attachedSlugs = useMemo(
-    () => new Set(geneLookup.all.map((g) => g.slug)),
-    [geneLookup],
-  );
+  const attachedSlugs = useMemo(() => new Set(geneLookup.all.map((g) => g.slug)), [geneLookup]);
 
   const loadCatalog = useCallback(async () => {
     setCatalogLoading(true);

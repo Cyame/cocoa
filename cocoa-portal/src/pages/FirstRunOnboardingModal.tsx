@@ -9,8 +9,8 @@ import { cn } from '@/lib/utils';
 import Step1DivinityCards from '@/pages/onboarding/Step1DivinityCards';
 import Step2EntityForm from '@/pages/onboarding/Step2EntityForm';
 import Step3KnowledgeConfirm from '@/pages/onboarding/Step3KnowledgeConfirm';
-import { isValidSlug, TOTAL_ONBOARDING_STEPS, useOnboardingStore } from '@/stores/onboardingStore';
 import { useOnboardingModalStore } from '@/stores/onboardingModalStore';
+import { isValidSlug, TOTAL_ONBOARDING_STEPS, useOnboardingStore } from '@/stores/onboardingStore';
 
 type FirstRunOnboardingModalProps = {
   readonly existingDisplayNames?: readonly string[];

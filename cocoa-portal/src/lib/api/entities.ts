@@ -43,7 +43,8 @@ function normalizeEntityDetail(raw: EntityDetailRaw): EntityDetail {
     ? raw.ai_genes
     : capabilities.map((cap) => ({
         slug: cap.name,
-        source: cap.source === 'extra_added' ? ('extra_added' as const) : ('from_base_class' as const),
+        source:
+          cap.source === 'extra_added' ? ('extra_added' as const) : ('from_base_class' as const),
       }));
   return {
     ...raw,

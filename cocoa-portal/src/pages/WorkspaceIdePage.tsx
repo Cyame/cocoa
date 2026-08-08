@@ -534,7 +534,7 @@ function joinHubPath(parent: string, name: string): string {
 function FornixPanel({
   workspaceId,
   hub,
-  refreshKey,
+  refreshKey: _refreshKey,
   onMutated,
 }: {
   readonly workspaceId: string;
@@ -582,7 +582,7 @@ function FornixPanel({
 
   useEffect(() => {
     void load(parentPath);
-  }, [load, parentPath, refreshKey]);
+  }, [load, parentPath]);
 
   const segments = useMemo(
     () => parentPath.split('/').filter((segment) => segment.length > 0),
@@ -744,7 +744,7 @@ function FornixPanel({
             {t('workspace.fornix.root')}
           </button>
           {segments.map((segment, index) => (
-            <span key={`${segment}-${index}`} className="flex items-center gap-1">
+            <span key={segments.slice(0, index + 1).join('/')} className="flex items-center gap-1">
               <span aria-hidden="true">/</span>
               <button
                 type="button"
@@ -887,7 +887,6 @@ function FornixPanel({
               <input
                 value={createName}
                 onChange={(event) => setCreateName(event.target.value)}
-                autoFocus
                 className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
               />
             </label>
@@ -984,7 +983,7 @@ function FornixPanel({
 
 function VaultPanel({
   workspaceId,
-  refreshKey,
+  refreshKey: _refreshKey,
   onMutated,
 }: {
   readonly workspaceId: string;
@@ -1023,7 +1022,7 @@ function VaultPanel({
 
   useEffect(() => {
     void load(search);
-  }, [load, refreshKey, search]);
+  }, [load, search]);
 
   async function handleRestore(entry: VaultEntry) {
     const ok = window.confirm(

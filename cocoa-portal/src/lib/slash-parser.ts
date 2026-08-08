@@ -104,12 +104,13 @@ export function expandInlineChatMentions(raw: string): Directive[] | null {
   }
   const matches: RegExpExecArray[] = [];
   RE_AT_TOKEN.lastIndex = 0;
-  let m: RegExpExecArray | null;
-  while ((m = RE_AT_TOKEN.exec(raw)) !== null) {
+  let m = RE_AT_TOKEN.exec(raw);
+  while (m !== null) {
     const slug = m[1];
     if (CONTENT_REF_SCOPES.has(slug)) continue;
     if (m.index > 0 && !/\s/.test(raw[m.index - 1] ?? '')) continue;
     matches.push(m);
+    m = RE_AT_TOKEN.exec(raw);
   }
   if (matches.length <= 1) return null;
   const out: Directive[] = [];

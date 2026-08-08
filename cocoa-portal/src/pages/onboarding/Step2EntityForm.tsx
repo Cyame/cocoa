@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { type ChangeEvent, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ModelInputCombobox } from '@/components/ModelInputCombobox';
 import { ApiError } from '@/lib/api';
 import {
   type CatalogModel,
@@ -25,7 +26,6 @@ import {
 } from '@/lib/api/providers';
 import type { EmployeeRank } from '@/lib/types';
 import { cn } from '@/lib/utils';
-import { ModelInputCombobox } from '@/components/ModelInputCombobox';
 import { isValidSlug, useOnboardingStore } from '@/stores/onboardingStore';
 
 type Step2Props = {
@@ -154,7 +154,7 @@ export default function Step2EntityForm({
     };
     // Intentionally omit `model` — only seed default once when provider changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- model seed is one-shot
-  }, [providerId, setModel]);
+  }, [providerId, setModel, model.trim]);
 
   const displayNameError = useMemo<string | null>(() => {
     if (trimmedDisplayName.length === 0) return null;

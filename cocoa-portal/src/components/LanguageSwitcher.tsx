@@ -92,7 +92,6 @@ export default function LanguageSwitcher({
       {open ? (
         <ul
           id={listId}
-          role="listbox"
           aria-label={t('language.label')}
           data-testid="language-switcher-menu"
           className={cn(
@@ -106,10 +105,11 @@ export default function LanguageSwitcher({
           {LOCALES.map((locale) => {
             const selected = locale.id === current;
             return (
-              <li key={locale.id} role="option" aria-selected={selected}>
+              <li key={locale.id}>
                 <button
                   type="button"
                   data-testid={`language-option-${locale.id}`}
+                  aria-current={selected ? 'true' : undefined}
                   onClick={() => selectLocale(locale.id)}
                   className={cn(
                     'flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm transition-colors',

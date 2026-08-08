@@ -22,10 +22,7 @@ describe('baseClassTags', () => {
   });
 
   it('normalizes and de-duplicates tags', () => {
-    expect(normalizeBaseClassTags(['plan', 'planning', 'oracle'])).toEqual([
-      'planning',
-      'oracle',
-    ]);
+    expect(normalizeBaseClassTags(['plan', 'planning', 'oracle'])).toEqual(['planning', 'oracle']);
   });
 
   it('translates primary and secondary tags via i18n', () => {

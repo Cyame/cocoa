@@ -2,6 +2,7 @@ import { AlertCircle, LoaderCircle, Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
+import { ModelInputCombobox } from '@/components/ModelInputCombobox';
 import { ApiError } from '@/lib/api';
 import { fetchBaseClass } from '@/lib/api/entities';
 import {
@@ -12,7 +13,6 @@ import {
   updateBaseClassProviderDefault,
 } from '@/lib/api/providers';
 import type { BaseClass } from '@/lib/types';
-import { ModelInputCombobox } from '@/components/ModelInputCombobox';
 import { useOnboardingModalStore } from '@/stores/onboardingModalStore';
 import { useSessionStore } from '@/stores/session';
 
@@ -169,9 +169,13 @@ export default function BaseClassDetailPage() {
                   ))}
                 </select>
               </label>
-              <label className="block text-xs font-medium text-slate-600">
+              <label
+                htmlFor="base-class-model"
+                className="block text-xs font-medium text-slate-600"
+              >
                 {t('organization.fields.model')}
                 <ModelInputCombobox
+                  id="base-class-model"
                   aria-label={t('organization.fields.model')}
                   value={model}
                   onChange={setModel}

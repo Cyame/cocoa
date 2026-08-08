@@ -6,10 +6,7 @@ import portalSeeds from '@/lib/gene_pack_seeds.json';
 import { GENE_PACKS } from '@/lib/genePacks';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const backendSeedsPath = join(
-  here,
-  '../../../../cocoa-backend/app/core/gene_pack_seeds.json',
-);
+const backendSeedsPath = join(here, '../../../../cocoa-backend/app/core/gene_pack_seeds.json');
 
 describe('genePacks', () => {
   it('has unique pack ids', () => {

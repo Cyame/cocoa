@@ -208,7 +208,7 @@ async function fetchStaticData(workspaceId: string): Promise<TopologyStaticData>
 export default function TopologyPage({
   embedded = false,
   workspaceId: workspaceIdProp,
-  refreshKey = 0,
+  refreshKey: _refreshKey = 0,
   onOpenBrain,
 }: TopologyPageProps = {}) {
   const { id: routeWorkspaceId } = useParams<{ id: string }>();
@@ -303,7 +303,7 @@ export default function TopologyPage({
     return () => {
       isActive = false;
     };
-  }, [workspaceId, refreshKey, t]);
+  }, [workspaceId, t]);
 
   // ---- Live status polling (every 2s) ----
   useEffect(() => {
@@ -502,7 +502,7 @@ export default function TopologyPage({
 
   useEffect(() => {
     didFitRef.current = false;
-  }, [workspaceId]);
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -1334,6 +1334,7 @@ function NodeView({
         </text>
       ) : null}
       {isTooltipVisible ? (
+        // biome-ignore lint/a11y/noStaticElementInteractions: SVG tooltip container — hover handlers control tooltip timing, the actionable content lives in child buttons
         <g
           data-testid={`topology-tooltip-group-${node.id}`}
           onMouseEnter={cancelHideTooltip}

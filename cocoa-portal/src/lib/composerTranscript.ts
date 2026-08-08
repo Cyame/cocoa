@@ -80,9 +80,7 @@ export function reconcileTranscript(
     if (msg.turn_id) {
       const key = roleTurnKey(msg.role, msg.turn_id);
       if (seenKeys.has(key)) continue;
-      const onServer = server.some(
-        (s) => s.role === msg.role && s.turn_id === msg.turn_id,
-      );
+      const onServer = server.some((s) => s.role === msg.role && s.turn_id === msg.turn_id);
       if (onServer) continue;
     }
     out.push(msg);
@@ -110,8 +108,7 @@ export function upsertAssistantBubble(
       target_entity: lane.target || existing.target_entity,
       target_entity_name: lane.targetName ?? existing.target_entity_name ?? null,
       recipient_username: lane.recipientUsername ?? existing.recipient_username ?? null,
-      recipient_display_name:
-        lane.recipientDisplayName ?? existing.recipient_display_name ?? null,
+      recipient_display_name: lane.recipientDisplayName ?? existing.recipient_display_name ?? null,
     };
     return copy;
   }

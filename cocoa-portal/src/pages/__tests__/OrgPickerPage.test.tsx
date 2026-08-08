@@ -146,7 +146,9 @@ describe('OrgPickerPage', () => {
       ),
     ).toBeInTheDocument();
     expect(
-      mockedApi.mock.calls.filter(([path, init]) => path === '/organizations' && init?.method === 'POST'),
+      mockedApi.mock.calls.filter(
+        ([path, init]) => path === '/organizations' && init?.method === 'POST',
+      ),
     ).toHaveLength(0);
     expect(screen.queryByText('Org dashboard destination')).not.toBeInTheDocument();
   });

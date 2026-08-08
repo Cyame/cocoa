@@ -1,14 +1,14 @@
 import { AlertCircle, LoaderCircle, MessageSquare, Send, Settings } from 'lucide-react';
-import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CommandAutocomplete } from '@/components/CommandAutocomplete';
 import { MentionAutocomplete } from '@/components/MentionAutocomplete';
-import { ApiError, api } from '@/lib/api';
 import {
   AgentThinkingStreamFilter,
   extractThinkingBlocks,
   stripAgentThinkingBlocks,
 } from '@/lib/agentOutput';
+import { ApiError, api } from '@/lib/api';
 import { streamComposerTurn } from '@/lib/composerStream';
 import {
   buildOptimisticUserBubbles,
@@ -54,11 +54,7 @@ type ComposerPanelProps = {
   readonly compact?: boolean;
 };
 
-function directiveDisplayText(
-  target: string | null,
-  turn: Turn | null,
-  fallback: string,
-): string {
+function directiveDisplayText(target: string | null, turn: Turn | null, fallback: string): string {
   if (turn === null) return fallback;
   const match = turn.directives.find((d) => d.target_entity === target);
   if (match === undefined) return fallback;
@@ -101,15 +97,18 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
   const transcriptEndRef = useRef<HTMLDivElement>(null);
   const streamFiltersRef = useRef<Map<string, AgentThinkingStreamFilter>>(new Map());
 
-  function entityLabel(slug: string | null | undefined, fallbackName?: string | null): string {
-    if (!slug) return fallbackName?.trim() || '';
-    const fromMap = entityNameBySlug[slug];
-    if (fromMap?.trim()) return fromMap.trim();
-    if (fallbackName?.trim()) return fallbackName.trim();
-    return slug;
-  }
+  const entityLabel = useCallback(
+    (slug: string | null | undefined, fallbackName?: string | null): string => {
+      if (!slug) return fallbackName?.trim() || '';
+      const fromMap = entityNameBySlug[slug];
+      if (fromMap?.trim()) return fromMap.trim();
+      if (fallbackName?.trim()) return fallbackName.trim();
+      return slug;
+    },
+    [entityNameBySlug],
+  );
 
-  async function fetchTranscript(): Promise<TranscriptMessage[]> {
+  const fetchTranscript = useCallback(async (): Promise<TranscriptMessage[]> => {
     try {
       const params = new URLSearchParams();
       if (filterSpeaker) params.set('speaker', filterSpeaker);
@@ -123,20 +122,23 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
     } catch {
       return [];
     }
-  }
+  }, [filterSpeaker, filterRecipient, workspaceId]);
 
-  async function reloadTranscript(mode: 'merge' | 'replace' = 'merge') {
-    const items = await fetchTranscript();
-    if (mode === 'replace') {
-      setTranscript(items);
-      return;
-    }
-    setTranscript((prev) => reconcileTranscript(items, prev));
-  }
+  const reloadTranscript = useCallback(
+    async (mode: 'merge' | 'replace' = 'merge') => {
+      const items = await fetchTranscript();
+      if (mode === 'replace') {
+        setTranscript(items);
+        return;
+      }
+      setTranscript((prev) => reconcileTranscript(items, prev));
+    },
+    [fetchTranscript],
+  );
 
   useEffect(() => {
     void reloadTranscript('replace');
-  }, [workspaceId, filterSpeaker, filterRecipient]);
+  }, [reloadTranscript]);
 
   useEffect(() => {
     const names: Record<string, string> = {};
@@ -151,7 +153,7 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
 
   useEffect(() => {
     transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [transcript, lanes]);
+  }, []);
 
   useEffect(() => {
     if (draft === null) return;
@@ -256,7 +258,7 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
       entities: [...entities.entries()].sort((a, b) => a[1].localeCompare(b[1])),
       hasSystem,
     };
-  }, [transcript, lanes, entityNameBySlug]);
+  }, [transcript, lanes, entityLabel]);
 
   const recipientOptions = useMemo(() => {
     const users = new Map<string, string>();
@@ -287,9 +289,7 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
         users.set(
           lane.recipientUsername,
           lane.recipientDisplayName ||
-            (lane.recipientUsername === currentUsername
-              ? currentDisplayName
-              : null) ||
+            (lane.recipientUsername === currentUsername ? currentDisplayName : null) ||
             lane.recipientUsername,
         );
       }
@@ -301,7 +301,7 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
       users: [...users.entries()].sort((a, b) => a[1].localeCompare(b[1])),
       entities: [...entities.entries()].sort((a, b) => a[1].localeCompare(b[1])),
     };
-  }, [transcript, lanes, entityNameBySlug, currentUsername, currentDisplayName]);
+  }, [transcript, lanes, currentUsername, currentDisplayName, entityLabel]);
 
   const filteredTranscript = useMemo(() => {
     // Speaker/recipient filters are applied server-side on reload.
@@ -319,11 +319,22 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
   const bareEmployeeCmdHint = useMemo(() => {
     if (turn === null) return false;
     for (const d of turn.directives) {
-      if (d.target_entity === null && d.cmd && !['/read', '/list', '/write', '/archive'].includes(d.cmd)) {
+      if (
+        d.target_entity === null &&
+        d.cmd &&
+        !['/read', '/list', '/write', '/archive'].includes(d.cmd)
+      ) {
         if (
-          ['/interrupt', '/pause', '/resume', '/status', '/snapshot', '/distill', '/consolidate', '/reflect'].includes(
-            d.cmd,
-          )
+          [
+            '/interrupt',
+            '/pause',
+            '/resume',
+            '/status',
+            '/snapshot',
+            '/distill',
+            '/consolidate',
+            '/reflect',
+          ].includes(d.cmd)
         ) {
           return true;
         }
@@ -423,12 +434,8 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
                       if (lane.turnId !== turnId) return lane;
                       if (frame.type === 'chat.response.chunk' && frame.token) {
                         rawAccum += frame.token;
-                        const visible = showThinkingChain
-                          ? rawAccum
-                          : filter.feed(frame.token);
-                        const thinking = showThinkingChain
-                          ? extractThinkingBlocks(rawAccum)
-                          : '';
+                        const visible = showThinkingChain ? rawAccum : filter.feed(frame.token);
+                        const thinking = showThinkingChain ? extractThinkingBlocks(rawAccum) : '';
                         return {
                           ...lane,
                           status: 'responding' as const,
@@ -482,9 +489,7 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
                 thinking: '',
                 error: e instanceof Error ? e.message : t('composer.streamFailed'),
               };
-              setLanes((prev) =>
-                prev.map((lane) => (lane.turnId === turnId ? failedLane : lane)),
-              );
+              setLanes((prev) => prev.map((lane) => (lane.turnId === turnId ? failedLane : lane)));
               setTranscript((tr) => upsertAssistantBubble(tr, failedLane));
             }
           }),
@@ -641,7 +646,9 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
 
       <div className="mb-2 min-h-0 flex-1 space-y-2 overflow-y-auto rounded-lg border border-slate-200 bg-white p-2">
         {filteredTranscript.length === 0 && lanes.length === 0 ? (
-          <p className="px-1 py-6 text-center text-xs text-slate-400">{t('composer.transcriptEmpty')}</p>
+          <p className="px-1 py-6 text-center text-xs text-slate-400">
+            {t('composer.transcriptEmpty')}
+          </p>
         ) : null}
         {filteredTranscript.map((msg) => (
           <MessageBubble
@@ -697,9 +704,7 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
                   speaker={entityLabel(lane.target, lane.targetName)}
                   recipient={
                     lane.recipientDisplayName ||
-                    (lane.recipientUsername === currentUsername
-                      ? currentDisplayName
-                      : null) ||
+                    (lane.recipientUsername === currentUsername ? currentDisplayName : null) ||
                     lane.recipientUsername ||
                     currentDisplayName ||
                     t('composer.roleUser')
@@ -711,9 +716,7 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
                 />
                 <StatusBadge status={lane.status} />
               </div>
-              {showThinkingChain && lane.thinking ? (
-                <ThinkingBlock text={lane.thinking} />
-              ) : null}
+              {showThinkingChain && lane.thinking ? <ThinkingBlock text={lane.thinking} /> : null}
               <MessageBody
                 text={lane.text || (lane.status === 'responding' ? '…' : '')}
                 renderMd={renderMd}
@@ -727,14 +730,17 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
       {deliveryRows.length > 0 ? (
         <ul className="mb-2 max-h-16 overflow-y-auto text-xs text-slate-700">
           {deliveryRows.flatMap((row) =>
-            row.delivery.map((d, i) => {
+            row.delivery.map((d) => {
               if (d.delivered) return null;
               const reasonLabel =
                 d.reason === 'routed_to_cerebellum'
                   ? t('composer.routedToCerebellum')
                   : (d.reason ?? t('composer.blocked'));
               return (
-                <li key={`${row.target_entity}-${i}`} className="font-mono">
+                <li
+                  key={`${row.target_entity ?? 'none'}-${d.reason ?? 'blocked'}`}
+                  className="font-mono"
+                >
                   @{row.target_entity ?? '?'}: {reasonLabel}
                 </li>
               );
@@ -775,11 +781,10 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
         <ul className="mt-2 max-h-16 overflow-y-auto text-xs text-slate-600">
           {compartments.map((c) => (
             <li key={c.label} className="truncate font-mono">
-              {c.label === 'general' ? t('composer.compartmentGeneral') : `@${c.label}`}
-              :{' '}
+              {c.label === 'general' ? t('composer.compartmentGeneral') : `@${c.label}`}:{' '}
               {c.directives.length > 0
                 ? c.directives.map((d) => d.cmd || d.args.join(' ') || '(chat)').join(', ')
-                : c.general_text ?? '—'}
+                : (c.general_text ?? '—')}
             </li>
           ))}
         </ul>
@@ -828,7 +833,9 @@ function ThinkingBlock({ text }: { readonly text: string }) {
   const { t } = useTranslation();
   return (
     <details className="mb-1 rounded border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] text-amber-900">
-      <summary className="cursor-pointer select-none font-medium">{t('composer.thinkingLabel')}</summary>
+      <summary className="cursor-pointer select-none font-medium">
+        {t('composer.thinkingLabel')}
+      </summary>
       <pre className="mt-1 whitespace-pre-wrap break-words font-sans opacity-90">{text}</pre>
     </details>
   );
@@ -871,7 +878,7 @@ function MessageBody({ text, renderMd }: { readonly text: string; readonly rende
     return (
       <div
         className="composer-markdown prose prose-sm max-w-none break-words text-slate-800"
-        // nodeskclaw-style sanitized HTML
+        // biome-ignore lint/security/noDangerouslySetInnerHtml: renderMarkdown sanitizes via DOMPurify (src/lib/markdown.ts)
         dangerouslySetInnerHTML={{ __html: renderMarkdown(text) }}
       />
     );

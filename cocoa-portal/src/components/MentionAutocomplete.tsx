@@ -143,10 +143,9 @@ export function MentionAutocomplete({
     dismissedStart !== activeToken.start &&
     filtered.length > 0;
 
-  const activeFilter = activeToken?.filter ?? null;
   useEffect(() => {
     setHighlighted(0);
-  }, [activeFilter]);
+  }, []);
 
   const handleSelect = useCallback(
     (slug: string) => {

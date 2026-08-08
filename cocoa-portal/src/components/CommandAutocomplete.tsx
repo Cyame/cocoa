@@ -185,10 +185,9 @@ export function CommandAutocomplete({
     setCursor(textarea.selectionStart);
   }, [text, textareaRef]);
 
-  const activeFilter = activeToken?.filter ?? null;
   useEffect(() => {
     setHighlighted(0);
-  }, [activeFilter]);
+  }, []);
 
   const handleSelect = useCallback(
     (cmd: string) => {

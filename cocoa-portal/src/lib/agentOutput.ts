@@ -2,13 +2,7 @@
  * Agent thinking-block filter — port of nodeskclaw `utils/agentOutput.ts`.
  */
 
-const REASONING_TAGS = [
-  'think',
-  'redacted_thinking',
-  'reasoning',
-  'thinking',
-  'thought',
-] as const;
+const REASONING_TAGS = ['think', 'redacted_thinking', 'reasoning', 'thinking', 'thought'] as const;
 
 const TAG_PATTERN = REASONING_TAGS.join('|');
 const OPEN_TAG_RE = new RegExp(`<\\s*(?:${TAG_PATTERN})\\b[^>]*>`, 'i');
