@@ -13,7 +13,7 @@ from __future__ import annotations
 from fastapi import APIRouter, status
 from sqlalchemy import func, select, update
 
-from app.api.deps import DB, CurrentUserDep
+from app.api.deps import DB, CurrentUserDep, XOrgIdHeader
 from app.core.errors import ConflictError, NotFoundError
 from app.core.openapi import add_error_responses
 from app.core.pagination import OffsetPage, paginate_offset
@@ -110,14 +110,27 @@ def _to_out_with_stats(
 async def list_namespaces(
     db: DB,
     current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
     limit: int = 50,
     offset: int = 0,
     org_id: str | None = None,
 ) -> OffsetPage:
-    """Return paginated namespaces with workspace and entity counts."""
+    """Return paginated namespaces with workspace and entity counts.
+
+    Filtered by the active organization context (``X-Organization-Id`` header
+    or the user's single OrganizationContract), falling back to the legacy
+    ``org_id`` query param for backward compatibility.
+    """
+    from app.core.org_scope import resolve_current_org_id
+
+    ctx_org_id = await resolve_current_org_id(
+        db, current_user.user_id, x_organization_id
+    )
     stmt = select(Namespace).where(Namespace.deleted_at.is_(None))
-    if org_id is not None:
-        stmt = stmt.where(Namespace.org_id == org_id)
+    # Prefer the resolved org context; legacy query param overrides when set.
+    effective_org = org_id or ctx_org_id
+    if effective_org is not None:
+        stmt = stmt.where(Namespace.org_id == effective_org)
     stmt = stmt.order_by(Namespace.created_at)
     page = await paginate_offset(db, stmt, offset, min(limit, 200))
     ids = [item.id for item in page.items]
