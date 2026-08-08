@@ -124,7 +124,6 @@ async def _spawn_stack(
         namespace_id=ns.id,
         name="V493 Entity",
         slug=f"v493ent-{uuid.uuid4().hex[:8]}",
-        rank="intern",
         preset_slug=preset_slug,
         has_knowledge=entity_has,
     )

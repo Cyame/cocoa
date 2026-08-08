@@ -143,7 +143,7 @@ async def clone_entity(db: AsyncSession, *, source_id: str, actor_user_id: str,
     # instead, because its entity copies land in fresh (empty) namespaces.
     new_entity = Entity(namespace_id=source.namespace_id, slug=new_slug,
                         name=_new_name(source.name, name), preset_slug=source.preset_slug,
-                        rank=source.rank, display_name=source.display_name,
+                        display_name=source.display_name,
                         display_color=source.display_color, system_prompt=source.system_prompt,
                         config_override=source.config_override, is_cerebellum=False)
     db.add(new_entity)
@@ -247,7 +247,7 @@ async def clone_organization(db: AsyncSession, *, source_id: str, actor_user_id:
 
     for entity in source_entities:
         ne = Entity(namespace_id=ns_map[entity.namespace_id].id, slug=entity.slug,
-                    name=entity.name, preset_slug=entity.preset_slug, rank=entity.rank,
+                    name=entity.name, preset_slug=entity.preset_slug,
                     display_name=entity.display_name, display_color=entity.display_color,
                     system_prompt=entity.system_prompt, config_override=entity.config_override,
                     is_cerebellum=entity.is_cerebellum)

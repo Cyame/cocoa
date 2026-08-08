@@ -223,7 +223,6 @@ function EntitiesList({
           <tr>
             <th className="px-4 py-3">{t('entityModal.fields.displayName')}</th>
             <th className="px-4 py-3">{t('entityModal.fields.slug')}</th>
-            <th className="px-4 py-3">{t('entityModal.fields.rank')}</th>
             <th className="px-4 py-3">{t('namespaces.entityActions')}</th>
           </tr>
         </thead>
@@ -240,7 +239,6 @@ function EntitiesList({
                 {entity.display_name ?? entity.name}
               </td>
               <td className="px-4 py-3 font-mono text-xs text-slate-500">{entity.slug}</td>
-              <td className="px-4 py-3 capitalize text-slate-600">{entity.rank}</td>
               <td className="px-4 py-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <button

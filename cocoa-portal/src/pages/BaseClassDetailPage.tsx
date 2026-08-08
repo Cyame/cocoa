@@ -129,7 +129,7 @@ export default function BaseClassDetailPage() {
               </span>
               <div>
                 <h1 className="text-2xl font-semibold text-slate-950">
-                  {baseClass.display_name ?? baseClass.name}
+                  {t(baseClass.display_name ?? baseClass.name, { defaultValue: baseClass.name })}
                 </h1>
                 <p className="mt-1 font-mono text-sm text-slate-500">{baseClass.slug}</p>
               </div>

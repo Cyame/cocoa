@@ -149,7 +149,6 @@ class TestCerebellumMigration:
         assert entity.slug == "cerebellum"
         assert entity.name == "cerebellum"
         assert entity.preset_slug == "cerebellum-baseclass"
-        assert entity.rank == "researcher"
         assert entity.system_prompt == "Be wise, little brain"
 
         instance = (

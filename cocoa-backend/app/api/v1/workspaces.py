@@ -356,24 +356,15 @@ async def introduce_entity(
     """Introduce a 眷族 into this workspace → create 迷失者 (Instance).
 
     At most one active instance per (workspace, entity). Portal primary path.
+    The spawn pipeline (config resolution / knowledge payload / consistency
+    hint / Instance row / topology placement) lives in the shared factory
+    :func:`app.services.instance_factory.create_introduced_instance`.
     """
-    from uuid import uuid4
+    import logging
 
-    from app.core.event_types import (
-        INSTANCE_CREATED,
-        INSTANCE_KNOWLEDGE_INCONSISTENT,
-    )
-    from app.core.events import emit
-    from app.core.knowledge_spawn import (
-        build_spawn_knowledge_payload,
-        check_knowledge_consistency,
-    )
-    from app.core.migration_hash import compute_entity_migration_hash
-    from app.core.overlay import resolve_instance_agent_config
     from app.core.permissions import require_workspace_permission
-    from app.core.workspace import generate_workspace_path
-    from app.models.entity import Entity
-    from app.models.instance import Instance, InstanceStatus
+    from app.models.instance import InstanceStatus
+    from app.services.instance_factory import create_introduced_instance
 
     await require_workspace_permission(
         db,
@@ -383,124 +374,19 @@ async def introduce_entity(
         x_organization_id=x_organization_id,
     )
 
-    workspace = await db.get(Workspace, workspace_id)
-    if workspace is None or workspace.deleted_at is not None:
-        raise NotFoundError(
-            "workspace.not_found",
-            "errors.workspace.not_found",
-            f"Workspace '{workspace_id}' not found",
-        )
-
-    entity = await db.get(Entity, body.entity_id)
-    if entity is None or entity.deleted_at is not None:
-        raise NotFoundError(
-            "entity.not_found",
-            "errors.entity.not_found",
-            f"Entity '{body.entity_id}' not found",
-        )
-    if entity.namespace_id != workspace.namespace_id:
-        raise ConflictError(
-            "entity.namespace_mismatch",
-            "errors.entity.namespace_mismatch",
-            "Entity does not belong to this workspace's namespace",
-        )
-
-    existing = await db.execute(
-        select(Instance).where(
-            Instance.workspace_id == workspace_id,
-            Instance.entity_id == body.entity_id,
-            Instance.deleted_at.is_(None),
-        )
-    )
-    if existing.scalar_one_or_none() is not None:
-        raise ConflictError(
-            "instance.entity_already_introduced",
-            "errors.instance.entity_already_introduced",
-            "This entity already has a lost one in this workspace",
-        )
-
-    # Ensure entity.migration_hash is populated so live-status outdated stays false.
-    if not entity.migration_hash:
-        entity.migration_hash = await compute_entity_migration_hash(db, entity)
-
-    workspace_path = generate_workspace_path(entity.slug, str(uuid4()))
-    agent_config = await resolve_instance_agent_config(db, entity)
-    runtime_config = {"agent_config": agent_config}
-    knowledge_payload = await build_spawn_knowledge_payload(
-        db, entity=entity, workspace_id=workspace_id
-    )
-    if knowledge_payload is not None:
-        runtime_config["knowledge"] = knowledge_payload
-    consistency_warning = await check_knowledge_consistency(db, entity)
-    instance = Instance(
+    instance, _membership, consistency_warning = await create_introduced_instance(
+        db,
         entity_id=body.entity_id,
         workspace_id=workspace_id,
-        workspace_path=workspace_path,
-        status=InstanceStatus.creating.value,
-        runtime_config=runtime_config,
-        proxy_token=str(uuid4()),
-        active_hash=entity.migration_hash or await compute_entity_migration_hash(db, entity),
-    )
-    db.add(instance)
-    await db.flush()
-
-    occupied = {
-        (row.posx, row.posy)
-        for row in (
-            await db.execute(
-                select(Membership.posx, Membership.posy).where(
-                    Membership.workspace_id == workspace_id,
-                    Membership.deleted_at.is_(None),
-                )
-            )
-        ).all()
-    }
-    posx, posy = 0, 0
-    found = False
-    for row in range(40):
-        for col in range(40):
-            candidate = (col * 120, row * 120)
-            if candidate not in occupied:
-                posx, posy = candidate
-                found = True
-                break
-        if found:
-            break
-    instance_membership = Membership(
-        workspace_id=workspace_id,
-        instance_id=instance.id,
-        user_id=None,
-        posx=posx,
-        posy=posy,
-    )
-    db.add(instance_membership)
-    await emit(
-        INSTANCE_CREATED,
-        actor_type="user",
+        require_namespace_match=True,
+        ensure_migration_hash=True,
         actor_id=current_user.user_id,
-        resource_type="instance",
-        resource_id=instance.id,
-        payload={"workspace_path": workspace_path, "workspace_id": workspace_id},
-        session=db,
     )
-    if consistency_warning is not None:
-        await emit(
-            INSTANCE_KNOWLEDGE_INCONSISTENT,
-            actor_type="user",
-            actor_id=current_user.user_id,
-            resource_type="instance",
-            resource_id=instance.id,
-            payload={**consistency_warning, "entity_id": entity.id},
-            session=db,
-        )
-    await db.commit()
-    await db.refresh(instance)
 
     # PRD-v3.4.1: auto-deploy the introduced instance (best-effort).
     deploy_record_id: str | None = None
     try:
         import asyncio
-        import logging
 
         from app.api.v1.instances import _is_k8s_available, _transition
         from app.core.event_types import INSTANCE_DEPLOYED

@@ -39,7 +39,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.errors import NotFoundError
 from app.core.workspace import generate_workspace_path
 from app.models.central_hub import CentralHub, CerebellumAgent
-from app.models.entity import Entity, EntityRank
+from app.models.entity import Entity
 from app.models.event import Event
 from app.models.instance import Instance, InstanceStatus
 from app.models.workspace import Workspace
@@ -181,7 +181,6 @@ def migrate_cerebellum(conn: sa.Connection) -> dict[str, Any]:
                     name=winner.get("name") or "cerebellum",
                     slug=_unique_slug(conn, ns_id, "cerebellum"),
                     preset_slug=winner.get("base_slug") or "cerebellum-baseclass",
-                    rank=EntityRank.researcher.value,
                     system_prompt=winner.get("system_prompt") or None,
                     is_cerebellum=True,
                     created_at=now,
@@ -291,7 +290,6 @@ async def ensure_cerebellum_entity_and_instance(
             name="cerebellum",
             slug=await _runtime_unique_slug(db, workspace.namespace_id, "cerebellum"),
             preset_slug="cerebellum-baseclass",
-            rank=EntityRank.researcher.value,
             system_prompt=None,
             is_cerebellum=True,
         )

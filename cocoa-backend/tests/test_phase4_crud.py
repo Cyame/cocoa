@@ -54,29 +54,23 @@ class TestBaseClassCrud:
     """CRUD for /api/v1/base-classes."""
 
     def test_list_base_classes(self, client: TestClient, auth_token: str) -> None:
-        """GET /api/v1/base-classes returns the 11 public 神职 (zong-jian hidden)."""
+        """GET /api/v1/base-classes returns the 5 常驻始祖 (zong-jian hidden)."""
         response = client.get(
             "/api/v1/base-classes",
             headers=_auth_headers(auth_token),
         )
         assert response.status_code == 200
         body = response.json()
-        assert body["total"] >= 11
+        assert body["total"] >= 5
         slugs = {item["slug"] for item in body["items"]}
         for expected in (
-            "mi-shi",
-            "huan-ling",
-            "an-xing",
-            "an-ying",
-            "zhu-jin",
-            "ling-shi",
-            "heng-pan",
-            "you-hun",
-            "qian-zhi",
-            "bai-tong",
-            "jiu-ri",
+            "fox",
+            "beaver",
+            "sparrow",
+            "coyote",
+            "lion",
         ):
-            assert expected in slugs, f"Built-in preset {expected} missing"
+            assert expected in slugs, f"Built-in 始祖 {expected} missing"
         assert "zong-jian" not in slugs
 
     async def test_create_base_class(
@@ -200,7 +194,7 @@ class TestEntityCrud:
                 "name": "Alice Agent",
                 "slug": "alice",
                 "rank": "researcher",
-                "preset_slug": "mi-shi",
+                "preset_slug": "fox",
                 "display_name": "Alice",
                 "display_color": "#FF5733",
             },
@@ -209,8 +203,7 @@ class TestEntityCrud:
         body = response.json()
         assert body["slug"] == "alice"
         assert body["name"] == "Alice Agent"
-        assert body["preset_slug"] == "mi-shi"
-        assert body["rank"] == "researcher"
+        assert body["preset_slug"] == "fox"
         assert "id" in body
 
     def test_create_entity_with_invalid_preset(

@@ -5,21 +5,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.base_class import BaseClass
-from app.models.entity import Entity, EntityRank
-
-
-class TestEntityRank:
-    """Tests for the EntityRank enum."""
-
-    def test_rank_has_two_values(self):
-        members = list(EntityRank)
-        assert len(members) == 2
-        values = {m.value for m in members}
-        assert values == {"intern", "researcher"}
-
-    def test_rank_is_string_enum(self):
-        assert isinstance(EntityRank.intern.value, str)
-        assert EntityRank.intern.value == "intern"
+from app.models.entity import Entity
 
 
 class TestBaseClassTable:
@@ -93,7 +79,6 @@ class TestEntityTable:
             namespace_id=ns.id,
             slug="alice",
             name="Alice",
-            rank=EntityRank.researcher,
         )
         session.add(emp)
         await session.commit()
@@ -102,21 +87,10 @@ class TestEntityTable:
         assert emp.id is not None
         assert emp.slug == "alice"
         assert emp.name == "Alice"
-        assert emp.rank == "researcher"
         assert emp.preset_slug is None
         assert emp.display_name is None
         assert emp.display_color is None
         assert emp.deleted_at is None
-
-    @pytest.mark.asyncio
-    async def test_default_rank_is_intern(self, session: AsyncSession, namespace_factory):
-        ns = await namespace_factory()
-        emp = Entity(namespace_id=ns.id, slug="bob", name="Bob")
-        session.add(emp)
-        await session.commit()
-        await session.refresh(emp)
-
-        assert emp.rank == EntityRank.intern.value
 
     @pytest.mark.asyncio
     async def test_create_entity_with_display_fields(
@@ -127,7 +101,6 @@ class TestEntityTable:
             namespace_id=ns.id,
             slug="charlie",
             name="Charlie",
-            rank=EntityRank.researcher,
             display_name="Charlie the Researcher",
             display_color="#FF5733",
         )
@@ -187,7 +160,6 @@ class TestBaseClassReference:
             slug="eve",
             name="Eve",
             preset_slug="engineer",
-            rank=EntityRank.researcher,
         )
         session.add(emp)
         await session.commit()
@@ -201,7 +173,7 @@ class TestBaseClassReference:
     ):
         ns = await namespace_factory()
         emp = Entity(
-            namespace_id=ns.id, slug="grace", name="Grace", rank=EntityRank.intern
+            namespace_id=ns.id, slug="grace", name="Grace"
         )
         session.add(emp)
         await session.commit()
@@ -223,7 +195,6 @@ class TestBaseClassReference:
             slug="hank",
             name="Hank",
             preset_slug="temp",
-            rank=EntityRank.intern,
         )
         session.add(emp)
         await session.commit()
@@ -245,7 +216,6 @@ class TestBaseClassReference:
             slug="iris",
             name="Iris",
             preset_slug="no-such-preset",
-            rank=EntityRank.intern,
         )
         session.add(emp)
         await session.commit()

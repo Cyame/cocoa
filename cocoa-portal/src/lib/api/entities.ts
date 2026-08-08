@@ -14,7 +14,6 @@ export type EntityDetail = {
   readonly namespace_id?: string;
   readonly name: string;
   readonly slug: string;
-  readonly rank: 'intern' | 'researcher' | 'director';
   readonly preset_slug: string | null;
   readonly display_name: string | null;
   readonly display_color: string | null;

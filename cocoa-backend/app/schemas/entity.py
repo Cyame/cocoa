@@ -4,18 +4,15 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict
 
 from app.core.slug import KebabSlug
-
-VALID_RANKS = frozenset({"intern", "researcher"})
 
 
 class EntityCreate(BaseModel):
     name: str
     slug: KebabSlug
     namespace_id: str | None = None
-    rank: str = "intern"
     preset_slug: str | None = None
     display_name: str | None = None
     display_color: str | None = None
@@ -25,14 +22,6 @@ class EntityCreate(BaseModel):
     # v4.3 D7: cerebellum flag — settable via API (partial-unique enforces
     # at most one per Namespace).
     is_cerebellum: bool = False
-
-    @field_validator("rank")
-    @classmethod
-    def _validate_rank(cls, v: str) -> str:
-        if v not in VALID_RANKS:
-            allowed = ", ".join(sorted(VALID_RANKS))
-            raise ValueError(f"Invalid rank {v!r}. Must be one of: {allowed}")
-        return v
 
 
 class EntityUpdate(BaseModel):
@@ -55,7 +44,6 @@ class EntityOut(BaseModel):
     namespace_id: str
     name: str
     slug: str
-    rank: str
     preset_slug: str | None = None
     display_name: str | None = None
     display_color: str | None = None

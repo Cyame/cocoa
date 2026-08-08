@@ -2,13 +2,14 @@ import { AlertCircle, LoaderCircle, MessageSquare, Send, Settings } from 'lucide
 import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CommandAutocomplete } from '@/components/CommandAutocomplete';
-import { MentionAutocomplete } from '@/components/MentionAutocomplete';
+import { type IntroduceTarget, MentionAutocomplete } from '@/components/MentionAutocomplete';
 import {
   AgentThinkingStreamFilter,
   extractThinkingBlocks,
   stripAgentThinkingBlocks,
 } from '@/lib/agentOutput';
 import { ApiError, api } from '@/lib/api';
+import { introduceEntityIntoWorkspace } from '@/lib/api/instances';
 import { streamComposerTurn } from '@/lib/composerStream';
 import {
   buildOptimisticUserBubbles,
@@ -92,6 +93,10 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
   const [presetByEntitySlug, setPresetByEntitySlug] = useState<
     Readonly<Record<string, string | null>>
   >({});
+  const [introduceTarget, setIntroduceTarget] = useState<IntroduceTarget | null>(null);
+  const [introducing, setIntroducing] = useState(false);
+  const [introduceError, setIntroduceError] = useState<string | null>(null);
+  const [mentionRefreshKey, setMentionRefreshKey] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
@@ -344,7 +349,42 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
     return false;
   }, [turn]);
 
-  const canSend = text.trim().length > 0 && parseError === null && !sending;
+  const canSend = text.trim().length > 0 && parseError === null && !sending && !introducing;
+
+  async function handleIntroduceConfirm() {
+    if (introduceTarget === null || introducing) return;
+    setIntroducing(true);
+    setIntroduceError(null);
+    try {
+      await introduceEntityIntoWorkspace(workspaceId, introduceTarget.entity_id);
+      const slug = introduceTarget.slug;
+      const textarea = textareaRef.current;
+      if (textarea !== null) {
+        const pos = textarea.selectionStart;
+        const inserted = `@${slug} `;
+        const newText = text.slice(0, pos) + inserted + text.slice(pos);
+        const newCursor = pos + inserted.length;
+        setText(newText);
+        requestAnimationFrame(() => {
+          textarea.focus();
+          textarea.setSelectionRange(newCursor, newCursor);
+        });
+      } else {
+        setText((prev) => `${prev}@${slug} `);
+      }
+      setMentionRefreshKey((k) => k + 1);
+      setIntroduceTarget(null);
+    } catch (e) {
+      setIntroduceError(e instanceof ApiError ? e.message : t('workspace.introduceFailed'));
+    } finally {
+      setIntroducing(false);
+    }
+  }
+
+  function handleIntroduceCancel() {
+    setIntroduceTarget(null);
+    setIntroduceError(null);
+  }
 
   async function handleSend() {
     if (!canSend) return;
@@ -774,6 +814,11 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
           onTextChange={setText}
           workspaceId={workspaceId}
           suppressed={cmdMenuOpen}
+          onIntroduceRequest={(entity) => {
+            setIntroduceError(null);
+            setIntroduceTarget(entity);
+          }}
+          refreshKey={mentionRefreshKey}
         />
       </div>
 
@@ -806,6 +851,56 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
           {sending ? t('composer.sending') : t('composer.send')}
         </button>
       </div>
+
+      {introduceTarget !== null ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="introduce-confirm-title"
+          className="fixed inset-0 z-[60] flex items-end justify-center bg-slate-950/50 p-0 sm:items-center sm:p-4"
+        >
+          <div className="flex w-full max-w-md flex-col overflow-hidden rounded-t-xl border border-slate-200 bg-white shadow-2xl sm:rounded-xl">
+            <header className="border-b border-slate-200 px-5 py-4">
+              <h2 id="introduce-confirm-title" className="text-base font-semibold text-slate-950">
+                {t('workspace.introduceTitle')}
+              </h2>
+              <p className="mt-1 text-xs text-slate-500">
+                {t('composer.introduceConfirm', { name: introduceTarget.name })}
+              </p>
+            </header>
+            {introduceError !== null ? (
+              <div
+                role="alert"
+                className="mx-5 mt-3 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
+              >
+                <AlertCircle className="size-4 shrink-0" aria-hidden="true" />
+                <p>{introduceError}</p>
+              </div>
+            ) : null}
+            <footer className="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3">
+              <button
+                type="button"
+                onClick={handleIntroduceCancel}
+                disabled={introducing}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                type="button"
+                disabled={introducing}
+                onClick={() => void handleIntroduceConfirm()}
+                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {introducing ? (
+                  <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+                ) : null}
+                {t('workspace.introduceSubmit')}
+              </button>
+            </footer>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

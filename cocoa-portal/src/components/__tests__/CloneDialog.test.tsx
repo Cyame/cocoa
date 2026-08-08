@@ -5,7 +5,7 @@ import { toSlug } from '@/lib/slug';
 
 const defaultProps = {
   open: true,
-  title: 'Clone base class',
+  title: 'Clone progenitor',
   confirmMessage: 'Clone base class "Test"?',
   confirmLabel: 'Clone',
   busy: false,

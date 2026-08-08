@@ -46,7 +46,7 @@ from app.models.central_hub import (  # noqa: E402, F401
     VaultEntrySourceType,
 )
 from app.models.composer_message import ComposerMessage  # noqa: E402, F401
-from app.models.entity import Entity, EntityRank  # noqa: E402, F401
+from app.models.entity import Entity  # noqa: E402, F401
 from app.models.junctions import (  # noqa: E402, F401
     BaseClassCapability,
     EntityAiGene,

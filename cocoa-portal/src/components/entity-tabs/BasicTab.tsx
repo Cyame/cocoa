@@ -1,9 +1,8 @@
-import { AlertCircle, Check, Hash, LoaderCircle, Lock, ShieldAlert } from 'lucide-react';
+import { AlertCircle, Check, Hash, LoaderCircle, ShieldAlert } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '@/lib/api';
 import { type EntityDetail, patchEntity } from '@/lib/api/entities';
-import type { EmployeeRank } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
 const DISPLAY_NAME_MAX = 32;
@@ -62,11 +61,6 @@ export default function BasicTab({ entity, canEdit, onUpdated, onFindInWorkspace
   const displayNameEmpty = displayNameLen === 0;
   const displayNameTooLong = displayNameLen > DISPLAY_NAME_MAX;
   const formInvalid = displayNameEmpty || displayNameTooLong || descriptionOverflow;
-
-  const rankLabel = useMemo(() => {
-    const r = entity.rank as EmployeeRank;
-    return t(`employees.rank.${r}`, { defaultValue: r });
-  }, [entity.rank, t]);
 
   async function handleSave() {
     if (formInvalid || saving || !canEdit) return;
@@ -281,18 +275,6 @@ export default function BasicTab({ entity, canEdit, onUpdated, onFindInWorkspace
             ) : (
               <span className="text-xs text-slate-400">—</span>
             )
-          }
-        />
-        <MetaItem
-          label={t('entityModal.basicTab.rank')}
-          value={
-            <span
-              title={t('entityModal.basicTab.rankFrozenTooltip')}
-              className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-700"
-            >
-              <Lock className="size-3" aria-hidden="true" />
-              {rankLabel}
-            </span>
           }
         />
         <MetaItem

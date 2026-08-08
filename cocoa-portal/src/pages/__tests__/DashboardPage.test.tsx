@@ -111,7 +111,7 @@ describe('DashboardPage', () => {
       '/orgs/org-1/namespaces/ns-1',
     );
 
-    expect(screen.queryByText('No namespaces yet')).not.toBeInTheDocument();
+    expect(screen.queryByText('No regions yet')).not.toBeInTheDocument();
     expect(screen.queryByText('No members yet')).not.toBeInTheDocument();
   });
 
@@ -121,7 +121,7 @@ describe('DashboardPage', () => {
     mockedFetchMembers.mockResolvedValue({ items: [] });
     renderDashboard();
 
-    expect(await screen.findByText('No namespaces yet')).toBeInTheDocument();
+    expect(await screen.findByText('No regions yet')).toBeInTheDocument();
     expect(screen.getByText('No members yet')).toBeInTheDocument();
     expect(screen.getByTestId('dashboard-stats-ns')).toHaveTextContent('0');
     expect(screen.getByTestId('dashboard-stats-members')).toHaveTextContent('0');

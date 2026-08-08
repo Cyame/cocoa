@@ -18,11 +18,11 @@ Usage::
         await registry.load(s)
 
     # At runtime:
-    preset = registry.get("mi-shi")                   # BaseClass | None
-    cmds = registry.get_commands("mi-shi")             # list[str]
-    tools = registry.get_tools("mi-shi")               # list[str]
-    skills = registry.get_skills("mi-shi")              # list[str]
-    all_presets = registry.list_presets()               # list[BaseClass]
+    preset = registry.get("fox")                       # BaseClass | None
+    cmds = registry.get_commands("fox")                # list[str]
+    tools = registry.get_tools("fox")                  # list[str]
+    skills = registry.get_skills("fox")                # list[str]
+    all_presets = registry.list_presets()              # list[BaseClass]
 """
 
 from __future__ import annotations

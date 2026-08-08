@@ -83,9 +83,9 @@ def _find_preset(slug: str) -> dict:
     raise AssertionError(f"preset {slug!r} not in ALL_BUILTIN_PRESETS")
 
 
-def test_mi_shi_manifest_is_openai_compatible_with_gpt4o_mini() -> None:
-    """mi-shi manifest → openai-compatible provider + gpt-4o-mini model."""
-    preset = _find_preset("mi-shi")
+def test_fox_manifest_is_openai_compatible_with_gpt4o_mini() -> None:
+    """fox manifest → openai-compatible provider + gpt-4o-mini model."""
+    preset = _find_preset("fox")
     cfg = LLMProviderConfig.from_manifest_legacy(preset["manifest"])
     assert cfg.provider_type == ProviderType.openai_compatible
     assert cfg.default_model == "gpt-4o-mini"
@@ -93,9 +93,9 @@ def test_mi_shi_manifest_is_openai_compatible_with_gpt4o_mini() -> None:
     assert cfg.temperature == 0.7
 
 
-def test_ling_shi_manifest_is_anthropic_with_claude_sonnet() -> None:
-    """ling-shi manifest → anthropic provider + claude-3-5-sonnet-latest."""
-    preset = _find_preset("ling-shi")
+def test_lion_manifest_is_anthropic_with_claude_sonnet() -> None:
+    """lion manifest → anthropic provider + claude-3-5-sonnet-latest."""
+    preset = _find_preset("lion")
     cfg = LLMProviderConfig.from_manifest_legacy(preset["manifest"])
     assert cfg.provider_type == ProviderType.anthropic
     assert cfg.default_model == "claude-3-5-sonnet-latest"
@@ -103,14 +103,14 @@ def test_ling_shi_manifest_is_anthropic_with_claude_sonnet() -> None:
     assert cfg.max_tokens == 2048
 
 
-def test_heng_pan_manifest_is_anthropic_with_claude_haiku() -> None:
-    """heng-pan manifest → anthropic provider + claude-3-5-haiku-latest."""
-    preset = _find_preset("heng-pan")
+def test_beaver_manifest_is_anthropic_with_larger_budget() -> None:
+    """beaver manifest → anthropic provider with 4096-token budget."""
+    preset = _find_preset("beaver")
     cfg = LLMProviderConfig.from_manifest_legacy(preset["manifest"])
     assert cfg.provider_type == ProviderType.anthropic
-    assert cfg.default_model == "claude-3-5-haiku-latest"
-    assert cfg.temperature == 0.4
-    assert cfg.max_tokens == 1024
+    assert cfg.default_model == "claude-3-5-sonnet-latest"
+    assert cfg.temperature == 0.5
+    assert cfg.max_tokens == 4096
 
 
 def test_zong_jian_manifest_has_no_provider_human_role() -> None:
@@ -351,7 +351,7 @@ async def test_instance_provider_config_overrides_preset_default_model(
     instance = await instance_factory()
     instance_id = instance.id
 
-    preset = _find_preset("mi-shi")
+    preset = _find_preset("fox")
     preset_cfg = _LLMProviderConfig_from_preset(preset)
     assert preset_cfg.default_model == "gpt-4o-mini", (
         "baseline: preset says gpt-4o-mini"

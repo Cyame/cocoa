@@ -1,19 +1,14 @@
 import {
   AlertCircle,
-  BadgeCheck,
   Binary,
-  BookOpen,
   Check,
   Compass,
-  Eye,
   Filter,
   Flame,
   Layers,
   LoaderCircle,
   RefreshCw,
-  ScanEye,
   Sparkles,
-  Wand2,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -29,157 +24,21 @@ type GroupFilter = 'all' | string;
 const INTERNAL_SLUGS = new Set(['cerebellum-baseclass']);
 const INTERNAL_TAGS = new Set(['internal', 'system']);
 
-const FALLBACK_BASE_CLASSES: readonly BaseClass[] = [
-  {
-    id: 'fallback-mi-shi',
-    slug: 'mi-shi',
-    name: 'mi-shi',
-    display_name: '密士',
-    description: '战略规划师：拆解目标、规划路径。',
-    manifest: { default_model: 'gpt-4o-mini', commands: ['/plan', '/decompose', '/prioritize'] },
-    version: '1.0',
-    tags: ['planning'],
-    created_at: '2026-07-01T00:00:00Z',
-  },
-  {
-    id: 'fallback-huan-ling',
-    slug: 'huan-ling',
-    name: 'huan-ling',
-    display_name: '唤灵',
-    description: '意图分析师：澄清诉求、提出方案。',
-    manifest: { default_model: 'gpt-4o-mini', commands: ['/analyze', '/clarify', '/propose'] },
-    version: '1.0',
-    tags: ['planning'],
-    created_at: '2026-07-01T00:00:00Z',
-  },
-  {
-    id: 'fallback-an-xing',
-    slug: 'an-xing',
-    name: 'an-xing',
-    display_name: '暗行',
-    description: '单兵全栈：独立完成端到端任务。',
-    manifest: { default_model: 'gpt-4o-mini', commands: ['/plan', '/execute', '/build'] },
-    version: '1.0',
-    tags: ['ultraworker', 'execution'],
-    created_at: '2026-07-01T00:00:00Z',
-  },
-  {
-    id: 'fallback-an-ying',
-    slug: 'an-ying',
-    name: 'an-ying',
-    display_name: '暗影',
-    description: '初级执行：快速、低成本完成任务。',
-    manifest: { default_model: 'gpt-4o-mini', commands: ['/execute', '/build', '/test'] },
-    version: '1.0',
-    tags: ['execution'],
-    created_at: '2026-07-01T00:00:00Z',
-  },
-  {
-    id: 'fallback-zhu-jin',
-    slug: 'zhu-jin',
-    name: 'zhu-jin',
-    display_name: '铸金',
-    description: '自主深度工作者：以目标为驱动持续推进。',
-    manifest: { default_model: 'gpt-4o-mini', commands: ['/execute', '/build', '/test'] },
-    version: '1.0',
-    tags: ['execution'],
-    created_at: '2026-07-01T00:00:00Z',
-  },
-  {
-    id: 'fallback-ling-shi',
-    slug: 'ling-shi',
-    name: 'ling-shi',
-    display_name: '灵视',
-    description: '只读架构 / 调试：分析与预测。',
-    manifest: { default_model: 'gpt-4o-mini', commands: ['/analyze', '/predict', '/review'] },
-    version: '1.0',
-    tags: ['oracle', 'review'],
-    created_at: '2026-07-01T00:00:00Z',
-  },
-  {
-    id: 'fallback-heng-pan',
-    slug: 'heng-pan',
-    name: 'heng-pan',
-    display_name: '衡判',
-    description: '质量门禁：审查、批准或驳回。',
-    manifest: { default_model: 'gpt-4o-mini', commands: ['/review', '/approve', '/reject'] },
-    version: '1.0',
-    tags: ['gate', 'review'],
-    created_at: '2026-07-01T00:00:00Z',
-  },
-  {
-    id: 'fallback-you-hun',
-    slug: 'you-hun',
-    name: 'you-hun',
-    display_name: '游魂',
-    description: '代码库检索 / 探索。',
-    manifest: { default_model: 'gpt-4o-mini', commands: ['/search', '/survey', '/report'] },
-    version: '1.0',
-    tags: ['scout'],
-    created_at: '2026-07-01T00:00:00Z',
-  },
-  {
-    id: 'fallback-qian-zhi',
-    slug: 'qian-zhi',
-    name: 'qian-zhi',
-    display_name: '潜知',
-    description: '外部参考 / 多仓库 / 文档研究。',
-    manifest: { default_model: 'gpt-4o-mini', commands: ['/search', '/reference', '/survey'] },
-    version: '1.0',
-    tags: ['scout', 'oracle'],
-    created_at: '2026-07-01T00:00:00Z',
-  },
-  {
-    id: 'fallback-bai-tong',
-    slug: 'bai-tong',
-    name: 'bai-tong',
-    display_name: '百瞳',
-    description: '视觉 / 媒体 / 音频分析。',
-    manifest: { default_model: 'gpt-4o-mini', commands: ['/look', '/analyze', '/describe'] },
-    version: '1.0',
-    tags: ['multimodal'],
-    created_at: '2026-07-01T00:00:00Z',
-  },
-  {
-    id: 'fallback-jiu-ri',
-    slug: 'jiu-ri',
-    name: 'jiu-ri',
-    display_name: '旧日',
-    description: '顶层调度 / 监督：委派与监控。',
-    manifest: { default_model: 'gpt-4o-mini', commands: ['/delegate', '/monitor', '/approve'] },
-    version: '1.0',
-    tags: ['delegate', 'planning'],
-    created_at: '2026-07-01T00:00:00Z',
-  },
-];
-
 const ICON_FOR_SLUG: Record<string, typeof Compass> = {
-  'mi-shi': Compass,
-  'huan-ling': Wand2,
-  'an-xing': Flame,
-  'an-ying': Binary,
-  'zhu-jin': Layers,
-  'ling-shi': ScanEye,
-  'heng-pan': BadgeCheck,
-  'you-hun': Filter,
-  'qian-zhi': BookOpen,
-  'bai-tong': Eye,
-  'jiu-ri': Sparkles,
+  fox: Compass,
+  beaver: Flame,
+  sparrow: Binary,
+  coyote: Layers,
+  lion: Sparkles,
 };
 
-/** Default tags when API omits them — free-form, not a closed enum. */
+/** Default tags when API omits them - free-form, not a closed enum. */
 const DEFAULT_TAGS_FOR_SLUG: Record<string, readonly string[]> = {
-  'mi-shi': ['planning'],
-  'huan-ling': ['planning'],
-  'jiu-ri': ['delegate', 'planning'],
-  'an-xing': ['ultraworker', 'execution'],
-  'an-ying': ['execution'],
-  'zhu-jin': ['execution'],
-  'ling-shi': ['oracle', 'review'],
-  'heng-pan': ['gate', 'review'],
-  'you-hun': ['scout'],
-  'qian-zhi': ['scout', 'oracle'],
-  'bai-tong': ['multimodal'],
+  fox: ['planning'],
+  beaver: ['ultraworker', 'execution'],
+  sparrow: ['execution'],
+  coyote: ['execution'],
+  lion: ['delegate', 'planning'],
 };
 
 const TAG_CLASSES: Record<string, string> = {
@@ -285,7 +144,7 @@ export default function Step1DivinityCards({ onLoadingChange, onErrorChange }: S
   }, [onErrorChange, onLoadingChange, t]);
 
   const dataSource: readonly BaseClass[] = useMemo(() => {
-    const source = classes !== null && classes.length > 0 ? classes : FALLBACK_BASE_CLASSES;
+    const source = classes ?? [];
     return source.filter((entry) => !isInternalBaseClass(entry));
   }, [classes]);
 
@@ -395,7 +254,7 @@ export default function Step1DivinityCards({ onLoadingChange, onErrorChange }: S
               const lead = primaryTag(entry);
               const commands = extractCommands(entry.manifest);
               const providerInfo = extractProvider(entry.manifest);
-              const displayName = entry.display_name ?? entry.name;
+              const displayName = t(entry.display_name ?? entry.name, { defaultValue: entry.name });
               return (
                 <label
                   key={entry.id}

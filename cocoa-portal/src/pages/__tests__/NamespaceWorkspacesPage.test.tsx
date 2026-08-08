@@ -65,8 +65,8 @@ describe('NamespaceWorkspacesPage', () => {
 
     expect(await screen.findByRole('heading', { name: 'Research Lab' })).toBeInTheDocument();
     expect(screen.getByText('research-lab')).toBeInTheDocument();
-    expect(screen.getByText('2 Directors')).toBeInTheDocument();
-    expect(screen.getByText('1 Lost Ones')).toBeInTheDocument();
+    expect(screen.getByText('2 Sapiens')).toBeInTheDocument();
+    expect(screen.getByText('1 Creatures')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('link', { name: /Research Lab/ }));
     expect(await screen.findByText('Workspace IDE destination')).toBeInTheDocument();
@@ -76,7 +76,7 @@ describe('NamespaceWorkspacesPage', () => {
     mockedApi.mockResolvedValue({ items: [], offset: 0, limit: 50, total: 0 });
     renderPage();
 
-    expect(await screen.findByText('No workspaces yet')).toBeInTheDocument();
+    expect(await screen.findByText('No habitats yet')).toBeInTheDocument();
   });
 
   it('redirects to login after a 401 response', async () => {

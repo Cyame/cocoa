@@ -61,8 +61,8 @@ describe('OrgPickerPage', () => {
     mockedApi.mockResolvedValue({ items: [], offset: 0, limit: 50, total: 0 });
     renderPicker();
 
-    expect(await screen.findByText('No worlds yet')).toBeInTheDocument();
-    expect(screen.getByTestId('org-picker-empty-cta')).toHaveTextContent('Create world');
+    expect(await screen.findByText('No continents yet')).toBeInTheDocument();
+    expect(screen.getByTestId('org-picker-empty-cta')).toHaveTextContent('Create continent');
   });
 
   it('lists the fetched worlds as selectable cards', async () => {

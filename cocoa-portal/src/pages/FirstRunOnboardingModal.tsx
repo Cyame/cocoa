@@ -237,10 +237,6 @@ export default function FirstRunOnboardingModal({
               <dt className="text-slate-500">Slug</dt>
               <dd className="font-mono text-slate-900">{completedEmployee.slug}</dd>
             </div>
-            <div className="flex justify-between gap-3">
-              <dt className="text-slate-500">Rank</dt>
-              <dd className="text-slate-900">{completedEmployee.rank}</dd>
-            </div>
           </dl>
           <button
             type="button"

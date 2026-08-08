@@ -74,7 +74,7 @@ describe('NamespaceContractsPage', () => {
     const inheritedSection = screen.getByTestId('inherited-atoms');
     expect(within(inheritedSection).getByText('can_manage_organization')).toBeInTheDocument();
     expect(within(inheritedSection).queryAllByRole('button')).toHaveLength(0);
-    expect(screen.getByText('1 contracts')).toBeInTheDocument();
+    expect(screen.getByText('1 members')).toBeInTheDocument();
   });
 
   it('removing a namespace atom sends only the namespace_atoms in the PATCH', async () => {
@@ -152,6 +152,6 @@ describe('NamespaceContractsPage', () => {
     mockedApi.mockResolvedValue({ items: [], limit: 200, offset: 0, total: 0 });
     renderContractsPage();
 
-    expect(await screen.findByText('No contracts in this namespace yet.')).toBeInTheDocument();
+    expect(await screen.findByText('No members in this region yet.')).toBeInTheDocument();
   });
 });

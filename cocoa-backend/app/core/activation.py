@@ -3,10 +3,7 @@
 Three trigger types:
 1. daily_report — self-sync timer via TaskQueue (P5 emits events only; P8 harness runs real logic)
 2. on_mention — triggered after successful message delivery (P5 emits events only)
-3. intern_hot_load — stateless invocation for intern-rank entities (creates Instance directly)
 """
-
-from uuid import uuid4
 
 from loguru import logger
 from sqlalchemy import select
@@ -16,7 +13,6 @@ from app.core.db import get_session_factory
 from app.core.event_types import MESSAGING_ACTIVATION_TRIGGERED
 from app.core.events import emit
 from app.core.queue import TaskQueue
-from app.core.workspace import generate_workspace_path
 from app.models.entity import Entity
 from app.models.instance import Instance, InstanceStatus
 from app.models.workspace import Workspace
@@ -152,71 +148,3 @@ async def trigger_on_mention(
         },
         session=session,
     )
-
-
-# ====================================================================
-# C. Intern invocation
-# ====================================================================
-
-
-async def handle_intern_invocation(
-    session: AsyncSession,
-    entity_slug: str,
-    workspace_id: str,
-) -> Instance | None:
-    """Create or reuse an Instance for an intern entity.
-
-    Intern entities are stateless: no Memory read/write, ephemeral
-    instances.  Returns an existing running Instance if one exists, or
-    creates a new one (status ``"creating"``).
-
-    Returns
-    -------
-    Instance | None
-        The running or newly created Instance, or ``None`` if the entity
-        is not found or is not an intern.
-    """
-    # Look up Entity by slug
-    result = await session.execute(
-        select(Entity).where(
-            Entity.slug == entity_slug,
-            Entity.deleted_at.is_(None),
-        )
-    )
-    emp = result.scalar_one_or_none()
-    if emp is None:
-        return None
-    if emp.rank != "intern":
-        return None
-
-    # Check for an existing running Instance in this workspace
-    result = await session.execute(
-        select(Instance).where(
-            Instance.entity_id == emp.id,
-            Instance.workspace_id == workspace_id,
-            Instance.status == InstanceStatus.running.value,
-            Instance.deleted_at.is_(None),
-        )
-    )
-    existing = result.scalar_one_or_none()
-    if existing is not None:
-        return existing
-
-    # Create a fresh Instance
-    instance = Instance(
-        entity_id=emp.id,
-        workspace_id=workspace_id,
-        workspace_path=generate_workspace_path(emp.slug, str(uuid4())),
-        status=InstanceStatus.creating.value,
-        proxy_token=str(uuid4()),
-    )
-    session.add(instance)
-    await session.flush()
-
-    logger.info(
-        "Intern instance created",
-        entity_id=str(emp.id),
-        workspace_id=workspace_id,
-        instance_id=str(instance.id),
-    )
-    return instance

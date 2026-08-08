@@ -82,7 +82,7 @@ describe('AppShell sidebar sections', () => {
       'href',
       '/orgs/org-1/members',
     );
-    expect(nav.getByRole('link', { name: 'Deity' })).toHaveAttribute(
+    expect(nav.getByRole('link', { name: 'Progenitor' })).toHaveAttribute(
       'href',
       '/orgs/org-1/base-classes',
     );
@@ -91,7 +91,7 @@ describe('AppShell sidebar sections', () => {
       '/orgs/org-1/capabilities',
     );
     expect(nav.getByRole('link', { name: 'Gene' })).toHaveAttribute('href', '/orgs/org-1/genes');
-    expect(nav.getByRole('link', { name: 'Namespaces' })).toHaveAttribute(
+    expect(nav.getByRole('link', { name: 'Regions' })).toHaveAttribute(
       'href',
       '/orgs/org-1/namespaces',
     );
@@ -104,19 +104,19 @@ describe('AppShell sidebar sections', () => {
 
     expect(screen.getByTestId('namespace-switcher')).toBeInTheDocument();
     const nav = desktopNav();
-    expect(nav.getByRole('link', { name: 'Workspaces' })).toHaveAttribute(
+    expect(nav.getByRole('link', { name: 'Habitats' })).toHaveAttribute(
       'href',
       '/orgs/org-1/namespaces/ns-1/workspaces',
     );
-    expect(nav.getByRole('link', { name: 'Entity' })).toHaveAttribute(
+    expect(nav.getByRole('link', { name: 'Bloodline' })).toHaveAttribute(
       'href',
       '/orgs/org-1/namespaces/ns-1/entities',
     );
-    expect(nav.getByRole('link', { name: 'Instances' })).toHaveAttribute(
+    expect(nav.getByRole('link', { name: 'Descendants' })).toHaveAttribute(
       'href',
       '/orgs/org-1/namespaces/ns-1/instances',
     );
-    expect(nav.getByRole('link', { name: 'Contract' })).toHaveAttribute(
+    expect(nav.getByRole('link', { name: 'Member' })).toHaveAttribute(
       'href',
       '/orgs/org-1/namespaces/ns-1/contracts',
     );
@@ -128,7 +128,7 @@ describe('AppShell sidebar sections', () => {
     renderShell('/orgs/org-1');
 
     expect(screen.queryByTestId('namespace-switcher')).not.toBeInTheDocument();
-    expect(desktopNav().queryByRole('link', { name: 'Workspaces' })).not.toBeInTheDocument();
+    expect(desktopNav().queryByRole('link', { name: 'Habitats' })).not.toBeInTheDocument();
   });
 
   it('renders the org switcher and account links in the header area', () => {

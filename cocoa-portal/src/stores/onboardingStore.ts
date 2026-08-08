@@ -2,7 +2,6 @@ import { create } from 'zustand';
 import { isValidSlug, SLUG_PATTERN, toSlug } from '@/lib/slug';
 import type {
   BaseClass,
-  EmployeeRank,
   EmployeeRuntimeConfig,
   EntityConfigOverride,
   KnowledgeEnvEntry,
@@ -36,7 +35,6 @@ export type OnboardingState = {
   readonly displayName: string;
   readonly slug: string;
   readonly slugTouched: boolean;
-  readonly rank: EmployeeRank;
   readonly providerId: string;
   readonly model: string;
   readonly description: string;
@@ -51,7 +49,6 @@ export type OnboardingState = {
   readonly setDisplayName: (displayName: string) => void;
   readonly setSlug: (slug: string) => void;
   readonly setSlugTouched: (slugTouched: boolean) => void;
-  readonly setRank: (rank: EmployeeRank) => void;
   readonly setProviderId: (providerId: string) => void;
   readonly setModel: (model: string) => void;
   readonly setDescription: (description: string) => void;
@@ -73,7 +70,6 @@ const INITIAL_STATE: Pick<
   | 'displayName'
   | 'slug'
   | 'slugTouched'
-  | 'rank'
   | 'providerId'
   | 'model'
   | 'description'
@@ -87,7 +83,6 @@ const INITIAL_STATE: Pick<
   displayName: '',
   slug: '',
   slugTouched: false,
-  rank: 'researcher',
   providerId: '',
   model: '',
   description: '',
@@ -169,7 +164,6 @@ export const useOnboardingStore = create<OnboardingState>()((set, get) => ({
   },
   setSlug: (slug) => set({ slug, slugTouched: true }),
   setSlugTouched: (slugTouched) => set({ slugTouched }),
-  setRank: (rank) => set({ rank }),
   setProviderId: (providerId) => set({ providerId }),
   setModel: (model) => set({ model }),
   setDescription: (description) => set({ description }),
@@ -205,7 +199,6 @@ export const useOnboardingStore = create<OnboardingState>()((set, get) => ({
     return {
       name: state.displayName.trim(),
       slug: state.slug.trim(),
-      rank: state.rank,
       preset_slug: presetSlug,
       display_name: state.displayName.trim(),
       system_prompt: description.length > 0 ? description : null,

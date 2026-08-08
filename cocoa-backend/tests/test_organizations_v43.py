@@ -281,7 +281,7 @@ class TestDeleteOrganization:
         ws = Workspace(namespace_id=ns.id, name="WS One", slug="ws-1")
         session.add(ws)
         await session.flush()
-        entity = Entity(namespace_id=ns.id, name="E One", slug="e-1", rank="intern")
+        entity = Entity(namespace_id=ns.id, name="E One", slug="e-1")
         session.add(entity)
         await session.flush()
         inst = Instance(

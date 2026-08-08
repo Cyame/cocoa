@@ -60,9 +60,9 @@ class TestBaseClassesList:
         resp = client.get("/api/v1/base-classes", headers=_auth(auth_token))
         assert resp.status_code == 200, resp.text
         body = resp.json()
-        assert body["total"] >= 6
+        assert body["total"] >= 5
         slugs = {item["slug"] for item in body["items"]}
-        assert "mi-shi" in slugs
+        assert "fox" in slugs
         # cerebellum-baseclass is API-hidden by default (PRD-v3)
         assert "cerebellum-baseclass" not in slugs
 
@@ -139,7 +139,7 @@ class TestBaseClassesList:
         assert len(body["items"]) == 2
 
         resp2 = client.get(
-            "/api/v1/base-classes?limit=2&offset=4",
+            "/api/v1/base-classes?limit=2&offset=2",
             headers=_auth(auth_token),
         )
         assert resp2.status_code == 200, resp2.text

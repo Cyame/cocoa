@@ -11,11 +11,11 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.activation import handle_intern_invocation, trigger_on_mention
+from app.core.activation import trigger_on_mention
 from app.core.message_router import MessageDeliveryResult, route_message
 from app.core.preset_registry import is_control_command, is_learning_command
 from app.core.slash_parser import parse_turn
-from app.models.entity import Entity, EntityRank
+from app.models.entity import Entity
 from app.models.workspace import Membership
 from app.schemas.slash import Directive
 
@@ -109,9 +109,8 @@ async def route_turn(
     1. Parse raw_text into a Turn via P4's parse_turn
     2. Find the sender's Membership in this workspace
     3. For each directive:
-       a. If target is an intern, ensure instance exists
-       b. Route via message_router
-       c. On successful delivery, trigger on_mention activation
+       a. Route via message_router
+       b. On successful delivery, trigger on_mention activation
     4. Return per-directive results
     """
     turn = parse_turn(raw_text)
@@ -161,9 +160,9 @@ async def route_turn(
             )
             continue
 
-        # If target is an intern, ensure instance exists (hot-load)
+        # Resolve target Entity for on_mention triggering (v5.0: no intern hot-load).
+        target_entity = None
         if target_slug:
-            # Check if target is intern
             result = await session.execute(
                 select(Entity).where(
                     Entity.slug == target_slug,
@@ -171,8 +170,38 @@ async def route_turn(
                 )
             )
             target_entity = result.scalars().first()
-            if target_entity and target_entity.rank == EntityRank.intern:
-                await handle_intern_invocation(session, target_slug, workspace_id)
+
+            # v5.0 T4: No-instance guard — reject @mentions for entities
+            # that have no active Instance in this workspace.
+            if target_entity is not None:
+                from app.models.instance import Instance, InstanceStatus
+
+                inst_result = await session.execute(
+                    select(Instance).where(
+                        Instance.entity_id == target_entity.id,
+                        Instance.workspace_id == workspace_id,
+                        Instance.deleted_at.is_(None),
+                        Instance.status.in_(
+                            [
+                                InstanceStatus.running.value,
+                                InstanceStatus.pending.value,
+                                InstanceStatus.creating.value,
+                                InstanceStatus.deploying.value,
+                            ]
+                        ),
+                    )
+                )
+                existing_instance = inst_result.scalars().first()
+                if existing_instance is None:
+                    directive_results.append(
+                        DirectiveResult(
+                            directive_raw=directive.raw_text,
+                            target_entity=target_slug,
+                            cmd=directive.cmd,
+                            results=[],
+                        )
+                    )
+                    continue
 
         # Route the directive
         delivery_results = await route_message(

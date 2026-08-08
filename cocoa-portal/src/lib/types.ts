@@ -63,14 +63,11 @@ export type OfficeMembership = WorkspaceMembership;
 /** @deprecated Use WorkspaceMember */
 export type OfficeMember = WorkspaceMember;
 
-export type EmployeeRank = 'intern' | 'researcher';
-
 export type Entity = {
   readonly id: string;
   readonly namespace_id: string;
   readonly name: string;
   readonly slug: string;
-  readonly rank: EmployeeRank;
   readonly preset_slug: string | null;
   readonly display_name: string | null;
   readonly display_color: string | null;
@@ -406,7 +403,6 @@ export type EntityPatchPayload = {
   readonly display_name?: string | null;
   readonly display_color?: string | null;
   readonly preset_slug?: string | null;
-  readonly rank?: EmployeeRank;
 };
 
 export type PromoteResult = {
@@ -482,7 +478,6 @@ export type EntityConfigOverride = {
 export type OnboardingPayload = {
   readonly name: string;
   readonly slug: string;
-  readonly rank: EmployeeRank;
   readonly preset_slug: string;
   readonly display_name: string;
   readonly system_prompt?: string | null;

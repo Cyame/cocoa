@@ -87,7 +87,7 @@ describe('BatchRestartModal', () => {
     expect(screen.getByRole('dialog', { name: 'Apply updated configuration' })).toBeInTheDocument();
     expect(
       screen.getByText(
-        '3 of 5 instances are running on an older config — restart to apply changes',
+        '3 of 5 descendants are running on an older config — restart to apply changes',
       ),
     ).toBeInTheDocument();
 
@@ -210,7 +210,7 @@ describe('BatchRestartModal', () => {
     fireEvent.click(screen.getByTestId('batch-restart-submit'));
 
     expect(await screen.findByTestId('batch-restart-error')).toHaveTextContent(
-      'Some selected instances are still running. Stop them and retry.',
+      'Some selected descendants are still running. Stop them and retry.',
     );
   });
 

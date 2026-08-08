@@ -212,7 +212,9 @@ function BaseClassGrid({
         <article key={bc.id} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <Link to={`/orgs/${orgId}/base-classes/${bc.slug}`} className="block">
             <div className="flex items-start justify-between gap-2">
-              <h2 className="text-lg font-semibold text-slate-950">{bc.display_name ?? bc.name}</h2>
+              <h2 className="text-lg font-semibold text-slate-950">
+                {t(bc.display_name ?? bc.name, { defaultValue: bc.name })}
+              </h2>
               {bc.scope === 'system' ? (
                 <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
                   <Layers className="size-3" aria-hidden="true" />

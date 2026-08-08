@@ -1052,7 +1052,7 @@ function SetDefaultModal({
                 onChange={() => toggleBaseClass(bc.id)}
                 className="size-4 accent-blue-600"
               />
-              {bc.display_name ?? bc.name}
+              {t(bc.display_name ?? bc.name, { defaultValue: bc.name })}
             </label>
           ))}
         </div>

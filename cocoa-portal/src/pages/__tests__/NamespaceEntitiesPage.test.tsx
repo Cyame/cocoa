@@ -24,7 +24,6 @@ const ENTITY_ROW = {
   namespace_id: 'ns-1',
   name: 'scout',
   slug: 'scout',
-  rank: 'oracle',
   preset_slug: 'base',
   display_name: 'Scout',
   display_color: null,
@@ -82,7 +81,7 @@ describe('NamespaceEntitiesPage', () => {
 
     const distillButton = await screen.findByTestId(`entity-transmute-${ENTITY_ROW.id}`);
     await waitFor(() => {
-      expect(distillButton.textContent).toContain('Distill / Transmute');
+      expect(distillButton.textContent).toContain('Comprehend / Evolve');
     });
   });
 });

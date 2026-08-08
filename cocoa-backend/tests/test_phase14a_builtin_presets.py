@@ -1,8 +1,9 @@
-"""PRD-v3-post builtin 神职: 11 public presets + internal zong-jian.
+"""v5.0 builtin 始祖: 5 常驻始祖 + internal zong-jian.
 
-* All public presets carry a usable ``provider`` config.
+* All 5 始祖 carry a usable ``provider`` config.
 * ``zong-jian`` (Director, human) lives in INTERNAL_PRESETS with provider=None.
 * Decoding via ``LLMProviderConfig.from_manifest_legacy`` round-trips.
+* v5.0 命名波：6 降级神职（唤灵/灵视/衡判/游魂/潜知/百瞳）已移除（v5-rename-decisions §六）。
 """
 
 from __future__ import annotations
@@ -12,23 +13,17 @@ from app.schemas.llm import LLMProviderConfig, ProviderType
 
 
 def test_public_presets_count_and_provider_config():
-    assert len(BUILTIN_PRESETS) == 11, "Cocoa ships exactly 11 public 神职"
+    assert len(BUILTIN_PRESETS) == 5, "Cocoa ships exactly 5 常驻始祖"
     assert len(INTERNAL_PRESETS) == 1
     assert INTERNAL_PRESETS[0]["slug"] == "zong-jian"
     assert "internal" in (INTERNAL_PRESETS[0].get("tags") or [])
 
     expected_types = {
-        "mi-shi": ProviderType.openai_compatible,
-        "huan-ling": ProviderType.openai_compatible,
-        "an-xing": ProviderType.anthropic,
-        "an-ying": ProviderType.openai_compatible,
-        "zhu-jin": ProviderType.openai_compatible,
-        "ling-shi": ProviderType.anthropic,
-        "heng-pan": ProviderType.anthropic,
-        "you-hun": ProviderType.openai_compatible,
-        "qian-zhi": ProviderType.openai_compatible,
-        "bai-tong": ProviderType.openai_compatible,
-        "jiu-ri": ProviderType.anthropic,
+        "fox": ProviderType.openai_compatible,
+        "beaver": ProviderType.anthropic,
+        "sparrow": ProviderType.openai_compatible,
+        "coyote": ProviderType.openai_compatible,
+        "lion": ProviderType.anthropic,
     }
 
     for preset in BUILTIN_PRESETS:
@@ -52,4 +47,4 @@ def test_public_presets_count_and_provider_config():
 
     zong = INTERNAL_PRESETS[0]
     assert zong["manifest"]["provider"] is None
-    assert len(ALL_BUILTIN_PRESETS) == 12
+    assert len(ALL_BUILTIN_PRESETS) == 6

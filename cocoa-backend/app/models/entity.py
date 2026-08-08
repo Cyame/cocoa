@@ -2,21 +2,12 @@
 
 from __future__ import annotations
 
-import enum
-
 from sqlalchemy import ForeignKey, Index, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
 from app.models.base import BaseModel
-
-
-class EntityRank(str, enum.Enum):
-    """AI Lab Rank — frozen at Entity create. Humans are director (not stored here)."""
-
-    intern = "intern"
-    researcher = "researcher"
 
 
 class Entity(BaseModel, Base):
@@ -48,9 +39,6 @@ class Entity(BaseModel, Base):
     preset_slug: Mapped[str | None] = mapped_column(
         String(255), nullable=True
     )
-    rank: Mapped[str] = mapped_column(
-        String(20), nullable=False, default=EntityRank.intern.value
-    )
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     display_color: Mapped[str | None] = mapped_column(String(7), nullable=True)
     system_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -68,4 +56,4 @@ class Entity(BaseModel, Base):
 
     def __repr__(self) -> str:
         cls = type(self).__name__
-        return f"<{cls} {self.id!r} slug={self.slug!r} rank={self.rank!r}>"
+        return f"<{cls} {self.id!r} slug={self.slug!r}>"

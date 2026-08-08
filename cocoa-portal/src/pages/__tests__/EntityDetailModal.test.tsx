@@ -18,7 +18,6 @@ const ENTITY_RESPONSE = {
   id: ENTITY_ID,
   name: '密士',
   slug: 'mi-shi',
-  rank: 'researcher',
   preset_slug: 'mi-shi-base',
   display_name: '密士',
   display_color: null,

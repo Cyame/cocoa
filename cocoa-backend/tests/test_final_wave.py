@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.base_class import BaseClass
-from app.models.entity import Entity, EntityRank
+from app.models.entity import Entity
 from app.models.instance import Instance
 from app.models.user import User
 from app.models.workspace import Membership, Workspace
@@ -34,7 +34,7 @@ class TestMultiInstance:
 
         ns = await namespace_factory()
         # 3. Create Entity
-        emp = Entity(namespace_id=ns.id, slug="f3-emp", name="F3 Entity", rank=EntityRank.researcher)
+        emp = Entity(namespace_id=ns.id, slug="f3-emp", name="F3 Entity")
         session.add(emp)
         await session.commit()
 
@@ -82,7 +82,7 @@ class TestWorkspacePathUniqueness:
         """Inserting two active instances with the same workspace_path fails."""
         ns = await namespace_factory()
         # Create dependent entities
-        emp = Entity(namespace_id=ns.id, slug="f3-wp-emp", name="WP Entity", rank=EntityRank.intern)
+        emp = Entity(namespace_id=ns.id, slug="f3-wp-emp", name="WP Entity")
         workspace_a = Workspace(namespace_id=ns.id, name="WP Workspace A", slug="wp-workspace-a")
         workspace_b = Workspace(namespace_id=ns.id, name="WP Workspace B", slug="wp-workspace-b")
         session.add_all([emp, workspace_a, workspace_b])
@@ -166,7 +166,7 @@ class TestMembershipExclusiveFK:
     ) -> None:
         """Membership with instance_id set and user_id NULL succeeds."""
         ns = await namespace_factory()
-        emp = Entity(namespace_id=ns.id, slug="f3-inst-emp", name="Inst Emp", rank=EntityRank.intern)
+        emp = Entity(namespace_id=ns.id, slug="f3-inst-emp", name="Inst Emp")
         workspace = Workspace(namespace_id=ns.id, name="Inst Workspace", slug="inst-workspace")
         session.add_all([emp, workspace])
         await session.commit()

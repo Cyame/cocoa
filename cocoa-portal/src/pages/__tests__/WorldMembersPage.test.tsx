@@ -64,7 +64,7 @@ describe('WorldMembersPage', () => {
 
     expect(await screen.findByText('Alice')).toBeInTheDocument();
     expect(screen.getByText(/alice · alice@example\.com/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Manage world members/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Manage continent members/ })).toBeInTheDocument();
     expect(screen.queryByText('contract-1')).not.toBeInTheDocument();
     expect(screen.getByText('1 members')).toBeInTheDocument();
   });
@@ -75,20 +75,20 @@ describe('WorldMembersPage', () => {
 
     expect(await screen.findByText('Alice')).toBeInTheDocument();
     const expectedNames = [
-      'Manage world',
-      'Manage world members',
-      'Manage namespaces',
-      'Manage workspaces',
-      'Edit workspaces',
-      'View workspaces',
-      'Operate workspaces',
+      'Manage continent',
+      'Manage continent members',
+      'Manage regions',
+      'Manage habitats',
+      'Edit habitats',
+      'View habitats',
+      'Operate habitats',
       'Manage genes',
       'Manage capabilities',
       'Manage AI genes',
-      'Clone base classes',
-      'Clone entities',
-      'Clone world',
-      'Clone workspace',
+      'Clone progenitors',
+      'Clone bloodlines',
+      'Clone continent',
+      'Clone habitat',
       'Manage knowledge',
       'Manage meetings',
     ];
@@ -130,7 +130,7 @@ describe('WorldMembersPage', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Remove' }));
     expect(
-      await screen.findByText('Cannot remove your own world-management permission.'),
+      await screen.findByText('Cannot remove your own continent-management permission.'),
     ).toBeInTheDocument();
   });
 
@@ -151,7 +151,7 @@ describe('WorldMembersPage', () => {
       target: { value: 'alice' },
     });
     fireEvent.click(await screen.findByText('alice'));
-    fireEvent.click(screen.getByLabelText('Manage world members'));
+    fireEvent.click(screen.getByLabelText('Manage continent members'));
     fireEvent.click(screen.getByTestId('world-members-submit'));
 
     await waitFor(() => {

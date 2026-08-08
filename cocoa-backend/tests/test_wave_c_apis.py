@@ -211,9 +211,9 @@ class TestAiGenes:
 
 class TestBaseClassBySlug:
     def test_get_by_slug(self, client: TestClient, auth_token: str) -> None:
-        resp = client.get("/api/v1/base-classes/mi-shi", headers=_h(auth_token))
+        resp = client.get("/api/v1/base-classes/fox", headers=_h(auth_token))
         assert resp.status_code == 200
-        assert resp.json()["slug"] == "mi-shi"
+        assert resp.json()["slug"] == "fox"
 
 
 class TestCapabilityMarket:

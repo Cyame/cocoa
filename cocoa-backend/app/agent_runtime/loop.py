@@ -5,7 +5,7 @@ side-effect, and emits ``HARNESS_CHECKPOINT`` carrying real
 ``token_estimate`` plus the K8s ``proxy_token``. Mode is selected via
 ``is_k8s_pod_mode()``: local uses in-process ``emit()`` + DB status;
 K8s uses HTTP ``emit_event()`` + ``poll_control()``. P14a preset
-selection defaults to ``mi-shi``. K8s-mode events (LOOP_STARTED /
+selection defaults to ``fox``. K8s-mode events (LOOP_STARTED /
 CHECKPOINT / LOOP_STOPPED) all carry ``proxy_token`` (anti-spoofing).
 """
 
@@ -58,14 +58,14 @@ _K8S_ITERATION_SLEEP = 5.0
 
 
 def _build_llm_client() -> tuple[Any, dict[str, Any]]:
-    """Build the loop's LLMClient from the ``mi-shi`` preset manifest.
+    """Build the loop's LLMClient from the ``fox`` preset manifest.
 
     When no API key is configured (common in unit tests), returns a stub
     client that emits a fixed checkpoint response so the loop can still
     exercise emit / notepad / breaker paths without network credentials.
     """
     manifest: dict[str, Any] = next(
-        (p.get("manifest") or {} for p in BUILTIN_PRESETS if p.get("slug") == "mi-shi"),
+        (p.get("manifest") or {} for p in BUILTIN_PRESETS if p.get("slug") == "fox"),
         {},
     )
     cfg = LLMProviderConfig.from_manifest_legacy(manifest)

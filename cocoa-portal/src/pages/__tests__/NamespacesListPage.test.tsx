@@ -79,6 +79,6 @@ describe('NamespacesListPage', () => {
     mockedApi.mockResolvedValue({ items: [], offset: 0, limit: 50, total: 0 });
     renderPage();
 
-    await waitFor(() => expect(screen.getByText('No namespaces yet')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('No regions yet')).toBeInTheDocument());
   });
 });

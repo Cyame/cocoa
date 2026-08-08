@@ -24,7 +24,6 @@ import {
   listOrganizationProviders,
   type OrganizationProvider,
 } from '@/lib/api/providers';
-import type { EmployeeRank } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { isValidSlug, useOnboardingStore } from '@/stores/onboardingStore';
 
@@ -33,14 +32,6 @@ type Step2Props = {
   readonly isSubmitting: boolean;
   readonly submitError: string | null;
 };
-
-const RANK_OPTIONS: ReadonlyArray<{
-  readonly value: EmployeeRank;
-  readonly key: 'rankResearcher' | 'rankIntern';
-}> = [
-  { value: 'researcher', key: 'rankResearcher' },
-  { value: 'intern', key: 'rankIntern' },
-];
 
 const MAX_DISPLAY_NAME_LENGTH = 32;
 
@@ -63,7 +54,6 @@ export default function Step2EntityForm({
   const displayName = useOnboardingStore((state) => state.displayName);
   const slug = useOnboardingStore((state) => state.slug);
   const slugTouched = useOnboardingStore((state) => state.slugTouched);
-  const rank = useOnboardingStore((state) => state.rank);
   const providerId = useOnboardingStore((state) => state.providerId ?? '');
   const model = useOnboardingStore((state) => state.model ?? '');
   const description = useOnboardingStore((state) => state.description ?? '');
@@ -72,7 +62,6 @@ export default function Step2EntityForm({
   const selectedBaseClass = useOnboardingStore((state) => state.selectedBaseClass);
   const setDisplayName = useOnboardingStore((state) => state.setDisplayName);
   const setSlug = useOnboardingStore((state) => state.setSlug);
-  const setRank = useOnboardingStore((state) => state.setRank);
   const setProviderId = useOnboardingStore((state) => state.setProviderId);
   const setModel = useOnboardingStore((state) => state.setModel);
   const setDescription = useOnboardingStore((state) => state.setDescription);
@@ -347,38 +336,6 @@ export default function Step2EntityForm({
             ) : null}
           </div>
 
-          <fieldset>
-            <legend className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-              {t('onboarding.step2.rankLabel')}
-            </legend>
-            <div className="mt-2 space-y-2">
-              {RANK_OPTIONS.map((option) => {
-                const isChecked = rank === option.value;
-                return (
-                  <label
-                    key={option.value}
-                    className={cn(
-                      'flex cursor-pointer items-start gap-2 rounded-md border px-3 py-2 text-sm transition-colors',
-                      isChecked
-                        ? 'border-blue-500 bg-blue-50 text-blue-900'
-                        : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50',
-                    )}
-                  >
-                    <input
-                      type="radio"
-                      name="rank"
-                      value={option.value}
-                      checked={isChecked}
-                      onChange={() => setRank(option.value)}
-                      className="mt-0.5 size-4 accent-blue-600"
-                    />
-                    <span>{t(`onboarding.step2.${option.key}`)}</span>
-                  </label>
-                );
-              })}
-            </div>
-          </fieldset>
-
           {providersLoading ? (
             <p className="flex items-center gap-2 text-xs text-slate-500">
               <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />
@@ -596,16 +553,6 @@ export default function Step2EntityForm({
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <span className="rounded-full bg-blue-50 px-2 py-0.5 font-mono text-[11px] text-blue-700">
                 {trimmedSlug === '' ? 'no-slug' : trimmedSlug}
-              </span>
-              <span
-                className={cn(
-                  'rounded-full px-2 py-0.5 text-[11px] font-medium',
-                  rank === 'researcher'
-                    ? 'bg-emerald-50 text-emerald-700'
-                    : 'bg-slate-100 text-slate-700',
-                )}
-              >
-                {rank}
               </span>
             </div>
             <dl className="mt-3 space-y-1.5 text-xs text-slate-600">

@@ -61,15 +61,15 @@ class TestGetPresetBySlug:
     def test_get_builtin_preset_returns_expanded_manifest(
         self, client: TestClient, auth_token: str,
     ) -> None:
-        """Built-in ``mi-shi`` preset returns 200 with a 5-field manifest."""
+        """Built-in ``fox`` preset returns 200 with a 5-field manifest."""
         resp = client.get(
-            "/api/v1/base-classes/mi-shi",
+            "/api/v1/base-classes/fox",
             headers=_auth_headers(auth_token),
         )
         assert resp.status_code == 200
         body = resp.json()
-        assert body["slug"] == "mi-shi"
-        assert body["name"] == "密士"
+        assert body["slug"] == "fox"
+        assert body["name"] == "狐狸"
         assert "id" in body
         assert "created_at" in body
         assert "updated_at" in body
@@ -87,9 +87,9 @@ class TestGetPresetBySlug:
     def test_get_builtin_preset_has_commands(
         self, client: TestClient, auth_token: str,
     ) -> None:
-        """``mi-shi`` (密士) commands list is non-empty per builtin_presets spec."""
+        """``fox`` (狐狸) commands list is non-empty per builtin_presets spec."""
         resp = client.get(
-            "/api/v1/base-classes/mi-shi",
+            "/api/v1/base-classes/fox",
             headers=_auth_headers(auth_token),
         )
         assert resp.status_code == 200
@@ -227,7 +227,7 @@ class TestGetPresetManifestExpansion:
     ) -> None:
         """v4.0: builtin presets expose their commands via the cmd-* junction."""
         resp = client.get(
-            "/api/v1/base-classes/mi-shi",
+            "/api/v1/base-classes/fox",
             headers=_auth_headers(auth_token),
         )
         assert resp.status_code == 200
@@ -238,5 +238,5 @@ class TestGetPresetManifestExpansion:
         self, client: TestClient,
     ) -> None:
         """GET without an auth token is rejected (CurrentUserDep enforced)."""
-        resp = client.get("/api/v1/base-classes/mi-shi")
+        resp = client.get("/api/v1/base-classes/fox")
         assert resp.status_code == 401

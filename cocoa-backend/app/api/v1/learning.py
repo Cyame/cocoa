@@ -883,7 +883,6 @@ async def promote_entity(
             name=body.new_entity_name,
             slug=body.new_entity_slug,
             preset_slug=entity.preset_slug,
-            rank=entity.rank,
             display_name=body.new_entity_name,
             display_color=entity.display_color,
             system_prompt=prompt_regen if body.include_prompt_regen else entity.system_prompt,

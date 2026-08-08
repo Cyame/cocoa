@@ -12,32 +12,32 @@ vi.mock('@/lib/api', async (importOriginal) => {
 
 const mockedApi = vi.mocked(api);
 
-const MI_SHI_BASE_CLASS = {
-  id: 'base-mi-shi',
-  slug: 'mi-shi',
-  name: 'mi-shi',
-  display_name: '密士',
-  description: '战略规划师：拆解目标、规划路径。',
+const FOX_BASE_CLASS = {
+  id: 'base-fox',
+  slug: 'fox',
+  name: 'fox',
+  display_name: 'baseClass.display.fox',
+  description: 'Strategic planner: decompose goals, plan paths.',
   manifest: { default_model: 'gpt-4o-mini', commands: ['/plan', '/decompose', '/prioritize'] },
   version: '1.0',
-  tags: ['plan'],
+  tags: ['planning'],
   created_at: '2026-07-01T00:00:00Z',
 };
 
-const HIDE_SEEK_BASE_CLASS = {
-  id: 'base-an-ying',
-  slug: 'an-ying',
-  name: 'an-ying',
-  display_name: '暗影',
-  description: '初级执行：快速、低成本完成任务。',
+const SPARROW_BASE_CLASS = {
+  id: 'base-sparrow',
+  slug: 'sparrow',
+  name: 'sparrow',
+  display_name: 'baseClass.display.sparrow',
+  description: 'Junior executor: fast, low-cost task completion.',
   manifest: { default_model: 'gpt-4o-mini', commands: ['/execute', '/build', '/test'] },
   version: '1.0',
-  tags: ['execute'],
+  tags: ['execution'],
   created_at: '2026-07-01T00:00:00Z',
 };
 
 const BASE_CLASSES_PAGE = {
-  items: [MI_SHI_BASE_CLASS, HIDE_SEEK_BASE_CLASS],
+  items: [FOX_BASE_CLASS, SPARROW_BASE_CLASS],
   offset: 0,
   limit: 50,
   total: 2,
@@ -47,8 +47,7 @@ const CREATED_EMPLOYEE = {
   id: 'employee-1',
   name: 'nyar-proutzi',
   slug: 'nyar-proutzi',
-  rank: 'researcher',
-  preset_slug: 'mi-shi',
+  preset_slug: 'fox',
   display_name: 'nyar-proutzi',
   display_color: null,
   created_at: '2026-07-29T00:00:00Z',
@@ -121,7 +120,6 @@ function resetOnboardingStores() {
       displayName: '',
       slug: '',
       slugTouched: false,
-      rank: 'researcher',
       providerId: '',
       model: '',
       description: '',
@@ -154,12 +152,12 @@ describe('FirstRunOnboardingModal', () => {
     const indicator = await screen.findByTestId('step-indicator', {}, { timeout: 5000 });
     expect(indicator).toHaveTextContent(/Step 1\/3/);
 
-    const miShi = await screen.findByTestId('deity-card-mi-shi');
-    expect(miShi).toBeInTheDocument();
-    expect(miShi).toHaveTextContent('密士');
+    const fox = await screen.findByTestId('deity-card-fox');
+    expect(fox).toBeInTheDocument();
+    expect(fox).toHaveTextContent('fox');
 
-    const anYing = screen.getByTestId('deity-card-an-ying');
-    expect(anYing).toHaveTextContent('暗影');
+    const sparrow = screen.getByTestId('deity-card-sparrow');
+    expect(sparrow).toHaveTextContent('sparrow');
 
     expect(mockedApi).toHaveBeenCalledWith('/base-classes?limit=50&offset=0');
   });
@@ -173,7 +171,7 @@ describe('FirstRunOnboardingModal', () => {
     const next = screen.getByTestId('onboarding-next');
     expect(next).toBeDisabled();
 
-    fireEvent.click(screen.getByTestId('deity-card-mi-shi'));
+    fireEvent.click(screen.getByTestId('deity-card-fox'));
 
     expect(next).not.toBeDisabled();
   });
@@ -185,7 +183,7 @@ describe('FirstRunOnboardingModal', () => {
       await screen.findByTestId('onboarding-step1', {}, { timeout: 5000 }),
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByTestId('deity-card-mi-shi'));
+    fireEvent.click(screen.getByTestId('deity-card-fox'));
     fireEvent.click(screen.getByTestId('onboarding-next'));
 
     expect(
@@ -215,7 +213,7 @@ describe('FirstRunOnboardingModal', () => {
     expect(
       await screen.findByTestId('onboarding-step1', {}, { timeout: 5000 }),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByTestId('deity-card-mi-shi'));
+    fireEvent.click(screen.getByTestId('deity-card-fox'));
     fireEvent.click(screen.getByTestId('onboarding-next'));
 
     expect(
@@ -253,7 +251,7 @@ describe('FirstRunOnboardingModal', () => {
     expect(
       await screen.findByTestId('onboarding-step1', {}, { timeout: 5000 }),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByTestId('deity-card-mi-shi'));
+    fireEvent.click(screen.getByTestId('deity-card-fox'));
     fireEvent.click(screen.getByTestId('onboarding-next'));
 
     expect(
@@ -282,7 +280,7 @@ describe('FirstRunOnboardingModal', () => {
       await screen.findByTestId('onboarding-step1', {}, { timeout: 5000 }),
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByTestId('deity-card-mi-shi'));
+    fireEvent.click(screen.getByTestId('deity-card-fox'));
     fireEvent.click(screen.getByTestId('onboarding-next'));
 
     expect(
@@ -319,8 +317,7 @@ describe('FirstRunOnboardingModal', () => {
         expect(body).toEqual({
           name: 'nyar-proutzi',
           slug: 'nyar-proutzi',
-          rank: 'researcher',
-          preset_slug: 'mi-shi',
+          preset_slug: 'fox',
           display_name: 'nyar-proutzi',
           system_prompt: null,
           config_override: {
@@ -357,7 +354,7 @@ describe('FirstRunOnboardingModal', () => {
     expect(
       await screen.findByTestId('onboarding-step1', {}, { timeout: 5000 }),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByTestId('deity-card-mi-shi'));
+    fireEvent.click(screen.getByTestId('deity-card-fox'));
     fireEvent.click(screen.getByTestId('onboarding-next'));
 
     expect(

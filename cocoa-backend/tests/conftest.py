@@ -236,7 +236,6 @@ async def entity_factory(session: AsyncSession, namespace_factory):
         defaults = {
             "name": overrides.pop("name", "Test Entity"),
             "slug": overrides.pop("slug", f"test-emp-{_uuid.uuid4().hex[:8]}"),
-            "rank": overrides.pop("rank", "intern"),
         }
         defaults.update(overrides)
         emp = Entity(**defaults)

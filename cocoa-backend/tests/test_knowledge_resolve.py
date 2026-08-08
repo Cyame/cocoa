@@ -113,7 +113,6 @@ async def _build_stack(session: AsyncSession, *, org=None, slug_prefix: str = "v
     await session.flush()
     entity = Entity(
         namespace_id=ns.id, name="Ent", slug=f"{slug_prefix}-e-{uuid.uuid4().hex[:8]}",
-        rank="intern",
     )
     session.add(entity)
     await session.flush()

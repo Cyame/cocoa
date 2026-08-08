@@ -184,7 +184,7 @@ class TestBaseClassSlugRename:
         self, client: TestClient, auth_token: str
     ) -> None:
         """Builtin presets are read-only even for a super-admin caller."""
-        resp = client.get("/api/v1/base-classes/mi-shi", headers=_auth(auth_token))
+        resp = client.get("/api/v1/base-classes/fox", headers=_auth(auth_token))
         assert resp.status_code == 200, resp.text
         preset_id = resp.json()["id"]
 

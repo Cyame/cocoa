@@ -15,7 +15,6 @@ import asyncio
 import logging
 import os
 from datetime import datetime, timezone
-from uuid import uuid4
 
 from fastapi import APIRouter, status
 from pydantic import BaseModel
@@ -28,7 +27,6 @@ from app.core.composer_turns import instance_has_active_turn
 from app.core.errors import ConflictError, NotFoundError
 from app.core.event_types import (
     INSTANCE_BATCH_RESTARTED,
-    INSTANCE_CREATED,
     INSTANCE_DELETED,
     INSTANCE_DEPLOYED,
     INSTANCE_FAILED,
@@ -39,17 +37,13 @@ from app.core.event_types import (
 from app.core.events import emit
 from app.core.inject_queue import enqueue_inject
 from app.core.knowledge import entry_to_dict, resolve_knowledge_for_instance
-from app.core.knowledge_spawn import (
-    build_spawn_knowledge_payload,
-    check_knowledge_consistency,
-)
+from app.core.knowledge_spawn import check_knowledge_consistency
 from app.core.migration_hash import compute_entity_migration_hash
 from app.core.openapi import add_error_responses
 from app.core.overlay import resolve_instance_agent_config
 from app.core.pagination import OffsetPage, paginate_offset
 from app.core.permissions import require_workspace_permission
 from app.core.topology_cleanup import soft_delete_passages_touching
-from app.core.workspace import generate_workspace_path
 from app.models.entity import Entity
 from app.models.inject_queue import InjectStatus
 from app.models.instance import Instance, InstanceStatus
@@ -80,6 +74,7 @@ from app.services.deploy_service import (
 from app.services.deploy_service import (
     teardown_instance_namespace as svc_teardown_instance_namespace,
 )
+from app.services.instance_factory import create_introduced_instance
 from app.services.instance_restart import restart_instance_runtime
 
 logger = logging.getLogger(__name__)
@@ -341,7 +336,10 @@ async def create_instance(
     The caller must hold at least the ``editor`` role in the target workspace.
     If ``workspace_path`` is omitted, one is generated automatically.
     A ``proxy_token`` is created automatically for P8 harness authentication.
-    The initial status is ``creating``.
+    The initial status is ``creating``. The spawn pipeline (config
+    resolution / knowledge payload / consistency hint / Instance row /
+    topology placement) lives in the shared factory
+    :func:`app.services.instance_factory.create_introduced_instance`.
     """
     entity = await db.get(Entity, body.entity_id)
     if entity is None or entity.deleted_at is not None:
@@ -367,96 +365,19 @@ async def create_instance(
         x_organization_id=x_organization_id,
     )
 
-    workspace_path = body.workspace_path or generate_workspace_path(
-        entity.slug, str(uuid4())
-    )
-
-    agent_config = await resolve_instance_agent_config(db, entity)
-    runtime_config = dict(body.runtime_config or {})
-    runtime_config["agent_config"] = agent_config
-    # v4.9.3: inject has-knowledge (BaseClass ∪ Entity) as env/files.
-    knowledge_payload = await build_spawn_knowledge_payload(
-        db, entity=entity, workspace_id=body.workspace_id
-    )
-    if knowledge_payload is not None:
-        runtime_config["knowledge"] = knowledge_payload
-    # v4.9.3 Q4: self-consistency hint — non-blocking, never rejects spawn.
-    consistency_warning = await check_knowledge_consistency(db, entity)
-
-    instance = Instance(
+    instance, _membership, consistency_warning = await create_introduced_instance(
+        db,
         entity_id=body.entity_id,
         workspace_id=body.workspace_id,
-        workspace_path=workspace_path,
-        status=InstanceStatus.creating.value,
-        runtime_config=runtime_config,
-        proxy_token=str(uuid4()),
-        active_hash=await compute_entity_migration_hash(db, entity),
-    )
-    db.add(instance)
-    await db.flush()
-
-    # Place the new instance on the workspace topology canvas.
-    occupied = {
-        (row.posx, row.posy)
-        for row in (
-            await db.execute(
-                select(Membership.posx, Membership.posy).where(
-                    Membership.workspace_id == body.workspace_id,
-                    Membership.deleted_at.is_(None),
-                )
-            )
-        ).all()
-    }
-    posx, posy = 0, 0
-    found = False
-    for row in range(40):
-        for col in range(40):
-            candidate = (col * 120, row * 120)
-            if candidate not in occupied:
-                posx, posy = candidate
-                found = True
-                break
-        if found:
-            break
-    db.add(
-        Membership(
-            workspace_id=body.workspace_id,
-            instance_id=instance.id,
-            user_id=None,
-            posx=posx,
-            posy=posy,
-        )
-    )
-
-    await emit(
-        INSTANCE_CREATED,
-        actor_type="user",
-        actor_id=current_user.user_id,
-        resource_type="instance",
-        resource_id=instance.id,
-        payload={"workspace_path": workspace_path, "workspace_id": body.workspace_id},
-        session=db,
-    )
-    if consistency_warning is not None:
-        await emit(
-            INSTANCE_KNOWLEDGE_INCONSISTENT,
-            actor_type="user",
-            actor_id=current_user.user_id,
-            resource_type="instance",
-            resource_id=instance.id,
-            payload={**consistency_warning, "entity_id": entity.id},
-            session=db,
-        )
-    try:
-        await db.commit()
-    except IntegrityError:
-        await db.rollback()
-        raise ConflictError(
+        workspace_path=body.workspace_path,
+        runtime_config_override=body.runtime_config,
+        conflict_error=(
             "instance.already_exists",
             "errors.instance.already_exists",
             "Instance path taken or entity already introduced in this workspace",
-        )
-    await db.refresh(instance)
+        ),
+        actor_id=current_user.user_id,
+    )
     out = InstanceOutWithToken.model_validate(instance)
     out.knowledge_consistency_warning = consistency_warning
     return out
