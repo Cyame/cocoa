@@ -195,7 +195,7 @@ export default function AppShell() {
         </div>
 
         <nav className="flex flex-1 flex-col gap-4 overflow-y-auto p-3" aria-label="Primary">
-          {activeOrgId !== null ? (
+          {activeOrgId !== null && activeNamespaceId === null ? (
             <section aria-label={t('nav.world')}>
               <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                 {t('nav.world')}
@@ -231,6 +231,16 @@ export default function AppShell() {
                 <NamespaceSwitcher orgId={activeOrgId} />
               </div>
               <div className="flex flex-col gap-1">
+                <NavLink
+                  to={`/orgs/${activeOrgId}`}
+                  end
+                  className={() =>
+                    cn(DESKTOP_LINK_CLASS, 'text-slate-300 hover:bg-slate-800 hover:text-white')
+                  }
+                >
+                  <LayoutDashboard className="size-4 shrink-0" aria-hidden="true" />
+                  <span className="truncate">{t('nav.world')}</span>
+                </NavLink>
                 {namespaceItems.map((item) => (
                   <NavLink
                     key={item.labelKey}
@@ -334,22 +344,56 @@ export default function AppShell() {
           className="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-200 bg-white px-3 pt-2 md:hidden"
           aria-label="Primary mobile"
         >
-          {worldItems.map((item) => (
-            <NavLink
-              key={item.labelKey}
-              to={item.to}
-              className={() =>
-                cn(
-                  'shrink-0 rounded-t-lg border-b-2 px-3 py-2 text-xs font-medium transition-colors',
-                  navActive(item, location.pathname)
-                    ? 'border-blue-600 bg-blue-50 text-blue-700'
-                    : 'border-transparent text-slate-500 hover:bg-slate-50',
-                )
-              }
-            >
-              {t(item.labelKey)}
-            </NavLink>
-          ))}
+          {activeNamespaceId === null
+            ? worldItems.map((item) => (
+                <NavLink
+                  key={item.labelKey}
+                  to={item.to}
+                  className={() =>
+                    cn(
+                      'shrink-0 rounded-t-lg border-b-2 px-3 py-2 text-xs font-medium transition-colors',
+                      navActive(item, location.pathname)
+                        ? 'border-blue-600 bg-blue-50 text-blue-700'
+                        : 'border-transparent text-slate-500 hover:bg-slate-50',
+                    )
+                  }
+                >
+                  {t(item.labelKey)}
+                </NavLink>
+              ))
+            : [
+                activeOrgId !== null ? (
+                  <NavLink
+                    key="back-world"
+                    to={`/orgs/${activeOrgId}`}
+                    end
+                    className={() =>
+                      cn(
+                        'shrink-0 rounded-t-lg border-b-2 px-3 py-2 text-xs font-medium transition-colors',
+                        'border-transparent text-slate-500 hover:bg-slate-50',
+                      )
+                    }
+                  >
+                    {t('nav.world')}
+                  </NavLink>
+                ) : null,
+                ...namespaceItems.map((item) => (
+                  <NavLink
+                    key={item.labelKey}
+                    to={item.to}
+                    className={() =>
+                      cn(
+                        'shrink-0 rounded-t-lg border-b-2 px-3 py-2 text-xs font-medium transition-colors',
+                        navActive(item, location.pathname)
+                          ? 'border-blue-600 bg-blue-50 text-blue-700'
+                          : 'border-transparent text-slate-500 hover:bg-slate-50',
+                      )
+                    }
+                  >
+                    {t(item.labelKey)}
+                  </NavLink>
+                )),
+              ]}
           <NavLink
             to="/account"
             className={() =>

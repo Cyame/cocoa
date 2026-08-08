@@ -256,16 +256,16 @@
     "title": "Intelligence",
     "name": "Name",
     "slug": "Slug",
-    "providerHint": "Register continent intelligence providers, then set defaults for the system hub and signal tower.",
+    "providerHint": "Register continent intelligence, then set defaults for the planet hub and signal tower.",
     "notAvailable": "Continent API is not available yet.",
     "cannot_lock_self": "Cannot remove your own continent-management permission.",
-    "readOnlyHint": "Read-only. System admins can edit intelligence providers and default bindings.",
+    "readOnlyHint": "Read-only. System admins can edit intelligence and default bindings.",
     "save": "Save",
     "saving": "Saving…",
     "cancel": "Cancel",
     "loadingModels": "Loading models…",
     "fields": {
-      "provider": "Intelligence provider",
+      "provider": "Intelligence",
       "model": "Model",
       "none": "Not set",
       "selectModel": "Select a model",
@@ -276,9 +276,9 @@
       "fetchModels": "Fetch models"
     },
     "providers": {
-      "title": "Continent intelligence providers",
-      "subtitle": "Once enabled, these providers can be chosen when summoning bloodlines or applying habitat overrides.",
-      "empty": "No intelligence providers yet. Enable one from the catalog, or add a custom endpoint.",
+      "title": "Continent intelligence",
+      "subtitle": "Once enabled, these providers can be chosen when creating bloodlines or applying habitat overrides.",
+      "empty": "No intelligence configured yet. Enable one from the catalog, or add a custom endpoint.",
       "enableCatalog": "Enable from catalog",
       "addCustom": "Add custom endpoint",
       "enabled": "Enabled",
@@ -303,15 +303,15 @@
       }
     },
     "systemHub": {
-      "title": "System hub",
-      "subtitle": "Used to generate and refine bloodline descriptions during summoning. Related actions stay disabled until configured."
+      "title": "Planet hub",
+      "subtitle": "Used to generate and refine bloodline descriptions during creation. Related actions stay disabled until configured."
     },
     "cerebellum": {
       "title": "Signal Tower",
-      "subtitle": "Default intelligence provider and model for each habitat signal tower (configures its cerebellum)."
+      "subtitle": "Default intelligence and model for each habitat signal tower (configures its cerebellum)."
     },
     "catalogModal": {
-      "title": "Enable catalog intelligence provider",
+      "title": "Enable catalog intelligence",
       "catalogProvider": "Catalog provider",
       "select": "Select one",
       "alreadyEnabled": "already enabled",
@@ -320,7 +320,7 @@
       "enable": "Enable"
     },
     "customModal": {
-      "title": "Add custom intelligence provider",
+      "title": "Add custom intelligence",
       "name": "Display name",
       "slug": "Slug (optional)",
       "baseUrl": "Base URL",
@@ -335,7 +335,7 @@
       "confirm": "Apply",
       "targets": {
         "base_class": "Progenitor defaults (multi-select)",
-        "system_hub": "System hub",
+        "system_hub": "Planet hub",
         "cerebellum": "Signal Tower"
       }
     },
@@ -384,7 +384,7 @@
   },
   "promoteModal": {
     "title": "Metamorphose (Reincarnate / Fork)",
-    "summary": "Write descendant capabilities back into an bloodline, or fork a new one.",
+    "summary": "Write descendant capabilities back into a bloodline, or fork a new one.",
     "open": "Metamorphose",
     "close": "Close",
     "cancel": "Cancel",
@@ -697,7 +697,7 @@
       "addExtraSearchPlaceholder": "Filter by slug or tag...",
       "addExtraEmpty": "No extra genes match your filter.",
       "addExtraConfirm": "Add to {{bloodline}}",
-      "addExtraHint": "Will be applied on the next spawn of an descendant.",
+      "addExtraHint": "Will be applied on the next creation of a descendant.",
       "filter": "Filter",
       "loading": "Loading genes",
       "attachPick": "Pick a catalog gene to attach to this bloodline.",
@@ -732,7 +732,7 @@
       "columnHealth": "Health",
       "columnContinuations": "Continuations",
       "columnPod": "K8s pod",
-      "columnSpawn": "Spawned",
+      "columnSpawn": "Created",
       "columnActive": "Last active",
       "columnActions": "Actions",
       "goToWorkspace": "Go to habitat",
@@ -826,7 +826,7 @@
       "knowledgeMounted": "Knowledge mounted",
       "none": "None",
       "viewBaseClass": "View progenitor",
-      "summonEntity": "Summon new bloodline",
+      "summonEntity": "Create new bloodline",
       "close": "Close"
     },
     "errors": {
@@ -851,7 +851,7 @@
     "createdDaysAgo_one": "Created 1 day ago",
     "createdDaysAgo_other": "Created {{count}} days ago",
     "createdJustNow": "Created just now",
-    "summonEntity": "Summon bloodline",
+    "summonEntity": "Create bloodline",
     "menuAria": "Habitat actions menu",
     "menuOpen": "Open menu",
     "menuBatchRestart": "Restart outdated descendants",
@@ -872,7 +872,7 @@
     "title": "Apply updated configuration",
     "subtitle": "{{outdated}} of {{total}} descendants are running on an older config — restart to apply changes",
     "subtitleAllMatch": "All descendants match the latest config.",
-    "configUpdatedHint": "Bloodline or intelligence provider settings changed. Restart is optional, but running descendants need a restart to load the new configuration. Memory is preserved.",
+    "configUpdatedHint": "Bloodline or intelligence settings changed. Restart is optional, but running descendants need a restart to load the new configuration. Memory is preserved.",
     "empty": "No descendants need a config refresh right now.",
     "selectAll": "Select all",
     "clearAll": "Clear all",
@@ -918,6 +918,11 @@
     },
     "central_hub": {
       "brainstem_schedule_not_found": "Brainstem schedule not found."
+    },
+    "system_hub": {
+      "not_configured": "Planet hub provider is not configured - set it in world settings",
+      "provider_unavailable": "Planet hub provider is missing or disabled",
+      "empty_response": "Planet hub returned an empty description"
     }
   },
   "onboarding": {
@@ -927,12 +932,12 @@
     "skip": "Skip",
     "back": "Back",
     "next": "Next",
-    "createAndSpawn": "Create and spawn",
+    "createAndSpawn": "Create and genesis",
     "networkError": "Network error. Please retry.",
-    "unexpectedError": "Summon failed. The error was logged and is being handled in the background.",
+    "unexpectedError": "Create failed. The error was logged and is being handled in the background.",
     "loadBaseClassesFailed": "Failed to load progenitor list",
     "step1": {
-      "title": "Summon your first progenitor's servant",
+      "title": "Create your first bloodline",
       "subtitle": "Pick 1 of 11 progenitors. Each defines a set of capabilities and commands.",
       "selectHint": "Please pick a progenitor",
       "groupAll": "All",
@@ -941,7 +946,7 @@
       "groupReview": "Review",
       "groupUltraworker": "Ultraworker",
       "tagFilterAll": "All",
-      "providerLabel": "Intelligence provider",
+      "providerLabel": "Intelligence",
       "commandsLabel": "Commands",
       "fallbackDisclaimer": "Progenitor list is unavailable; showing built-in defaults below."
     },
@@ -962,22 +967,22 @@
       "rankLabel": "AI form (rank)",
       "rankResearcher": "Researcher — persistent AI with memory across descendants",
       "rankIntern": "Intern — stateless AI, reset on each restart",
-      "providerLabel": "Intelligence provider",
-      "providerPlaceholder": "Select a continent intelligence provider",
+      "providerLabel": "Intelligence",
+      "providerPlaceholder": "Select a continent intelligence",
       "providerInherit": "Inherit progenitor default",
       "modelLabel": "Model",
       "modelPlaceholder": "Select a model",
       "modelInherit": "Inherit default model",
-      "loadingProviders": "Loading intelligence providers…",
+      "loadingProviders": "Loading intelligence…",
       "loadingModels": "Loading models…",
-      "noProviders": "No intelligence providers enabled yet.",
+      "noProviders": "No intelligence enabled yet.",
       "configureProviders": "Open intelligence settings",
       "descriptionLabel": "Description",
       "descriptionPlaceholder": "Role summary for this bloodline (optional)",
       "generateDescription": "Generate description",
       "optimizeDescription": "Optimize description",
       "generateDisabledName": "Enter a display name first",
-      "generateDisabledHub": "Configure the system hub under Continent → Intelligence first",
+      "generateDisabledHub": "Configure the planet hub under Continent → Intelligence first",
       "previewLabel": "Preview",
       "previewTag": "Onboarding preview",
       "previewKnowledgeCount": "{{count}} entries",
@@ -989,13 +994,13 @@
       "knowledgeFileAdd": "+ Upload file",
       "knowledgeFileEmpty": "No files selected",
       "freezeWarning": "These properties are frozen after creation. To change them, create a new bloodline.",
-      "summon": "Summon servant",
-      "summoning": "Summoning...",
-      "submitFailed": "Summon failed. Please retry."
+      "summon": "Create bloodline",
+      "summoning": "Creating...",
+      "submitFailed": "Create failed. Please retry."
     },
     "step3": {
       "title": "Configure AI signal tower and knowledge",
-      "subtitle": "Set the intelligence provider and model for this bloodline; they apply when you introduce it into a habitat.",
+      "subtitle": "Set the intelligence and model for this bloodline; they apply when you introduce it into a habitat.",
       "knowledgeSummary": "Added knowledge",
       "knowledgeEmpty": "No knowledge added yet.",
       "knowledgeScopeHeading": "Knowledge scope",
@@ -1006,29 +1011,29 @@
       "knowledgeScopeWorkspace": "Shared across this habitat",
       "knowledgeScopeWorkspaceHelp": "Warning: other AI in the habitat can also read it.",
       "skipNextTime": "Skip, configure later",
-      "spawnFailed": "Spawn failed. Please retry.",
-      "successTitle": "Summon successful",
+      "spawnFailed": "Create failed. Please retry.",
+      "successTitle": "Creation successful",
       "successDetail": "Your first progenitor's servant is ready."
     }
   },
   "namespaces": {
     "title": "Region hub",
     "subtitle": "Manage habitats, progenitors, members, bloodlines, and capabilities.",
-    "summonEntity": "Summon bloodline",
+    "summonEntity": "Create bloodline",
     "createWorkspace": "Create habitat",
     "creatingWorkspace": "Creating...",
     "createWorkspaceTitle": "Create habitat",
-    "createWorkspaceHint": "A habitat can start empty — only the signal tower is required. Summon bloodlines later.",
+    "createWorkspaceHint": "A habitat can start empty — only the signal tower is required. Create bloodlines later.",
     "workspaceName": "Name",
     "workspaceSlug": "Slug",
     "workspaceNamePlaceholder": "e.g. cocoa-api",
     "workspaceSlugPlaceholder": "kebab-case",
     "cancel": "Cancel",
     "confirmCreate": "Create",
-    "summonFromBaseClass": "Summon from this progenitor",
+    "summonFromBaseClass": "Create from this progenitor",
     "enterWorkspace": "Enter habitat",
     "noWorkspacesTitle": "No habitats yet",
-    "noWorkspacesDetail": "Habitats can be empty — create one and the signal tower appears; summon bloodlines later.",
+    "noWorkspacesDetail": "Habitats can be empty — create one and the signal tower appears; create bloodlines later.",
     "contractsTitle": "Members",
     "contractsDetail": "Human seals in this region. Joining a habitat auto-ensures a member.",
     "contractsEmpty": "No members yet. Creating a habitat or adding members will create them.",
@@ -1073,9 +1078,9 @@
       "genes": "Genes"
     },
     "instancesTitle": "Descendants",
-    "instancesDetail": "Read-only cross-habitat rollup. Creatures live in habitats — introduce an bloodline there.",
-    "instancesEmpty": "No descendant records yet. Open a habitat and introduce an bloodline.",
-    "instancesNeedEntity": "Summon an bloodline first, then introduce it in a habitat.",
+    "instancesDetail": "Read-only cross-habitat rollup. Creatures live in habitats — introduce a bloodline there.",
+    "instancesEmpty": "No descendant records yet. Open a habitat and introduce a bloodline.",
+    "instancesNeedEntity": "Create a bloodline first, then introduce it in a habitat.",
     "summonInstance": "Introduce bloodline",
     "instanceEntity": "Bloodline",
     "instanceId": "Descendant ID",
@@ -1218,13 +1223,13 @@
     "emptyMembershipsTitle": "No sapiens",
     "emptyMembershipsDetail": "No humans are present in this habitat yet.",
     "emptyInstancesTitle": "No Creatures",
-    "emptyInstancesDetail": "Introduce an bloodline to materialize a Creature here.",
+    "emptyInstancesDetail": "Introduce a bloodline to materialize a Creature here.",
     "emptyMemoryDetail": "Shared memory is not initialized yet.",
     "introduceInstance": "Introduce bloodline",
     "introduceTitle": "Introduce bloodline",
-    "introduceDetail": "Pick an bloodline to bring into this habitat. A Creature is created and placed on the topology.",
+    "introduceDetail": "Pick a bloodline to bring into this habitat. A Creature is created and placed on the topology.",
     "introduceEntity": "Bloodline",
-    "introduceEntityPlaceholder": "Select an bloodline",
+    "introduceEntityPlaceholder": "Select a bloodline",
     "introduceSubmit": "Introduce and create Creature",
     "introduceFailed": "Failed to introduce bloodline. Please retry.",
     "removeAwakened": "Remove",
@@ -1357,9 +1362,9 @@
   },
   "baseClass": {
     "slugMissing": "Progenitor slug is missing.",
-    "providerDefaultTitle": "Default intelligence provider",
-    "providerDefaultHint": "Pre-fills intelligence provider and model when summoning an bloodline from this progenitor.",
-    "providerDefaultSaved": "Default intelligence provider saved.",
+    "providerDefaultTitle": "Default intelligence",
+    "providerDefaultHint": "Pre-fills intelligence and model when creating a bloodline from this progenitor.",
+    "providerDefaultSaved": "Default intelligence saved.",
     "saveProviderDefault": "Save default",
     "display": {
       "fox": "Fox",
@@ -1408,7 +1413,7 @@
     "failedTitle": "Deploy failed",
     "cancelledTitle": "Deploy cancelled",
     "timeoutTitle": "Deploy timed out",
-    "subtitle": "Introducing an bloodline auto-deploys a K8s descendant.",
+    "subtitle": "Introducing a bloodline auto-deploys a K8s descendant.",
     "runBackground": "Run in background",
     "runningBackground": "Deploy in progress…",
     "cancel": "Cancel deploy",
@@ -1432,5 +1437,13 @@
     "orgAdmin": "Organization admin",
     "namespaceOps": "Region ops",
     "workspaceOps": "Habitat ops"
+  },
+  "settings": {
+    "proxyTitle": "Egress Proxy",
+    "useProxy": "Route outbound requests through a proxy",
+    "proxyHost": "Host",
+    "proxyPort": "Port",
+    "proxyUsername": "Username",
+    "proxyPassword": "Password"
   }
 }

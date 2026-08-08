@@ -38,6 +38,10 @@ Database columns use the backend names. UI labels use the frontend names. Backen
 | **LoopState** | **心智状态** | 心智状态 | Harness runtime state |
 | **DeployRecord** | **诞生记录** | 降世记录 | K8s deployment lifecycle record |
 | **Topology** | **领地地图** | 心灵图景 | 空间可视化 canvas |
+| **SystemHub** | **星球中枢** | 系统中枢 | Org 级隐式助手（描述生成 / LLM 默认）|
+| **IntelligenceProvider** | **智能** | 智能供者 | LLM provider（org 级配置）|
+| **AiGene** | **生物基因** | 深海基因 | 血脉能力包（tool/skill/command）|
+| **UserGene** | **智人基因** | 用户基因 | 真人权限/能力基因 |
 
 ### BaseClasses（5 Built-in 始祖）
 

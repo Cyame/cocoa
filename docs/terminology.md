@@ -11,7 +11,7 @@ One-line definitions for every Cocoa code-term (backend), display-name (frontend
 ### 租户层级（大陆 → 区域 → 生境）
 
 - **Organization**（大陆）— Top-level isolation unit. 单租户默认 slug=`default`。
-- **Namespace**（区域）— Within an Organization: **scenario partition**（e.g. coding vs social-media），**not** env。Entity（血脉）belongs here so scenario identity spans multiple Workspaces。
+- **Namespace**（区域）— Within an Organization: **region partition**（e.g. coding vs social-media），**not** env。Entity（血脉）belongs here so region identity spans multiple Workspaces。
 - **Workspace**（生境）— Within a Namespace: a concrete workstream（e.g. a product system or a publish platform）。**代码名保持 `Office` 不变**（v5 只改 UI 显示名，代码名不动）。单租户默认：一个生境 shared by all users。Starts empty。
 - **场景意象**（迁徙路线）— Portal 拓扑背景意象；动物通用。
 
@@ -20,7 +20,7 @@ One-line definitions for every Cocoa code-term (backend), display-name (frontend
 > v5 三层名：从大到小 始祖（源头）> 血脉（传承线）> 后裔（个体）。
 
 - **BaseClass**（始祖）— Preset template defining rules, prompt, commands, tools, provider config, subagent 策略。Created by humans or distilled（演化）from Entity experience。System-scoped。**5 built-in 始祖**（§BaseClasses）。
-- **Entity**（血脉）— Instantiation of a BaseClass **per-Namespace**，with identity + accumulated Memory（记忆）。Scenario-scoped so one Entity can spawn Instances across Workspaces in that Namespace。Can be promoted（蜕变）/transmuted（演化）。
+- **Entity**（血脉）— Instantiation of a BaseClass **per-Namespace**，with identity + accumulated Memory（记忆）。Region-scoped so one Entity can 创生 Instances across Workspaces in that Namespace。Can be promoted（蜕变）/transmuted（演化）。
 - **Instance**（后裔）— Running materialization of an Entity in one Workspace。One Instance per pod。Lifecycle ≤ Workspace。**Invariant**: at most one active Instance per `(workspace_id, entity_id)` because `@slug` addresses the Entity。
 - **Membership**（智人 / 生物）— Workspace presence with posx/posy。Exclusive-FK: user XOR instance。**v5 产品名**: user row = **智人**（真人，对应 15d 觉醒者）; instance row = **生物**（AI 成员，对应 15d 迷失者）。
 - **NamespaceContract**（成员）— Namespace ↔ User 关系。**v5 不再造专有名词**：直接表达为「某区域的成员」。
@@ -36,6 +36,11 @@ One-line definitions for every Cocoa code-term (backend), display-name (frontend
 - **Event**（足迹）— Audit log row。Display 中文「足迹」（对应 15d 印痕）。
 - **DeployRecord**（诞生记录）— K8s deployment lifecycle record: 9-step pipeline。Display 中文「诞生记录」（对应 15d 降世记录）。
 - **Topology**（领地地图）— Spatial visualization of Workspace members as SVG nodes with glow halos, 3 interaction modes (Select/Connect/Move), message-flow particle animation。Display 中文「领地地图」（对应 15d 心灵图景）。
+- **SystemHub**（星球中枢）- Org-level implicit assistant for description generation and LLM defaults。Backend 代码名 `system_hub`。Display 中文「星球中枢」（v5.0.1 从「系统中枢」改名）。
+- **IntelligenceProvider**（智能）- LLM provider configured at org level。Backend 代码名 `OrganizationProvider`。Display 中文「智能」（v5.0.1 从「智能供者」改名）。
+- **AiGene**（生物基因）- Capability pack (tool/skill/command) installable on bloodlines。Display 中文「生物基因」（v5.0.1 从「深海基因」改名；对齐 AI 成员=生物）。
+- **UserGene**（智人基因）- Permission/capability gene for human users。Display 中文「智人基因」（对齐真人=智人）。
+- **summon / spawn**（创生）- 动词：创建血脉（Entity）或后裔（Instance）。v5.0.1 从「召唤」改名，与名词体系对齐。
 
 ### Runtime 概念
 

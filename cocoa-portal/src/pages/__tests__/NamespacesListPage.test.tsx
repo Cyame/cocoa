@@ -17,7 +17,7 @@ const NAMESPACE_ROW = {
   org_id: 'org-1',
   slug: 'default',
   name: 'Default namespace',
-  description: 'Primary scenario',
+  description: 'Primary region',
   tags: null,
   workspace_count: 1,
   entity_count: 0,
@@ -68,7 +68,7 @@ describe('NamespacesListPage', () => {
 
     expect(await screen.findByText('Default namespace')).toBeInTheDocument();
     expect(screen.getByText('default')).toBeInTheDocument();
-    expect(screen.getByText('Primary scenario')).toBeInTheDocument();
+    expect(screen.getByText('Primary region')).toBeInTheDocument();
     expect(screen.getByText('1')).toBeInTheDocument();
 
     fireEvent.click(screen.getByText('Default namespace'));

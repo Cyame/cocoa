@@ -56,9 +56,8 @@ export default function OrgSwitcher({ variant = 'header' }: OrgSwitcherProps) {
   }, [orgs, t]);
 
   useEffect(() => {
-    if (!open) return;
     void load();
-  }, [open, load]);
+  }, [load]);
 
   useEffect(() => {
     if (!open) return;

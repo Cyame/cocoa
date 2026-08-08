@@ -5,6 +5,7 @@ import { Navigate, useNavigate } from 'react-router';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { ApiError } from '@/lib/api';
 import { createOrganization, fetchOrganizations } from '@/lib/api/organizations';
+import { toSlug } from '@/lib/slug';
 import type { Organization } from '@/lib/types';
 import { useSessionStore } from '@/stores/session';
 
@@ -23,6 +24,7 @@ export default function OrgPickerPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
+  const [slugTouched, setSlugTouched] = useState(false);
   const [description, setDescription] = useState('');
   const [createError, setCreateError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -204,7 +206,13 @@ export default function OrgPickerPage() {
               <input
                 id="org-name"
                 value={name}
-                onChange={(event) => setName(event.currentTarget.value)}
+                onChange={(event) => {
+                  const value = event.currentTarget.value;
+                  setName(value);
+                  if (!slugTouched) {
+                    setSlug(toSlug(value));
+                  }
+                }}
                 required
                 className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none transition-colors placeholder:text-slate-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
               />
@@ -216,7 +224,10 @@ export default function OrgPickerPage() {
               <input
                 id="org-slug"
                 value={slug}
-                onChange={(event) => setSlug(event.currentTarget.value)}
+                onChange={(event) => {
+                  setSlug(event.currentTarget.value);
+                  setSlugTouched(true);
+                }}
                 placeholder="kebab-case"
                 required
                 className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none transition-colors placeholder:text-slate-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"

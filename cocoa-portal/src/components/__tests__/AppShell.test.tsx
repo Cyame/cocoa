@@ -121,6 +121,9 @@ describe('AppShell sidebar sections', () => {
       '/orgs/org-1/namespaces/ns-1/contracts',
     );
     expect(nav.queryByRole('link', { name: 'Topology' })).not.toBeInTheDocument();
+    expect(nav.queryByRole('link', { name: 'Settings' })).not.toBeInTheDocument();
+    expect(nav.queryByRole('link', { name: 'Regions' })).not.toBeInTheDocument();
+    expect(nav.getByRole('link', { name: 'Continent' })).toHaveAttribute('href', '/orgs/org-1');
   });
 
   it('does not render the namespace section when only an org is set', () => {
@@ -129,6 +132,7 @@ describe('AppShell sidebar sections', () => {
 
     expect(screen.queryByTestId('namespace-switcher')).not.toBeInTheDocument();
     expect(desktopNav().queryByRole('link', { name: 'Habitats' })).not.toBeInTheDocument();
+    expect(desktopNav().getByRole('link', { name: 'Dashboard' })).toBeInTheDocument();
   });
 
   it('renders the org switcher and account links in the header area', () => {
