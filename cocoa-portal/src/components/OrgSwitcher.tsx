@@ -1,4 +1,4 @@
-import { AlertCircle, Check, ChevronDown, Globe2, LoaderCircle } from 'lucide-react';
+import { AlertCircle, Check, ChevronDown, Globe2, LoaderCircle, LogOut } from 'lucide-react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
@@ -176,6 +176,29 @@ export default function OrgSwitcher({ variant = 'header' }: OrgSwitcherProps) {
               );
             })
           )}
+          <div
+            className={cn(
+              'my-1 border-t',
+              variant === 'header' ? 'border-slate-200' : 'border-slate-700',
+            )}
+          />
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              navigate('/orgs/picker');
+            }}
+            data-testid="org-switcher-back-to-picker"
+            className={cn(
+              'flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors',
+              variant === 'header'
+                ? 'text-slate-600 hover:bg-slate-50'
+                : 'text-slate-400 hover:bg-slate-800 hover:text-white',
+            )}
+          >
+            <LogOut className="size-3.5 shrink-0" aria-hidden="true" />
+            {t('orgPicker.backToPicker')}
+          </button>
         </div>
       ) : null}
     </div>

@@ -65,7 +65,8 @@
     "switcherLabel": "切换大陆",
     "switcherPlaceholder": "选择一个大陆",
     "switcherEmpty": "暂无可用大陆。",
-    "switchDirtyConfirm": "离开当前大陆将丢失未保存的本地工作区状态。是否继续？"
+    "switchDirtyConfirm": "离开当前大陆将丢失未保存的本地工作区状态。是否继续？",
+    "backToPicker": "返回大陆选择"
   },
   "dashboard": {
     "title": "大陆仪表盘",

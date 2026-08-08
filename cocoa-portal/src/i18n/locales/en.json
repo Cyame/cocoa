@@ -65,7 +65,8 @@
     "switcherLabel": "Switch continent",
     "switcherPlaceholder": "Select a continent",
     "switcherEmpty": "No continents available.",
-    "switchDirtyConfirm": "Leaving this continent discards unsaved local habitat state. Continue?"
+    "switchDirtyConfirm": "Leaving this continent discards unsaved local habitat state. Continue?",
+    "backToPicker": "Back to continent selection"
   },
   "dashboard": {
     "title": "Continent dashboard",
