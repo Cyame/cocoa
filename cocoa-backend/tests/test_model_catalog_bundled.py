@@ -19,6 +19,8 @@ async def test_bundled_snapshot_used_when_network_fails() -> None:
         new=AsyncMock(side_effect=RuntimeError("models.dev unreachable")),
     ):
         providers, degraded = await catalog.list_providers()
+        # Background refresh fails silently; the bundled snapshot is kept.
+        await catalog._refresh_task
     assert degraded is True
     assert catalog.source == "bundled"
     assert len(providers) > 10
@@ -39,6 +41,9 @@ async def test_live_fetch_marks_not_degraded() -> None:
         }
     }
     with patch.object(catalog, "_fetch_raw", new=AsyncMock(return_value=fake)):
+        await catalog.list_providers()
+        # Background refresh lands the live payload.
+        await catalog._refresh_task
         providers, degraded = await catalog.list_providers()
     assert degraded is False
     assert catalog.source == "live"

@@ -58,18 +58,27 @@ def _sample_models_dev_payload() -> dict:
 
 @pytest.mark.asyncio
 async def test_fetch_from_models_dev_mocked() -> None:
-    """Given: httpx returns sample models.dev JSON.
-    When: list_models() is called.
-    Then: parsed ModelInfo list matches the payload structure."""
+    """First call serves the bundled snapshot without blocking; a background
+    refresh then swaps in the live models.dev payload."""
     payload = _sample_models_dev_payload()
     mock_client = _make_async_client_mock(payload)
 
     with patch("app.services.llm.model_catalog.httpx.AsyncClient", return_value=mock_client) as mock_cls:
         catalog = ModelCatalog()
+        snapshot = await catalog.list_models()
+        # Immediate snapshot: no network wait on the first call.
+        assert catalog.source == "bundled"
+        assert catalog.degraded is True
+        assert len(snapshot) > 0
+        # Background refresh completes and updates the cache.
+        assert catalog._refresh_task is not None
+        await catalog._refresh_task
         models = await catalog.list_models()
 
     mock_cls.assert_called_once_with(timeout=10.0)
     mock_client.get.assert_awaited_once()
+    assert catalog.source == "live"
+    assert catalog.degraded is False
 
     by_id = {m.id: m for m in models}
     # openai/gpt-4o — context + cost extracted
@@ -95,17 +104,19 @@ async def test_fetch_from_models_dev_mocked() -> None:
 @pytest.mark.asyncio
 async def test_cache_hit_within_600s() -> None:
     """Given: a ModelCatalog.
-    When: list_models() is called twice in quick succession.
-    Then: the underlying fetch is invoked exactly once (cache hit)."""
+    When: list_models() is called repeatedly.
+    Then: the background fetch runs exactly once; later calls are served from cache."""
     catalog = ModelCatalog(ttl_seconds=CACHE_TTL_SECONDS)
     fetch_spy = AsyncMock(return_value=_sample_models_dev_payload())
     with patch.object(catalog, "_fetch_raw", fetch_spy):
+        await catalog.list_models()
+        await catalog._refresh_task
         first = await catalog.list_models()
         second = await catalog.list_models()
 
     assert first == second
     assert {m.id for m in first} == {"gpt-4o", "gpt-4o-mini", "claude-3-5-sonnet-latest"}
-    assert fetch_spy.await_count == 1, "second call must be served from cache"
+    assert fetch_spy.await_count == 1, "fetch happens once; later calls are served from cache"
 
 
 @pytest.mark.asyncio
@@ -121,6 +132,8 @@ async def test_fetch_fails_fallback_to_builtin() -> None:
     ), patch.object(ModelCatalog, "_load_bundled_raw", return_value=None):
         catalog = ModelCatalog()
         models = await catalog.list_models()
+        # Background refresh fails silently; the builtin snapshot is kept.
+        await catalog._refresh_task
 
     fallback_ids = {entry["id"] for entry in _BUILTIN_FALLBACK}
     returned_ids = {m.id for m in models}

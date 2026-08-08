@@ -19,6 +19,9 @@ logger = logging.getLogger(__name__)
 MODELS_DEV_URL = "https://models.dev/api.json"
 # Long TTL: portal does not need a live-fresh catalog every open.
 CACHE_TTL_SECONDS = 7 * 24 * 3600
+# Background refresh cap: if models.dev does not answer within 5s, keep the
+# current snapshot and move on (the UI never blocks on this).
+BG_REFRESH_TIMEOUT_SECONDS = 5.0
 # Bundled snapshot for demos / offline (committed under app/resources/).
 BUNDLED_MODELS_DEV_PATH = (
     Path(__file__).resolve().parents[2] / "resources" / "models_dev_api.json"
@@ -215,6 +218,7 @@ class ModelCatalog:
         self._source: str = "empty"
         self._ttl = ttl_seconds
         self._lock = asyncio.Lock()
+        self._refresh_task: asyncio.Task | None = None
 
     @property
     def degraded(self) -> bool:
@@ -301,41 +305,56 @@ class ModelCatalog:
             now = time.monotonic()
             if self._cache is not None and (now - self._cache_time) < self._ttl:
                 return self._cache
-            try:
-                raw = await self._fetch_raw()
-                return self._apply_raw(raw, source="live", degraded=False)
-            except Exception as exc:  # noqa: BLE001
-                # Keep a previously successful in-memory cache if present.
-                if self._cache is not None and self._provider_cache is not None:
-                    logger.warning(
-                        "models.dev fetch failed; keeping stale cache",
-                        extra={"error": str(exc), "source": self._source},
-                    )
-                    self._degraded = True
-                    self._cache_time = time.monotonic()
-                    return self._cache
 
+            # Serve a snapshot immediately — never block the caller on the network.
+            if self._cache is None:
                 bundled = self._load_bundled_raw()
                 if bundled is not None:
-                    logger.warning(
-                        "models.dev fetch failed; using bundled snapshot",
-                        extra={"error": str(exc), "path": str(BUNDLED_MODELS_DEV_PATH)},
-                    )
-                    return self._apply_raw(bundled, source="bundled", degraded=True)
+                    self._apply_raw(bundled, source="bundled", degraded=True)
+                else:
+                    models = _build_builtin_fallback()
+                    providers = _builtin_provider_infos()
+                    self._degraded = True
+                    self._source = "builtin"
+                    self._raw_cache = None
+                    self._cache = models
+                    self._provider_cache = providers
+                    self._cache_time = time.monotonic()
 
-                logger.warning(
-                    "models.dev fetch failed; using builtin fallback",
-                    extra={"error": str(exc)},
-                )
-                models = _build_builtin_fallback()
-                providers = _builtin_provider_infos()
-                self._degraded = True
-                self._source = "builtin"
-                self._raw_cache = None
-                self._cache = models
-                self._provider_cache = providers
-                self._cache_time = time.monotonic()
-                return models
+            # Kick off a background refresh (5s cap); the snapshot stays until it lands.
+            self._maybe_schedule_refresh()
+            return self._cache  # type: ignore[return-value]
+
+    def _maybe_schedule_refresh(self) -> None:
+        """Background-refresh the catalog once; 5s timeout, stale-on-failure."""
+        if self._refresh_task is not None and not self._refresh_task.done():
+            return
+        if self._source == "live" and (time.monotonic() - self._cache_time) < self._ttl:
+            # Already live and fresh — nothing to refresh.
+            return
+        self._refresh_task = asyncio.create_task(self._refresh_in_background())
+
+    async def _refresh_in_background(self) -> None:
+        try:
+            raw = await asyncio.wait_for(
+                self._fetch_raw(), timeout=BG_REFRESH_TIMEOUT_SECONDS
+            )
+        except asyncio.CancelledError:
+            raise
+        except asyncio.TimeoutError:
+            logger.warning("models.dev background refresh timed out (>5s); keeping snapshot")
+            self._cache_time = time.monotonic()
+            return
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "models.dev background refresh failed; keeping snapshot",
+                extra={"error": str(exc)},
+            )
+            self._cache_time = time.monotonic()
+            return
+        async with self._lock:
+            self._apply_raw(raw, source="live", degraded=False)
+        logger.info("models.dev catalog refreshed in background")
 
     async def _fetch_raw(self) -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=10.0) as client:

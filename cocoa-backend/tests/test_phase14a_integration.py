@@ -262,6 +262,8 @@ async def test_model_catalog_provider_filter_returns_only_matches() -> None:
 
     with patch("app.services.llm.model_catalog.httpx.AsyncClient", return_value=mock_client):
         catalog = ModelCatalog()
+        await catalog.list_models()  # serves bundled snapshot immediately
+        await catalog._refresh_task  # background fetch lands the live payload
         openai_only = await catalog.list_models(provider="openai")
         anthropic_only = await catalog.list_models(provider="anthropic")
 
@@ -297,7 +299,8 @@ async def test_model_catalog_search_hits_cached_results() -> None:
 
     with patch("app.services.llm.model_catalog.httpx.AsyncClient", return_value=mock_client):
         catalog = ModelCatalog()
-        await catalog.list_models()  # triggers fetch + cache populate
+        await catalog.list_models()  # serves bundled snapshot immediately
+        await catalog._refresh_task  # background fetch lands the live payload
         # search() is sync but reads from the populated cache.
         results = catalog.search("claude")
 
@@ -324,6 +327,7 @@ async def test_model_catalog_fallback_includes_anthropic_models() -> None:
     ), patch.object(ModelCatalog, "_load_bundled_raw", return_value=None):
         catalog = ModelCatalog()
         models = await catalog.list_models(provider="anthropic")
+        await catalog._refresh_task  # background refresh fails silently; snapshot kept
 
     anthropic_ids = {m.id for m in models}
     # All three stock anthropic models must survive the fallback
