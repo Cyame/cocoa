@@ -79,7 +79,7 @@ describe('CommandAutocomplete', () => {
   it('includes per-preset commands when a target slug is present', async () => {
     mockedApi.mockResolvedValue({
       id: 'preset-1',
-      slug: '密士',
+      slug: '白狐',
       name: 'Mishi',
       version: '1.0.0',
       manifest: {
@@ -93,11 +93,11 @@ describe('CommandAutocomplete', () => {
       updated_at: '2026-07-01T00:00:00Z',
     } as never);
 
-    render(<Wrapper targetSlugs={['密士']} presetByEntitySlug={{ 密士: 'mi-shi' }} />);
+    render(<Wrapper targetSlugs={['白狐']} presetByEntitySlug={{ 白狐: 'bai-hu' }} />);
     const textarea = screen.getByTestId('composer') as HTMLTextAreaElement;
 
     act(() => {
-      typeAndPlaceCursor(textarea, '@密士 /');
+      typeAndPlaceCursor(textarea, '@白狐 /');
     });
 
     await waitFor(() => {
@@ -110,7 +110,7 @@ describe('CommandAutocomplete', () => {
     expect(screen.getByText('/distill')).toBeInTheDocument();
     // Commands are read from the base-class GET (junction-aggregated mirror),
     // not the legacy employee-presets endpoint.
-    expect(mockedApi).toHaveBeenCalledWith(`/base-classes/${encodeURIComponent('mi-shi')}`);
+    expect(mockedApi).toHaveBeenCalledWith(`/base-classes/${encodeURIComponent('bai-hu')}`);
   });
 
   it('inserts the highlighted command into the textarea on Enter when a filter is typed', async () => {

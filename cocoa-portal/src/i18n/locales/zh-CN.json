@@ -789,7 +789,7 @@
       "title": "为血脉起名",
       "subtitle": "血脉会基于你选的始祖被创建。进入生境后再「引入血脉」生成生物。",
       "displayNameLabel": "血脉显示名",
-      "displayNamePlaceholder": "例如：奈亚探子、克总助理",
+      "displayNamePlaceholder": "例如：白狐、云雀",
       "displayNameHelp": "必填，1-32 字符。",
       "displayNameRequired": "显示名不能为空。",
       "displayNameTooLong": "显示名不能超过 32 字符。",
@@ -865,7 +865,7 @@
     "workspaceSlugPlaceholder": "kebab-case",
     "cancel": "取消",
     "confirmCreate": "创建",
-    "summonFromBaseClass": "基于此始祖创生血脉",
+    "summonFromBaseClass": "创生",
     "enterWorkspace": "进入生境",
     "noWorkspacesTitle": "还没有生境",
     "noWorkspacesDetail": "生境可以为空——先创建生境，信号塔会自动就位；血脉可稍后创生。",
@@ -986,7 +986,8 @@
     "geneCapabilitiesHint": "勾选的能力将随提交写入 manifest.capabilities，与 combine 产物结构一致（name / type / description）。Manifest JSON 为高级模式，改动会同步到勾选态。",
     "geneCapabilitiesEmpty": "能力市场暂无能力，可先在能力市场创建。",
     "geneCapabilitiesSummary": "已选 {{count}} 个能力，将写入 manifest.capabilities：",
-    "geneCapabilitiesNone": "未选择能力。"
+    "geneCapabilitiesNone": "未选择能力。",
+    "displayNamePlaceholder": "例如：白狐、云雀"
   },
   "workspace": {
     "idMissing": "缺少生境标识。",

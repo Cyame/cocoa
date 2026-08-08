@@ -230,7 +230,7 @@ describe('FirstRunOnboardingModal', () => {
     expect(next).not.toBeDisabled();
 
     fireEvent.change(screen.getByLabelText(/Slug/i), {
-      target: { value: 'Nyar Proutzi' },
+      target: { value: 'White Fox' },
     });
 
     expect(
@@ -261,11 +261,11 @@ describe('FirstRunOnboardingModal', () => {
     const displayInput = screen.getByLabelText(/Display name/i);
     const slugInput = screen.getByLabelText(/Slug/i);
 
-    fireEvent.change(displayInput, { target: { value: 'Nyar Proutzi Aide' } });
-    expect((slugInput as HTMLInputElement).value).toBe('nyar-proutzi-aide');
+    fireEvent.change(displayInput, { target: { value: 'White Fox Aide' } });
+    expect((slugInput as HTMLInputElement).value).toBe('white-fox-aide');
 
-    fireEvent.change(displayInput, { target: { value: '奈亚探子' } });
-    expect((slugInput as HTMLInputElement).value).toBe('nai-ya-tan-zi');
+    fireEvent.change(displayInput, { target: { value: '白狐' } });
+    expect((slugInput as HTMLInputElement).value).toBe('bai-hu');
 
     fireEvent.change(slugInput, { target: { value: 'custom-slug' } });
     fireEvent.change(displayInput, { target: { value: 'cthulhu-aide' } });

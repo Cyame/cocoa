@@ -123,7 +123,10 @@ describe('AppShell sidebar sections', () => {
     expect(nav.queryByRole('link', { name: 'Topology' })).not.toBeInTheDocument();
     expect(nav.queryByRole('link', { name: 'Settings' })).not.toBeInTheDocument();
     expect(nav.queryByRole('link', { name: 'Regions' })).not.toBeInTheDocument();
-    expect(nav.getByRole('link', { name: 'Back to continent' })).toHaveAttribute('href', '/orgs/org-1');
+    expect(nav.getByRole('link', { name: 'Back to continent' })).toHaveAttribute(
+      'href',
+      '/orgs/org-1',
+    );
   });
 
   it('does not render the namespace section when only an org is set', () => {

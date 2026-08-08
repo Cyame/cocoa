@@ -6,7 +6,7 @@ const SLUG_MAX = 48;
  * Derive a kebab-case slug from a display name.
  *
  * Chinese characters are converted to tone-less pinyin syllables
- * (e.g. "奈亚探子" → "nai-ya-tan-zi"), matching the onboarding UX spec.
+ * (e.g. "白狐" → "bai-hu"), matching the onboarding UX spec.
  * Latin / digits are kept; everything else collapses to hyphens.
  */
 export function toSlug(input: string, maxLength = SLUG_MAX): string {

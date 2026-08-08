@@ -16,13 +16,13 @@ const ENTITY_ID = 'entity-1';
 
 const ENTITY_RESPONSE = {
   id: ENTITY_ID,
-  name: '密士',
-  slug: 'mi-shi',
-  preset_slug: 'mi-shi-base',
-  display_name: '密士',
+  name: '白狐',
+  slug: 'bai-hu',
+  preset_slug: 'bai-hu-base',
+  display_name: '白狐',
   display_color: null,
   description: 'A research-grade entity for testing.',
-  base_class_slug: 'mi-shi',
+  base_class_slug: 'bai-hu',
   capabilities: [
     {
       name: 'workflow-patterns',
@@ -72,8 +72,8 @@ const PROMOTE_RESPONSE = {
 
 const TRANSMUTE_RESPONSE = {
   new_base_class_id: 'bc-1',
-  new_base_class_slug: 'jin-mi-shi',
-  new_base_class_name: '金密士',
+  new_base_class_slug: 'yin-bai-hu',
+  new_base_class_name: '银白狐',
   manifest_preview: {
     provider_config: { provider: 'anthropic', model: 'claude-3.5' },
     default_model: 'anthropic/claude-3.5',
@@ -156,8 +156,8 @@ describe('EntityDetailModal', () => {
     renderModal();
 
     expect(await screen.findByTestId('entity-detail-modal')).toBeInTheDocument();
-    expect(screen.getByTestId('entity-modal-title')).toHaveTextContent('密士');
-    expect(screen.getByTestId('entity-modal-slug')).toHaveTextContent('mi-shi');
+    expect(screen.getByTestId('entity-modal-title')).toHaveTextContent('白狐');
+    expect(screen.getByTestId('entity-modal-slug')).toHaveTextContent('bai-hu');
     expect(screen.getByTestId('entity-modal-tabs')).toBeInTheDocument();
     expect(screen.getByText('Display name')).toBeInTheDocument();
     expect(mockedApi).toHaveBeenCalledWith(`/entities/${ENTITY_ID}`);
@@ -222,18 +222,18 @@ describe('EntityDetailModal', () => {
     expect(await screen.findByTestId('transmute-modal')).toBeInTheDocument();
 
     fireEvent.change(screen.getByTestId('transmute-modal-slug'), {
-      target: { value: 'jin-mi-shi' },
+      target: { value: 'yin-bai-hu' },
     });
     fireEvent.change(screen.getByTestId('transmute-modal-name'), {
-      target: { value: '金密士' },
+      target: { value: '银白狐' },
     });
 
     fireEvent.click(screen.getByTestId('transmute-modal-submit'));
 
     const resultDialog = await screen.findByTestId('distill-result-modal');
     expect(resultDialog).toBeInTheDocument();
-    expect(screen.getByTestId('distill-result-slug')).toHaveTextContent('jin-mi-shi');
-    expect(screen.getByTestId('distill-result-name')).toHaveTextContent('金密士');
+    expect(screen.getByTestId('distill-result-slug')).toHaveTextContent('yin-bai-hu');
+    expect(screen.getByTestId('distill-result-name')).toHaveTextContent('银白狐');
     expect(resultDialog).toHaveTextContent('debug-checklist');
     expect(resultDialog).toHaveTextContent('workflow-patterns');
 
@@ -245,8 +245,8 @@ describe('EntityDetailModal', () => {
     if (transmuteCall === undefined) throw new Error('expected transmute call');
     const init = transmuteCall[1] as RequestInit;
     const body = JSON.parse(init.body as string);
-    expect(body.target_base_class_slug).toBe('jin-mi-shi');
-    expect(body.target_base_class_name).toBe('金密士');
+    expect(body.target_base_class_slug).toBe('yin-bai-hu');
+    expect(body.target_base_class_name).toBe('银白狐');
   });
 
   it('runs distill (memory to capability) with engine selection and shows candidates', async () => {

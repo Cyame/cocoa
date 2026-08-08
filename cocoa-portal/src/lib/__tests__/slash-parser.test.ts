@@ -8,11 +8,11 @@ import {
 
 describe('slash-parser', () => {
   it('parses @slug /cmd @workspace:path into 1 directive + 1 content-ref', () => {
-    // Note: 密士 (CJK) does not match the [a-zA-Z0-9_-]+ target regex,
+    // Note: 白狐 (CJK) does not match the [a-zA-Z0-9_-]+ target regex,
     // so target_entity is null - mirroring the Python parser exactly.
     // The /plan command still makes this a directive, and @workspace:foo.md
     // is extracted as a content-ref (legacy scope normalized to hub).
-    const turn = parse_turn('@密士 /plan @workspace:foo.md');
+    const turn = parse_turn('@白狐 /plan @workspace:foo.md');
 
     expect(turn.directives).toHaveLength(1);
     expect(turn.general_text).toBeNull();
@@ -20,11 +20,11 @@ describe('slash-parser', () => {
     const d: Directive = turn.directives[0];
     expect(d.cmd).toBe('/plan');
     expect(d.target_entity).toBeNull();
-    expect(d.args).toEqual(['@密士']);
+    expect(d.args).toEqual(['@白狐']);
     expect(d.content_ref).not.toBeNull();
     expect(d.content_ref?.scope).toBe('hub');
     expect(d.content_ref?.path).toBe('foo.md');
-    expect(d.raw_text).toBe('@密士 /plan @workspace:foo.md');
+    expect(d.raw_text).toBe('@白狐 /plan @workspace:foo.md');
   });
 
   it('normalizes legacy scopes to hub/instance and passes canonical through', () => {

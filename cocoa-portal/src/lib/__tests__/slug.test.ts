@@ -3,15 +3,15 @@ import { isValidKebabSlug, isValidSlug, toSlug } from '@/lib/slug';
 
 describe('toSlug', () => {
   it('kebab-cases latin display names', () => {
-    expect(toSlug('Nyar Proutzi Aide')).toBe('nyar-proutzi-aide');
+    expect(toSlug('White Fox Aide')).toBe('white-fox-aide');
   });
 
   it('converts Chinese display names to pinyin kebab-case', () => {
-    expect(toSlug('奈亚探子')).toBe('nai-ya-tan-zi');
+    expect(toSlug('白狐')).toBe('bai-hu');
   });
 
   it('handles mixed Chinese and latin', () => {
-    expect(toSlug('密士 Aide')).toBe('mi-shi-aide');
+    expect(toSlug('云雀 Aide')).toBe('yun-que-aide');
   });
 
   it('returns empty for empty / punctuation-only input', () => {
