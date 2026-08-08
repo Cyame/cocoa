@@ -4,7 +4,7 @@
 > **Design SoT**: `.omo/evidence/audit-product-design.md`  
 > **Executable plans**: `.omo/plans/v4-roadmap.md` + `v4-0` … `v4-10`  
 > **Prior PRDs**: `docs/archive/` (v1–v3.4.1)  
-> **Visual follow-on**: v5 / 3.6
+> **Visual follow-on**: **v5 完整世代**（v5.3 视觉波；见 `.omo/plans/v5-roadmap.md` + `.omo/evidence/v5-rename-decisions.md`）
 
 This file is the **product index** for v4. Normative design lives in the audit pack; wave execution lives in `.omo/plans/v4-*.md`. Do not duplicate full schema here—link out.
 

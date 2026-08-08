@@ -1,14 +1,12 @@
-> **Pre-v4 reference**: Conflict with `.omo/evidence/audit-product-design.md` → audit wins. Awaiting v4 PRD rewrite.
->
+# Cocoa Metaphor Name Table (v5 山海+生物世界观)
 
-# Cocoa Metaphor Name Table (15d)
-
-> **Canonical source**: `.omo/drafts/archive/phase-15d-naming-system.md` §3–§4（已归档；活表为本文件）。
-> **Code rename pending**: This table describes the target architecture. Current code (P0-P15b) still uses old naming.
+> **Canonical source**: v5 命名基线（2026-08-07 终稿）。决策 SoT：`.omo/evidence/v5-rename-decisions.md`。
+> **Prior**: 15d（克苏鲁）命名快照归档于 `docs/archive/metaphor-name-table-15d.md`（只读）。
+> **执行波**: v5（`.omo/plans/v5-roadmap.md`）——v5.0 命名波起 UI 显示名逐步切换；后端代码名/DB/API 不动。
 
 ## Preamble
 
-Cocoa uses a **two-axis naming system**: backend uses strict technical English, frontend uses Cthulhu/Lovecraft-themed Chinese. This table is the single source of truth mapping every concept from code-term → frontend display-name. Downstream documents (terminology, domain model, preset manifests, UI) derive their identifiers from the rows below.
+Cocoa uses a **two-axis naming system**: backend uses strict technical English, frontend uses 山海+生物（自然地理/动物）世界观 Chinese terms. This table is the single source of truth mapping every concept from code-term → frontend display-name.
 
 Database columns use the backend names. UI labels use the frontend names. Backend code internally uses backend names. DB does NOT store display_name columns — the UI layer resolves display via i18n JSON keys.
 
@@ -16,71 +14,75 @@ Database columns use the backend names. UI labels use the frontend names. Backen
 
 ## Name Table
 
-### Structure Terms (Tenant + Entity Hierarchy)
+### Structure Terms（租户 + 实体层级）
 
-| Backend (code/DB) | Frontend Display | Old Name (P0-P15) | Description |
+| Backend (code/DB) | Frontend Display (v5) | 15d Display（已归档）| Description |
 |---|---|---|---|
-| **Organization** | 世界 | (none / emerging) | Top-level isolation unit. PRD-v2 first-class; singleton default. |
-| **Namespace** | 次元 | (none / emerging) | **场景分区**（非 env）：e.g. coding / social-media。Entity 归属层。 |
-| **Workspace** | 空间 | Office | 场景内具体工作流（平台 / 系统）。Current "Office" model until rename. |
-| **BaseClass** | 神职 | EmployeePreset | Preset template: prompt, commands, tools, provider config. 11 built-in. |
-| **Entity** | 眷族 | Employee | **per-Namespace** identity + Memory；跨该场景多个 Workspace 复用。 |
-| **Instance** | **看场景**：眷族侧=**化身**；空间与人并列=**迷失者** | Instance (unchanged) | Running pod；生命周期 ≤ 空间；同空间同眷族最多 1 个。不是「化身已废弃」。 |
-| **Membership** | （见下行拆分） | Membership (unchanged) | **PRD-v3.4**：产品名不再统称「契印」。`user_id` 行 = 空间 **觉醒者**；`instance_id` 行 = **迷失者**拓扑位。 |
-| **NamespaceContract** | 契印 | （new in v3.4） | Namespace ↔ User。**契印只在次元层使用此名。** |
-| **Passage** | 通道 | Corridor | Edge between two endpoints in Workspace topology. CorridorNode dropped. |
-| **CentralHub** | 主脑 | CentralHub (was Blackboard; semantics: 4 脑区合成容器) | Per-Workspace shared state；含 **CerebellumAgent 1:1**。 |
-| **CerebellumAgent** | 小脑 / 中央智能体 | (new / emerging) | 主脑内置系统 agent；不可软删；不进拓扑。 |
-| **Vault** | 冰封库 | Vault (unchanged) | Cold archive；v2 = DB KV，远期 MinIO/S3。 |
-| **Memory** | 记忆沉淀 | MemoryEntry | Append-only per-Entity memory log (experience/lesson/decision/problem). |
-| **Event** | 印痕 | Event (unchanged) | Audit log row. |
-| **LoopState** | 心智状态 | InstanceLoopState | Harness runtime state: status, continuations, breakers. |
-| **DeployRecord** | 降世记录 | DeployRecord (unchanged) | K8s deployment lifecycle record. |
-| **Topology** | 心灵图景 | Topology (unchanged) | Spatial visualization canvas with glow nodes + particle animation. |
+| **Organization** | **大陆** | 世界 | Top-level isolation unit; 单租户默认 |
+| **Namespace** | **区域** | 次元 | **场景分区**（非 env）|
+| **Workspace** | **生境** | 空间 | 场景内具体工作流（当前代码 Office）|
+| （场景意象）| **迁徙路线** | — | Portal 拓扑背景意象 |
+| **BaseClass** | **始祖** | 神职 | Preset template + subagent 策略; 5 built-in |
+| **Entity** | **血脉** | 眷族 | per-Namespace identity + Memory（记忆）|
+| **Instance** | **后裔** | 化身 | Running pod; 生命周期 ≤ 生境; 同生境同血脉最多 1 个 |
+| **Membership** user 行 | **智人** | 觉醒者 | 真人（生物学期人属物种名）|
+| **Membership** instance 行 | **生物** | 迷失者 | AI 成员（各动物种）|
+| **NamespaceContract** | **成员**（概念化）| 契印 | 用户是某区域的成员，不再造专有名词 |
+| **Passage** | **兽道** | 通道 | 拓扑邻接边 |
+| **CentralHub** | **信号塔** | 主脑 | 协作中枢；含 CerebellumAgent 1:1 |
+| **CerebellumAgent** | 小脑 / 中央智能体 | 小脑 | 主脑内置系统 agent |
+| **Fornix** | **粮仓** | 穹窿 | 共享文件区（活跃）|
+| **Vault** | **标本** | 冰封库 | Cold archive（DB KV）|
+| **Memory** | **记忆** | 记忆沉淀 | Append-only per-Entity memory log |
+| **Event** | **足迹** | 印痕 | Audit log row |
+| **LoopState** | **心智状态** | 心智状态 | Harness runtime state |
+| **DeployRecord** | **诞生记录** | 降世记录 | K8s deployment lifecycle record |
+| **Topology** | **领地地图** | 心灵图景 | 空间可视化 canvas |
 
-### BaseClasses (11 Built-in 神职)
+### BaseClasses（5 Built-in 始祖）
 
-Slug = kebab-case identifier (DB unique). Display = i18n key. Commands = per-class command surface.
+Slug = 英文动物名 kebab-case（DB unique）。Display = i18n key。
 
-| Slug | Display | Role | Commands | omo Agent Source |
-|---|---|---|---|---|
-| `mi-shi` | 密士 | Strategic planner, plan mode sticky | /plan /decompose /prioritize | Prometheus |
-| `huan-ling` | 唤灵 | Intent analysis, pre-planner | /analyze /clarify /propose | Metis |
-| `an-xing` | 暗行 | Solo full-stack coder | /plan /execute /build /test | Sisyphus |
-| `an-ying` | 暗影 | Junior coder, cheap/fast | /execute /build /test | Sisyphus-Junior |
-| `zhu-jin` | 铸金 | Autonomous deep worker, goal-driven | /execute /build /test | Hephaestus |
-| `ling-shi` | 灵视 | Read-only architecture / debugging | /analyze /predict /review | Oracle |
-| `heng-pan` | 衡判 | Quality gate: review/approve/reject | /review /approve /reject | Momus |
-| `you-hun` | 游魂 | Codebase grep / exploration | /search /survey /report | Explore |
-| `qian-zhi` | 潜知 | External reference + multi-repo + docs | /search /reference /survey | Librarian |
-| `bai-tong` | 百瞳 | Visual / media / audio analysis | /look /analyze /describe | Multimodal-Looker |
-| `jiu-ri` | 旧日 | Top-level delegation / monitoring | /delegate /monitor /approve | Atlas |
+| Slug (v5) | Display (v5) | 15d Slug（归档）| 15d 名（归档）| Role | omo Agent Source |
+|---|---|---|---|---|---|
+| `fox` | **狐狸** | mi-shi | 密士 | Strategic planner, plan mode sticky | Prometheus |
+| `beaver` | **海狸** | an-xing | 暗行 | Solo full-stack coder | Sisyphus |
+| `sparrow` | **麻雀** | an-ying | 暗影 | Junior coder, cheap/fast | Sisyphus-Junior |
+| `coyote` | **郊狼** | zhu-jin | 铸金 | Autonomous deep worker | Hephaestus |
+| `lion` | **狮子** | jiu-ri | 旧日 | Top-level delegation / monitoring | Atlas |
 
-**Gap note**: All 11 omo non-Sisyphus-Junior agents are now BaseClasses. Human operators are users, not a BaseClass. `User.is_super_admin` covers some Atlas semantics, but Atlas itself remains a distinct BaseClass.
+### 内置 Subagent 能力（v5.1 落实，不命名、不占拓扑、无 Entity 卡片）
 
-### Lab Ranks (克苏鲁神秘系)
+| 15d 神职（归档）| 能力角色 | omo Agent Source | 归属 |
+|---|---|---|---|
+| 唤灵 | Intent analysis, pre-planner | Metis | per-始祖 manifest 声明 |
+| 灵视 | Read-only architecture / debugging | Oracle | per-始祖 manifest 声明 |
+| 衡判 | Quality gate: review/approve/reject | Momus | per-始祖 manifest 声明 |
+| 游魂 | Codebase grep / exploration | Explore | per-始祖 manifest 声明 |
+| 潜知 | External reference + multi-repo + docs | Librarian | per-始祖 manifest 声明 |
+| 百瞳 | Visual / media / audio analysis | Multimodal-Looker | per-始祖 manifest 声明 |
 
-Progression from shallow perception → deep knowledge → awakened mastery.
+### Learning 动作
 
-| Backend | Display | Description |
-|---|---|---|
-| Intern | 浅识者 | Stateless hot-load, no memory, fresh invocation each time. Barely glimpsed the cosmic truth. |
-| Researcher | 深潜者 | Full BaseClass + memory, persistent, accumulates experience across invocations. Diving ever deeper. |
-| Director | 觉醒者 | Human operator, highest authority, approval and forwarding rights. Fully awakened to direct others. |
+| Backend | 15d 名（归档）| v5 名 | Description |
+|---|---|---|---|
+| distill | 蒸馏 | **领悟** | Memory（记忆）→ capability（P10「学习」页面同步改「领悟」）|
+| promote | 晋升 | **蜕变** | Instance（后裔）→ Entity（血脉）就地增强 |
+| transmute | 炼化 | **演化** | Entity（血脉）→ BaseClass（始祖）新始祖诞生 |
 
-### Sub-entities (Data Layer, No Display Name)
+### Sub-entities（Data Layer, No Display Name）
 
 | Backend | Old Name | Description |
 |---|---|---|
 | User | User (unchanged) | Human auth identity |
 | BaseClass | EmployeePreset | Persisted preset: slug, manifest JSONB, version |
-| Entity | Employee | Per-Workspace identity with BaseClass ref + memory |
-| Membership | Membership (unchanged) | Workspace presence: user=觉醒者, instance=迷失者拓扑位 (PRD-v3.4) |
-| NamespaceContract | （new） | Namespace ↔ User 契印 |
-| BlackboardFile | BlackboardFile (unchanged) | File on a Blackboard |
-| VaultEntry | VaultEntry (unchanged) | Archived entry in Vault |
+| Entity | Employee | Per-Namespace identity with BaseClass ref + memory |
+| Membership | Membership (unchanged) | Workspace presence: user=智人, instance=生物 |
+| NamespaceContract | （契印）| Namespace ↔ User 成员关系 |
+| BlackboardFile | BlackboardFile (unchanged) | File on a CentralHub fornix（粮仓）|
+| VaultEntry | VaultEntry (unchanged) | Archived entry in Vault（标本）|
 | Memory | MemoryEntry | Append-only memory log per Entity |
-| InstanceProviderConfig | InstanceProviderConfig (unchanged) | LLM provider config (internal, no UI) |
+| InstanceProviderConfig | InstanceProviderConfig (unchanged) | LLM provider config (internal) |
 
 ---
 
@@ -89,10 +91,11 @@ Progression from shallow perception → deep knowledge → awakened mastery.
 1. **Slug = unique identifier (DB layer)**. Display = i18n key (UI layer). DB does not store display_name columns.
 2. **Backend code uses backend names**. Frontend UI uses display names resolved from i18n.
 3. **Decision rule**: If a concept is not in this table, it doesn't exist yet.
-4. **CorridorNode dropped in 15d** — edges simplified to any two points connecting directly. No intermediary anchor nodes.
-5. **6 old presets deprecated** — replaced by 11 BaseClasses. Old P1 slugs (mi-shi, zhu-jin, ling-shi, you-hun, heng-pan) retained; new slugs (huan-ling, an-xing, an-ying, qian-zhi, bai-tong, jiu-ri) added. zong-jian (总监) retired as a preset.
-6. **Distillation actions** — Instance→Entity = 晋升 (promotion, in-place capture); Entity→BaseClass = 炼化 (transmutation, creates new reusable 神职).
+4. **CorridorNode dropped** — edges simplified to any two points connecting directly.
+5. **11 神职 → 5 常驻始祖** — 6 个工具/咨询型角色（唤灵/灵视/衡判/游魂/潜知/百瞳）降级为 subagent 能力（v5.1）；旧 11 拼音 slug 仅 5 个映射到动物 slug（mi-shi→fox / an-xing→beaver / an-ying→sparrow / zhu-jin→coyote / jiu-ri→lion），其余退出命名体系。
+6. **Learning 动作** — Instance→Entity = 蜕变（promotion）；Entity→BaseClass = 演化（transmutation）；Memory→capability = 领悟（distill）。
+7. **代码名/DB/API 不动** — v5 只改 UI 显示名与 5 个动物 slug；后端代码名（Organization/Namespace/Workspace/BaseClass/Entity/Instance 等）不变。
 
 ---
 
-*Derived from `.omo/drafts/archive/phase-15d-naming-system.md` §3-§4 (2026-07-28).*
+*v5 映射表 2026-08-07。15d 快照归档于 `docs/archive/metaphor-name-table-15d.md`；决策 SoT `.omo/evidence/v5-rename-decisions.md`；执行总图 `.omo/plans/v5-roadmap.md`。*

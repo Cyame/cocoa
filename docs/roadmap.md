@@ -3,11 +3,11 @@
 > **Status**: Living document. Canonical project roadmap + system goal blueprint.
 > **Authority**: Supersedes archived pre-v4 roadmaps under `.omo/plans/archive/`.
 > **Design SoT (2026-08-01)**: `.omo/evidence/audit-product-design.md` (v3.5.x design correction; decisions D1–D11).
-> **Implementation wave**: **v4** — `.omo/plans/v4-roadmap.md` + `v4-0`…`v4-10`.
-> **Visual wave**: **v5 / 3.6** (pure UI; not in v4 closure).
+> **Implementation wave**: **v4** — `.omo/plans/v4-roadmap.md` + `v4-0`…`v4-10`（v4.10 已完成；v4.9.5 closeout 完成）。
+> **Next generation**: **v5** — 完整世代（更名 → 定义 → UIUX → 视觉）；SoT `.omo/evidence/v5-rename-decisions.md` + 执行总图 `.omo/plans/v5-roadmap.md`。
 > **Archived PRDs**: `docs/archive/` (prd-v1 … prd-v3.4.1). Subsystem `docs/*-system.md` = pre-v4 reference; conflicts → audit wins.
-> **Naming**: `docs/terminology.md` + `docs/metaphor-name-table.md` (15d locked; incremental edits in v4).
-> **Last revision**: 2026-08-05（v4.9 closure gate 收尾；v4.7/v4.8 Done；PRD-v2 归档标注）。
+> **Naming**: `docs/terminology.md` + `docs/metaphor-name-table.md`（**v5 命名基线**：大陆/区域/生境/始祖/血脉/后裔/5 动物；15d 版归档于 `docs/archive/`）。
+> **Last revision**: 2026-08-07（v5 完整世代立项 + 命名 SoT 闭环）。
 
 ---
 
@@ -38,7 +38,7 @@
 | v4.9 | `v4-9-closure-gate.md` | Zero functional holes + deploy |
 | v4.10 | `v4-10-default-prompts.md` | Default prompt polish |
 
-Out of v4: pure visual redesign → v5; session-engine-v2 multimodal day1 remains §7 far queue unless v4.9 finds a blocker.
+Out of v4: → **v5 完整世代**（更名/定义/UIUX/视觉，见 `.omo/plans/v5-roadmap.md`）；session-engine-v2 multimodal day1 remains §7 far queue（v6 协议锁定窗口）。
 
 ---
 
@@ -193,11 +193,11 @@ Cocoa no longer plans primarily as open-ended "P-N feature waves". After foundat
 |---|---|---|
 | **v1–v3.4.1** | Historical product slices | **Archived** → `docs/archive/` |
 | **v3.5.x design correction** | audit-review + D1–D11 → `audit-product-design.md` | **Done** (docs) |
-| **v4** | Functional closure (schema, tenant, knowledge, clone, harness collab, …) | **Active** — `.omo/plans/v4-*.md` |
-| **v5 / 3.6** | Pure visual refactor | Queued after v4.9 |
+| **v4** | Functional closure (schema, tenant, knowledge, clone, harness collab, …) | **Done**（v4.0–v4.10 + v4.9.5 closeout 质量审查通过 2026-08-08）— `.omo/plans/v4-*.md` |
+| **v5** | 完整世代：更名（山海+生物世界观）+ 定义（5 始祖/6 subagent/镜像体系）+ UIUX + 视觉（原 3.6） | **Queued（2026-08-07 立项）** — `.omo/evidence/v5-rename-decisions.md` + `.omo/plans/v5-roadmap.md` |
 | **Later** | Session-engine-v2 multimodal, Voice, … | §7 far queue |
 
-Code identifiers follow 15d names (`Workspace`, `Entity`, `Passage`, `BaseClass`). Pre-v2 names remain only in alembic history.
+Code identifiers follow 15d names (`Workspace`, `Entity`, `Passage`, `BaseClass`) — **v5 世代只改 UI 显示名与 5 动物 slug，代码名/DB/API 仍保持 15d**（见 `.omo/evidence/v5-rename-decisions.md`）。Pre-v2 names remain only in alembic history.
 
 ---
 
@@ -281,14 +281,15 @@ Full history: `.omo/plans/archive/` + `.omo/plans/archive/cocoa-v2-roadmap.md` (
 
 | Track | Intent | Plan |
 |---|---|---|
-| **3.5.x** | **主流程产品设计闭环** — summon / connect / talk / observe / lifecycle / brain handoff stub；行为正确、可部署、可人测；缺口随迭代小步修正 | `.omo/plans/archive/product-version-track-3-5-3-6.md` |
-| **3.6** | **整体 UI 大重构** — 壳层 / 密度 / Composer·Topology 视觉语言 / 空态；不抢跑于 3.5.x 闭环之前 | same file §4–§5 |
+| **3.5.x / 3.6** | 主流程闭环 + 纯视觉 UI 大重构（历史轨，已被 v4/v5 取代）| `.omo/plans/archive/product-version-track-3-5-3-6.md` |
+| **4.x** | v4 功能收口（已完成 v4.0–v4.10 + v4.9.5 closeout）| `.omo/plans/v4-roadmap.md` |
+| **5.x** | **v5 完整世代**：更名（命名波）→ 定义（抽象落地）→ UIUX → 视觉（原 3.6 内容并入尾段）| `.omo/plans/v5-roadmap.md` |
 
-**Working agreement:** 主功能仍有不通处与未修正项，随产品迭代逐步设计与变更；**不做**「先大改 UI 再通主流程」。
+**Working agreement:** 主功能仍有不通处与未修正项，随产品迭代逐步设计与变更；**不做**「先大改 UI 再通主流程」（v4 已闭环主流程；v5 视觉波在命名/定义/UIUX 之后）。
 
-> **历史轨**：3.5.x / 3.6 为文档纠偏与纯视觉轨；当前实现轨 **4.x** 见 `.omo/plans/v4-roadmap.md`。
+> **历史轨**：3.5.x / 3.6 为文档纠偏与纯视觉轨；当前实现轨 **4.x 收尾 + 5.x 世代** 见 `.omo/plans/v4-roadmap.md` / `.omo/plans/v5-roadmap.md`。
 
-### 5.3 Now (immediate — inside 3.5.x)
+### 5.3 Now（历史轨 3.5.x 遗留；当前 v4 收尾 + v5 世代见 §5.2）
 
 | Slot | Title | Spec / Plan | Notes |
 |---|---|---|---|
@@ -302,10 +303,10 @@ Full history: `.omo/plans/archive/` + `.omo/plans/archive/cocoa-v2-roadmap.md` (
 |---|---|---|
 | **PRD-v3.4.2** | 全神职基础 gene + capability（空间会话 / 拓扑邻接说话） | 建在 3.5 tunnel/pi 上；仍属 3.5.x 行为闭环 |
 | Cerebellum business | 未连线 `@` 转小脑的真实业务 | Stub exists; design in later 3.5.x slice |
-| **3.6 UI refactor** | Portal / Composer / Topology visual overhaul | After 3.5.x loops trusted |
-| Avatar presets UI | 用户/眷族预设头像切换 | → **3.6**（原 Later-A） |
-| Visual + 神职图 | 主视觉换皮、候选图挂卡片 | → **3.6**（原 Later-B） |
-| Empty IDE polish | 空空间 IDE 深打磨、神职预选 | → **3.6** unless blocking introduce |
+| **v5.3 视觉波**（原 3.6）| Portal / Composer / Topology visual overhaul | 已并入 v5 完整世代（`.omo/plans/v5-roadmap.md`） |
+| Avatar presets UI | 用户/血脉预设头像切换 | → **v5.2/v5.3**（原 Later-A） |
+| Visual + 始祖图 | 主视觉换皮、候选图挂卡片 | → **v5.3**（原 Later-B） |
+| Empty 生境 IDE polish | 空生境 IDE 深打磨、始祖预选 | → **v5.3** unless blocking introduce |
 | Capability hub assist | skill/capability 中枢撰写 | Later-D |
 | Session engine v2 | Multimodal day-1 protocol | `.omo/drafts/session-engine-v2.md`（原 v4+ **后移**） |
 | Gene LLM real | Richer distill than heuristics | Former P16c |
@@ -365,7 +366,7 @@ Recorded so future planners do not lose intent:
 | **`roadmap.md`** | **This file — system blueprint + living roadmap** |
 | `prd-v1.md` | PRD generation 1 (MVP UX); historical + residual reference |
 | `prd-v2.md` | PRD generation 2 — **archived**（`docs/archive/prd-v2.md`；设计以 `audit-product-design.md` 为准） |
-| `terminology.md` / `metaphor-name-table.md` | Naming |
+| `terminology.md` / `metaphor-name-table.md` | Naming（**v5 命名基线**：大陆/区域/生境/始祖/血脉/后裔/5 动物/术语新词；15d 版归档于 `docs/archive/terminology-15d.md` + `docs/archive/metaphor-name-table-15d.md`）|
 | `domain-model.md` / `api-architecture.md` / `*-system.md` / `observability.md` / `product-positioning.md` | Subsystem contracts (refresh when code lands) |
 
 ### Planning (`.omo/`)
@@ -409,5 +410,7 @@ Recorded so future planners do not lose intent:
 | 2026-08-02 | **附录 B 决议** — OrganizationContract + 原子 UserGene/基因组；Org 选择页；成员赋基因；Knowledge override；clone can_*。见 `audit-v4-design-review.md` |
 
 | 2026-08-02 | **V47-1…11 签核** — 全部接受顾问建议；v4.7 可排队实现（仍依赖 v4.5/v4.6）。 |
+
+| 2026-08-07 | **v5 完整世代立项** — 四切片（v5.0 命名 / v5.1 定义 / v5.2 UIUX / v5.3 视觉）；MAJOR bump 5.x；grill-me 会话闭环全部待定项：5 常驻始祖（狐狸/海狸/麻雀/郊狼/狮子）+ 6 subagent 能力（唤灵/灵视/衡判/游魂/潜知/百瞳 退出体系）、三层名始祖/血脉/后裔、结构术语大陆/区域/生境/迁徙路线、其余术语全量新词（成员/信号塔/标本/粮仓/足迹/诞生记录/领地地图/蜕变/演化/领悟/兽道）、rank 全量退役、slug 直接改名+存量 UPDATE、代码名不动。SoT `.omo/evidence/v5-rename-decisions.md` + `.omo/plans/v5-roadmap.md`；v4.9.5 closeout 先行。 |
 
 *Next update trigger: a v4 slice closes, or implementation of a signed plan starts.*

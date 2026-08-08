@@ -1,115 +1,118 @@
-> **Pre-v4 reference**: Conflict with `.omo/evidence/audit-product-design.md` → audit wins. Awaiting v4 PRD rewrite.
->
+> **Canonical source**: v5 命名基线（2026-08-07 终稿）。决策 SoT：`.omo/evidence/v5-rename-decisions.md`。
+> **Prior**: 15d（克苏鲁）命名已归档至 `docs/archive/terminology-15d.md`（只读）。
+> **执行波**: v5（`.omo/plans/v5-roadmap.md`）——v5.0 命名波起 UI 显示名逐步切换；后端代码名/DB/API 不动。
 
-# Cocoa Terminology Glossary (15d)
-
-> **Canonical source**: Naming decisions locked in `.omo/drafts/archive/phase-15d-naming-system.md`（已归档；活文档为本文件 + `metaphor-name-table.md`）。
-> **Code rename pending**: This doc describes the target architecture (15d+). The current codebase (P0-P15b) still uses old naming; a dedicated rename wave (15d-rename) is deferred until after P16d Org model decision.
-
-One-line definitions for every Cocoa code-term (backend), display-name (frontend Cthulhu-themed), and protocol entity. Derived from the naming system and the core domain model. Code-terms stay English; display-names in parentheses are for product UI reference.
+One-line definitions for every Cocoa code-term (backend), display-name (frontend 山海+生物世界观), and protocol entity. Code-terms stay English; display-names in parentheses are for product UI reference.
 
 ---
 
-## Structure Terms (3-Layer Tenant + 3-Tier Entity)
+## Structure Terms（3 层租户 + 3 层实体）
 
-### Tenant Hierarchy
+### 租户层级（大陆 → 区域 → 生境）
 
-- **Organization** (世界) — Top-level isolation unit. **PRD-v2 first-class**; single-tenant default slug=`default`.
-- **Namespace** (次元) — Within an Organization: **scenario partition** (e.g. coding vs social-media), **not** env (dev/staging/prod). **PRD-v2 first-class**; Entity belongs here so scenario identity spans multiple Workspaces.
-- **Workspace** (空间) — Within a Namespace: a concrete workstream (e.g. a product system or a publish platform). Current code may still say `Office` until rename wave. Single-tenant default: one Workspace shared by all users. Starts empty (no auto-preloaded Entities).
+- **Organization**（大陆）— Top-level isolation unit. 单租户默认 slug=`default`。
+- **Namespace**（区域）— Within an Organization: **scenario partition**（e.g. coding vs social-media），**not** env。Entity（血脉）belongs here so scenario identity spans multiple Workspaces。
+- **Workspace**（生境）— Within a Namespace: a concrete workstream（e.g. a product system or a publish platform）。**代码名保持 `Office` 不变**（v5 只改 UI 显示名，代码名不动）。单租户默认：一个生境 shared by all users。Starts empty。
+- **场景意象**（迁徙路线）— Portal 拓扑背景意象；动物通用。
 
-### Entity Hierarchy (the "agent stack")
+### 实体层级（始祖 → 血脉 → 后裔）
 
-- **BaseClass** (神职) — Preset template defining rules, prompt, commands, tools, and provider config. Created by humans or distilled from Entity experience. System-scoped. 11 built-in BaseClasses defined in §4 of the naming system.
-- **Instance** — Running materialization of an Entity in one Workspace. One Instance per pod. Lifecycle ≤ Workspace. **Invariant (PRD-v3.4)**: at most one active Instance per `(workspace_id, entity_id)` because `@slug` addresses the Entity. **Product display is scene-dependent (not「旧称→新称」)**:
-  - **眷族视角**（眷族详情、晋升/批量重启、次元「化身」只读聚合）：叫 **化身** — 相对眷族的运行体。
-  - **空间层与真人并列**（空间卡计数、空间 tab、拓扑座位）：叫 **迷失者**，对位 **觉醒者**。
-  - Do **not** force-rename 眷族侧「化身」为迷失者；do **not** call workspace human seats 契印.
-- **Entity** (眷族) — Instantiation of a BaseClass **per-Namespace**, with identity + accumulated Memory. Scenario-scoped so one Entity can spawn Instances across Workspaces in that Namespace. Can be promoted/transmuted via distillation actions.
+> v5 三层名：从大到小 始祖（源头）> 血脉（传承线）> 后裔（个体）。
 
-### Structural Concepts
+- **BaseClass**（始祖）— Preset template defining rules, prompt, commands, tools, provider config, subagent 策略。Created by humans or distilled（演化）from Entity experience。System-scoped。**5 built-in 始祖**（§BaseClasses）。
+- **Entity**（血脉）— Instantiation of a BaseClass **per-Namespace**，with identity + accumulated Memory（记忆）。Scenario-scoped so one Entity can spawn Instances across Workspaces in that Namespace。Can be promoted（蜕变）/transmuted（演化）。
+- **Instance**（后裔）— Running materialization of an Entity in one Workspace。One Instance per pod。Lifecycle ≤ Workspace。**Invariant**: at most one active Instance per `(workspace_id, entity_id)` because `@slug` addresses the Entity。
+- **Membership**（智人 / 生物）— Workspace presence with posx/posy。Exclusive-FK: user XOR instance。**v5 产品名**: user row = **智人**（真人，对应 15d 觉醒者）; instance row = **生物**（AI 成员，对应 15d 迷失者）。
+- **NamespaceContract**（成员）— Namespace ↔ User 关系。**v5 不再造专有名词**：直接表达为「某区域的成员」。
 
-- **Membership** — Workspace presence with posx/posy + role. Exclusive-FK: user XOR instance. **PRD-v3.4 product names**: user row = **觉醒者** (director present in workspace); instance row = topology seat for **迷失者**. Not called 契印.
-- **NamespaceContract** (契印) — **PRD-v3.4**. Namespace ↔ User seal. The **only** product use of the name 契印. Auto-ensured when a user creates/joins a workspace in that namespace.
-- **Passage** (通道) — Adjacency edge between two Memberships, defining the selectable neighbor set for messaging. CorridorNode dropped.
-- **CentralHub** (主脑) — Per-Workspace 协作中枢容器，含 4 脑区（穹窿 / 额叶 / 脑干 / **小脑=内置中央智能体 CerebellumAgent 1:1**）。Display 中文"主脑"，backend 代码名 `CentralHub`。
-- **CerebellumAgent** (小脑 / 中央智能体) — Built-in system agent historically on every CentralHub. **v4**: migrates to Entity(`is_cerebellum`) + Instance；见 `.omo/plans/v4-0` / `v4-3` 与 migration-spec §6.3。
-- **Vault** (冰封库) — Cold archive per Workspace. PRD-v2: DB KV (`vault_entries`, optional inline value); eventual MinIO/S3 via `archived_key` — not expanded in v2.
-- **Memory** (记忆沉淀) — Append-only per-Entity memory log, indexed by kind (experience/lesson/decision/problem) and time. No `updated_at` column. Accumulates across Instances.
+### 结构概念
 
-### Runtime Concepts
+- **Passage**（兽道）— Adjacency edge between two Memberships, defining the selectable neighbor set for messaging。CorridorNode dropped。
+- **CentralHub**（信号塔）— Per-Workspace 协作中枢容器，含 4 脑区（Fornix 粮仓 / 额叶 / 脑干 / **小脑 = 内置中央智能体 CerebellumAgent 1:1**）。Display 中文「信号塔」，backend 代码名 `CentralHub`。
+- **CerebellumAgent**（小脑 / 中央智能体）— Built-in system agent on every CentralHub。v4: migrates to Entity(`is_cerebellum`) + Instance。
+- **Fornix**（粮仓）— Active shared file region per CentralHub（对应 15d 穹窿）。Display 中文「粮仓」。
+- **Vault**（标本）— Cold archive per Workspace。DB KV (`vault_entries`, optional inline value); eventual MinIO/S3 via `archived_key`。Display 中文「标本」。
+- **Memory**（记忆）— Append-only per-Entity memory log, indexed by kind (experience/lesson/decision/problem) and time。No `updated_at` column。
+- **Event**（足迹）— Audit log row。Display 中文「足迹」（对应 15d 印痕）。
+- **DeployRecord**（诞生记录）— K8s deployment lifecycle record: 9-step pipeline。Display 中文「诞生记录」（对应 15d 降世记录）。
+- **Topology**（领地地图）— Spatial visualization of Workspace members as SVG nodes with glow halos, 3 interaction modes (Select/Connect/Move), message-flow particle animation。Display 中文「领地地图」（对应 15d 心灵图景）。
 
-- **Workspace control plane** — Cocoa's operator + harness surface (Portal, Supervisor, Boulder, Passage, CentralHub, deploy, observability). Product peer: a more flexible / observable **senpi · oh-my-openagent · oh-my-pi**. Not the per-Instance agent binary.
-- **pi runtime** — Preferred sandboxed agent loop that drives each **Instance / 化身**. Entity `system_prompt` + `config_override` serialize to pi AgentConfig. React runtime is an optional alternative (less preferred for sandbox stability). **Not** Senpi CLI.
-- **LoopState** (心智状态) — Harness runtime state for an Instance: loop_status (6 states), continuation_count, breaker_config, last_checkpoint_at.
-- **DeployRecord** (降世记录) — K8s deployment lifecycle record: 9-step pipeline from build to pod-ready.
-- **InstanceProviderConfig** — LLM provider configuration for an Instance (openai-compatible, anthropic, etc.). Internal config, no UI equivalent.
-- **Topology** (心灵图景) — Spatial visualization of Workspace members as SVG nodes with glow halos, 3 interaction modes (Select/Connect/Move), and message-flow particle animation.
-- **delivery_mode** (投递模式, v4.7) — How a collaboration/inject payload reaches an Instance: `notify` (event only, no auto-wake), `soft_inject` (safe-point insert into running loop), `wake` (start/resume turn if idle). Normative in `.omo/plans/v4-7-harness-collab.md` / `audit-product-design.md` §九. Pattern study: [jcode](https://github.com/1jehuang/jcode) soft interrupt — not a Cocoa product synonym for swarm chat.
+### Runtime 概念
 
----
-
-## BaseClasses (11 Built-in 神职)
-
-Per naming system §4. Slug = kebab-case identifier (DB layer). Display = i18n key (UI layer). DB does not store display_name column.
-
-| # | Slug | Display | Role | omo Agent Source |
-|---|---|---|---|---|
-| 1 | `mi-shi` | 密士 | Interview planner, plan mode sticky, `.omo` plan writer | Prometheus (Strategic Planner) |
-| 2 | `huan-ling` | 唤灵 | Intent analysis, pre-planner before Prometheus | Metis (Pre-planning Consultant) |
-| 3 | `an-xing` | 暗行 | Solo full-stack coder, boulder-pusher | Sisyphus (Main Coder) |
-| 4 | `an-ying` | 暗影 | Junior coder, cheap/fast | Sisyphus-Junior |
-| 5 | `zhu-jin` | 铸金 | Autonomous deep worker, goal-driven | Hephaestus |
-| 6 | `ling-shi` | 灵视 | Read-only architecture / hard debugging | Oracle (High-IQ Reasoning) |
-| 7 | `heng-pan` | 衡判 | Quality gate: review/approve/reject | Momus (Critic) |
-| 8 | `you-hun` | 游魂 | Codebase grep / exploration | Explore |
-| 9 | `qian-zhi` | 潜知 | External reference + multi-repo + docs | Librarian |
-| 10 | `bai-tong` | 百瞳 | Visual / media / audio analysis | Multimodal-Looker |
-| 11 | `jiu-ri` | 旧日 | Top-level delegation / monitoring / approval | Atlas (Orchestrator) |
+- **Workspace control plane** — Cocoa's operator + harness surface (Portal, Supervisor, Boulder, Passage, CentralHub, deploy, observability)。Product peer: a more flexible / observable **senpi · oh-my-openagent · oh-my-pi**。Not the per-Instance agent binary。
+- **pi runtime** — Preferred sandboxed agent loop that drives each **Instance（后裔）**。Entity `system_prompt` + `config_override` serialize to pi AgentConfig。React runtime is an optional alternative。**Not** Senpi CLI。
+- **LoopState**（心智状态）— Harness runtime state for an Instance: loop_status (6 states), continuation_count, breaker_config, last_checkpoint_at。保留中性词。
+- **InstanceProviderConfig** — LLM provider configuration for an Instance。Internal config, no UI equivalent。
+- **delivery_mode**（投递模式, v4.7）— How a collaboration/inject payload reaches an Instance: `notify` / `soft_inject` / `wake`。
+- **subagent 能力** — Runtime 内部机制（pi task tool / opencode 子代理 / Claude Task），由 Host adapter 映射为「模块功能」；**不进拓扑、不进 Tunnel 协议、不进 Memory/蒸馏链**。6 个内置 subagent 能力：唤灵/灵视/衡判/游魂/潜知/百瞳（对应 15d 神职降级，v5.1 落实）。
 
 ---
 
-## Lab Ranks (克苏鲁神秘系)
+## BaseClasses（5 Built-in 始祖）
 
-Progression from shallow perception → deep knowledge → awakened mastery.
+> v5 终稿：11 神职 → **5 常驻始祖**（有动物名）。其余 6 神职（唤灵/灵视/衡判/游魂/潜知/百瞳）**降级为 subagent 能力**，不命名、不占拓扑（v5.1 落实）。Slug = 英文动物名 kebab-case。Display = i18n key。DB does not store display_name column。
 
-- **Intern** (浅识者) — Stateless hot-load rank: no persistent session, no memory read, fresh invocation each time. Barely glimpsed the cosmic truth.
-- **Researcher** (深潜者) — Full BaseClass plus memory rank: persistent, accumulates experience across invocations. Diving ever deeper into the mysteries.
-- **Director** (觉醒者) — Human operator rank: highest authority, approval and forwarding rights. Fully awakened to direct others. Not a BaseClass; human users hold this.
+| # | Slug | Display | 15d 名 | Role | omo Agent Source |
+|---|---|---|---|---|---|
+| 1 | `fox` | 狐狸 | 密士 | Interview planner, plan mode sticky, `.omo` plan writer | Prometheus (Strategic Planner) |
+| 2 | `beaver` | 海狸 | 暗行 | Solo full-stack coder, boulder-pusher | Sisyphus (Main Coder) |
+| 3 | `sparrow` | 麻雀 | 暗影 | Junior coder, cheap/fast | Sisyphus-Junior |
+| 4 | `coyote` | 郊狼 | 铸金 | Autonomous deep worker, goal-driven | Hephaestus |
+| 5 | `lion` | 狮子 | 旧日 | Top-level delegation / monitoring / approval | Atlas (Orchestrator) |
+
+### 内置 subagent 能力（v5.1 落实，不命名）
+
+| 15d 神职 | 能力角色 | omo Agent Source | 归属（per-始祖声明） |
+|---|---|---|---|
+| 唤灵 | Intent analysis, pre-planner | Metis | 常驻始祖按需声明 |
+| 灵视 | Read-only architecture / hard debugging | Oracle | 常驻始祖按需声明 |
+| 衡判 | Quality gate: review/approve/reject | Momus | 常驻始祖按需声明 |
+| 游魂 | Codebase grep / exploration | Explore | 常驻始祖按需声明 |
+| 潜知 | External reference + multi-repo + docs | Librarian | 常驻始祖按需声明 |
+| 百瞳 | Visual / media / audio analysis | Multimodal-Looker | 常驻始祖按需声明 |
 
 ---
 
-## Sub-entities (Data Layer)
+## Learning 动作（领悟 / 蜕变 / 演化）
+
+| 后端动作 | 15d 名 | v5 名 | 语义 |
+|---|---|---|---|
+| distill | 蒸馏 | **领悟** | Memory（记忆）→ capability；P10「学习」页面同步改「领悟」 |
+| promote | 晋升 | **蜕变** | Instance（后裔）→ Entity（血脉）：运行状态 + Memory 回写，就地增强 |
+| transmute | 炼化 | **演化** | Entity（血脉）→ BaseClass（始祖）：经验蒸馏成新始祖，新 slug 全域可用 |
+
+---
+
+## Sub-entities（Data Layer）
 
 Code-term-only entities from the core domain model. No product UI display-names.
 
-- **User** — Human authentication identity: username, email, password hash; the login entity.
-- **BaseClass** (was EmployeePreset) — Persisted preset record storing slug, manifest JSONB, and version.
-- **Entity** (was Employee) — Per-Namespace identity referencing a BaseClass, with accumulated memory across Workspaces in that scenario.
-- **Membership** (觉醒者 / 迷失者拓扑位；勿称契印) — Workspace presence seal. See Structural Concepts.
-- **NamespaceContract** (契印) — Namespace-scoped human contract (PRD-v3.4).
-- **BlackboardFile** / **FornixFile** — File record on CentralHub fornix, with storage key, content type, and directory tree metadata.
-- **CerebellumAgent** — Built-in central agent (1:1 CentralHub); system-owned, not a Membership.
-- **VaultEntry** — Archived KV entry in a Vault (`value` inline in v2; `archived_key` for future object store).
-- **Memory** (was MemoryEntry) — Append-only memory log entry per Entity, indexed by kind and time.
+- **User** — Human authentication identity: username, email, password hash。
+- **BaseClass**（was EmployeePreset）— Persisted preset record storing slug, manifest JSONB, version。
+- **Entity**（was Employee）— Per-Namespace identity referencing a BaseClass, with accumulated memory across Workspaces。
+- **Membership**（智人 / 生物）— Workspace presence。Exclusive-FK user XOR instance。
+- **NamespaceContract**（成员）— Namespace-scoped human membership（v5 概念化）。
+- **BlackboardFile** / **FornixFile** — File record on CentralHub fornix（粮仓）。
+- **CerebellumAgent** — Built-in central agent (1:1 CentralHub); system-owned, not a Membership。
+- **VaultEntry**（标本条目）— Archived KV entry in a Vault。
+- **Memory**（was MemoryEntry）— Append-only memory log entry per Entity, indexed by kind and time。
+- **InstanceProviderConfig** — LLM provider config for an Instance。
 
 ---
 
 ## Concepts
 
-- **Entity-as-role-identity** — Entity is a persistent role identity composed of a BaseClass manifest plus shared cross-instance Memory; it grows as memory accumulates.
-- **Instance=materialization** — An Instance is a concrete materialization of an Entity in one Workspace, with isolated workspace and runtime.
-- **near-neighbor messaging** — Messaging restricted to passage-defined adjacent nodes only; no broadcast fan-out, unlike flat log-based group chat.
-- **passage** — The editable neighbor set of a node; defines the selectable recipient list for directed messaging within a Workspace.
-- **activation trigger** — Event that causes a node to sync topology and state: daily-report self-sync, on-mention, or scheduled task invocation.
-- **promotion (晋升)** — Instance → Entity: capture Instance runtime state + Memory back into the Entity. In-place enhancement.
-- **transmutation (炼化)** — Entity → BaseClass: distill accumulated Entity Memory into a new reusable BaseClass. Creates a new slug, available across Workspaces.
-- **slash-protocol** — Structured turn-based command grammar: a Turn is a list of Directives, each with optional target, command, args, and content-ref.
-- **directive** — A single command unit within a Turn: target_entity, cmd, args, content_ref, and raw_text.
-- **command-registry** — Registry of four command families: GLOBAL (/read, /list, /write, /archive), PER-PRESET (defined in manifest.commands), CONTROL (/interrupt, /pause, /resume, /status, /snapshot), LEARNING (/distill, /consolidate, /reflect). Priority-ordered in directive_router.py::route_turn().
-- **content-ref** — A scope-qualified reference to content: mandatory scope prefix (workspace|blackboard|vault|memory) with optional path.
-- **composer compartmentalization** — The Composer UI splits a message into per-entity compartments before send; the user sees and confirms what each entity receives, emitted as a structured Turn.
+- **Entity-as-role-identity** — Entity（血脉）is a persistent role identity composed of a BaseClass（始祖）manifest plus shared cross-instance Memory; it grows as memory accumulates。
+- **Instance=materialization** — An Instance（后裔）is a concrete materialization of an Entity in one Workspace, with isolated workspace and runtime。
+- **near-neighbor messaging** — Messaging restricted to passage（兽道）-defined adjacent nodes only; no broadcast fan-out。
+- **activation trigger** — Event that causes a node to sync topology and state: daily-report self-sync, on-mention, or scheduled task invocation。
+- **slash-protocol** — Structured turn-based command grammar: a Turn is a list of Directives, each with optional target, command, args, and content-ref。
+- **directive** — A single command unit within a Turn: target_entity, cmd, args, content_ref, and raw_text。
+- **command-registry** — Registry of four command families: GLOBAL (/read, /list, /write, /archive), PER-PRESET (manifest.commands), CONTROL (/interrupt, /pause, /resume, /status, /snapshot), LEARNING (/distill, /consolidate, /reflect)。
+- **content-ref** — A scope-qualified reference to content: mandatory scope prefix (workspace|blackboard|vault|memory) with optional path。
+- **composer compartmentalization** — The Composer UI splits a message into per-entity compartments before send。
+- **subagent 策略** — Per-始祖 manifest 声明：能否使用 subagent、模板、约束（v5.1 落实）。
 
 ---
 
-*Derived from `.omo/drafts/archive/phase-15d-naming-system.md` (2026-07-28). Code rename pending where still needed; v4 SoT = `audit-product-design.md`.*
+*v5 命名基线 2026-08-07。15d 快照归档于 `docs/archive/terminology-15d.md`；决策 SoT `.omo/evidence/v5-rename-decisions.md`；执行总图 `.omo/plans/v5-roadmap.md`。*
