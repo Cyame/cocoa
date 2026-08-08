@@ -755,7 +755,7 @@
       "brainstem_schedule_not_found": "脑干调度不存在。"
     },
     "system_hub": {
-      "not_configured": "星球中枢供者未配置 - 请在世界设置中配置",
+      "not_configured": "星球中枢供者未配置 - 请在大陆设置中配置",
       "provider_unavailable": "星球中枢供者缺失或已禁用",
       "empty_response": "星球中枢返回了空描述"
     }

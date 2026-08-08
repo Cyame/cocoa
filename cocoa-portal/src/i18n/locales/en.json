@@ -922,7 +922,7 @@
       "brainstem_schedule_not_found": "Brainstem schedule not found."
     },
     "system_hub": {
-      "not_configured": "Planet hub provider is not configured - set it in world settings",
+      "not_configured": "Planet hub provider is not configured - set it in Continent settings",
       "provider_unavailable": "Planet hub provider is missing or disabled",
       "empty_response": "Planet hub returned an empty description"
     }
