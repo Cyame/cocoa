@@ -1,0 +1,38 @@
+# syntax=docker/dockerfile:1.7
+# Cocoa Instance Ancestor image — thin layer over cocoa-instance-base with the
+# ancestor's enabled subagent agent .md files baked into ~/.pi/agent/agents/.
+#
+# Part of the v5.1 "1+5" instance image family (see .omo/plans/v5-1-definition.md N2).
+# The enabled set per slug is the single source of truth in
+# cocoa-backend/app/core/builtin_presets.py (manifest.subagent_strategy.enabled);
+# scripts/build-instance-images.sh resolves it and passes it via ENABLED_AGENTS
+# (space-separated capability ids). SYSTEM.md/AGENTS.md still come from the
+# per-instance ConfigMap (G7).
+#
+# Build from repo root (example):
+#   docker build -f cocoa-artifacts/docker/Dockerfile.instance-ancestor \
+#     --build-arg ENGINE_V=0.83.0 --build-arg SLUG=fox \
+#     --build-arg ENABLED_AGENTS="intent architecture research" \
+#     -t cocoa-instance-fox:0.83.0 .
+#
+# Pod main process: cocoa-instance-host (Tunnel WS client + pi --mode rpc).
+
+ARG ENGINE_V=0.83.0
+FROM cocoa-instance-base:${ENGINE_V}
+
+ARG SLUG
+ARG ENABLED_AGENTS
+
+LABEL org.cocoa.instance.ancestor="${SLUG}"
+LABEL org.cocoa.instance.enabled-agents="${ENABLED_AGENTS}"
+
+# Bake ONLY the enabled agent .md files (thin layer). cp fails the build if an
+# enabled capability id has no matching agent file.
+COPY cocoa-instance-host/subagents/agents/ /tmp/subagent-agents/
+RUN test -n "${SLUG}" && \
+    test -n "${ENABLED_AGENTS}" && \
+    mkdir -p ${HOME}/.pi/agent/agents && \
+    for name in ${ENABLED_AGENTS}; do \
+      cp "/tmp/subagent-agents/${name}.md" "${HOME}/.pi/agent/agents/"; \
+    done && \
+    rm -rf /tmp/subagent-agents

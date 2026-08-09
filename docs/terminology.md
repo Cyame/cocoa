@@ -61,20 +61,22 @@ One-line definitions for every Cocoa code-term (backend), display-name (frontend
 |---|---|---|---|---|---|
 | 1 | `fox` | 狐狸 | 密士 | Interview planner, plan mode sticky, `.omo` plan writer | Prometheus (Strategic Planner) |
 | 2 | `beaver` | 海狸 | 暗行 | Solo full-stack coder, boulder-pusher | Sisyphus (Main Coder) |
-| 3 | `sparrow` | 麻雀 | 暗影 | Junior coder, cheap/fast | Sisyphus-Junior |
+| 3 | `sparrow` | 麻雀 | 暗影 | Junior coder, high-throughput fast response | Sisyphus-Junior |
 | 4 | `coyote` | 郊狼 | 铸金 | Autonomous deep worker, goal-driven | Hephaestus |
 | 5 | `lion` | 狮子 | 旧日 | Top-level delegation / monitoring / approval | Atlas (Orchestrator) |
 
 ### 内置 subagent 能力（v5.1 落实，不命名）
 
-| 15d 神职 | 能力角色 | omo Agent Source | 归属（per-始祖声明） |
-|---|---|---|---|
-| 唤灵 | Intent analysis, pre-planner | Metis | 常驻始祖按需声明 |
-| 灵视 | Read-only architecture / hard debugging | Oracle | 常驻始祖按需声明 |
-| 衡判 | Quality gate: review/approve/reject | Momus | 常驻始祖按需声明 |
-| 游魂 | Codebase grep / exploration | Explore | 常驻始祖按需声明 |
-| 潜知 | External reference + multi-repo + docs | Librarian | 常驻始祖按需声明 |
-| 百瞳 | Visual / media / audio analysis | Multimodal-Looker | 常驻始祖按需声明 |
+> T1 已建 6 个能力 agent：`cocoa-instance-host/subagents/agents/{intent,architecture,quality,explore,research,vision}.md`；frontmatter `name` = 能力 id，`subagent_strategy.enabled` 值复用同名。
+
+| 能力 id | 15d 神职 | 能力角色 | omo Agent Source | 归属（per-始祖声明） |
+|---|---|---|---|---|
+| `intent` | 唤灵 | Intent analysis, pre-planner | Metis | 常驻始祖按需声明 |
+| `architecture` | 灵视 | Read-only architecture / hard debugging | Oracle | 常驻始祖按需声明 |
+| `quality` | 衡判 | Quality gate: review/approve/reject | Momus | 常驻始祖按需声明 |
+| `explore` | 游魂 | Codebase grep / exploration | Explore | 常驻始祖按需声明 |
+| `research` | 潜知 | External reference + multi-repo + docs | Librarian | 常驻始祖按需声明 |
+| `vision` | 百瞳 | Visual / media / audio analysis | Multimodal-Looker | 常驻始祖按需声明 |
 
 ---
 

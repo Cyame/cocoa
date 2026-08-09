@@ -23,6 +23,30 @@ _COMPOSE_INSTRUCTIONS = """你是 Cocoa 世界中枢。请把下面的结构化�
 4. 输出只要最终 SYSTEM 正文，不要前言、不要解释你的整理过程。
 """
 
+# v5.1 能力目录（N1）：能力 id = agent .md 文件名 = subagent_strategy.enabled 值。
+# 中文标签取「行为定义」首段，用于 scaffold 主 pi 意图识别提示。
+_SUBAGENT_ABILITY_LABELS: dict[str, str] = {
+    "intent": "意图分析/预规划",
+    "architecture": "只读架构分析",
+    "quality": "质量门禁",
+    "explore": "代码库探索",
+    "research": "外部参考",
+    "vision": "视觉/媒体分析",
+}
+
+
+def _subagent_block(agent_config: dict[str, Any]) -> str:
+    """Render the ``## 可用 Subagent 能力`` body from enabled capability ids."""
+    enabled = (
+        agent_config.get("subagent_strategy", {}).get("enabled") or []
+    )
+    if not enabled:
+        return "- （未启用 subagent 能力）"
+    labels = [
+        f"{aid}（{_SUBAGENT_ABILITY_LABELS.get(aid, aid)}）" for aid in enabled
+    ]
+    return "- " + "、".join(labels)
+
 
 def _knowledge_block(knowledge) -> str:
     """Render the ``## 知识`` section body from resolved knowledge entries.
@@ -102,6 +126,8 @@ def build_prompt_scaffold(
         f"{caps_block}\n\n"
         f"## 基因（仅继承自眷族）\n\n"
         f"{genes_block}\n\n"
+        f"## 可用 Subagent 能力\n\n"
+        f"{_subagent_block(agent_config)}\n\n"
         f"{knowledge_section}"
     )
 

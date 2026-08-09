@@ -1,10 +1,18 @@
 # syntax=docker/dockerfile:1.7
-# Cocoa Instance Host image — Node Host + pinned pi CLI (PRD-v3.5 Tunnel).
+# Cocoa Instance Base image — Node Host + pinned pi CLI + subagent extension.
+#
+# Part of the v5.1 "1+5" instance image family (see .omo/plans/v5-1-definition.md N2):
+#   - cocoa-instance-base:{engine-v}        <- this file (extension, agents dir EMPTY)
+#   - cocoa-instance-{slug}:{engine-v}      <- Dockerfile.instance-ancestor (thin layer)
 #
 # Build from repo root:
-#   docker build -t cocoa-instance:latest -f cocoa-artifacts/docker/Dockerfile.instance .
+#   docker build -t cocoa-instance-base:0.83.0 \
+#     -f cocoa-artifacts/docker/Dockerfile.instance-base .
 #
 # Pod main process: cocoa-instance-host (Tunnel WS client + pi --mode rpc).
+# pi loads the vendored subagent extension from ~/.pi/agent/extensions/subagent/
+# and user-level agents from ~/.pi/agent/agents/*.md (kept empty here; ancestor
+# images bake their enabled agents into that dir in a thin layer — G7).
 
 FROM node:24-bookworm-slim AS host-builder
 WORKDIR /build
@@ -25,12 +33,22 @@ RUN npm config set registry https://registry.npmmirror.com && \
 FROM node:24-bookworm-slim
 WORKDIR /app
 
+# node:24-bookworm-slim runs as root; make HOME explicit (used by pi's ~/.pi).
+ENV HOME=/root
+
 RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/*.sources 2>/dev/null || \
     sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list
 
 COPY --from=host-builder /build/dist ./dist
 COPY --from=host-builder /build/node_modules ./node_modules
 COPY --from=host-builder /build/package.json ./package.json
+
+# Vendored subagent extension (versioned with the repo, byte-identical to pi
+# 0.83.0 examples/extensions/subagent/): loaded from
+# ~/.pi/agent/extensions/subagent/index.ts. The agents dir is intentionally
+# EMPTY on base — custom slugs fall back to this image + ConfigMap (G9).
+COPY cocoa-instance-host/subagents/extension/ ${HOME}/.pi/agent/extensions/subagent/
+RUN mkdir -p ${HOME}/.pi/agent/agents
 
 ENV COCOA_POD_MODE=true
 ENV COCOA_WORKSPACE_PATH=/data

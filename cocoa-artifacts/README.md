@@ -7,7 +7,8 @@ Build artifacts and Kubernetes deployment manifests for the Cocoa multi-agent co
 ```
 cocoa-artifacts/
 ├── docker/
-│   └── Dockerfile.instance  # Instance runtime container image
+│   ├── Dockerfile.instance-base      # Instance base image: Node host + pi + subagent extension
+│   └── Dockerfile.instance-ancestor  # Thin layer over base: baked enabled subagent agents
 ├── k8s/
 │   └── instance/
 │       ├── deployment.yaml       # Deployment (1 replica, workspace PVC)
@@ -23,7 +24,8 @@ cocoa-artifacts/
 
 | Manifest | Purpose |
 |----------|---------|
-| `Dockerfile.instance` | Builds the `cocoa-instance` image from `python:3.12-slim`. Copies the backend and runs `uv sync --frozen`. Entrypoint: `python -m app.agent_runtime` (module implemented in P8). |
+| `Dockerfile.instance-base` | Builds `cocoa-instance-base:{engine-v}`: Node host + pinned pi CLI + vendored subagent extension (`~/.pi/agent/extensions/subagent/`). Agents dir kept empty — custom slugs fall back to this image + ConfigMap (v5.1 G9). |
+| `Dockerfile.instance-ancestor` | Builds `cocoa-instance-{slug}:{engine-v}` for the 5 始祖: `FROM base` + thin layer baking only the slug's enabled agent `.md` files into `~/.pi/agent/agents/`. Enabled set resolved by `scripts/build-instance-images.sh` from `builtin_presets.py` (`subagent_strategy.enabled`). |
 | `deployment.yaml` | Single-replica Deployment per Instance. Mounts the workspace PVC at `/app/.pi/workspace`. Env vars from the per-instance ConfigMap. Requests: 100m CPU, 256Mi memory. |
 | `configmap.yaml` | Injects `RUNTIME_CONFIG` (JSON from Instance DB record) and `INSTANCE_ID` into the container. Non-sensitive config only — secrets go to a separate Secret resource (not scaffolded in P7). |
 | `pvc.yaml` | 1Gi `ReadWriteOnce` volume per Instance. Stores the agent workspace under `/app/.pi/workspace`. Each Instance gets its own PVC for filesystem isolation. |
@@ -42,10 +44,17 @@ All YAML files in `k8s/instance/` use `{variable}` placeholders. A deploy script
 
 ## Usage
 
-### Build the Instance Image
+### Build the 1+5 Instance Images
+
+The v5.1 instance image family is `cocoa-instance-base:{engine-v}` + one thin
+layer per 始祖 (`cocoa-instance-{fox|beaver|sparrow|coyote|lion}:{engine-v}`).
+`engine-v` = pi runtime version (from `cocoa-instance-host/package.json` pin);
+enabled agent sets come from `cocoa-backend/app/core/builtin_presets.py`.
 
 ```bash
-docker build -t cocoa-instance:latest -f cocoa-artifacts/docker/Dockerfile.instance .
+bash scripts/build-instance-images.sh            # build 1+5 locally (no push)
+bash scripts/build-instance-images.sh --push     # build + push to registry (localhost:5000 default)
+COCOA_INSTANCE_REGISTRY=localhost:5000 bash scripts/build-instance-images.sh --push
 ```
 
 ### Apply Manifests (after template substitution)

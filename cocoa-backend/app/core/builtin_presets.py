@@ -20,6 +20,15 @@ from __future__ import annotations
 #   {slug, name, display_name, description, tags, version, manifest}
 
 
+def _subagent_strategy(enabled: list[str]) -> dict:
+    """Shape a ``subagent_strategy`` manifest block (v5.1 G2/G3).
+
+    ``enabled`` values are subagent capability ids (agent .md file names,
+    e.g. ``intent`` / ``architecture``), matching the 6 能力目录.
+    """
+    return {"enabled": enabled, "constraints": {"max_parallel": 4}}
+
+
 def _preset(
     *,
     slug: str,
@@ -29,8 +38,19 @@ def _preset(
     commands: list[str],
     prompt: str,
     provider: dict | None,
+    subagent_strategy: dict | None = None,
     version: str = "1.0.0",
 ) -> dict:
+    manifest: dict = {
+        "model": "tbd",
+        "prompt": prompt,
+        "skills": [],
+        "tools": [],
+        "commands": commands,
+        "provider": provider,
+    }
+    if subagent_strategy is not None:
+        manifest["subagent_strategy"] = subagent_strategy
     return {
         "slug": slug,
         "name": name,
@@ -38,14 +58,7 @@ def _preset(
         "description": description,
         "tags": tags,
         "version": version,
-        "manifest": {
-            "model": "tbd",
-            "prompt": prompt,
-            "skills": [],
-            "tools": [],
-            "commands": commands,
-            "provider": provider,
-        },
+        "manifest": manifest,
     }
 
 
@@ -76,6 +89,9 @@ BUILTIN_PRESETS: list[dict] = [
             "让下游血脉接力。约束：只负责「想清楚」，落地动作通过兽道 @ 完成。"
         ),
         provider=_DEFAULT_PROVIDER,
+        subagent_strategy=_subagent_strategy(
+            ["intent", "architecture", "research"]
+        ),
     ),
     _preset(
         slug="beaver",
@@ -92,6 +108,9 @@ BUILTIN_PRESETS: list[dict] = [
             "max_tokens": 4096,
             "temperature": 0.5,
         },
+        subagent_strategy=_subagent_strategy(
+            ["explore", "research", "architecture", "quality"]
+        ),
     ),
     _preset(
         slug="sparrow",
@@ -104,6 +123,7 @@ BUILTIN_PRESETS: list[dict] = [
             "任务后快速执行、构建与测试。不擅自扩 scope；不确定就问上游。"
         ),
         provider=_DEFAULT_PROVIDER,
+        subagent_strategy=_subagent_strategy(["explore", "quality"]),
     ),
     _preset(
         slug="coyote",
@@ -122,6 +142,9 @@ BUILTIN_PRESETS: list[dict] = [
             "max_tokens": 4096,
             "temperature": 0.5,
         },
+        subagent_strategy=_subagent_strategy(
+            ["explore", "research", "architecture", "quality"]
+        ),
     ),
     _preset(
         slug="lion",
@@ -135,6 +158,16 @@ BUILTIN_PRESETS: list[dict] = [
             "只保证链路闭合。"
         ),
         provider=_ANTHROPIC_PROVIDER,
+        subagent_strategy=_subagent_strategy(
+            [
+                "intent",
+                "architecture",
+                "quality",
+                "explore",
+                "research",
+                "vision",
+            ]
+        ),
     ),
 ]
 

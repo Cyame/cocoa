@@ -53,6 +53,8 @@ def _manifest_template_subset(manifest: dict[str, Any]) -> dict[str, Any]:
         or "",
         "tools": list(manifest.get("tools") or []),
         "runtime_config": dict(manifest.get("runtime_config") or {}),
+        # Subagent delegation strategy (v5.1) — flows for scaffold intent hints.
+        "subagent_strategy": manifest.get("subagent_strategy") or {},
         # Template-only copies for world-hub prompt composition (not live caps).
         "baseclass_template_prompt": manifest.get("system_prompt")
         or manifest.get("prompt")

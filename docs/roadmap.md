@@ -194,7 +194,7 @@ Cocoa no longer plans primarily as open-ended "P-N feature waves". After foundat
 | **v1–v3.4.1** | Historical product slices | **Archived** → `docs/archive/` |
 | **v3.5.x design correction** | audit-review + D1–D11 → `audit-product-design.md` | **Done** (docs) |
 | **v4** | Functional closure (schema, tenant, knowledge, clone, harness collab, …) | **Done**（v4.0–v4.10 + v4.9.5 closeout 质量审查通过 2026-08-08）— `.omo/plans/v4-*.md` |
-| **v5** | 完整世代：更名（山海+生物世界观）+ 定义（5 始祖/6 subagent/镜像体系）+ UIUX + 视觉（原 3.6） | **Queued（2026-08-07 立项）** — `.omo/evidence/v5-rename-decisions.md` + `.omo/plans/v5-roadmap.md` |
+| **v5** | 完整世代：更名（山海+生物世界观）+ 定义（5 始祖/6 subagent/镜像体系）+ UIUX + 视觉（原 3.6） | **In Progress**（v5.0 命名波已交付；**v5.1 定义波执行中** 2026-08-09）— `.omo/evidence/v5-rename-decisions.md` + `.omo/plans/v5-roadmap.md` |
 | **Later** | Session-engine-v2 multimodal, Voice, … | §7 far queue |
 
 Code identifiers follow 15d names (`Workspace`, `Entity`, `Passage`, `BaseClass`) — **v5 世代只改 UI 显示名与 5 动物 slug，代码名/DB/API 仍保持 15d**（见 `.omo/evidence/v5-rename-decisions.md`）。Pre-v2 names remain only in alembic history.
@@ -412,5 +412,6 @@ Recorded so future planners do not lose intent:
 | 2026-08-02 | **V47-1…11 签核** — 全部接受顾问建议；v4.7 可排队实现（仍依赖 v4.5/v4.6）。 |
 
 | 2026-08-07 | **v5 完整世代立项** — 四切片（v5.0 命名 / v5.1 定义 / v5.2 UIUX / v5.3 视觉）；MAJOR bump 5.x；grill-me 会话闭环全部待定项：5 常驻始祖（狐狸/海狸/麻雀/郊狼/狮子）+ 6 subagent 能力（唤灵/灵视/衡判/游魂/潜知/百瞳 退出体系）、三层名始祖/血脉/后裔、结构术语大陆/区域/生境/迁徙路线、其余术语全量新词（成员/信号塔/标本/粮仓/足迹/诞生记录/领地地图/蜕变/演化/领悟/兽道）、rank 全量退役、slug 直接改名+存量 UPDATE、代码名不动。SoT `.omo/evidence/v5-rename-decisions.md` + `.omo/plans/v5-roadmap.md`；v4.9.5 closeout 先行。 |
+| 2026-08-09 | **v5.0 命名波交付 + v5.1 定义波执行中** — 版本 5.0.2；6 降级 Memory 物理删光（迁移 `78137b7985e5` M2）；T1 落地 6 能力 subagent agent .md（intent/architecture/quality/explore/research/vision）；T6 Tunnel 协议清理（提交 a3f0b85：错误码中性化 host_spawn_error/host_stdin_closed/turn_rejected/host_error + done payload 去 finish_reason + control interrupt）。SoT 同步：`v5-rename-decisions.md` §六.2「Memory 经验回流」条目作废 + §七.1 扩充；terminology / metaphor-name-table 补能力 id 列。 |
 
 *Next update trigger: a v4 slice closes, or implementation of a signed plan starts.*

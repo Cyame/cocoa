@@ -57,14 +57,16 @@ Slug = 英文动物名 kebab-case（DB unique）。Display = i18n key。
 
 ### 内置 Subagent 能力（v5.1 落实，不命名、不占拓扑、无 Entity 卡片）
 
-| 15d 神职（归档）| 能力角色 | omo Agent Source | 归属 |
-|---|---|---|---|
-| 唤灵 | Intent analysis, pre-planner | Metis | per-始祖 manifest 声明 |
-| 灵视 | Read-only architecture / debugging | Oracle | per-始祖 manifest 声明 |
-| 衡判 | Quality gate: review/approve/reject | Momus | per-始祖 manifest 声明 |
-| 游魂 | Codebase grep / exploration | Explore | per-始祖 manifest 声明 |
-| 潜知 | External reference + multi-repo + docs | Librarian | per-始祖 manifest 声明 |
-| 百瞳 | Visual / media / audio analysis | Multimodal-Looker | per-始祖 manifest 声明 |
+> T1 已建 6 个能力 agent：`cocoa-instance-host/subagents/agents/{intent,architecture,quality,explore,research,vision}.md`；frontmatter `name` = 能力 id，`subagent_strategy.enabled` 值复用同名。
+
+| 能力 id | 15d 神职（归档）| 能力角色 | omo Agent Source | 归属 |
+|---|---|---|---|---|
+| `intent` | 唤灵 | Intent analysis, pre-planner | Metis | per-始祖 manifest 声明 |
+| `architecture` | 灵视 | Read-only architecture / debugging | Oracle | per-始祖 manifest 声明 |
+| `quality` | 衡判 | Quality gate: review/approve/reject | Momus | per-始祖 manifest 声明 |
+| `explore` | 游魂 | Codebase grep / exploration | Explore | per-始祖 manifest 声明 |
+| `research` | 潜知 | External reference + multi-repo + docs | Librarian | per-始祖 manifest 声明 |
+| `vision` | 百瞳 | Visual / media / audio analysis | Multimodal-Looker | per-始祖 manifest 声明 |
 
 ### Learning 动作
 
