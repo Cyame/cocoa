@@ -65,7 +65,7 @@ export class ChatBridge {
       void this.onPiEvent(evt);
     });
     this.pi.on("error", (err: Error) => {
-      this.failActive(err.message || "pi_spawn_error");
+      this.failActive(err.message || "host_spawn_error");
     });
   }
 
@@ -76,8 +76,9 @@ export class ChatBridge {
     }
     if (msg.type === "control") {
       const action = String(msg.payload?.action ?? "");
-      if (action === "kill") {
-        this.log("control.kill");
+      // Protocol face only knows "interrupt"; mapping to pi.kill is host-internal.
+      if (action === "interrupt") {
+        this.log("control.interrupt");
         this.pi.kill();
       }
     }
@@ -109,7 +110,7 @@ export class ChatBridge {
     this.log("prompt", turnId, text.slice(0, 80));
     const ok = this.pi.prompt(text || "(empty)", turnId);
     if (!ok) {
-      this.sendError(turnId, targetEntity, "pi_stdin_closed");
+      this.sendError(turnId, targetEntity, "host_stdin_closed");
       this.active = null;
     }
   }
@@ -119,12 +120,14 @@ export class ChatBridge {
     if (!turn) return;
 
     if (evt.type === "response") {
+      // The bridge only drives one RPC per active turn, so a failed response
+      // always means the turn failed; classification must stay runtime-neutral.
       const success = Boolean(evt.success);
-      if (!success && evt.command === "prompt") {
+      if (!success) {
         const err =
           typeof evt.error === "string"
             ? evt.error
-            : JSON.stringify(evt.error ?? "prompt_rejected");
+            : JSON.stringify(evt.error ?? "turn_rejected");
         this.sendError(turn.turnId, turn.targetEntity, err);
         this.active = null;
       }
@@ -226,7 +229,6 @@ export class ChatBridge {
           "chat.response.done",
           {
             turn_id: turn.turnId,
-            finish_reason: "stop",
             status: "completed",
             target_entity: turn.targetEntity,
             text: turn.replyText,
@@ -240,7 +242,7 @@ export class ChatBridge {
 
     // Some pi builds emit top-level errors
     if (evt.type === "error" || evt.type === "agent_error") {
-      const message = String(evt.message ?? evt.error ?? "pi_error");
+      const message = String(evt.message ?? evt.error ?? "host_error");
       this.sendError(turn.turnId, turn.targetEntity, message);
       this.active = null;
     }

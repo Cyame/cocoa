@@ -96,7 +96,6 @@ async def ingest_tunnel_chat_frame(turn_id: str, frame: dict[str, Any]) -> None:
     if msg_type == CHAT_RESPONSE_DONE:
         state.status = "completed"
         frame.setdefault("status", "completed")
-        frame.setdefault("finish_reason", "stop")
         done_text = frame.get("text")
         # Done payload is authoritative when present; otherwise keep chunks.
         if isinstance(done_text, str) and done_text.strip():

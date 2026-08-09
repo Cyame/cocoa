@@ -104,6 +104,9 @@ class TunnelHub:
     async def send_control(
         self, instance_id: str, action: str, extra: dict[str, Any] | None = None
     ) -> bool:
+        """Send a control frame. Generic action channel: values are neutral
+        protocol primitives (interrupt / pause / resume / ...), never runtime
+        names."""
         payload = {"action": action, **(extra or {})}
         msg = TunnelMessage(type=TunnelMessageType.CONTROL.value, payload=payload)
         return await self.send(instance_id, msg)
@@ -132,7 +135,6 @@ async def ingest_host_frame(instance_id: str, message: TunnelMessage) -> None:
             "instance_id": instance_id,
             "token": message.payload.get("token"),
             "message": message.payload.get("message"),
-            "finish_reason": message.payload.get("finish_reason"),
             "target_entity": message.payload.get("target_entity"),
             "status": message.payload.get("status"),
         }

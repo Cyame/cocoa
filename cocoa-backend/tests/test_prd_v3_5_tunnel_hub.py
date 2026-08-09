@@ -118,7 +118,7 @@ async def test_chunk_ingest_into_turn_queue():
 
         await ingest_tunnel_chat_frame(
             turn_id,
-            {"type": CHAT_RESPONSE_DONE, "finish_reason": "stop", "status": "completed"},
+            {"type": CHAT_RESPONSE_DONE, "status": "completed"},
         )
         done = await asyncio.wait_for(state.queue.get(), timeout=1)
         assert done["type"] == CHAT_RESPONSE_DONE
@@ -150,7 +150,6 @@ async def test_ingest_done_text_without_chunks():
             turn_id,
             {
                 "type": CHAT_RESPONSE_DONE,
-                "finish_reason": "stop",
                 "status": "completed",
                 "text": "整段答复",
             },
