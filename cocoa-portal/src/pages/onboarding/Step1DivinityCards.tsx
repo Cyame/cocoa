@@ -1,20 +1,10 @@
-import {
-  AlertCircle,
-  Binary,
-  Check,
-  Compass,
-  Filter,
-  Flame,
-  Layers,
-  LoaderCircle,
-  RefreshCw,
-  Sparkles,
-} from 'lucide-react';
+import { AlertCircle, Check, Filter, LoaderCircle, RefreshCw } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '@/lib/api';
 import { fetchBaseClasses } from '@/lib/api/onboarding';
 import { resolveError } from '@/lib/apiError';
+import { getIconForSlug } from '@/lib/baseClassIcons';
 import { normalizeBaseClassTags, translateBaseClassTag } from '@/lib/baseClassTags';
 import type { BaseClass, JsonObject } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -24,14 +14,6 @@ type GroupFilter = 'all' | string;
 
 const INTERNAL_SLUGS = new Set(['cerebellum-baseclass']);
 const INTERNAL_TAGS = new Set(['internal', 'system']);
-
-const ICON_FOR_SLUG: Record<string, typeof Compass> = {
-  fox: Compass,
-  beaver: Flame,
-  sparrow: Binary,
-  coyote: Layers,
-  lion: Sparkles,
-};
 
 /** Default tags when API omits them - free-form, not a closed enum. */
 const DEFAULT_TAGS_FOR_SLUG: Record<string, readonly string[]> = {
@@ -247,7 +229,7 @@ export default function Step1DivinityCards({ onLoadingChange, onErrorChange }: S
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
             {filtered.map((entry) => {
               const isSelected = entry.id === selectedId;
-              const Icon = ICON_FOR_SLUG[entry.slug] ?? Compass;
+              const Icon = getIconForSlug(entry.slug);
               const tags = resolveTags(entry);
               const lead = primaryTag(entry);
               const commands = extractCommands(entry.manifest);
