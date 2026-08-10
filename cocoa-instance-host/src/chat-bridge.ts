@@ -1,6 +1,10 @@
 /** Bridge Tunnel chat.request ↔ pi RPC events → chat.response.*. */
 
-import { makeMessage, type TunnelMessage } from "./protocol.js";
+import {
+  makeMessage,
+  TunnelMessageType,
+  type TunnelMessage,
+} from "./protocol.js";
 import type { PiEvent, PiRpc } from "./pi-rpc.js";
 import type { TunnelClient } from "./tunnel-client.js";
 
@@ -136,7 +140,7 @@ export class ChatBridge {
 
     if (evt.type === "message_update") {
       const ame = evt.assistantMessageEvent as
-        | { type?: string; delta?: string }
+        | { type?: string; delta?: string; toolName?: string }
         | undefined;
       if (ame?.type === "text_delta" && typeof ame.delta === "string" && ame.delta) {
         turn.sawText = true;
@@ -153,6 +157,22 @@ export class ChatBridge {
             { turn_id: turn.turnId },
           ),
         );
+      } else if (ame?.type === "thinking_start" || ame?.type === "thinking_end") {
+        this.sendActivity(
+          turn,
+          "thinking",
+          ame.type === "thinking_start" ? "start" : "end",
+        );
+      } else if (ame?.type === "thinking_delta" && typeof ame.delta === "string") {
+        this.sendActivity(turn, "thinking", "delta", { delta: ame.delta });
+      } else if (ame?.type === "toolcall_start") {
+        this.sendActivity(turn, "tool_use", "start", {
+          tool_name: ame.toolName,
+        });
+      } else if (ame?.type === "toolcall_delta" && typeof ame.delta === "string") {
+        this.sendActivity(turn, "tool_use", "delta", { delta: ame.delta });
+      } else if (ame?.type === "toolcall_end") {
+        this.sendActivity(turn, "tool_use", "end");
       } else {
         // Some pi builds emit full text on message_update without deltas.
         const full = extractAssistantText(evt);
@@ -203,6 +223,33 @@ export class ChatBridge {
       return;
     }
 
+    // Tool execution is reported at top level (not nested in message_update).
+    if (evt.type === "tool_execution_start") {
+      const toolName = String((evt as { toolName?: unknown }).toolName ?? "");
+      this.sendActivity(turn, "tool_use", "start", { tool_name: toolName });
+      return;
+    }
+    if (evt.type === "tool_execution_update") {
+      const partial = (evt as { partialResult?: unknown }).partialResult;
+      const delta =
+        typeof partial === "string"
+          ? partial
+          : partial != null
+            ? JSON.stringify(partial)
+            : undefined;
+      this.sendActivity(turn, "tool_use", "delta", {
+        tool_name: String((evt as { toolName?: unknown }).toolName ?? ""),
+        ...(delta !== undefined ? { delta } : {}),
+      });
+      return;
+    }
+    if (evt.type === "tool_execution_end") {
+      this.sendActivity(turn, "tool_use", "end", {
+        tool_name: String((evt as { toolName?: unknown }).toolName ?? ""),
+      });
+      return;
+    }
+
     if (evt.type === "agent_end") {
       // Last chance: pull final assistant text if no deltas were streamed.
       if (!turn.sawText) {
@@ -246,6 +293,27 @@ export class ChatBridge {
       this.sendError(turn.turnId, turn.targetEntity, message);
       this.active = null;
     }
+  }
+
+  private sendActivity(
+    turn: ActiveTurn,
+    kind: "thinking" | "tool_use",
+    status: "start" | "delta" | "end",
+    extra: { tool_name?: string; delta?: string } = {},
+  ): void {
+    this.tunnel.send(
+      makeMessage(
+        TunnelMessageType.CHAT_RESPONSE_ACTIVITY,
+        {
+          turn_id: turn.turnId,
+          kind,
+          status,
+          ...extra,
+          target_entity: turn.targetEntity,
+        },
+        { turn_id: turn.turnId },
+      ),
+    );
   }
 
   private failActive(message: string): void {

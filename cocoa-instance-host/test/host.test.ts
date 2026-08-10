@@ -304,3 +304,193 @@ test("pi rpc framing splits only on LF", () => {
   );
   assert.equal((events[0] as { type: string }).type, "message_update");
 });
+
+test("chat bridge maps thinking events to chat.response.activity kind=thinking", async () => {
+  const sent: Array<{ type: string; payload: Record<string, unknown> }> = [];
+  const fakeTunnel = {
+    send(msg: { type: string; payload: Record<string, unknown> }) {
+      sent.push(msg);
+      return true;
+    },
+  };
+  const fakePi = new PiRpc({ log: () => {} });
+  Object.defineProperty(fakePi, "running", { get: () => true });
+  fakePi.prompt = () => true;
+  fakePi.start = () => {};
+
+  const bridge = new ChatBridge({
+    tunnel: fakeTunnel as unknown as TunnelClient,
+    pi: fakePi,
+    log: () => {},
+  });
+
+  await bridge.handleTunnelMessage(
+    makeMessage(
+      "chat.request",
+      { turn_id: "turn-think", text: "hello", target_entity: "alice" },
+      { turn_id: "turn-think" },
+    ),
+  );
+
+  fakePi.emit("event", {
+    type: "message_update",
+    assistantMessageEvent: { type: "thinking_start", contentIndex: 0 },
+  });
+  fakePi.emit("event", {
+    type: "message_update",
+    assistantMessageEvent: {
+      type: "thinking_delta",
+      contentIndex: 0,
+      delta: "深入思考",
+    },
+  });
+  fakePi.emit("event", {
+    type: "message_update",
+    assistantMessageEvent: { type: "thinking_end", contentIndex: 0 },
+  });
+
+  const activities = sent.filter((m) => m.type === "chat.response.activity");
+  assert.equal(activities.length, 3);
+  assert.deepEqual(activities[0]?.payload, {
+    turn_id: "turn-think",
+    kind: "thinking",
+    status: "start",
+    target_entity: "alice",
+  });
+  assert.deepEqual(activities[1]?.payload, {
+    turn_id: "turn-think",
+    kind: "thinking",
+    status: "delta",
+    delta: "深入思考",
+    target_entity: "alice",
+  });
+  assert.deepEqual(activities[2]?.payload, {
+    turn_id: "turn-think",
+    kind: "thinking",
+    status: "end",
+    target_entity: "alice",
+  });
+  assert.equal(
+    sent.some((m) => m.type === "chat.response.chunk"),
+    false,
+    "thinking events must not leak into text chunk frames",
+  );
+});
+
+test("chat bridge maps toolcall_start to activity kind=tool_use with tool_name", async () => {
+  const sent: Array<{ type: string; payload: Record<string, unknown> }> = [];
+  const fakeTunnel = {
+    send(msg: { type: string; payload: Record<string, unknown> }) {
+      sent.push(msg);
+      return true;
+    },
+  };
+  const fakePi = new PiRpc({ log: () => {} });
+  Object.defineProperty(fakePi, "running", { get: () => true });
+  fakePi.prompt = () => true;
+  fakePi.start = () => {};
+
+  const bridge = new ChatBridge({
+    tunnel: fakeTunnel as unknown as TunnelClient,
+    pi: fakePi,
+    log: () => {},
+  });
+
+  await bridge.handleTunnelMessage(
+    makeMessage(
+      "chat.request",
+      { turn_id: "turn-tool", text: "hello", target_entity: "alice" },
+      { turn_id: "turn-tool" },
+    ),
+  );
+
+  fakePi.emit("event", {
+    type: "message_update",
+    assistantMessageEvent: {
+      type: "toolcall_start",
+      contentIndex: 0,
+      id: "call_1",
+      toolName: "bash",
+    },
+  });
+  fakePi.emit("event", {
+    type: "message_update",
+    assistantMessageEvent: {
+      type: "toolcall_delta",
+      contentIndex: 0,
+      delta: '{"command":"ls"}',
+    },
+  });
+  fakePi.emit("event", {
+    type: "message_update",
+    assistantMessageEvent: { type: "toolcall_end", contentIndex: 0 },
+  });
+
+  const activities = sent.filter((m) => m.type === "chat.response.activity");
+  assert.equal(activities.length, 3);
+  assert.deepEqual(activities[0]?.payload, {
+    turn_id: "turn-tool",
+    kind: "tool_use",
+    status: "start",
+    tool_name: "bash",
+    target_entity: "alice",
+  });
+  assert.deepEqual(activities[1]?.payload, {
+    turn_id: "turn-tool",
+    kind: "tool_use",
+    status: "delta",
+    delta: '{"command":"ls"}',
+    target_entity: "alice",
+  });
+  assert.deepEqual(activities[2]?.payload, {
+    turn_id: "turn-tool",
+    kind: "tool_use",
+    status: "end",
+    target_entity: "alice",
+  });
+});
+
+test("chat bridge maps top-level tool_execution_start to tool_use activity", async () => {
+  const sent: Array<{ type: string; payload: Record<string, unknown> }> = [];
+  const fakeTunnel = {
+    send(msg: { type: string; payload: Record<string, unknown> }) {
+      sent.push(msg);
+      return true;
+    },
+  };
+  const fakePi = new PiRpc({ log: () => {} });
+  Object.defineProperty(fakePi, "running", { get: () => true });
+  fakePi.prompt = () => true;
+  fakePi.start = () => {};
+
+  const bridge = new ChatBridge({
+    tunnel: fakeTunnel as unknown as TunnelClient,
+    pi: fakePi,
+    log: () => {},
+  });
+
+  await bridge.handleTunnelMessage(
+    makeMessage(
+      "chat.request",
+      { turn_id: "turn-exec", text: "delegate", target_entity: "alice" },
+      { turn_id: "turn-exec" },
+    ),
+  );
+
+  fakePi.emit("event", {
+    type: "tool_execution_start",
+    toolCallId: "call_1",
+    toolName: "subagent-ops",
+    args: { strategy: "default" },
+  });
+
+  const activities = sent.filter((m) => m.type === "chat.response.activity");
+  assert.equal(activities.length, 1);
+  assert.deepEqual(activities[0]?.payload, {
+    turn_id: "turn-exec",
+    kind: "tool_use",
+    status: "start",
+    tool_name: "subagent-ops",
+    target_entity: "alice",
+  });
+});

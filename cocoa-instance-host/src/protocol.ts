@@ -1,5 +1,27 @@
 /** Tunnel envelope shared with cocoa-backend tunnel protocol. */
 
+/**
+ * Versioned message types, aligned 1:1 with the backend Tunnel protocol
+ * (`cocoa-backend/app/services/tunnel/protocol.py`). Dotted names are the
+ * wire contract; new message types must follow the same `area.name` shape.
+ */
+export enum TunnelMessageType {
+  // Backend -> Host
+  AUTH_OK = "auth.ok",
+  AUTH_ERROR = "auth.error",
+  CHAT_REQUEST = "chat.request",
+  CONTROL = "control",
+  PING = "ping",
+
+  // Host -> Backend
+  AUTH = "auth",
+  CHAT_RESPONSE_CHUNK = "chat.response.chunk",
+  CHAT_RESPONSE_DONE = "chat.response.done",
+  CHAT_RESPONSE_ERROR = "chat.response.error",
+  CHAT_RESPONSE_ACTIVITY = "chat.response.activity",
+  PONG = "pong",
+}
+
 export interface TunnelMessage {
   id: string;
   type: string;
