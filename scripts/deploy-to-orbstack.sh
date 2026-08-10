@@ -84,18 +84,50 @@ if [[ "$MODE" == "logs" ]]; then
 fi
 
 require_command docker
+
+# v5.1 N2/G10: engine-v comes from the pi package pin — same extraction as
+# scripts/build-instance-images.sh (single source of truth, never hardcode).
+PACKAGE_JSON="$ROOT_DIR/cocoa-instance-host/package.json"
+ENGINE_V="$(python3 -c '
+import json, sys
+with open(sys.argv[1]) as f:
+    pkg = json.load(f)
+pin = pkg.get("dependencies", {}).get("@earendil-works/pi-coding-agent", "")
+if not pin:
+    sys.exit("package.json has no @earendil-works/pi-coding-agent pin")
+print(pin)
+' "$PACKAGE_JSON")"
+log "engine-v = ${ENGINE_V} (pi package pin)"
+
+# v5.1 N2/G8: the 1+5 instance image family. Instance Deployment image refs are
+# resolved at runtime by the backend DeployService (_resolve_instance_image →
+# {registry}/cocoa-instance-{slug}:{engine-v}, registry env
+# COCOA_INSTANCE_REGISTRY default localhost:5000), so the deploy script only
+# preflights local presence of the six images. Keep the registry env in sync
+# with both build-instance-images.sh and deploy_service.py.
+REGISTRY="${COCOA_INSTANCE_REGISTRY:-localhost:5000}"
+INSTANCE_IMAGES=(
+  "$REGISTRY/cocoa-instance-base:${ENGINE_V}"
+  "$REGISTRY/cocoa-instance-fox:${ENGINE_V}"
+  "$REGISTRY/cocoa-instance-beaver:${ENGINE_V}"
+  "$REGISTRY/cocoa-instance-sparrow:${ENGINE_V}"
+  "$REGISTRY/cocoa-instance-coyote:${ENGINE_V}"
+  "$REGISTRY/cocoa-instance-lion:${ENGINE_V}"
+)
 MISSING=()
-for image in cocoa-backend:latest cocoa-instance:latest cocoa-portal:latest; do
+for image in cocoa-backend:latest "${INSTANCE_IMAGES[@]}" cocoa-portal:latest; do
   if ! docker images --format '{{.Repository}}:{{.Tag}}' | grep -qx "$image"; then
     MISSING+=("$image")
   fi
 done
 if (( ${#MISSING[@]} > 0 )); then
   err "Missing Docker images: ${MISSING[*]}"
-  err "Build them locally before deploying, for example: docker build -t cocoa-backend:latest ..."
+  err "Build them locally before deploying, for example:"
+  err "  docker build -t cocoa-backend:latest ..."
+  err "  ./scripts/build-instance-images.sh --push   # 1+5 family (base + 5 ancestors)"
   exit 2
 fi
-ok "All required Cocoa images are present locally"
+ok "All required Cocoa images are present locally (backend/portal + instance 1+5)"
 
 log "Ensuring namespace $NS exists"
 kubectl create namespace "$NS" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
@@ -110,7 +142,9 @@ DATABASE_URL="${DATABASE_URL:-postgresql+asyncpg://postgres:devpassword@cocoa-po
 JWT_SECRET="${JWT_SECRET:-dev-secret-not-for-production-32-chars-min-OK}"
 ENCRYPTION_KEY="${ENCRYPTION_KEY:-dev-encrypt-key-32-bytes-long-AAA}"
 COCOA_K8S_DISABLED="${COCOA_K8S_DISABLED:-false}"
-COCOA_INSTANCE_IMAGE_PULL_POLICY="${COCOA_INSTANCE_IMAGE_PULL_POLICY:-Never}"
+# v5.1 G8: registry images may be updated in place, so instance pods must
+# always re-pull (Never was the old shared-daemon assumption).
+COCOA_INSTANCE_IMAGE_PULL_POLICY="${COCOA_INSTANCE_IMAGE_PULL_POLICY:-Always}"
 # Stable internal token for instance pods ↔ backend /api/v1/internal/*.
 # Reuse the live secret value when present so redeploys do not rotate it.
 EXISTING_API_TOKEN="$(
