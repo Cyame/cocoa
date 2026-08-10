@@ -49,6 +49,9 @@ MESSAGING_ACTIVATION_TRIGGERED = "messaging.activation_triggered"
 CHAT_RESPONSE_CHUNK = "chat.response.chunk"
 CHAT_RESPONSE_DONE = "chat.response.done"
 CHAT_RESPONSE_ERROR = "chat.response.error"
+# v5.2: host 流式活动回显（thinking / tool_use 两层事件，payload 原样透传，
+# portal 端自行决定展示去重）
+CHAT_RESPONSE_ACTIVITY = "chat.response.activity"
 
 # ---------------------------------------------------------------------------
 # CentralHub (emit points in P6)

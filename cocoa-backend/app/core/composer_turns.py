@@ -15,6 +15,7 @@ from uuid import uuid4
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.event_types import (
+    CHAT_RESPONSE_ACTIVITY,
     CHAT_RESPONSE_CHUNK,
     CHAT_RESPONSE_DONE,
     CHAT_RESPONSE_ERROR,
@@ -117,6 +118,13 @@ async def ingest_tunnel_chat_frame(turn_id: str, frame: dict[str, Any]) -> None:
             state, status="failed", content=str(frame.get("message") or state.reply_text)
         )
         await state.queue.put(None)
+        return
+
+    if msg_type == CHAT_RESPONSE_ACTIVITY:
+        # 流式活动回显（thinking / tool_use）：透传 host payload，不改变
+        # turn 状态与回复文本，也不终结 turn。
+        await _emit_frame(state, frame)
+        await _persist_chat_event(CHAT_RESPONSE_ACTIVITY, state, frame)
         return
 
     logger.debug("ignore non-chat tunnel frame type=%s", msg_type)

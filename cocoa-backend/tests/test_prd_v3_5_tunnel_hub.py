@@ -12,7 +12,7 @@ from starlette.testclient import TestClient
 from starlette.websockets import WebSocketState
 
 from app.core.composer_turns import ComposerTurnState, get_turn, ingest_tunnel_chat_frame
-from app.core.event_types import CHAT_RESPONSE_CHUNK, CHAT_RESPONSE_DONE
+from app.core.event_types import CHAT_RESPONSE_ACTIVITY, CHAT_RESPONSE_CHUNK, CHAT_RESPONSE_DONE
 from app.services.tunnel.protocol import TunnelMessage, TunnelMessageType
 from app.services.tunnel.tunnel_hub import TunnelHub, ingest_host_frame, tunnel_hub
 
@@ -264,6 +264,127 @@ async def test_ingest_host_frame_strips_finish_reason_from_done(monkeypatch):
     assert frame["type"] == CHAT_RESPONSE_DONE
     assert frame["status"] == "completed"
     assert "finish_reason" not in frame
+
+
+@pytest.mark.asyncio
+async def test_tunnel_message_type_includes_chat_response_activity():
+    """v5.2: activity 回显消息类型与 host 侧 protocol.ts 1:1（dotted 版本化）。"""
+    assert TunnelMessageType.CHAT_RESPONSE_ACTIVITY == "chat.response.activity"
+    assert TunnelMessageType.CHAT_RESPONSE_ACTIVITY.value == CHAT_RESPONSE_ACTIVITY
+
+
+@pytest.mark.asyncio
+async def test_ingest_host_frame_routes_activity_to_composer(monkeypatch):
+    """activity payload 字段名原样透传（kind/status/tool_name/delta/target_entity）。"""
+    seen: list[tuple[str, dict]] = []
+
+    async def fake_ingest(turn_id: str, frame: dict):
+        seen.append((turn_id, frame))
+
+    monkeypatch.setattr(
+        "app.core.composer_turns.ingest_tunnel_chat_frame", fake_ingest
+    )
+    msg = TunnelMessage(
+        type=TunnelMessageType.CHAT_RESPONSE_ACTIVITY.value,
+        turn_id="t-activity",
+        payload={
+            "turn_id": "t-activity",
+            "kind": "tool_use",
+            "status": "start",
+            "tool_name": "read_file",
+            "target_entity": "bob",
+        },
+    )
+    await ingest_host_frame("inst", msg)
+    assert seen == [
+        (
+            "t-activity",
+            {
+                "type": "chat.response.activity",
+                "turn_id": "t-activity",
+                "instance_id": "inst",
+                "kind": "tool_use",
+                "status": "start",
+                "tool_name": "read_file",
+                "target_entity": "bob",
+            },
+        )
+    ]
+
+
+@pytest.mark.asyncio
+async def test_ingest_host_frame_activity_drops_null_optionals(monkeypatch):
+    """thinking start/end 无 tool_name/delta → 可选字段从 frame 中剔除。"""
+    seen: list[tuple[str, dict]] = []
+
+    async def fake_ingest(turn_id: str, frame: dict):
+        seen.append((turn_id, frame))
+
+    monkeypatch.setattr(
+        "app.core.composer_turns.ingest_tunnel_chat_frame", fake_ingest
+    )
+    msg = TunnelMessage(
+        type=TunnelMessageType.CHAT_RESPONSE_ACTIVITY.value,
+        turn_id="t-think",
+        payload={
+            "turn_id": "t-think",
+            "kind": "thinking",
+            "status": "end",
+        },
+    )
+    await ingest_host_frame("inst", msg)
+    assert len(seen) == 1
+    _, frame = seen[0]
+    assert frame["kind"] == "thinking"
+    assert frame["status"] == "end"
+    assert "tool_name" not in frame
+    assert "delta" not in frame
+
+
+@pytest.mark.asyncio
+async def test_activity_frame_into_turn_queue():
+    """activity 帧进入 composer_turns history+queue，不终结 turn。"""
+    turn_id = str(uuid4())
+    state = ComposerTurnState(
+        turn_id=turn_id,
+        instance_id="inst-1",
+        workspace_id="ws-1",
+        target_entity="alice",
+        via_tunnel=True,
+    )
+    from app.core import composer_turns as ct
+
+    ct._TURNS[turn_id] = state
+    try:
+        await ingest_tunnel_chat_frame(
+            turn_id,
+            {
+                "type": CHAT_RESPONSE_ACTIVITY,
+                "kind": "tool_use",
+                "status": "delta",
+                "tool_name": "write_file",
+                "delta": "{\"path\": \"x\"}",
+            },
+        )
+        frame = await asyncio.wait_for(state.queue.get(), timeout=1)
+        assert frame["type"] == CHAT_RESPONSE_ACTIVITY
+        assert frame["kind"] == "tool_use"
+        assert frame["status"] == "delta"
+        assert frame["tool_name"] == "write_file"
+        assert frame["delta"] == '{"path": "x"}'
+        assert frame["target_entity"] == "alice"
+        assert state.status == "responding"
+        assert state.reply_text == ""
+
+        await ingest_tunnel_chat_frame(
+            turn_id,
+            {"type": CHAT_RESPONSE_DONE, "status": "completed"},
+        )
+        done = await asyncio.wait_for(state.queue.get(), timeout=1)
+        assert done["type"] == CHAT_RESPONSE_DONE
+        await asyncio.wait_for(state.queue.get(), timeout=1)  # sentinel
+    finally:
+        ct._TURNS.pop(turn_id, None)
 
 
 @pytest.mark.asyncio

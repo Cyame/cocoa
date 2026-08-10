@@ -25,6 +25,7 @@ class TunnelMessageType(str, Enum):
     CHAT_RESPONSE_CHUNK = "chat.response.chunk"
     CHAT_RESPONSE_DONE = "chat.response.done"
     CHAT_RESPONSE_ERROR = "chat.response.error"
+    CHAT_RESPONSE_ACTIVITY = "chat.response.activity"
     PONG = "pong"
 
 

@@ -143,6 +143,28 @@ async def ingest_host_frame(instance_id: str, message: TunnelMessage) -> None:
         await ingest_tunnel_chat_frame(str(turn_id), frame)
         return
 
+    if msg_type == TunnelMessageType.CHAT_RESPONSE_ACTIVITY.value:
+        # v5.2 activity 回显：thinking / tool_use 两层事件，payload 字段名
+        # 与 host 侧 protocol.ts 1:1（kind/status/tool_name/delta/target_entity）。
+        turn_id = message.turn_id or message.payload.get("turn_id")
+        if not turn_id:
+            logger.warning("tunnel chat frame missing turn_id type=%s", msg_type)
+            return
+        frame = {
+            "type": msg_type,
+            "turn_id": turn_id,
+            "instance_id": instance_id,
+            "kind": message.payload.get("kind"),
+            "status": message.payload.get("status"),
+            "tool_name": message.payload.get("tool_name"),
+            "delta": message.payload.get("delta"),
+            "target_entity": message.payload.get("target_entity"),
+        }
+        # Drop null optional fields for cleaner SSE
+        frame = {k: v for k, v in frame.items() if v is not None}
+        await ingest_tunnel_chat_frame(str(turn_id), frame)
+        return
+
     if msg_type == TunnelMessageType.PONG.value:
         return
 
