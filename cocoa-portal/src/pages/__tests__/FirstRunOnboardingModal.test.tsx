@@ -407,4 +407,152 @@ describe('FirstRunOnboardingModal', () => {
 
     expect(onClose).toHaveBeenCalledWith('dismissed');
   });
+
+  it('shows inherit placeholder in preview when no provider is selected', async () => {
+    renderModal();
+
+    fireEvent.click(await screen.findByTestId('deity-card-fox', {}, { timeout: 5000 }));
+    fireEvent.click(screen.getByTestId('onboarding-next'));
+
+    expect(
+      await screen.findByTestId('onboarding-step2', {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
+
+    expect(screen.getByText('Inherit progenitor default')).toBeInTheDocument();
+    expect(screen.getByText('Inherit default model')).toBeInTheDocument();
+  });
+
+  it('shows model dropdown when a provider is selected and hides it when switched back to inherit', async () => {
+    renderModal();
+
+    fireEvent.click(await screen.findByTestId('deity-card-fox', {}, { timeout: 5000 }));
+    fireEvent.click(screen.getByTestId('onboarding-next'));
+
+    expect(
+      await screen.findByTestId('onboarding-step2', {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
+
+    expect(screen.queryByLabelText('Model')).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Intelligence'), { target: { value: 'prov-1' } });
+
+    expect(await screen.findByLabelText('Model', {}, { timeout: 3000 })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Intelligence'), { target: { value: '' } });
+
+    await waitFor(() => {
+      expect(screen.queryByLabelText('Model')).not.toBeInTheDocument();
+    });
+  });
+
+  it('clears model when switching provider', async () => {
+    renderModal();
+
+    fireEvent.click(await screen.findByTestId('deity-card-fox', {}, { timeout: 5000 }));
+    fireEvent.click(screen.getByTestId('onboarding-next'));
+
+    expect(
+      await screen.findByTestId('onboarding-step2', {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Intelligence'), { target: { value: 'prov-1' } });
+    await screen.findByLabelText('Model', {}, { timeout: 3000 });
+
+    act(() => {
+      useOnboardingStore.setState({ model: 'gpt-4o-mini' });
+    });
+    expect(useOnboardingStore.getState().model).toBe('gpt-4o-mini');
+
+    fireEvent.change(screen.getByLabelText('Intelligence'), { target: { value: '' } });
+
+    expect(useOnboardingStore.getState().model).toBe('');
+  });
+
+  it('does not overwrite user manual provider/model selection with base class defaults', async () => {
+    mockedApi.mockImplementation((path, init) => {
+      if (path.startsWith('/base-classes/by-id/') && path.endsWith('/provider-default')) {
+        return Promise.resolve({
+          id: 'pd-1',
+          base_class_id: 'base-fox',
+          provider_id: 'prov-default',
+          model: 'default-model',
+          created_at: '2026-07-01T00:00:00Z',
+          updated_at: null,
+        });
+      }
+      if (path.startsWith('/base-classes') && (init?.method ?? 'GET') === 'GET') {
+        return Promise.resolve(BASE_CLASSES_PAGE);
+      }
+      if (
+        path.startsWith('/organizations/default/providers') &&
+        (init?.method ?? 'GET') === 'GET'
+      ) {
+        return Promise.resolve([
+          {
+            id: 'prov-1',
+            organization_id: 'org-1',
+            origin: 'custom',
+            catalog_provider_id: null,
+            name: 'OpenAI Compatible',
+            slug: 'openai-compatible',
+            request_format: 'completion',
+            base_url: 'https://api.example.com',
+            api_key_ref: 'OPENAI_API_KEY',
+            default_model: 'gpt-4o-mini',
+            models_allowlist: ['gpt-4o-mini', 'gpt-4o'],
+            verify_ssl: true,
+            models_endpoint_mode: 'inherit',
+            models_base_url: null,
+            enabled: true,
+            last_test_status: 'ok',
+            last_tested_at: null,
+            last_test_detail: null,
+            created_at: '2026-07-01T00:00:00Z',
+            updated_at: null,
+          },
+        ]);
+      }
+      if (
+        path.startsWith('/organizations/default/system-hub') &&
+        (init?.method ?? 'GET') === 'GET'
+      ) {
+        return Promise.resolve({ provider_id: 'prov-1', model: 'gpt-4o-mini', configured: true });
+      }
+      if (path.startsWith('/namespaces') && (init?.method ?? 'GET') === 'GET') {
+        return Promise.resolve({
+          items: [
+            {
+              id: 'ns-default',
+              name: 'Default',
+              slug: 'default',
+              workspace_count: 0,
+              entity_count: 0,
+            },
+          ],
+          offset: 0,
+          limit: 50,
+          total: 1,
+        });
+      }
+      return Promise.reject(new Error(`Unmocked: ${init?.method ?? 'GET'} ${path}`));
+    });
+
+    renderModal();
+
+    fireEvent.click(await screen.findByTestId('deity-card-fox', {}, { timeout: 5000 }));
+    fireEvent.click(screen.getByTestId('onboarding-next'));
+
+    expect(
+      await screen.findByTestId('onboarding-step2', {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
+
+    act(() => {
+      useOnboardingStore.setState({ providerId: 'prov-1', model: 'gpt-4o' });
+    });
+
+    await waitFor(() => {
+      expect(useOnboardingStore.getState().providerId).toBe('prov-1');
+      expect(useOnboardingStore.getState().model).toBe('gpt-4o');
+    });
+  });
 });

@@ -11,7 +11,7 @@ import {
   Wand2,
   X,
 } from 'lucide-react';
-import { type ChangeEvent, useEffect, useMemo, useState } from 'react';
+import { type ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ModelInputCombobox } from '@/components/ModelInputCombobox';
 import { fetchNamespaces, type NamespaceWithStats } from '@/lib/api/namespaces';
@@ -78,10 +78,15 @@ export default function Step2EntityForm({
   const [namespaces, setNamespaces] = useState<readonly NamespaceWithStats[]>([]);
   const [namespacesLoading, setNamespacesLoading] = useState(true);
   const [modelsLoading, setModelsLoading] = useState(false);
+  const [modelsError, setModelsError] = useState<string | null>(null);
   const [systemHubConfigured, setSystemHubConfigured] = useState(false);
   const [providersLoading, setProvidersLoading] = useState(true);
   const [generateLoading, setGenerateLoading] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
+  const [baseClassDefaults, setBaseClassDefaults] = useState<
+    import('@/lib/api/providers').BaseClassProviderDefault | null
+  >(null);
+  const userTouchedProviderRef = useRef(false);
 
   const trimmedDisplayName = displayName.trim();
   const trimmedSlug = slug.trim();
@@ -129,23 +134,28 @@ export default function Step2EntityForm({
   }, [setNamespaceId]);
 
   useEffect(() => {
-    if (selectedBaseClass === null || providers.length === 0) return;
+    if (selectedBaseClass === null) return;
     let active = true;
     fetchBaseClassProviderDefault(selectedBaseClass.id)
       .then((defaults) => {
         if (!active || defaults === null) return;
-        setProviderId(defaults.provider_id);
-        setModel(defaults.model);
+        setBaseClassDefaults(defaults);
+        if (!userTouchedProviderRef.current) {
+          setProviderId(defaults.provider_id);
+          setModel(defaults.model);
+        }
       })
       .catch(() => undefined);
     return () => {
       active = false;
     };
-  }, [selectedBaseClass, providers.length, setModel, setProviderId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- prefill only on base class change
+  }, [selectedBaseClass, setModel, setProviderId]);
 
   useEffect(() => {
     if (providerId.trim().length === 0) {
       setModels([]);
+      setModelsError(null);
       setModelsLoading(false);
       return;
     }
@@ -168,10 +178,12 @@ export default function Step2EntityForm({
           model_type: null,
         })),
       );
+      setModelsError(null);
       setModelsLoading(false);
       return;
     }
     setModels([]);
+    setModelsError(null);
     setModelsLoading(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- models come from provider allowlist
   }, [providerId, providers]);
@@ -213,8 +225,23 @@ export default function Step2EntityForm({
       : t('onboarding.step2.generateDescription');
 
   const selectedProvider = providers.find((p) => p.id === providerId) ?? null;
-  const previewProvider = selectedProvider?.name ?? t('onboarding.step2.providerInherit');
-  const previewModel = model.trim() === '' ? t('onboarding.step2.modelInherit') : model.trim();
+  const inheritProviderName =
+    baseClassDefaults !== null
+      ? (providers.find((p) => p.id === baseClassDefaults.provider_id)?.name ??
+        baseClassDefaults.provider_id)
+      : null;
+  const inheritModelName = baseClassDefaults?.model ?? null;
+  const previewProvider =
+    selectedProvider?.name ??
+    (inheritProviderName !== null
+      ? `${t('onboarding.step2.providerInherit')}（${inheritProviderName}）`
+      : t('onboarding.step2.providerInherit'));
+  const previewModel =
+    model.trim() !== ''
+      ? model.trim()
+      : inheritModelName !== null
+        ? `${t('onboarding.step2.modelInherit')}（${inheritModelName}）`
+        : t('onboarding.step2.modelInherit');
   const previewKnowledgeCount = knowledgeRows.filter((row) => row.key.trim() !== '').length;
 
   async function handleGenerateDescription() {
@@ -425,6 +452,7 @@ export default function Step2EntityForm({
                   name="provider_id"
                   value={providerId}
                   onChange={(event) => {
+                    userTouchedProviderRef.current = true;
                     setProviderId(event.currentTarget.value);
                     setModel('');
                   }}
@@ -438,33 +466,72 @@ export default function Step2EntityForm({
                   ))}
                 </select>
               </div>
-              <div>
-                <label
-                  htmlFor="onboarding-model"
-                  className="block text-xs font-semibold uppercase tracking-wide text-slate-600"
-                >
-                  {t('onboarding.step2.modelLabel')}
-                </label>
-                <ModelInputCombobox
-                  id="onboarding-model"
-                  name="model"
-                  aria-label={t('onboarding.step2.modelLabel')}
-                  value={model}
-                  onChange={setModel}
-                  options={models}
-                  disabled={providerId.length === 0}
-                  placeholder={t('onboarding.step2.modelPlaceholder')}
-                  emptyOptionLabel={
-                    providerId.length === 0 ? t('onboarding.step2.modelInherit') : undefined
-                  }
-                  className="mt-2"
-                />
-                {modelsLoading ? (
-                  <p className="mt-1 text-xs text-slate-500">
-                    {t('onboarding.step2.loadingModels')}
-                  </p>
-                ) : null}
-              </div>
+              {providerId.length > 0 ? (
+                <div>
+                  <label
+                    htmlFor="onboarding-model"
+                    className="block text-xs font-semibold uppercase tracking-wide text-slate-600"
+                  >
+                    {t('onboarding.step2.modelLabel')}
+                  </label>
+                  <ModelInputCombobox
+                    id="onboarding-model"
+                    name="model"
+                    aria-label={t('onboarding.step2.modelLabel')}
+                    value={model}
+                    onChange={setModel}
+                    options={models}
+                    placeholder={t('onboarding.step2.modelPlaceholder')}
+                    emptyOptionLabel={
+                      models.length === 0 && !modelsLoading
+                        ? t('onboarding.step2.modelsEmpty')
+                        : undefined
+                    }
+                    className="mt-2"
+                  />
+                  {modelsLoading ? (
+                    <p className="mt-1 text-xs text-slate-500">
+                      {t('onboarding.step2.loadingModels')}
+                    </p>
+                  ) : null}
+                  {modelsError !== null ? (
+                    <div className="mt-1 flex items-center gap-2 text-xs text-red-700" role="alert">
+                      <span>{modelsError}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setModelsError(null);
+                          const selected = providers.find((p) => p.id === providerId);
+                          if (selected?.models_allowlist && selected.models_allowlist.length > 0) {
+                            setModels(
+                              selected.models_allowlist.map((id) => ({
+                                id,
+                                name: id,
+                                provider: selected.slug,
+                                context_length: null,
+                                description: null,
+                                reasoning: null,
+                                tool_call: null,
+                                attachment: null,
+                                modalities: null,
+                                limit_output: null,
+                                cost: null,
+                                web_search: null,
+                                model_type: null,
+                              })),
+                            );
+                          } else {
+                            setModels([]);
+                          }
+                        }}
+                        className="font-medium underline hover:text-red-900"
+                      >
+                        {t('onboarding.step2.modelsRetry')}
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           )}
 
