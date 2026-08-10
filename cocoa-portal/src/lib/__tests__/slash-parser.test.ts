@@ -81,3 +81,84 @@ describe('slash-parser', () => {
     expect(() => parse_turn(undefined as unknown as string)).toThrow(SlashParserError);
   });
 });
+
+describe('segmentCompartments', () => {
+  it('always places general compartment first', () => {
+    const turn = parse_turn('@alice /read\n@bob /write');
+    const compartments = segmentCompartments(turn);
+    expect(compartments[0].label).toBe('general');
+  });
+
+  it('creates one compartment per unique target slug', () => {
+    const turn = parse_turn('@alice /read\n@bob /write\n@alice /status');
+    const compartments = segmentCompartments(turn);
+    const labels = compartments.map((c) => c.label);
+    expect(labels).toEqual(['general', 'alice', 'bob']);
+  });
+
+  it('groups directives by target_entity correctly', () => {
+    const turn = parse_turn('@alice /read\n@bob /write\n@alice /status');
+    const compartments = segmentCompartments(turn);
+    const alice = compartments.find((c) => c.label === 'alice');
+    const bob = compartments.find((c) => c.label === 'bob');
+    expect(alice?.directives).toHaveLength(2);
+    expect(bob?.directives).toHaveLength(1);
+    expect(alice?.directives[0].cmd).toBe('/read');
+    expect(alice?.directives[1].cmd).toBe('/status');
+    expect(bob?.directives[0].cmd).toBe('/write');
+  });
+
+  it('includes general_text in the general compartment', () => {
+    const turn = parse_turn('hello\n@alice /read');
+    const compartments = segmentCompartments(turn);
+    expect(compartments[0].label).toBe('general');
+    expect(compartments[0].general_text).toBe('hello');
+    expect(compartments[0].directives).toHaveLength(0);
+  });
+
+  it('general compartment has null general_text when no free text', () => {
+    const turn = parse_turn('@alice /read');
+    const compartments = segmentCompartments(turn);
+    expect(compartments[0].general_text).toBeNull();
+  });
+
+  it('G2 bidirectional: directives where lineage X is addressed all appear in X segment', () => {
+    const turn = parse_turn('@bob /read\n@bob /write @workspace:notes.md');
+    const compartments = segmentCompartments(turn);
+    const bob = compartments.find((c) => c.label === 'bob');
+    expect(bob).toBeDefined();
+    expect(bob?.directives).toHaveLength(2);
+    expect(bob?.directives[0].cmd).toBe('/read');
+    expect(bob?.directives[1].cmd).toBe('/write');
+  });
+
+  it('G2: multi-lineage input produces separate segments per lineage', () => {
+    const turn = parse_turn(
+      '@alice /read @hub:spec.md\n@bob /write @hub:output.md\n@alice /status',
+    );
+    const compartments = segmentCompartments(turn);
+    expect(compartments).toHaveLength(3);
+    const alice = compartments.find((c) => c.label === 'alice');
+    const bob = compartments.find((c) => c.label === 'bob');
+    expect(alice?.directives).toHaveLength(2);
+    expect(bob?.directives).toHaveLength(1);
+  });
+
+  it('produces only general compartment for untargeted turn', () => {
+    const turn = parse_turn('just some text');
+    const compartments = segmentCompartments(turn);
+    expect(compartments).toHaveLength(1);
+    expect(compartments[0].label).toBe('general');
+    expect(compartments[0].general_text).toBe('just some text');
+  });
+
+  it('empty general compartment when turn has only directives', () => {
+    const turn = parse_turn('@alice /read');
+    const compartments = segmentCompartments(turn);
+    expect(compartments).toHaveLength(2);
+    expect(compartments[0].label).toBe('general');
+    expect(compartments[0].directives).toHaveLength(0);
+    expect(compartments[0].general_text).toBeNull();
+    expect(compartments[1].label).toBe('alice');
+  });
+});

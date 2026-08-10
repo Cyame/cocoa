@@ -285,6 +285,15 @@ export type Compartment = {
  * Group a parsed {@link Turn} into visual compartments for the composer
  * preview panel. The "general" compartment always comes first (even if
  * empty) so the UI has a stable anchor.
+ *
+ * G2 (bidirectional inclusion): A directive belongs to a lineage
+ * compartment whenever that lineage appears as ``target_entity`` —
+ * regardless of whether the current user is sender or recipient.
+ * For the *input turn* (what the user is typing), the current user is
+ * always the sender, so ``target_entity`` correctly buckets directives
+ * by the addressed lineage. The transcript panel handles the
+ * complementary direction (assistant responses *to* the current user)
+ * separately; ``segmentCompartments`` only partitions the input turn.
  */
 export function segmentCompartments(turn: Turn): readonly Compartment[] {
   const generalDirectives: Directive[] = [];

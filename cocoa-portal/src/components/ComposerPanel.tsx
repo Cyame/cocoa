@@ -1,4 +1,4 @@
-import { AlertCircle, LoaderCircle, MessageSquare, Send, Settings } from 'lucide-react';
+import { AlertCircle, Hash, LoaderCircle, MessageSquare, Send, Settings } from 'lucide-react';
 import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CommandAutocomplete } from '@/components/CommandAutocomplete';
@@ -28,6 +28,7 @@ import {
   segmentCompartments,
   type Turn,
 } from '@/lib/slash-parser';
+import { cn } from '@/lib/utils';
 import { useComposerDraftStore } from '@/stores/composerDraftStore';
 import { useComposerSettingsStore } from '@/stores/composerSettingsStore';
 import { useSessionStore } from '@/stores/session';
@@ -98,6 +99,10 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
   const [introducing, setIntroducing] = useState(false);
   const [introduceError, setIntroduceError] = useState<string | null>(null);
   const [mentionRefreshKey, setMentionRefreshKey] = useState(0);
+  const [activeSegment, setActiveSegment] = useState<string>('general');
+  const [segmentInputs, setSegmentInputs] = useState<Record<string, string>>({
+    general: '',
+  });
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
@@ -219,6 +224,14 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
     if (turn === null) return [];
     return segmentCompartments(turn);
   }, [turn]);
+
+  useEffect(() => {
+    if (compartments.length === 0) return;
+    const labels = compartments.map((c) => c.label);
+    if (!labels.includes(activeSegment)) {
+      setActiveSegment(labels[0]);
+    }
+  }, [compartments, activeSegment]);
 
   const targetSlugs = useMemo<readonly string[]>(() => {
     if (turn === null) return [];
@@ -548,6 +561,21 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
     }
   }
 
+  function handleSegmentSend(segmentLabel: string) {
+    const input = (segmentInputs[segmentLabel] ?? '').trim();
+    if (input.length === 0 || sending || introducing) return;
+    const prefix = segmentLabel === 'general' ? '' : `@${segmentLabel} `;
+    const outgoing = `${prefix}${input}`;
+    setText((prev) => {
+      const sep = prev.trim().length > 0 ? '\n' : '';
+      return `${prev}${sep}${outgoing}`;
+    });
+    setSegmentInputs((prev) => ({ ...prev, [segmentLabel]: '' }));
+    requestAnimationFrame(() => {
+      textareaRef.current?.focus();
+    });
+  }
+
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault();
@@ -824,16 +852,157 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
       </div>
 
       {compartments.length > 0 ? (
-        <ul className="mt-2 max-h-16 overflow-y-auto text-xs text-slate-600">
-          {compartments.map((c) => (
-            <li key={c.label} className="truncate font-mono">
-              {c.label === 'general' ? t('composer.compartmentGeneral') : `@${c.label}`}:{' '}
-              {c.directives.length > 0
-                ? c.directives.map((d) => d.cmd || d.args.join(' ') || '(chat)').join(', ')
-                : (c.general_text ?? '—')}
-            </li>
-          ))}
-        </ul>
+        <div
+          className="mt-2 rounded-lg border border-slate-200 bg-white"
+          data-testid="segment-panel"
+        >
+          <div
+            role="tablist"
+            aria-label={t('composer.segment.general')}
+            className="flex flex-wrap items-center gap-1 border-b border-slate-200 bg-slate-50 px-2 py-1.5"
+          >
+            {compartments.map((c) => {
+              const isActive = activeSegment === c.label;
+              const label =
+                c.label === 'general'
+                  ? t('composer.segment.general')
+                  : entityLabel(c.label, c.label);
+              const directiveCount = c.directives.length;
+              return (
+                <button
+                  key={c.label}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  tabIndex={isActive ? 0 : -1}
+                  onClick={() => setActiveSegment(c.label)}
+                  data-testid={`segment-tab-${c.label}`}
+                  className={cn(
+                    'inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
+                    isActive
+                      ? 'bg-white text-slate-900 shadow-sm'
+                      : 'text-slate-600 hover:bg-white hover:text-slate-900',
+                  )}
+                >
+                  {c.label !== 'general' ? (
+                    <Hash className="size-3 shrink-0 text-slate-400" aria-hidden="true" />
+                  ) : null}
+                  <span>{label}</span>
+                  {directiveCount > 0 ? (
+                    <span className="rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
+                      {directiveCount}
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="p-2" role="tabpanel" data-testid={`segment-content-${activeSegment}`}>
+            {(() => {
+              const active = compartments.find((c) => c.label === activeSegment);
+              if (active === undefined) return null;
+
+              const items: { key: string; content: React.ReactNode }[] = [];
+
+              if (active.directives.length > 0) {
+                for (const d of active.directives) {
+                  const display =
+                    d.raw_text.trim() ||
+                    [d.cmd, ...d.args].filter(Boolean).join(' ').trim() ||
+                    t('composer.segment.chatLabel');
+                  items.push({
+                    key: `dir-${d.cmd}-${d.args.join('-')}`,
+                    content: (
+                      <div
+                        key={`dir-${d.cmd}-${d.args.join('-')}`}
+                        className="truncate rounded bg-slate-50 px-2 py-1 font-mono text-xs text-slate-700"
+                      >
+                        {display}
+                      </div>
+                    ),
+                  });
+                }
+              } else if (active.general_text !== null && active.label === 'general') {
+                items.push({
+                  key: 'general-text',
+                  content: (
+                    <p key="general-text" className="truncate px-1 text-xs text-slate-500">
+                      {active.general_text}
+                    </p>
+                  ),
+                });
+              } else {
+                items.push({
+                  key: 'empty',
+                  content: (
+                    <p key="empty" className="px-1 text-xs text-slate-400">
+                      {t('composer.segment.noDirectives')}
+                    </p>
+                  ),
+                });
+              }
+
+              return (
+                <div className="mb-2 space-y-1">
+                  {items.map((item) => (
+                    <div key={item.key}>{item.content}</div>
+                  ))}
+                </div>
+              );
+            })()}
+
+            <div className="flex items-center gap-1.5">
+              <input
+                type="text"
+                value={segmentInputs[activeSegment] ?? ''}
+                onChange={(e) =>
+                  setSegmentInputs((prev) => ({ ...prev, [activeSegment]: e.target.value }))
+                }
+                onKeyDown={(e) => {
+                  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                    e.preventDefault();
+                    handleSegmentSend(activeSegment);
+                  }
+                }}
+                placeholder={
+                  activeSegment === 'general'
+                    ? t('composer.segment.inputPlaceholderGeneral')
+                    : t('composer.segment.inputPlaceholder', {
+                        name: entityLabel(activeSegment, activeSegment),
+                      })
+                }
+                className="flex-1 rounded border border-slate-300 px-2 py-1 font-mono text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                aria-label={
+                  activeSegment === 'general'
+                    ? t('composer.segment.sendGeneral')
+                    : t('composer.segment.sendToSegment', {
+                        name: entityLabel(activeSegment, activeSegment),
+                      })
+                }
+                data-testid={`segment-input-${activeSegment}`}
+              />
+              <button
+                type="button"
+                onClick={() => handleSegmentSend(activeSegment)}
+                disabled={
+                  sending || introducing || (segmentInputs[activeSegment] ?? '').trim().length === 0
+                }
+                className="inline-flex items-center rounded bg-blue-600 px-2 py-1 text-xs font-semibold text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label={
+                  activeSegment === 'general'
+                    ? t('composer.segment.sendGeneral')
+                    : t('composer.segment.sendToSegment', {
+                        name: entityLabel(activeSegment, activeSegment),
+                      })
+                }
+                data-testid={`segment-send-${activeSegment}`}
+              >
+                <Send className="size-3" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
 
       <div className="mt-3 flex items-center justify-between gap-2">

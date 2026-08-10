@@ -358,7 +358,18 @@
     "thinkingLabel": "思考过程",
     "filterSpeaker": "发言人",
     "filterRecipient": "接收人",
-    "filterAll": "全部"
+    "filterAll": "全部",
+    "segment": {
+      "general": "通用",
+      "lineage": "{{name}} 血脉",
+      "directiveCount": "{{count}} 条指令",
+      "inputPlaceholder": "向 {{name}} 输入指令...",
+      "inputPlaceholderGeneral": "输入通用消息...",
+      "sendToSegment": "发送到 {{name}}",
+      "sendGeneral": "发送通用消息",
+      "noDirectives": "暂无指令",
+      "chatLabel": "对话"
+    }
   },
   "debug": {
     "title": "调试",

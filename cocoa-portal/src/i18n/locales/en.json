@@ -525,7 +525,18 @@
     "thinkingLabel": "Thinking",
     "filterSpeaker": "Speaker",
     "filterRecipient": "Recipient",
-    "filterAll": "All"
+    "filterAll": "All",
+    "segment": {
+      "general": "General",
+      "lineage": "{{name}} lineage",
+      "directiveCount": "{{count}} directive(s)",
+      "inputPlaceholder": "Type a directive to {{name}}...",
+      "inputPlaceholderGeneral": "Type a general message...",
+      "sendToSegment": "Send to {{name}}",
+      "sendGeneral": "Send general message",
+      "noDirectives": "No directives yet",
+      "chatLabel": "Chat"
+    }
   },
   "debug": {
     "title": "Debug",
