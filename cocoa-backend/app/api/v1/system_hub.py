@@ -8,10 +8,12 @@ from __future__ import annotations
 from fastapi import APIRouter
 from sqlalchemy import select
 
-from app.api.deps import DB, CurrentUserDep
+from app.api.deps import DB, CurrentUserDep, XOrgIdHeader
 from app.api.v1.organizations import _get_default_org
-from app.core.errors import ValidationError
+from app.core.errors import NotFoundError, ValidationError
 from app.core.openapi import add_error_responses
+from app.core.org_scope import resolve_current_org_id
+from app.models.organization import Organization
 from app.models.organization_provider import OrganizationProvider
 from app.schemas.organization import GenerateDescriptionOut, GenerateDescriptionRequest
 from app.services.llm.llm_client import LLMError
@@ -95,13 +97,37 @@ async def generate_description(
     body: GenerateDescriptionRequest,
     db: DB,
     current_user: CurrentUserDep,
+    x_organization_id: XOrgIdHeader = None,
 ) -> GenerateDescriptionOut:
-    org = await _get_default_org(db)
-    if not org.system_hub_provider_id or not org.system_hub_model:
+    # Org scope resolution (v5.2.1): honor the caller's org context so reads
+    # match the write path (/organizations/{org_id}/...). Resolution order:
+    # X-Organization-Id header → the user's sole active contract → the seeded
+    # default org (legacy fallback, super-admin / no-contract callers).
+    org_id = await resolve_current_org_id(
+        db, current_user.user_id, x_organization_id
+    )
+    if org_id is None:
+        org = await _get_default_org(db)
+    else:
+        org = await db.get(Organization, org_id)
+        if org is None or org.deleted_at is not None:
+            raise NotFoundError(
+                "organization.not_found",
+                "errors.organization.not_found",
+                f"Organization '{org_id}' not found",
+            )
+
+    if not org.system_hub_provider_id:
         raise ValidationError(
-            "system_hub.not_configured",
-            "errors.system_hub.not_configured",
-            "System hub provider is not configured — set it in world settings",
+            "system_hub.provider_not_set",
+            "errors.system_hub.provider_not_set",
+            "System hub provider is not set — configure it in world settings",
+        )
+    if not org.system_hub_model:
+        raise ValidationError(
+            "system_hub.model_not_set",
+            "errors.system_hub.model_not_set",
+            "System hub model is not set — pick a model for the provider",
         )
 
     result = await db.execute(

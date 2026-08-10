@@ -950,6 +950,8 @@
     },
     "system_hub": {
       "not_configured": "Planet hub provider is not configured - set it in Continent settings",
+      "provider_not_set": "Planet hub provider is not set - configure it in Continent settings",
+      "model_not_set": "Planet hub model is not set - pick a model for the provider",
       "provider_unavailable": "Planet hub provider is missing or disabled",
       "empty_response": "Planet hub returned an empty description"
     }
@@ -1036,13 +1038,9 @@
       "subtitle": "Set the intelligence and model for this bloodline; they apply when you introduce it into a habitat.",
       "knowledgeSummary": "Added knowledge",
       "knowledgeEmpty": "No knowledge added yet.",
-      "knowledgeScopeHeading": "Knowledge scope",
-      "knowledgeScopeInstance": "Private to this descendant (recommended)",
-      "knowledgeScopeInstanceHelp": "Knowledge is injected into only this descendant's container.",
-      "knowledgeScopeEntity": "Shared across all descendants of this bloodline",
-      "knowledgeScopeEntityHelp": "Bloodline-wide: other descendants can also read it (requires restart).",
-      "knowledgeScopeWorkspace": "Shared across this habitat",
-      "knowledgeScopeWorkspaceHelp": "Warning: other AI in the habitat can also read it.",
+      "lineageKnowledge": "Lineage knowledge",
+      "inheritedKnowledge": "Inheritable knowledge",
+      "inheritedKnowledgeHelp": "Select which knowledge to inherit from the progenitor. Applied when introduced into a habitat.",
       "skipNextTime": "Skip, configure later",
       "spawnFailed": "Create failed. Please retry.",
       "successTitle": "Creation successful",

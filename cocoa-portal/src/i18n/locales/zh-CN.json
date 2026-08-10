@@ -783,6 +783,8 @@
     },
     "system_hub": {
       "not_configured": "星球中枢供者未配置 - 请在大陆设置中配置",
+      "provider_not_set": "星球中枢供者未配置 - 请在大陆设置中配置供者",
+      "model_not_set": "星球中枢模型未设置 - 请为供者选择模型",
       "provider_unavailable": "星球中枢供者缺失或已禁用",
       "empty_response": "星球中枢返回了空描述"
     }
@@ -869,13 +871,9 @@
       "subtitle": "为该血脉设定智能与模型，可选注入知识。进入生境后引入时生效。",
       "knowledgeSummary": "已添加的知识",
       "knowledgeEmpty": "暂未添加任何知识。",
-      "knowledgeScopeHeading": "知识作用域",
-      "knowledgeScopeInstance": "仅此 Instance 私有（推荐）",
-      "knowledgeScopeInstanceHelp": "知识只注入这一个 Instance 容器。",
-      "knowledgeScopeEntity": "该 Entity 所有现有 Instance 都共享",
-      "knowledgeScopeEntityHelp": "Entity 共享：其他 Instance 也会读取（需重启）。",
-      "knowledgeScopeWorkspace": "该 Workspace 共享",
-      "knowledgeScopeWorkspaceHelp": "高危：Workspace 内其他 AI 也能读取。",
+      "lineageKnowledge": "本血脉知识",
+      "inheritedKnowledge": "可继承知识",
+      "inheritedKnowledgeHelp": "勾选希望从始祖继承的知识。进入生境后引入时生效。",
       "skipNextTime": "跳过，下一步再配置",
       "spawnFailed": "创生失败，请重试。",
       "successTitle": "创生成功",

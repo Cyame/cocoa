@@ -156,7 +156,7 @@ def test_set_system_hub_and_generate_description(
         json={"name": "测试眷属"},
     )
     assert missing.status_code == 422
-    assert missing.json()["error_code"] == "system_hub.not_configured"
+    assert missing.json()["error_code"] == "system_hub.provider_not_set"
 
     create = client.post(
         "/api/v1/organizations/default/providers",
@@ -173,6 +173,23 @@ def test_set_system_hub_and_generate_description(
     )
     assert create.status_code == 201, create.text
     pid = create.json()["id"]
+
+    # Provider set but model still empty → model_not_set (not a blanket error).
+    only_provider = client.patch(
+        "/api/v1/organizations/default/system-hub",
+        headers=_auth(auth_token),
+        json={"provider_id": pid},
+    )
+    assert only_provider.status_code == 200
+    assert only_provider.json()["configured"] is False
+
+    no_model = client.post(
+        "/api/v1/system-hub/generate-description",
+        headers=_auth(auth_token),
+        json={"name": "测试眷属"},
+    )
+    assert no_model.status_code == 422
+    assert no_model.json()["error_code"] == "system_hub.model_not_set"
 
     hub = client.patch(
         "/api/v1/organizations/default/system-hub",
@@ -202,6 +219,73 @@ def test_set_system_hub_and_generate_description(
         )
     assert gen.status_code == 200, gen.text
     assert len(gen.json()["description"]) > 10
+
+
+def test_system_hub_generate_resolves_org_scope(
+    client: TestClient, auth_token: str
+) -> None:
+    """Configure the hub on a non-default org; generate-description must read
+    the caller's org context (sole active contract), not the default org."""
+    org = client.post(
+        "/api/v1/organizations",
+        headers=_auth(auth_token),
+        json={"slug": "scope-world", "name": "Scope World"},
+    )
+    assert org.status_code == 201, org.text
+    org_id = org.json()["id"]
+
+    create = client.post(
+        f"/api/v1/organizations/{org_id}/providers",
+        headers=_auth(auth_token),
+        json={
+            "origin": "custom",
+            "name": "Scope Hub",
+            "slug": "scope-hub",
+            "request_format": "completion",
+            "base_url": "https://llm.example.com/v1",
+            "api_key_ref": "SCOPE_KEY",
+            "default_model": "gpt-4o-mini",
+        },
+    )
+    assert create.status_code == 201, create.text
+    pid = create.json()["id"]
+
+    hub = client.patch(
+        f"/api/v1/organizations/{org_id}/system-hub",
+        headers=_auth(auth_token),
+        json={"provider_id": pid, "model": "gpt-4o-mini"},
+    )
+    assert hub.status_code == 200
+    assert hub.json()["configured"] is True
+
+    fake_resp = type(
+        "R",
+        (),
+        {"content": "作用域组织的世界描述，覆盖定位与治理边界。"},
+    )()
+    with patch(
+        "app.api.v1.system_hub.build_llm_client_from_org_provider",
+        return_value=type(
+            "C",
+            (),
+            {"complete": AsyncMock(return_value=fake_resp)},
+        )(),
+    ):
+        via_header = client.post(
+            "/api/v1/system-hub/generate-description",
+            headers={
+                **_auth(auth_token),
+                "X-Organization-Id": org_id,
+            },
+            json={"name": "Scope World", "kind": "world"},
+        )
+        via_contract = client.post(
+            "/api/v1/system-hub/generate-description",
+            headers=_auth(auth_token),
+            json={"name": "Scope World", "kind": "world"},
+        )
+    assert via_header.status_code == 200, via_header.text
+    assert via_contract.status_code == 200, via_contract.text
 
 
 def test_base_classes_hide_internal_by_default(
