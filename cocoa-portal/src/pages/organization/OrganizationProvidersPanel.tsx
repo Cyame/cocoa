@@ -2,8 +2,10 @@ import {
   AlertCircle,
   Check,
   CircleAlert,
+  Edit,
   LoaderCircle,
   Plus,
+  RefreshCw,
   TestTube2,
   Trash2,
   X,
@@ -21,10 +23,10 @@ import {
   fetchProviderCatalog,
   fetchSystemHub,
   listOrganizationProviders,
+  type ModelOverride,
   type OrganizationProvider,
   type ProviderCatalogEntry,
   previewProviderModels,
-  refreshProviderModels,
   type SetDefaultTarget,
   setProviderDefault,
   testOrganizationProvider,
@@ -63,6 +65,10 @@ export function OrganizationProvidersPanel({ canWrite, orgId }: ProvidersPanelPr
   const [setDefaultOpen, setSetDefaultOpen] = useState<string | null>(null);
   const [testingId, setTestingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [expandedProviderId, setExpandedProviderId] = useState<string | null>(null);
+  const [providerCatalogModels, setProviderCatalogModels] = useState<
+    Record<string, readonly CatalogModel[]>
+  >({});
 
   const enabledProviders = useMemo(() => providers.filter((p) => p.enabled), [providers]);
 
@@ -132,6 +138,22 @@ export function OrganizationProvidersPanel({ canWrite, orgId }: ProvidersPanelPr
       await loadAll();
     } catch (error) {
       setActionError(resolveError(t, error));
+    }
+  }
+
+  async function toggleExpandProvider(provider: OrganizationProvider) {
+    if (expandedProviderId === provider.id) {
+      setExpandedProviderId(null);
+      return;
+    }
+    setExpandedProviderId(provider.id);
+    if (!providerCatalogModels[provider.id]) {
+      try {
+        const page = await fetchModelCatalog(provider.id);
+        setProviderCatalogModels((prev) => ({ ...prev, [provider.id]: page.items }));
+      } catch {
+        setProviderCatalogModels((prev) => ({ ...prev, [provider.id]: [] }));
+      }
     }
   }
 
@@ -342,6 +364,18 @@ export function OrganizationProvidersPanel({ canWrite, orgId }: ProvidersPanelPr
                             <Trash2 className="size-3" aria-hidden="true" />
                             {t('organization.providers.delete')}
                           </button>
+                          <button
+                            type="button"
+                            onClick={() => void toggleExpandProvider(provider)}
+                            className={cn(
+                              'rounded-md border px-2 py-1 text-xs',
+                              expandedProviderId === provider.id
+                                ? 'border-blue-200 bg-blue-50 text-blue-700'
+                                : 'border-slate-200 text-slate-700 hover:bg-slate-50',
+                            )}
+                          >
+                            {t('organization.models.capabilities')}
+                          </button>
                         </div>
                       </td>
                     ) : null}
@@ -352,6 +386,22 @@ export function OrganizationProvidersPanel({ canWrite, orgId }: ProvidersPanelPr
           </div>
         )}
       </section>
+
+      {expandedProviderId !== null
+        ? (() => {
+            const expanded = providers.find((p) => p.id === expandedProviderId);
+            if (!expanded) return null;
+            return (
+              <AllowlistPanel
+                provider={expanded}
+                catalogModels={providerCatalogModels[expandedProviderId] ?? []}
+                orgId={orgId}
+                canWrite={canWrite}
+                onUpdated={() => void loadAll()}
+              />
+            );
+          })()
+        : null}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <HubSettingsPanel
@@ -448,7 +498,6 @@ function HubSettingsPanel({
 }) {
   const { t } = useTranslation();
   const [models, setModels] = useState<readonly CatalogModel[]>([]);
-  const [modelsLoading, setModelsLoading] = useState(false);
 
   useEffect(() => {
     if (providerId.length === 0) {
@@ -463,25 +512,20 @@ function HubSettingsPanel({
           name: id,
           provider: selected.slug,
           context_length: null,
+          description: null,
+          reasoning: null,
+          tool_call: null,
+          attachment: null,
+          modalities: null,
+          limit_output: null,
+          cost: null,
+          web_search: null,
+          model_type: null,
         })),
       );
       return;
     }
-    let active = true;
-    setModelsLoading(true);
-    fetchModelCatalog(providerId)
-      .then((page) => {
-        if (active) setModels(page.items);
-      })
-      .catch(() => {
-        if (active) setModels([]);
-      })
-      .finally(() => {
-        if (active) setModelsLoading(false);
-      });
-    return () => {
-      active = false;
-    };
+    setModels([]);
   }, [providerId, providers]);
 
   return (
@@ -516,12 +560,6 @@ function HubSettingsPanel({
             placeholder={t('organization.fields.selectModel')}
           />
         </div>
-        {modelsLoading ? (
-          <p className="flex items-center gap-2 text-xs text-slate-500">
-            <LoaderCircle className="size-3 animate-spin" aria-hidden="true" />
-            {t('organization.loadingModels')}
-          </p>
-        ) : null}
         {error !== null ? (
           <p role="alert" className="text-xs text-red-700">
             {error}
@@ -725,9 +763,20 @@ function EnableCatalogModal({
             />
           </div>
           {error !== null ? (
-            <p role="alert" className="text-xs text-red-700">
-              {error}
-            </p>
+            <div className="flex items-start gap-2">
+              <p role="alert" className="flex-1 text-xs text-red-700">
+                {error}
+              </p>
+              <button
+                type="button"
+                disabled={!selectedId || !apiKey.trim() || fetchingModels}
+                onClick={() => void handleFetchModels()}
+                className="inline shrink-0 items-center gap-1 rounded-md border border-red-200 px-2 py-1 text-[11px] font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+              >
+                <RefreshCw className="size-3" aria-hidden="true" />
+                {t('organization.models.retry')}
+              </button>
+            </div>
           ) : null}
           <div className="flex justify-end gap-2 pt-2">
             <button
@@ -899,9 +948,20 @@ function CustomProviderModal({
         </div>
       </div>
       {error !== null ? (
-        <p role="alert" className="mt-3 text-xs text-red-700">
-          {error}
-        </p>
+        <div className="mt-3 flex items-start gap-2">
+          <p role="alert" className="flex-1 text-xs text-red-700">
+            {error}
+          </p>
+          <button
+            type="button"
+            disabled={!baseUrl.trim() || !apiKey.trim() || fetchingModels}
+            onClick={() => void handleFetchModels()}
+            className="inline shrink-0 items-center gap-1 rounded-md border border-red-200 px-2 py-1 text-[11px] font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+          >
+            <RefreshCw className="size-3" aria-hidden="true" />
+            {t('organization.models.retry')}
+          </button>
+        </div>
       ) : null}
       <div className="mt-4 flex justify-end gap-2">
         <button
@@ -944,7 +1004,6 @@ function SetDefaultModal({
   const [model, setModel] = useState(provider?.default_model ?? '');
   const [selectedBaseClassIds, setSelectedBaseClassIds] = useState<ReadonlySet<string>>(new Set());
   const [models, setModels] = useState<readonly CatalogModel[]>([]);
-  const [fetchingModels, setFetchingModels] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -958,13 +1017,20 @@ function SetDefaultModal({
           name: id,
           provider: provider.slug,
           context_length: null,
+          description: null,
+          reasoning: null,
+          tool_call: null,
+          attachment: null,
+          modalities: null,
+          limit_output: null,
+          cost: null,
+          web_search: null,
+          model_type: null,
         })),
       );
       return;
     }
-    fetchModelCatalog(provider.id)
-      .then((page) => setModels(page.items))
-      .catch(() => setModels([]));
+    setModels([]);
   }, [provider]);
 
   function toggleBaseClass(id: string) {
@@ -974,22 +1040,6 @@ function SetDefaultModal({
       else next.add(id);
       return next;
     });
-  }
-
-  async function handleRefreshModels() {
-    if (provider === null) return;
-    setFetchingModels(true);
-    setError(null);
-    try {
-      const page = await refreshProviderModels(provider.id, orgId);
-      setModels(page.items);
-      if (page.error) setError(page.error);
-      if (page.default_model) setModel(page.default_model);
-    } catch (err) {
-      setError(resolveError(t, err));
-    } finally {
-      setFetchingModels(false);
-    }
   }
 
   async function handleSubmit() {
@@ -1059,26 +1109,13 @@ function SetDefaultModal({
       ) : null}
 
       <div className="mt-3 block text-xs font-semibold uppercase tracking-wide text-slate-600">
-        <div className="flex items-center justify-between gap-2">
-          <span>{t('organization.fields.model')}</span>
-          <button
-            type="button"
-            disabled={fetchingModels}
-            onClick={() => void handleRefreshModels()}
-            className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-[11px] font-medium normal-case tracking-normal text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-          >
-            {fetchingModels ? (
-              <LoaderCircle className="size-3 animate-spin" aria-hidden="true" />
-            ) : null}
-            {t('organization.fields.fetchModels')}
-          </button>
-        </div>
+        <span>{t('organization.fields.model')}</span>
         <ModelInputCombobox
           aria-label={t('organization.fields.model')}
           value={model}
           onChange={setModel}
           options={models}
-          placeholder={t('organization.fields.modelPlaceholder')}
+          placeholder={t('organization.fields.selectModel')}
         />
       </div>
 
@@ -1181,5 +1218,401 @@ function Field({
         )}
       />
     </label>
+  );
+}
+
+const MODEL_TYPES = [
+  'chat',
+  'embedding',
+  'tts',
+  'asr',
+  'image',
+  'video',
+  'text2music',
+  'realtime',
+] as const;
+
+function ToggleField({
+  label,
+  checked,
+  onChange,
+  disabled = false,
+}: {
+  readonly label: string;
+  readonly checked: boolean;
+  readonly onChange: (v: boolean) => void;
+  readonly disabled?: boolean;
+}) {
+  return (
+    <label className="flex items-center gap-2 text-sm text-slate-700">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        disabled={disabled}
+        className="size-4 accent-blue-600"
+      />
+      {label}
+    </label>
+  );
+}
+
+function inferVision(m: CatalogModel | undefined): boolean {
+  if (!m) return false;
+  return m.attachment === true || (m.modalities?.input ?? []).some((s) => s === 'image');
+}
+
+function inferImageGen(m: CatalogModel | undefined): boolean {
+  if (!m) return false;
+  return (m.modalities?.output ?? []).some((s) => s === 'image');
+}
+
+function inferVideoRecognition(m: CatalogModel | undefined): boolean {
+  if (!m) return false;
+  return (m.modalities?.input ?? []).some((s) => s === 'video');
+}
+
+function ModelCapabilityModal({
+  modelId,
+  initial,
+  catalogModel,
+  onClose,
+  onSaved,
+}: {
+  readonly modelId: string;
+  readonly initial: ModelOverride | undefined;
+  readonly catalogModel: CatalogModel | undefined;
+  readonly onClose: () => void;
+  readonly onSaved: (modelId: string, override: ModelOverride) => void;
+}) {
+  const { t } = useTranslation();
+  const [displayName, setDisplayName] = useState(
+    initial?.display_name ?? catalogModel?.name ?? modelId,
+  );
+  const [maxContext, setMaxContext] = useState(
+    String(initial?.max_context ?? catalogModel?.context_length ?? ''),
+  );
+  const [extendedParams, setExtendedParams] = useState(initial?.extended_params ?? '');
+  const [toolUse, setToolUse] = useState(initial?.tool_use ?? catalogModel?.tool_call ?? false);
+  const [vision, setVision] = useState(initial?.vision ?? inferVision(catalogModel));
+  const [reasoning, setReasoning] = useState(
+    initial?.reasoning ?? catalogModel?.reasoning ?? false,
+  );
+  const [webSearch, setWebSearch] = useState(initial?.web_search ?? false);
+  const [imageGeneration, setImageGeneration] = useState(
+    initial?.image_generation ?? inferImageGen(catalogModel),
+  );
+  const [videoRecognition, setVideoRecognition] = useState(
+    initial?.video_recognition ?? inferVideoRecognition(catalogModel),
+  );
+  const [modelType, setModelType] = useState(initial?.model_type ?? 'chat');
+
+  function handleSave() {
+    const override: ModelOverride = {
+      display_name: displayName || undefined,
+      max_context: maxContext ? Number(maxContext) : undefined,
+      extended_params: extendedParams || undefined,
+      tool_use: toolUse || undefined,
+      vision: vision || undefined,
+      reasoning: reasoning || undefined,
+      web_search: webSearch || undefined,
+      image_generation: imageGeneration || undefined,
+      video_recognition: videoRecognition || undefined,
+      model_type: modelType || undefined,
+    };
+    onSaved(modelId, override);
+  }
+
+  return (
+    <ModalShell
+      title={t('organization.models.editModelTitle')}
+      onClose={onClose}
+      testId="model-capability-modal"
+    >
+      <div className="space-y-3">
+        <div>
+          <label
+            htmlFor="model-capability-id"
+            className="block text-xs font-semibold uppercase tracking-wide text-slate-600"
+          >
+            {t('organization.models.modelId')}
+          </label>
+          <input
+            id="model-capability-id"
+            type="text"
+            value={modelId}
+            disabled
+            className="mt-1.5 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-sm text-slate-500"
+          />
+          <p className="mt-1 text-xs text-slate-400">{t('organization.models.modelIdReadonly')}</p>
+        </div>
+        <Field
+          label={t('organization.models.displayName')}
+          value={displayName}
+          onChange={setDisplayName}
+        />
+        <Field
+          label={t('organization.models.maxContext')}
+          value={maxContext}
+          onChange={setMaxContext}
+          mono
+        />
+        <Field
+          label={t('organization.models.extendedParams')}
+          value={extendedParams}
+          onChange={setExtendedParams}
+          mono
+        />
+        <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600">
+          {t('organization.models.modelType')}
+          <select
+            value={modelType}
+            onChange={(e) => setModelType(e.target.value)}
+            className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          >
+            {MODEL_TYPES.map((mt) => (
+              <option key={mt} value={mt}>
+                {t(`organization.models.modelTypes.${mt}`)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="space-y-2 rounded-lg border border-slate-200 p-3">
+          <ToggleField
+            label={t('organization.models.toolUse')}
+            checked={toolUse}
+            onChange={setToolUse}
+          />
+          <ToggleField
+            label={t('organization.models.vision')}
+            checked={vision}
+            onChange={setVision}
+          />
+          <ToggleField
+            label={t('organization.models.reasoning')}
+            checked={reasoning}
+            onChange={setReasoning}
+          />
+          <ToggleField
+            label={t('organization.models.webSearch')}
+            checked={webSearch}
+            onChange={setWebSearch}
+          />
+          <ToggleField
+            label={t('organization.models.imageGeneration')}
+            checked={imageGeneration}
+            onChange={setImageGeneration}
+          />
+          <ToggleField
+            label={t('organization.models.videoRecognition')}
+            checked={videoRecognition}
+            onChange={setVideoRecognition}
+          />
+        </div>
+      </div>
+      <div className="mt-4 flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-700"
+        >
+          {t('organization.models.cancel')}
+        </button>
+        <button
+          type="button"
+          onClick={handleSave}
+          className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-500"
+        >
+          {t('organization.models.saveCapabilities')}
+        </button>
+      </div>
+    </ModalShell>
+  );
+}
+
+function AllowlistPanel({
+  provider,
+  catalogModels,
+  orgId,
+  canWrite,
+  onUpdated,
+}: {
+  readonly provider: OrganizationProvider;
+  readonly catalogModels: readonly CatalogModel[];
+  readonly orgId?: string;
+  readonly canWrite: boolean;
+  readonly onUpdated: () => void;
+}) {
+  const { t } = useTranslation();
+  const [overrides, setOverrides] = useState<Record<string, ModelOverride>>(
+    () => (provider.model_overrides as Record<string, ModelOverride>) ?? {},
+  );
+  const [editingModelId, setEditingModelId] = useState<string | null>(null);
+  const [addingCustom, setAddingCustom] = useState(false);
+  const [customModelId, setCustomModelId] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const allowlist = provider.models_allowlist ?? [];
+  const modelsWithOverrides = allowlist.map((id) => {
+    const catalog = catalogModels.find((m) => m.id === id);
+    const override = overrides[id];
+    return { id, catalog, override };
+  });
+
+  function handleRemoveModel(modelId: string) {
+    void handleSaveAllowlist(allowlist.filter((id) => id !== modelId));
+  }
+
+  async function handleSaveAllowlist(newAllowlist: readonly string[]) {
+    setSaving(true);
+    setError(null);
+    try {
+      await updateOrganizationProvider(
+        provider.id,
+        { models_allowlist: newAllowlist, model_overrides: overrides },
+        orgId,
+      );
+      onUpdated();
+    } catch (err) {
+      setError(resolveError(t, err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleAddCustomModel() {
+    if (!customModelId.trim()) return;
+    const id = customModelId.trim();
+    if (allowlist.includes(id)) {
+      setCustomModelId('');
+      setAddingCustom(false);
+      return;
+    }
+    void handleSaveAllowlist([...allowlist, id]);
+    setCustomModelId('');
+    setAddingCustom(false);
+  }
+
+  function handleCapabilitySaved(modelId: string, override: ModelOverride) {
+    const next = { ...overrides, [modelId]: override };
+    setOverrides(next);
+    setEditingModelId(null);
+    void updateOrganizationProvider(provider.id, { model_overrides: next }, orgId).then(() =>
+      onUpdated(),
+    );
+  }
+
+  return (
+    <div className="mt-3 rounded-lg border border-slate-200 p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+          {t('organization.models.capabilities')}
+          <span className="ml-1 font-normal normal-case tracking-normal text-slate-400">
+            ({allowlist.length})
+          </span>
+        </h4>
+        {canWrite ? (
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => setAddingCustom(true)}
+            className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+          >
+            <Plus className="size-3" aria-hidden="true" />
+            {t('organization.models.addCustomModel')}
+          </button>
+        ) : null}
+      </div>
+
+      {allowlist.length === 0 ? (
+        <p className="text-xs text-slate-500">{t('organization.models.allowlistEmpty')}</p>
+      ) : (
+        <div className="space-y-1">
+          {modelsWithOverrides.map(({ id, catalog, override }) => (
+            <div
+              key={id}
+              className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 hover:bg-slate-50"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-mono text-xs text-slate-900">{id}</p>
+                {(override?.display_name ?? catalog?.name) &&
+                (override?.display_name ?? catalog?.name) !== id ? (
+                  <p className="truncate text-xs text-slate-500">
+                    {override?.display_name ?? catalog?.name}
+                  </p>
+                ) : null}
+              </div>
+              {canWrite ? (
+                <div className="flex shrink-0 gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setEditingModelId(id)}
+                    className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                    aria-label={t('organization.models.editModel')}
+                  >
+                    <Edit className="size-3" aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveModel(id)}
+                    className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                    aria-label={t('organization.models.removeModel')}
+                  >
+                    <Trash2 className="size-3" aria-hidden="true" />
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {addingCustom ? (
+        <div className="mt-2 flex items-center gap-2">
+          <input
+            type="text"
+            value={customModelId}
+            onChange={(e) => setCustomModelId(e.target.value)}
+            placeholder="model-id"
+            className="flex-1 rounded-md border border-slate-300 px-2 py-1 font-mono text-xs"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleAddCustomModel();
+              if (e.key === 'Escape') setAddingCustom(false);
+            }}
+          />
+          <button
+            type="button"
+            onClick={handleAddCustomModel}
+            className="rounded-md bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-500"
+          >
+            {t('organization.models.saveCapabilities')}
+          </button>
+          <button
+            type="button"
+            onClick={() => setAddingCustom(false)}
+            className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-700"
+          >
+            {t('organization.models.cancel')}
+          </button>
+        </div>
+      ) : null}
+
+      {error !== null ? (
+        <p role="alert" className="mt-2 text-xs text-red-700">
+          {error}
+        </p>
+      ) : null}
+
+      {editingModelId !== null ? (
+        <ModelCapabilityModal
+          modelId={editingModelId}
+          initial={overrides[editingModelId]}
+          catalogModel={catalogModels.find((m) => m.id === editingModelId)}
+          onClose={() => setEditingModelId(null)}
+          onSaved={handleCapabilitySaved}
+        />
+      ) : null}
+    </div>
   );
 }

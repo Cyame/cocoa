@@ -18,7 +18,6 @@ import { fetchNamespaces, type NamespaceWithStats } from '@/lib/api/namespaces';
 import {
   type CatalogModel,
   fetchBaseClassProviderDefault,
-  fetchModelCatalog,
   fetchSystemHub,
   generateDescription,
   listOrganizationProviders,
@@ -147,30 +146,35 @@ export default function Step2EntityForm({
   useEffect(() => {
     if (providerId.trim().length === 0) {
       setModels([]);
+      setModelsLoading(false);
       return;
     }
-    let active = true;
-    setModelsLoading(true);
-    fetchModelCatalog(providerId)
-      .then((page) => {
-        if (!active) return;
-        setModels(page.items);
-        if (model.trim().length === 0 && page.default_model) {
-          setModel(page.default_model);
-        }
-      })
-      .catch(() => {
-        if (active) setModels([]);
-      })
-      .finally(() => {
-        if (active) setModelsLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-    // Intentionally omit `model` — only seed default once when provider changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- model seed is one-shot
-  }, [providerId, setModel, model.trim]);
+    const selected = providers.find((p) => p.id === providerId);
+    if (selected?.models_allowlist && selected.models_allowlist.length > 0) {
+      setModels(
+        selected.models_allowlist.map((id) => ({
+          id,
+          name: id,
+          provider: selected.slug,
+          context_length: null,
+          description: null,
+          reasoning: null,
+          tool_call: null,
+          attachment: null,
+          modalities: null,
+          limit_output: null,
+          cost: null,
+          web_search: null,
+          model_type: null,
+        })),
+      );
+      setModelsLoading(false);
+      return;
+    }
+    setModels([]);
+    setModelsLoading(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- models come from provider allowlist
+  }, [providerId, providers]);
 
   const displayNameError = useMemo<string | null>(() => {
     if (trimmedDisplayName.length === 0) return null;

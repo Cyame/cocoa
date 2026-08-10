@@ -17,14 +17,9 @@ type Props = {
   readonly name?: string;
   readonly 'aria-label'?: string;
   readonly className?: string;
-  /** Extra option shown at top of dropdown (e.g. inherit / empty). */
   readonly emptyOptionLabel?: string;
 };
 
-/**
- * Editable model field + chevron dropdown (cc-switch style).
- * Typing edits the value directly; picking from the list fills the input.
- */
 export function ModelInputCombobox({
   value,
   onChange,
@@ -64,6 +59,13 @@ export function ModelInputCombobox({
     if (disabled) setOpen(false);
   }, [disabled]);
 
+  const selectedOption = options.find((opt) => opt.id === value);
+  const displayValue = selectedOption
+    ? selectedOption.name && selectedOption.name !== selectedOption.id
+      ? `${selectedOption.id} — ${selectedOption.name}`
+      : selectedOption.id
+    : value;
+
   return (
     <div ref={rootRef} className={cn('relative mt-1.5', className)}>
       <div
@@ -72,24 +74,26 @@ export function ModelInputCombobox({
           disabled && 'bg-slate-50',
         )}
       >
-        <input
-          id={id}
-          name={name}
-          type="text"
+        <input type="hidden" id={id} name={name} value={value} />
+        <button
+          type="button"
           role="combobox"
-          value={value}
-          disabled={disabled}
-          placeholder={placeholder}
           aria-label={ariaLabel}
-          aria-autocomplete="list"
+          aria-autocomplete="none"
           aria-expanded={open}
           aria-controls={open ? listId : undefined}
-          onChange={(e) => onChange(e.target.value)}
-          onFocus={() => {
-            if (canOpen) setOpen(true);
+          disabled={disabled}
+          onClick={() => {
+            if (canOpen) setOpen((prev) => !prev);
           }}
-          className="min-w-0 flex-1 border-0 bg-transparent px-3 py-2 font-mono text-sm text-slate-900 outline-none focus-visible:ring-0 disabled:cursor-not-allowed disabled:text-slate-500"
-        />
+          className={cn(
+            'min-w-0 flex-1 border-0 bg-transparent px-3 py-2 text-left font-mono text-sm text-slate-900 outline-none',
+            disabled && 'cursor-not-allowed text-slate-500',
+            !value && 'text-slate-400',
+          )}
+        >
+          {displayValue || placeholder || ''}
+        </button>
         <button
           type="button"
           disabled={!canOpen}

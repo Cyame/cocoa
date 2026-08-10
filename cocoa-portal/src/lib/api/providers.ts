@@ -26,6 +26,7 @@ export type OrganizationProvider = {
   readonly api_key_ref: string;
   readonly default_model: string;
   readonly models_allowlist: readonly string[] | null;
+  readonly model_overrides: Record<string, ModelOverride> | null;
   readonly verify_ssl: boolean;
   readonly models_endpoint_mode: string;
   readonly models_base_url: string | null;
@@ -51,6 +52,33 @@ export type CatalogModel = {
   readonly name: string;
   readonly provider: string;
   readonly context_length: number | null;
+  readonly description: string | null;
+  readonly reasoning: boolean | null;
+  readonly tool_call: boolean | null;
+  readonly attachment: boolean | null;
+  readonly modalities: {
+    readonly input?: readonly string[];
+    readonly output?: readonly string[];
+  } | null;
+  readonly limit_output: number | null;
+  readonly cost: Record<string, unknown> | null;
+  /** Portal-only fields (backend快照无数据源; None → 手动填写) */
+  readonly web_search: boolean | null;
+  readonly model_type: string | null;
+};
+
+/** Per-model capability overrides stored in OrganizationProvider.model_overrides (JSONB, keyed by model id). */
+export type ModelOverride = {
+  readonly display_name?: string;
+  readonly max_context?: number;
+  readonly extended_params?: string;
+  readonly tool_use?: boolean;
+  readonly vision?: boolean;
+  readonly reasoning?: boolean;
+  readonly web_search?: boolean;
+  readonly image_generation?: boolean;
+  readonly video_recognition?: boolean;
+  readonly model_type?: string;
 };
 
 export type CatalogModelsPage = {
@@ -139,6 +167,7 @@ export type OrganizationProviderCreatePayload = {
   readonly api_key_ref: string;
   readonly default_model?: string | null;
   readonly models_allowlist?: readonly string[] | null;
+  readonly model_overrides?: Record<string, ModelOverride> | null;
   readonly verify_ssl?: boolean;
   readonly models_endpoint_mode?: 'inherit' | 'separate';
   readonly models_base_url?: string | null;
@@ -162,6 +191,7 @@ export type OrganizationProviderUpdatePayload = {
   readonly api_key_ref?: string;
   readonly default_model?: string;
   readonly models_allowlist?: readonly string[] | null;
+  readonly model_overrides?: Record<string, ModelOverride> | null;
   readonly verify_ssl?: boolean;
   readonly models_endpoint_mode?: 'inherit' | 'separate';
   readonly models_base_url?: string | null;

@@ -46,7 +46,6 @@ import {
   type CerebellumAgent,
   type CerebellumDefaults,
   fetchCerebellumDefaults,
-  fetchModelCatalog,
   fetchWorkspaceCerebellum,
   listOrganizationProviders,
   type OrganizationProvider,
@@ -1144,10 +1143,29 @@ function CerebellumPanel({
       setModels([]);
       return;
     }
-    fetchModelCatalog(providerId)
-      .then((page) => setModels(page.items))
-      .catch(() => setModels([]));
-  }, [providerId]);
+    const selected = providers.find((p) => p.id === providerId);
+    if (selected?.models_allowlist && selected.models_allowlist.length > 0) {
+      setModels(
+        selected.models_allowlist.map((id) => ({
+          id,
+          name: id,
+          provider: selected.slug,
+          context_length: null,
+          description: null,
+          reasoning: null,
+          tool_call: null,
+          attachment: null,
+          modalities: null,
+          limit_output: null,
+          cost: null,
+          web_search: null,
+          model_type: null,
+        })),
+      );
+      return;
+    }
+    setModels([]);
+  }, [providerId, providers]);
 
   const worldHint =
     worldDefaults?.provider_id && worldDefaults.model
