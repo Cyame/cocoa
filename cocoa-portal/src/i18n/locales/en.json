@@ -298,7 +298,10 @@
       "testOk": "Passed",
       "testFailed": "Failed",
       "notTested": "Not tested",
-      "setDefault": "Set as default",
+      "setDefault": "Apply as default",
+      "saveChanges": "Save changes",
+      "saveSuccess": "Settings saved",
+      "saveFailed": "Save failed, please retry",
       "enable": "Enable",
       "disable": "Disable",
       "delete": "Delete",
@@ -386,7 +389,7 @@
       "create": "Add"
     },
     "setDefaultModal": {
-      "title": "Set “{{name}}” as default",
+      "title": "Apply “{{name}}” as default",
       "target": "Apply to",
       "confirm": "Apply",
       "targets": {

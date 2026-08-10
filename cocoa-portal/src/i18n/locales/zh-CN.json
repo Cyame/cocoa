@@ -1259,7 +1259,10 @@
       "testOk": "通过",
       "testFailed": "失败",
       "notTested": "未测试",
-      "setDefault": "设为默认",
+      "setDefault": "应用为默认",
+      "saveChanges": "保存修改",
+      "saveSuccess": "配置已保存",
+      "saveFailed": "保存失败，请重试",
       "enable": "启用",
       "disable": "停用",
       "delete": "删除",
@@ -1347,7 +1350,7 @@
       "create": "添加"
     },
     "setDefaultModal": {
-      "title": "将「{{name}}」设为默认",
+      "title": "将「{{name}}」应用为默认",
       "target": "应用到",
       "confirm": "确认应用",
       "targets": {

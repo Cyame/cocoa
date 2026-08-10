@@ -60,6 +60,12 @@ export function OrganizationProvidersPanel({ canWrite, orgId }: ProvidersPanelPr
   const [hubError, setHubError] = useState<string | null>(null);
   const [cerebellumError, setCerebellumError] = useState<string | null>(null);
 
+  const [savedSystemHubProviderId, setSavedSystemHubProviderId] = useState<string>('');
+  const [savedSystemHubModel, setSavedSystemHubModel] = useState<string>('');
+  const [savedCerebellumProviderId, setSavedCerebellumProviderId] = useState<string>('');
+  const [savedCerebellumModel, setSavedCerebellumModel] = useState<string>('');
+  const [saveToast, setSaveToast] = useState<'success' | 'error' | null>(null);
+
   const [catalogOpen, setCatalogOpen] = useState(false);
   const [customOpen, setCustomOpen] = useState(false);
   const [setDefaultOpen, setSetDefaultOpen] = useState<string | null>(null);
@@ -71,6 +77,24 @@ export function OrganizationProvidersPanel({ canWrite, orgId }: ProvidersPanelPr
   >({});
 
   const enabledProviders = useMemo(() => providers.filter((p) => p.enabled), [providers]);
+
+  const dirty = useMemo(
+    () =>
+      systemHubProviderId !== savedSystemHubProviderId ||
+      systemHubModel !== savedSystemHubModel ||
+      cerebellumProviderId !== savedCerebellumProviderId ||
+      cerebellumModel !== savedCerebellumModel,
+    [
+      systemHubProviderId,
+      systemHubModel,
+      cerebellumProviderId,
+      cerebellumModel,
+      savedSystemHubProviderId,
+      savedSystemHubModel,
+      savedCerebellumProviderId,
+      savedCerebellumModel,
+    ],
+  );
 
   const loadAll = useCallback(async () => {
     setIsLoading(true);
@@ -94,6 +118,10 @@ export function OrganizationProvidersPanel({ canWrite, orgId }: ProvidersPanelPr
       setSystemHubModel(hub.model ?? '');
       setCerebellumProviderId(cerebellum.provider_id ?? '');
       setCerebellumModel(cerebellum.model ?? '');
+      setSavedSystemHubProviderId(hub.provider_id ?? '');
+      setSavedSystemHubModel(hub.model ?? '');
+      setSavedCerebellumProviderId(cerebellum.provider_id ?? '');
+      setSavedCerebellumModel(cerebellum.model ?? '');
     } catch (error) {
       setErrorMessage(resolveError(t, error));
     } finally {
@@ -104,6 +132,12 @@ export function OrganizationProvidersPanel({ canWrite, orgId }: ProvidersPanelPr
   useEffect(() => {
     void loadAll();
   }, [loadAll]);
+
+  useEffect(() => {
+    if (!saveToast) return;
+    const id = setTimeout(() => setSaveToast(null), 3000);
+    return () => clearTimeout(id);
+  }, [saveToast]);
 
   async function handleTest(providerId: string) {
     if (!canWrite) return;
@@ -157,42 +191,40 @@ export function OrganizationProvidersPanel({ canWrite, orgId }: ProvidersPanelPr
     }
   }
 
-  async function saveSystemHub() {
-    if (!canWrite) return;
+  async function saveAll() {
+    if (!canWrite || !dirty) return;
     setHubSaving(true);
+    setCerebellumSaving(true);
     setHubError(null);
+    setCerebellumError(null);
+    setSaveToast(null);
     try {
-      await updateSystemHub(
-        {
-          provider_id: systemHubProviderId || null,
-          model: systemHubModel || null,
-        },
-        orgId,
-      );
+      const hubChanged =
+        systemHubProviderId !== savedSystemHubProviderId || systemHubModel !== savedSystemHubModel;
+      const cbChanged =
+        cerebellumProviderId !== savedCerebellumProviderId ||
+        cerebellumModel !== savedCerebellumModel;
+      await Promise.all([
+        hubChanged
+          ? updateSystemHub(
+              { provider_id: systemHubProviderId || null, model: systemHubModel || null },
+              orgId,
+            )
+          : Promise.resolve(),
+        cbChanged
+          ? updateCerebellumDefaults(
+              { provider_id: cerebellumProviderId || null, model: cerebellumModel || null },
+              orgId,
+            )
+          : Promise.resolve(),
+      ]);
       await loadAll();
+      setSaveToast('success');
     } catch (error) {
       setHubError(resolveError(t, error));
+      setSaveToast('error');
     } finally {
       setHubSaving(false);
-    }
-  }
-
-  async function saveCerebellumDefaults() {
-    if (!canWrite) return;
-    setCerebellumSaving(true);
-    setCerebellumError(null);
-    try {
-      await updateCerebellumDefaults(
-        {
-          provider_id: cerebellumProviderId || null,
-          model: cerebellumModel || null,
-        },
-        orgId,
-      );
-      await loadAll();
-    } catch (error) {
-      setCerebellumError(resolveError(t, error));
-    } finally {
       setCerebellumSaving(false);
     }
   }
@@ -207,267 +239,301 @@ export function OrganizationProvidersPanel({ canWrite, orgId }: ProvidersPanelPr
   }
 
   return (
-    <div className="space-y-8">
-      {errorMessage !== null ? (
-        <div
-          role="alert"
-          className="flex gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
-        >
-          <AlertCircle className="size-4 shrink-0" aria-hidden="true" />
-          <p>{errorMessage}</p>
-        </div>
-      ) : null}
-
-      {actionError !== null ? (
-        <div
-          role="alert"
-          className="flex gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
-        >
-          <AlertCircle className="size-4 shrink-0" aria-hidden="true" />
-          <p>{actionError}</p>
-        </div>
-      ) : null}
-
-      <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
-          <div>
-            <h2 className="text-base font-semibold text-slate-900">
-              {t('organization.providers.title')}
-            </h2>
-            <p className="mt-1 text-xs text-slate-500">{t('organization.providers.subtitle')}</p>
+    <>
+      <div className="space-y-8">
+        {errorMessage !== null ? (
+          <div
+            role="alert"
+            className="flex gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+          >
+            <AlertCircle className="size-4 shrink-0" aria-hidden="true" />
+            <p>{errorMessage}</p>
           </div>
-          {canWrite ? (
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setCatalogOpen(true)}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-              >
-                <Plus className="size-3.5" aria-hidden="true" />
-                {t('organization.providers.enableCatalog')}
-              </button>
-              <button
-                type="button"
-                onClick={() => setCustomOpen(true)}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-500"
-              >
-                <Plus className="size-3.5" aria-hidden="true" />
-                {t('organization.providers.addCustom')}
-              </button>
-            </div>
-          ) : null}
-        </header>
+        ) : null}
 
-        {providers.length === 0 ? (
-          <p className="px-5 py-8 text-sm text-slate-500">{t('organization.providers.empty')}</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm" data-testid="organization-providers-table">
-              <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-                <tr>
-                  <th className="px-4 py-3">{t('organization.providers.columns.name')}</th>
-                  <th className="px-4 py-3">{t('organization.providers.columns.origin')}</th>
-                  <th className="px-4 py-3">{t('organization.providers.columns.model')}</th>
-                  <th className="px-4 py-3">{t('organization.providers.columns.status')}</th>
-                  <th className="px-4 py-3">{t('organization.providers.columns.test')}</th>
-                  {canWrite ? (
-                    <th className="px-4 py-3">{t('organization.providers.columns.actions')}</th>
-                  ) : null}
-                </tr>
-              </thead>
-              <tbody>
-                {providers.map((provider) => (
-                  <tr key={provider.id} className="border-b border-slate-100 last:border-0">
-                    <td className="px-4 py-3">
-                      <p className="font-medium text-slate-900">{provider.name}</p>
-                      <p className="font-mono text-xs text-slate-500">{provider.slug}</p>
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">
-                      {provider.origin === 'catalog'
-                        ? t('organization.providers.originCatalog')
-                        : provider.origin === 'custom'
-                          ? t('organization.providers.originCustom')
-                          : provider.origin}
-                    </td>
-                    <td className="px-4 py-3 font-mono text-xs text-slate-700">
-                      {provider.default_model}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={cn(
-                          'inline-flex rounded-full px-2 py-0.5 text-xs font-medium',
-                          provider.enabled
-                            ? 'bg-emerald-50 text-emerald-700'
-                            : 'bg-slate-100 text-slate-600',
-                        )}
-                      >
-                        {provider.enabled
-                          ? t('organization.providers.enabled')
-                          : t('organization.providers.disabled')}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      {provider.last_test_status === 'ok' ? (
-                        <span className="inline-flex items-center gap-1 text-xs text-emerald-700">
-                          <Check className="size-3.5" aria-hidden="true" />
-                          {t('organization.providers.testOk')}
-                        </span>
-                      ) : provider.last_test_status === 'error' ? (
-                        <span className="inline-flex items-center gap-1 text-xs text-red-700">
-                          <CircleAlert className="size-3.5" aria-hidden="true" />
-                          {t('organization.providers.testFailed')}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-slate-400">
-                          {t('organization.providers.notTested')}
-                        </span>
-                      )}
-                    </td>
+        {actionError !== null ? (
+          <div
+            role="alert"
+            className="flex gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+          >
+            <AlertCircle className="size-4 shrink-0" aria-hidden="true" />
+            <p>{actionError}</p>
+          </div>
+        ) : null}
+
+        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+          <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
+            <div>
+              <h2 className="text-base font-semibold text-slate-900">
+                {t('organization.providers.title')}
+              </h2>
+              <p className="mt-1 text-xs text-slate-500">{t('organization.providers.subtitle')}</p>
+            </div>
+            {canWrite ? (
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCatalogOpen(true)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  <Plus className="size-3.5" aria-hidden="true" />
+                  {t('organization.providers.enableCatalog')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCustomOpen(true)}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-500"
+                >
+                  <Plus className="size-3.5" aria-hidden="true" />
+                  {t('organization.providers.addCustom')}
+                </button>
+              </div>
+            ) : null}
+          </header>
+
+          {providers.length === 0 ? (
+            <p className="px-5 py-8 text-sm text-slate-500">{t('organization.providers.empty')}</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm" data-testid="organization-providers-table">
+                <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3">{t('organization.providers.columns.name')}</th>
+                    <th className="px-4 py-3">{t('organization.providers.columns.origin')}</th>
+                    <th className="px-4 py-3">{t('organization.providers.columns.model')}</th>
+                    <th className="px-4 py-3">{t('organization.providers.columns.status')}</th>
+                    <th className="px-4 py-3">{t('organization.providers.columns.test')}</th>
                     {canWrite ? (
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => void handleTest(provider.id)}
-                            disabled={testingId === provider.id}
-                            data-testid={`provider-test-${provider.id}`}
-                            className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
-                          >
-                            {testingId === provider.id ? (
-                              <LoaderCircle className="size-3 animate-spin" aria-hidden="true" />
-                            ) : (
-                              <TestTube2 className="size-3" aria-hidden="true" />
-                            )}
-                            {t('organization.providers.test')}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setSetDefaultOpen(provider.id)}
-                            className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
-                          >
-                            {t('organization.providers.setDefault')}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void handleToggleEnabled(provider)}
-                            className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
-                          >
-                            {provider.enabled
-                              ? t('organization.providers.disable')
-                              : t('organization.providers.enable')}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void handleDelete(provider.id)}
-                            className="inline-flex items-center gap-1 rounded-md border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-50"
-                          >
-                            <Trash2 className="size-3" aria-hidden="true" />
-                            {t('organization.providers.delete')}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void toggleExpandProvider(provider)}
-                            className={cn(
-                              'rounded-md border px-2 py-1 text-xs',
-                              expandedProviderId === provider.id
-                                ? 'border-blue-200 bg-blue-50 text-blue-700'
-                                : 'border-slate-200 text-slate-700 hover:bg-slate-50',
-                            )}
-                          >
-                            {t('organization.models.capabilities')}
-                          </button>
-                        </div>
-                      </td>
+                      <th className="px-4 py-3">{t('organization.providers.columns.actions')}</th>
                     ) : null}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+                </thead>
+                <tbody>
+                  {providers.map((provider) => (
+                    <tr key={provider.id} className="border-b border-slate-100 last:border-0">
+                      <td className="px-4 py-3">
+                        <p className="font-medium text-slate-900">{provider.name}</p>
+                        <p className="font-mono text-xs text-slate-500">{provider.slug}</p>
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {provider.origin === 'catalog'
+                          ? t('organization.providers.originCatalog')
+                          : provider.origin === 'custom'
+                            ? t('organization.providers.originCustom')
+                            : provider.origin}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-xs text-slate-700">
+                        {provider.default_model}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={cn(
+                            'inline-flex rounded-full px-2 py-0.5 text-xs font-medium',
+                            provider.enabled
+                              ? 'bg-emerald-50 text-emerald-700'
+                              : 'bg-slate-100 text-slate-600',
+                          )}
+                        >
+                          {provider.enabled
+                            ? t('organization.providers.enabled')
+                            : t('organization.providers.disabled')}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        {provider.last_test_status === 'ok' ? (
+                          <span className="inline-flex items-center gap-1 text-xs text-emerald-700">
+                            <Check className="size-3.5" aria-hidden="true" />
+                            {t('organization.providers.testOk')}
+                          </span>
+                        ) : provider.last_test_status === 'error' ? (
+                          <span className="inline-flex items-center gap-1 text-xs text-red-700">
+                            <CircleAlert className="size-3.5" aria-hidden="true" />
+                            {t('organization.providers.testFailed')}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-slate-400">
+                            {t('organization.providers.notTested')}
+                          </span>
+                        )}
+                      </td>
+                      {canWrite ? (
+                        <td className="px-4 py-3">
+                          <div className="flex flex-wrap gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => void handleTest(provider.id)}
+                              disabled={testingId === provider.id}
+                              data-testid={`provider-test-${provider.id}`}
+                              className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
+                            >
+                              {testingId === provider.id ? (
+                                <LoaderCircle className="size-3 animate-spin" aria-hidden="true" />
+                              ) : (
+                                <TestTube2 className="size-3" aria-hidden="true" />
+                              )}
+                              {t('organization.providers.test')}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setSetDefaultOpen(provider.id)}
+                              className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
+                            >
+                              {t('organization.providers.setDefault')}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleToggleEnabled(provider)}
+                              className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
+                            >
+                              {provider.enabled
+                                ? t('organization.providers.disable')
+                                : t('organization.providers.enable')}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleDelete(provider.id)}
+                              className="inline-flex items-center gap-1 rounded-md border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-50"
+                            >
+                              <Trash2 className="size-3" aria-hidden="true" />
+                              {t('organization.providers.delete')}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void toggleExpandProvider(provider)}
+                              className={cn(
+                                'rounded-md border px-2 py-1 text-xs',
+                                expandedProviderId === provider.id
+                                  ? 'border-blue-200 bg-blue-50 text-blue-700'
+                                  : 'border-slate-200 text-slate-700 hover:bg-slate-50',
+                              )}
+                            >
+                              {t('organization.models.capabilities')}
+                            </button>
+                          </div>
+                        </td>
+                      ) : null}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
 
-      {expandedProviderId !== null
-        ? (() => {
-            const expanded = providers.find((p) => p.id === expandedProviderId);
-            if (!expanded) return null;
-            return (
-              <AllowlistPanel
-                provider={expanded}
-                catalogModels={providerCatalogModels[expandedProviderId] ?? []}
-                orgId={orgId}
-                canWrite={canWrite}
-                onUpdated={() => void loadAll()}
-              />
-            );
-          })()
-        : null}
+        {expandedProviderId !== null
+          ? (() => {
+              const expanded = providers.find((p) => p.id === expandedProviderId);
+              if (!expanded) return null;
+              return (
+                <AllowlistPanel
+                  provider={expanded}
+                  catalogModels={providerCatalogModels[expandedProviderId] ?? []}
+                  orgId={orgId}
+                  canWrite={canWrite}
+                  onUpdated={() => void loadAll()}
+                />
+              );
+            })()
+          : null}
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <HubSettingsPanel
-          title={t('organization.systemHub.title')}
-          subtitle={t('organization.systemHub.subtitle')}
-          providerId={systemHubProviderId}
-          model={systemHubModel}
-          providers={enabledProviders}
-          canEdit={canWrite}
-          saving={hubSaving}
-          error={hubError}
-          onProviderChange={setSystemHubProviderId}
-          onModelChange={setSystemHubModel}
-          onSave={() => void saveSystemHub()}
-        />
-        <HubSettingsPanel
-          title={t('organization.cerebellum.title')}
-          subtitle={t('organization.cerebellum.subtitle')}
-          providerId={cerebellumProviderId}
-          model={cerebellumModel}
-          providers={enabledProviders}
-          canEdit={canWrite}
-          saving={cerebellumSaving}
-          error={cerebellumError}
-          onProviderChange={setCerebellumProviderId}
-          onModelChange={setCerebellumModel}
-          onSave={() => void saveCerebellumDefaults()}
-        />
+        <div className="grid gap-6 lg:grid-cols-2">
+          <HubSettingsPanel
+            title={t('organization.systemHub.title')}
+            subtitle={t('organization.systemHub.subtitle')}
+            providerId={systemHubProviderId}
+            model={systemHubModel}
+            providers={enabledProviders}
+            canEdit={canWrite}
+            saving={hubSaving}
+            error={hubError}
+            onProviderChange={setSystemHubProviderId}
+            onModelChange={setSystemHubModel}
+          />
+          <HubSettingsPanel
+            title={t('organization.cerebellum.title')}
+            subtitle={t('organization.cerebellum.subtitle')}
+            providerId={cerebellumProviderId}
+            model={cerebellumModel}
+            providers={enabledProviders}
+            canEdit={canWrite}
+            saving={cerebellumSaving}
+            error={cerebellumError}
+            onProviderChange={setCerebellumProviderId}
+            onModelChange={setCerebellumModel}
+          />
+        </div>
+
+        {catalogOpen && canWrite ? (
+          <EnableCatalogModal
+            existing={providers}
+            orgId={orgId}
+            onClose={() => setCatalogOpen(false)}
+            onCreated={() => {
+              setCatalogOpen(false);
+              void loadAll();
+            }}
+          />
+        ) : null}
+
+        {customOpen && canWrite ? (
+          <CustomProviderModal
+            orgId={orgId}
+            onClose={() => setCustomOpen(false)}
+            onCreated={() => {
+              setCustomOpen(false);
+              void loadAll();
+            }}
+          />
+        ) : null}
+
+        {setDefaultOpen !== null && canWrite ? (
+          <SetDefaultModal
+            provider={providers.find((p) => p.id === setDefaultOpen) ?? null}
+            baseClasses={baseClasses}
+            orgId={orgId}
+            systemHubProviderId={systemHubProviderId}
+            systemHubModel={systemHubModel}
+            cerebellumProviderId={cerebellumProviderId}
+            cerebellumModel={cerebellumModel}
+            onClose={() => setSetDefaultOpen(null)}
+            onSaved={() => {
+              setSetDefaultOpen(null);
+              void loadAll();
+            }}
+          />
+        ) : null}
       </div>
 
-      {catalogOpen && canWrite ? (
-        <EnableCatalogModal
-          existing={providers}
-          orgId={orgId}
-          onClose={() => setCatalogOpen(false)}
-          onCreated={() => {
-            setCatalogOpen(false);
-            void loadAll();
-          }}
-        />
+      {dirty && canWrite ? (
+        <button
+          type="button"
+          disabled={hubSaving || cerebellumSaving}
+          onClick={() => void saveAll()}
+          className="fixed bottom-4 right-4 z-[70] inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg hover:bg-blue-500 disabled:opacity-60"
+        >
+          {hubSaving || cerebellumSaving ? (
+            <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+          ) : null}
+          {t('organization.providers.saveChanges')}
+        </button>
       ) : null}
 
-      {customOpen && canWrite ? (
-        <CustomProviderModal
-          orgId={orgId}
-          onClose={() => setCustomOpen(false)}
-          onCreated={() => {
-            setCustomOpen(false);
-            void loadAll();
-          }}
-        />
+      {saveToast !== null ? (
+        <div
+          role={saveToast === 'error' ? 'alert' : 'status'}
+          className={cn(
+            'fixed bottom-4 left-1/2 z-[80] -translate-x-1/2 rounded-lg border px-4 py-2.5 text-sm font-medium shadow-lg',
+            saveToast === 'success'
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+              : 'border-red-200 bg-red-50 text-red-800',
+          )}
+        >
+          {saveToast === 'success'
+            ? t('organization.providers.saveSuccess')
+            : t('organization.providers.saveFailed')}
+        </div>
       ) : null}
-
-      {setDefaultOpen !== null && canWrite ? (
-        <SetDefaultModal
-          provider={providers.find((p) => p.id === setDefaultOpen) ?? null}
-          baseClasses={baseClasses}
-          orgId={orgId}
-          onClose={() => setSetDefaultOpen(null)}
-          onSaved={() => {
-            setSetDefaultOpen(null);
-            void loadAll();
-          }}
-        />
-      ) : null}
-    </div>
+    </>
   );
 }
 
@@ -482,7 +548,6 @@ function HubSettingsPanel({
   error,
   onProviderChange,
   onModelChange,
-  onSave,
 }: {
   readonly title: string;
   readonly subtitle: string;
@@ -494,7 +559,6 @@ function HubSettingsPanel({
   readonly error: string | null;
   readonly onProviderChange: (value: string) => void;
   readonly onModelChange: (value: string) => void;
-  readonly onSave: () => void;
 }) {
   const { t } = useTranslation();
   const [models, setModels] = useState<readonly CatalogModel[]>([]);
@@ -538,7 +602,10 @@ function HubSettingsPanel({
           <select
             value={providerId}
             disabled={!canEdit}
-            onChange={(e) => onProviderChange(e.target.value)}
+            onChange={(e) => {
+              onProviderChange(e.target.value);
+              onModelChange('');
+            }}
             className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm disabled:bg-slate-50"
           >
             <option value="">{t('organization.fields.none')}</option>
@@ -565,16 +632,11 @@ function HubSettingsPanel({
             {error}
           </p>
         ) : null}
-        {canEdit ? (
-          <button
-            type="button"
-            onClick={onSave}
-            disabled={saving}
-            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-500 disabled:opacity-60"
-          >
-            {saving ? <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" /> : null}
-            {t('organization.save')}
-          </button>
+        {saving ? (
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <LoaderCircle className="size-3 animate-spin" aria-hidden="true" />
+            {t('organization.saving')}
+          </div>
         ) : null}
       </div>
     </section>
@@ -990,18 +1052,45 @@ function SetDefaultModal({
   provider,
   baseClasses,
   orgId,
+  systemHubProviderId,
+  systemHubModel,
+  cerebellumProviderId,
+  cerebellumModel,
   onClose,
   onSaved,
 }: {
   readonly provider: OrganizationProvider | null;
   readonly baseClasses: readonly BaseClass[];
   readonly orgId?: string;
+  readonly systemHubProviderId: string;
+  readonly systemHubModel: string;
+  readonly cerebellumProviderId: string;
+  readonly cerebellumModel: string;
   readonly onClose: () => void;
   readonly onSaved: () => void;
 }) {
   const { t } = useTranslation();
   const [target, setTarget] = useState<SetDefaultTarget>('system_hub');
-  const [model, setModel] = useState(provider?.default_model ?? '');
+
+  const computeModelForTarget = useCallback(
+    (next: SetDefaultTarget): string => {
+      if (provider === null) return '';
+      if (next === 'system_hub') {
+        return systemHubProviderId === provider.id
+          ? systemHubModel
+          : (provider.default_model ?? '');
+      }
+      if (next === 'cerebellum') {
+        return cerebellumProviderId === provider.id
+          ? cerebellumModel
+          : (provider.default_model ?? '');
+      }
+      return provider.default_model ?? '';
+    },
+    [provider, systemHubProviderId, systemHubModel, cerebellumProviderId, cerebellumModel],
+  );
+
+  const [model, setModel] = useState(() => computeModelForTarget('system_hub'));
   const [selectedBaseClassIds, setSelectedBaseClassIds] = useState<ReadonlySet<string>>(new Set());
   const [models, setModels] = useState<readonly CatalogModel[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -1009,7 +1098,8 @@ function SetDefaultModal({
 
   useEffect(() => {
     if (provider === null) return;
-    setModel(provider.default_model);
+    setModel(computeModelForTarget('system_hub'));
+    setTarget('system_hub');
     if (provider.models_allowlist && provider.models_allowlist.length > 0) {
       setModels(
         provider.models_allowlist.map((id) => ({
@@ -1031,7 +1121,7 @@ function SetDefaultModal({
       return;
     }
     setModels([]);
-  }, [provider]);
+  }, [provider, computeModelForTarget]);
 
   function toggleBaseClass(id: string) {
     setSelectedBaseClassIds((prev) => {
@@ -1084,7 +1174,10 @@ function SetDefaultModal({
               name="set-default-target"
               value={value}
               checked={target === value}
-              onChange={() => setTarget(value)}
+              onChange={() => {
+                setTarget(value);
+                setModel(computeModelForTarget(value));
+              }}
               className="size-4 accent-blue-600"
             />
             {t(`organization.setDefaultModal.targets.${value}`)}
