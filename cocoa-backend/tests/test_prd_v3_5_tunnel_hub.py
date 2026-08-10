@@ -235,3 +235,67 @@ async def test_ingest_host_frame_routes_to_composer(monkeypatch):
         "instance_id": "inst",
         "token": "x",
     })]
+
+
+@pytest.mark.asyncio
+async def test_ingest_host_frame_strips_finish_reason_from_done(monkeypatch):
+    """v5.1 N3: Tunnel 面 done 帧不再透传 finish_reason（chat-bridge.ts 已停发）。"""
+    seen: list[tuple[str, dict]] = []
+
+    async def fake_ingest(turn_id: str, frame: dict):
+        seen.append((turn_id, frame))
+
+    monkeypatch.setattr(
+        "app.core.composer_turns.ingest_tunnel_chat_frame", fake_ingest
+    )
+    msg = TunnelMessage(
+        type=TunnelMessageType.CHAT_RESPONSE_DONE.value,
+        turn_id="t-done",
+        payload={
+            "turn_id": "t-done",
+            "text": "finished",
+            "status": "completed",
+            "finish_reason": "stop",
+        },
+    )
+    await ingest_host_frame("inst", msg)
+    assert len(seen) == 1
+    _, frame = seen[0]
+    assert frame["type"] == CHAT_RESPONSE_DONE
+    assert frame["status"] == "completed"
+    assert "finish_reason" not in frame
+
+
+@pytest.mark.asyncio
+async def test_tunnel_done_emits_frame_without_finish_reason():
+    """DONE 分支（composer_turns.py:96-109）不再 setdefault finish_reason。
+
+    即使 hub 层已剥离，ingest 路径本身也不得补回 finish_reason。
+    """
+    turn_id = str(uuid4())
+    state = ComposerTurnState(
+        turn_id=turn_id,
+        instance_id="inst-1",
+        workspace_id="ws-1",
+        target_entity="alice",
+        via_tunnel=True,
+    )
+    from app.core import composer_turns as ct
+
+    ct._TURNS[turn_id] = state
+    try:
+        await ingest_tunnel_chat_frame(
+            turn_id,
+            {
+                "type": CHAT_RESPONSE_DONE,
+                "status": "completed",
+                "text": "整段答复",
+            },
+        )
+        done = await asyncio.wait_for(state.queue.get(), timeout=1)
+        assert done["type"] == CHAT_RESPONSE_DONE
+        assert done["text"] == "整段答复"
+        assert "finish_reason" not in done
+        await asyncio.wait_for(state.queue.get(), timeout=1)  # sentinel
+    finally:
+        ct._TURNS.pop(turn_id, None)

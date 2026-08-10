@@ -23,6 +23,41 @@ async def test_stub_token_stream_yields_chunks(monkeypatch: pytest.MonkeyPatch) 
     assert finish == "stop"
 
 
+@pytest.mark.asyncio
+async def test_offline_stream_done_keeps_finish_reason(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """v5.1 N3: offline LLM 兜底路径保留 finish_reason（内部 SSE 非 Tunnel 面）。
+
+    ``_run_stream_turn``（composer_turns.py:252-280）的 done 帧携带
+    ``finish_reason``（"stop" 或 chunk 值）——Tunnel 面移除不得波及该路径。
+    """
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    async def noop(*_a, **_k):
+        return None
+
+    monkeypatch.setattr("app.core.composer_turns.emit", noop)
+    monkeypatch.setattr("app.core.composer_turns._persist_chat_event", noop)
+
+    from app.core.composer_turns import ComposerTurnState, _run_stream_turn
+    from app.core.event_types import CHAT_RESPONSE_DONE
+
+    state = ComposerTurnState(
+        turn_id="offline-1",
+        instance_id="inst-1",
+        workspace_id="ws-1",
+        target_entity="alice",
+        text="ping",
+    )
+    await _run_stream_turn(state)
+
+    done = [f for f in state.history if f["type"] == CHAT_RESPONSE_DONE]
+    assert len(done) == 1
+    assert done[0]["finish_reason"] == "stop"
+    assert done[0]["text"] == "[stub] ping"
+
+
 def test_parse_turn_multi_mention_chat() -> None:
     turn = parse_turn("@a 你好\n@b hello")
     assert len(turn.directives) == 2
