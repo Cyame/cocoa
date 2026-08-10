@@ -158,7 +158,7 @@ if [[ "$MODE" == "push" ]]; then
   registry_base="${REGISTRY#*://}"
   reachable=0
   for scheme in http https; do
-    if docker run --rm curlimages/curl curl -sf "${scheme}://${registry_base}/v2/" >/dev/null 2>&1; then
+    if docker run --rm --network host curlimages/curl curl -sf "${scheme}://${registry_base}/v2/" >/dev/null 2>&1; then
       reachable=1
       break
     fi
