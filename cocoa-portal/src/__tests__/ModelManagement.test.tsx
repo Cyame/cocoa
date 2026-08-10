@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ModelInputCombobox } from '@/components/ModelInputCombobox';
 
@@ -9,7 +9,14 @@ const options = [
 
 describe('ModelInputCombobox', () => {
   it('shows placeholder when no value selected', () => {
-    render(<ModelInputCombobox value="" onChange={() => {}} options={options} placeholder="Select a model" />);
+    render(
+      <ModelInputCombobox
+        value=""
+        onChange={() => {}}
+        options={options}
+        placeholder="Select a model"
+      />,
+    );
     expect(screen.getByRole('combobox')).toHaveTextContent('Select a model');
   });
 
