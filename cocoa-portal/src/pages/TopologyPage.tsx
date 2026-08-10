@@ -33,6 +33,7 @@ import { ApiError, api } from '@/lib/api';
 import { deleteInstanceById, deleteMembership, deletePassage } from '@/lib/api/instances';
 import { fetchTopologyLiveStatus } from '@/lib/api/topology';
 import { resolveError } from '@/lib/apiError';
+import { getIconForSlug } from '@/lib/baseClassIcons';
 import { fitNodes } from '@/lib/topologyFit';
 import type {
   Event,
@@ -1153,6 +1154,33 @@ export default function TopologyPage({
 // Sub-views
 // ---------------------------------------------------------------------------
 
+/**
+ * Split a label into up to `maxLines` lines, each at most `maxChars` characters.
+ * Returns an array of strings; if the label fits in one line, returns a single
+ * element. A trailing ellipsis is appended when the label is truncated.
+ */
+function splitLabelLines(label: string, maxChars = 14, maxLines = 2): readonly string[] {
+  if (label.length <= maxChars) return [label];
+  const lines: string[] = [];
+  let remaining = label;
+  for (let i = 0; i < maxLines; i++) {
+    if (i === maxLines - 1) {
+      // Last allowed line — take remaining but cap + ellipsis
+      lines.push(
+        remaining.length > maxChars ? `${remaining.slice(0, maxChars - 1)}...` : remaining,
+      );
+      break;
+    }
+    if (remaining.length <= maxChars) {
+      lines.push(remaining);
+      break;
+    }
+    lines.push(remaining.slice(0, maxChars));
+    remaining = remaining.slice(maxChars);
+  }
+  return lines;
+}
+
 type NodeViewProps = {
   readonly node: NodeSummary;
   readonly onClick: (node: NodeSummary) => void;
@@ -1183,7 +1211,16 @@ function NodeView({
   const coreStrokeOpacity = intensityStrokeOpacity(node.glowIntensity);
   const isUser = node.fillColor === DEFAULT_USER_FILL;
   const tooltip = `${node.label} | ${node.status}`;
-  const Icon = node.kind === 'hub' ? Brain : isUser ? User : node.instanceId !== null ? Cpu : Bot;
+  const Icon =
+    node.kind === 'hub'
+      ? Brain
+      : isUser
+        ? User
+        : node.slug
+          ? getIconForSlug(node.slug)
+          : node.instanceId !== null
+            ? Cpu
+            : Bot;
   const renderX = dragOverride !== null ? dragOverride.x : node.x;
   const renderY = dragOverride !== null ? dragOverride.y : node.y;
   const highlightStroke =
@@ -1282,20 +1319,28 @@ function NodeView({
           <Icon size={20} strokeWidth={2} />
         </div>
       </foreignObject>
-      {node.kind !== 'hub' ? (
-        <text
-          y={NODE_RADIUS + 16}
-          textAnchor="middle"
-          className="fill-slate-700"
-          style={{ fontSize: 11, fontWeight: node.isCurrentUser ? 700 : 500 }}
-          data-testid={`topology-node-label-${node.id}`}
-        >
-          {node.label.length > 14 ? `${node.label.slice(0, 13)}…` : node.label}
-        </text>
-      ) : null}
+      {node.kind !== 'hub'
+        ? (() => {
+            const labelLines = splitLabelLines(node.label);
+            return (
+              <text
+                textAnchor="middle"
+                className="fill-slate-700"
+                style={{ fontSize: 11, fontWeight: node.isCurrentUser ? 700 : 500 }}
+                data-testid={`topology-node-label-${node.id}`}
+              >
+                {labelLines.map((line, i) => (
+                  <tspan key={line} x={0} dy={i === 0 ? 0 : 13}>
+                    {line}
+                  </tspan>
+                ))}
+              </text>
+            );
+          })()
+        : null}
       {node.isCurrentUser ? (
         <text
-          y={NODE_RADIUS + 30}
+          y={NODE_RADIUS + 10 + splitLabelLines(node.label).length * 13 + 3}
           textAnchor="middle"
           className="fill-blue-600"
           style={{ fontSize: 10, fontWeight: 700 }}

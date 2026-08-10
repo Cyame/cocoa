@@ -18,6 +18,8 @@ const MEMBERSHIP_INSTANCE = {
   workspace_id: 'ws-1',
   user_id: null,
   instance_id: 'instance-1',
+  entity_slug: 'fox',
+  entity_name: 'Swift Fox Agent',
   posx: 200,
   posy: 100,
   permissions: null,
@@ -168,7 +170,7 @@ describe('TopologyPage', () => {
 
     fireEvent.doubleClick(node);
     expect(useTabStore.getState().tabs).toEqual([
-      { id: 'instance-instance-1', label: 'instance-1', instanceId: 'instance-1' },
+      { id: 'instance-instance-1', label: 'Swift Fox Agent', instanceId: 'instance-1' },
     ]);
   });
 
@@ -298,5 +300,222 @@ describe('TopologyPage', () => {
     await waitFor(() => {
       expect(screen.queryByTestId('topology-node-modal')).not.toBeInTheDocument();
     });
+  });
+
+  it('uses slug-based icon for instance with entity_slug', async () => {
+    setupMockApi();
+    renderTopology();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('topology-node-membership-1')).toBeInTheDocument();
+    });
+
+    const nodeGroup = screen.getByTestId('topology-node-membership-1');
+    const iconForeignObject = nodeGroup.querySelector('foreignObject[x="-12"]');
+    expect(iconForeignObject).toBeInTheDocument();
+  });
+
+  it('falls back to Cpu icon for instance without entity_slug', async () => {
+    const membershipNoSlug = {
+      id: 'membership-noslug',
+      workspace_id: 'ws-1',
+      user_id: null,
+      instance_id: 'instance-noslug',
+      posx: 300,
+      posy: 200,
+      permissions: null,
+      created_at: '2026-07-01T00:00:00Z',
+      updated_at: '2026-07-01T00:00:00Z',
+    };
+    const liveNoSlug = [
+      {
+        membership_id: 'membership-noslug',
+        posx: 300,
+        posy: 200,
+        node_type: 'instance' as const,
+        glow: { color: '#94a3b8', intensity: 'static' as const },
+        outdated: false,
+        active_hash: null,
+      },
+    ];
+    mockedApi.mockImplementation((path: string) => {
+      if (path.startsWith('/messaging/memberships?')) {
+        return Promise.resolve({ items: [membershipNoSlug], total: 1 });
+      }
+      if (path.startsWith('/messaging/passages?')) {
+        return Promise.resolve({ items: [], total: 0 });
+      }
+      if (path.includes('/live-status')) return Promise.resolve(liveNoSlug);
+      if (path.startsWith('/events?')) {
+        return Promise.resolve({ items: [], next_cursor: null, total: 0 });
+      }
+      return Promise.reject(new Error(`Unmocked: ${path}`));
+    });
+
+    renderTopology();
+    await waitFor(() => {
+      expect(screen.getByTestId('topology-node-membership-noslug')).toBeInTheDocument();
+    });
+    const nodeGroup = screen.getByTestId('topology-node-membership-noslug');
+    const foreignObject = nodeGroup.querySelector('foreignObject');
+    expect(foreignObject).toBeInTheDocument();
+  });
+
+  it('wraps long entity_name into multiple label lines', async () => {
+    const longNameMembership = {
+      id: 'membership-long',
+      workspace_id: 'ws-1',
+      user_id: null,
+      instance_id: 'instance-long',
+      entity_name: 'Very Long Entity Name That Should Wrap',
+      entity_slug: 'beaver',
+      posx: 0,
+      posy: 300,
+      permissions: null,
+      created_at: '2026-07-01T00:00:00Z',
+      updated_at: '2026-07-01T00:00:00Z',
+    };
+    const liveLong = [
+      {
+        membership_id: 'membership-long',
+        posx: 0,
+        posy: 300,
+        node_type: 'instance' as const,
+        glow: { color: '#10b981', intensity: 'strong' as const },
+        outdated: false,
+        active_hash: null,
+      },
+    ];
+    mockedApi.mockImplementation((path: string) => {
+      if (path.startsWith('/messaging/memberships?')) {
+        return Promise.resolve({ items: [longNameMembership], total: 1 });
+      }
+      if (path.startsWith('/messaging/passages?')) {
+        return Promise.resolve({ items: [], total: 0 });
+      }
+      if (path.includes('/live-status')) return Promise.resolve(liveLong);
+      if (path.startsWith('/events?')) {
+        return Promise.resolve({ items: [], next_cursor: null, total: 0 });
+      }
+      return Promise.reject(new Error(`Unmocked: ${path}`));
+    });
+
+    renderTopology();
+    await waitFor(() => {
+      expect(screen.getByTestId('topology-node-membership-long')).toBeInTheDocument();
+    });
+
+    const label = screen.getByTestId('topology-node-label-membership-long');
+    const tspans = label.querySelectorAll('tspan');
+    expect(tspans.length).toBeGreaterThanOrEqual(2);
+    expect(tspans[0]?.getAttribute('x')).toBe('0');
+    if (tspans.length > 1) {
+      expect(tspans[1]?.getAttribute('dy')).toBe('13');
+    }
+  });
+
+  it('shows entity_name as label when entity_name is present', async () => {
+    setupMockApi();
+    renderTopology();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('topology-node-membership-1')).toBeInTheDocument();
+    });
+
+    const label = screen.getByTestId('topology-node-label-membership-1');
+    expect(label.textContent).toContain('Swift Fox Agent');
+  });
+
+  it('uses entity_slug as label fallback when entity_name is absent', async () => {
+    const slugOnlyMembership = {
+      id: 'membership-slug',
+      workspace_id: 'ws-1',
+      user_id: null,
+      instance_id: 'instance-slug',
+      entity_slug: 'coyote',
+      posx: 100,
+      posy: 400,
+      permissions: null,
+      created_at: '2026-07-01T00:00:00Z',
+      updated_at: '2026-07-01T00:00:00Z',
+    };
+    const liveSlug = [
+      {
+        membership_id: 'membership-slug',
+        posx: 100,
+        posy: 400,
+        node_type: 'instance' as const,
+        glow: { color: '#10b981', intensity: 'strong' as const },
+        outdated: false,
+        active_hash: null,
+      },
+    ];
+    mockedApi.mockImplementation((path: string) => {
+      if (path.startsWith('/messaging/memberships?')) {
+        return Promise.resolve({ items: [slugOnlyMembership], total: 1 });
+      }
+      if (path.startsWith('/messaging/passages?')) {
+        return Promise.resolve({ items: [], total: 0 });
+      }
+      if (path.includes('/live-status')) return Promise.resolve(liveSlug);
+      if (path.startsWith('/events?')) {
+        return Promise.resolve({ items: [], next_cursor: null, total: 0 });
+      }
+      return Promise.reject(new Error(`Unmocked: ${path}`));
+    });
+
+    renderTopology();
+    await waitFor(() => {
+      expect(screen.getByTestId('topology-node-membership-slug')).toBeInTheDocument();
+    });
+
+    const label = screen.getByTestId('topology-node-label-membership-slug');
+    expect(label.textContent).toBe('coyote');
+  });
+
+  it('uses instance_id as label fallback when entity_name and entity_slug are absent', async () => {
+    const idOnlyMembership = {
+      id: 'membership-idonly',
+      workspace_id: 'ws-1',
+      user_id: null,
+      instance_id: 'instance-idonly',
+      posx: 200,
+      posy: 500,
+      permissions: null,
+      created_at: '2026-07-01T00:00:00Z',
+      updated_at: '2026-07-01T00:00:00Z',
+    };
+    const liveIdOnly = [
+      {
+        membership_id: 'membership-idonly',
+        posx: 200,
+        posy: 500,
+        node_type: 'instance' as const,
+        glow: { color: '#10b981', intensity: 'strong' as const },
+        outdated: false,
+        active_hash: null,
+      },
+    ];
+    mockedApi.mockImplementation((path: string) => {
+      if (path.startsWith('/messaging/memberships?')) {
+        return Promise.resolve({ items: [idOnlyMembership], total: 1 });
+      }
+      if (path.startsWith('/messaging/passages?')) {
+        return Promise.resolve({ items: [], total: 0 });
+      }
+      if (path.includes('/live-status')) return Promise.resolve(liveIdOnly);
+      if (path.startsWith('/events?')) {
+        return Promise.resolve({ items: [], next_cursor: null, total: 0 });
+      }
+      return Promise.reject(new Error(`Unmocked: ${path}`));
+    });
+
+    renderTopology();
+    await waitFor(() => {
+      expect(screen.getByTestId('topology-node-membership-idonly')).toBeInTheDocument();
+    });
+
+    const label = screen.getByTestId('topology-node-label-membership-idonly');
+    expect(label.textContent).toBe('instance-idonly');
   });
 });
