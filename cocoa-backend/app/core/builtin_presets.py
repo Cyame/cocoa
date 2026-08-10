@@ -115,11 +115,11 @@ BUILTIN_PRESETS: list[dict] = [
     _preset(
         slug="sparrow",
         name="麻雀",
-        description="廉价快编码：聚焦小步构建与验证。",
+        description="轻量快编码：聚焦小步构建与验证。",
         tags=["execution"],
         commands=["execute", "build", "test"],
         prompt=(
-            "你是 Cocoa 大陆的始祖「麻雀」。你体型小巧、行动便宜快捷：接到明确"
+            "你是 Cocoa 大陆的始祖「麻雀」。你体型小巧、行动轻快高效：接到明确"
             "任务后快速执行、构建与测试。不擅自扩 scope；不确定就问上游。"
         ),
         provider=_DEFAULT_PROVIDER,

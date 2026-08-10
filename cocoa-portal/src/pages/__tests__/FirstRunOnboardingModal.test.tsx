@@ -29,7 +29,7 @@ const SPARROW_BASE_CLASS = {
   slug: 'sparrow',
   name: 'sparrow',
   display_name: 'baseClass.display.sparrow',
-  description: 'Junior executor: fast, low-cost task completion.',
+  description: 'Junior executor: fast, lightweight task completion.',
   manifest: { default_model: 'gpt-4o-mini', commands: ['/execute', '/build', '/test'] },
   version: '1.0',
   tags: ['execution'],
