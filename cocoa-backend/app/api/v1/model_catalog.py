@@ -9,10 +9,12 @@ from __future__ import annotations
 from fastapi import APIRouter, Query
 from sqlalchemy import select
 
-from app.api.deps import DB, CurrentUserDep
+from app.api.deps import DB, CurrentUserDep, XOrgIdHeader
 from app.api.v1.organizations import _get_default_org
 from app.core.errors import NotFoundError
 from app.core.openapi import add_error_responses
+from app.core.org_scope import resolve_current_org_id
+from app.models.organization import Organization
 from app.models.organization_provider import OrganizationProvider
 from app.schemas.organization import CatalogModelOut, CatalogModelsOut
 from app.services.llm.model_catalog import model_catalog
@@ -32,8 +34,24 @@ async def get_model_catalog(
         default=False,
         description="Bypass cached allowlist and re-fetch remote /models.dev",
     ),
+    x_organization_id: XOrgIdHeader = None,
 ) -> CatalogModelsOut:
-    org = await _get_default_org(db)
+    # Org scope resolution (v5.2.1): honor the caller's org context so non-default
+    # org providers resolve; fall back to the seeded default org when no header and
+    # no sole active contract (legacy callers).
+    org_id = await resolve_current_org_id(
+        db, current_user.user_id, x_organization_id
+    )
+    if org_id is None:
+        org = await _get_default_org(db)
+    else:
+        org = await db.get(Organization, org_id)
+        if org is None or org.deleted_at is not None:
+            raise NotFoundError(
+                "organization.not_found",
+                "errors.organization.not_found",
+                f"Organization '{org_id}' not found",
+            )
     result = await db.execute(
         select(OrganizationProvider).where(
             OrganizationProvider.id == provider_id,

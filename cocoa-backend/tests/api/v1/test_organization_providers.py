@@ -288,6 +288,105 @@ def test_system_hub_generate_resolves_org_scope(
     assert via_contract.status_code == 200, via_contract.text
 
 
+def test_provider_model_overrides_round_trip(
+    client: TestClient, auth_token: str
+) -> None:
+    """F1a: model_overrides must survive PATCH → GET (was silently dropped by
+    the schema contract gap)."""
+    create = client.post(
+        "/api/v1/organizations/default/providers",
+        headers=_auth(auth_token),
+        json={
+            "origin": "custom",
+            "name": "Override Hub",
+            "slug": "override-hub",
+            "request_format": "completion",
+            "base_url": "https://llm.example.com/v1",
+            "api_key_ref": "OVERRIDE_KEY",
+            "default_model": "gpt-4o-mini",
+        },
+    )
+    assert create.status_code == 201, create.text
+    pid = create.json()["id"]
+
+    overrides = {
+        "gpt-4o-mini": {
+            "display_name": "Mini Pro",
+            "extended_params": {"temperature": 0.7, "max_tokens": 4096},
+            "reasoning": False,
+            "vision": True,
+        },
+        "gpt-4o": {"display_name": "Omni", "tool_call": True},
+    }
+    patched = client.patch(
+        f"/api/v1/organizations/default/providers/{pid}",
+        headers=_auth(auth_token),
+        json={"model_overrides": overrides},
+    )
+    assert patched.status_code == 200, patched.text
+    assert patched.json()["model_overrides"] == overrides
+
+    got = client.get(
+        f"/api/v1/organizations/default/providers/{pid}",
+        headers=_auth(auth_token),
+    )
+    assert got.status_code == 200
+    assert got.json()["model_overrides"] == overrides
+
+    listed = client.get(
+        "/api/v1/organizations/default/providers",
+        headers=_auth(auth_token),
+    )
+    assert listed.status_code == 200
+    match = next(p for p in listed.json() if p["id"] == pid)
+    assert match["model_overrides"] == overrides
+
+
+def test_system_hub_provider_unavailable_when_disabled(
+    client: TestClient, auth_token: str
+) -> None:
+    """C: a configured hub provider that is disabled must surface
+    system_hub.provider_unavailable (not fall through to the LLM call)."""
+    create = client.post(
+        "/api/v1/organizations/default/providers",
+        headers=_auth(auth_token),
+        json={
+            "origin": "custom",
+            "name": "Unavailable Hub",
+            "slug": "unavailable-hub",
+            "request_format": "completion",
+            "base_url": "https://llm.example.com/v1",
+            "api_key_ref": "UNAVAIL_KEY",
+            "default_model": "gpt-4o-mini",
+        },
+    )
+    assert create.status_code == 201, create.text
+    pid = create.json()["id"]
+
+    hub = client.patch(
+        "/api/v1/organizations/default/system-hub",
+        headers=_auth(auth_token),
+        json={"provider_id": pid, "model": "gpt-4o-mini"},
+    )
+    assert hub.status_code == 200
+    assert hub.json()["configured"] is True
+
+    disabled = client.patch(
+        f"/api/v1/organizations/default/providers/{pid}",
+        headers=_auth(auth_token),
+        json={"enabled": False},
+    )
+    assert disabled.status_code == 200
+
+    resp = client.post(
+        "/api/v1/system-hub/generate-description",
+        headers=_auth(auth_token),
+        json={"name": "测试眷属"},
+    )
+    assert resp.status_code == 422
+    assert resp.json()["error_code"] == "system_hub.provider_unavailable"
+
+
 def test_base_classes_hide_internal_by_default(
     client: TestClient, auth_token: str
 ) -> None:

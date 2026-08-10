@@ -170,3 +170,59 @@ def test_allowlist_branch_unknown_model_has_none_capabilities(
     assert item["reasoning"] is None
     assert item["modalities"] is None
     assert item["cost"] is None
+
+
+def test_model_catalog_resolves_non_default_org_via_header(
+    client: TestClient, auth_token: str
+) -> None:
+    """F1b: GET /model-catalog must resolve the provider's own org via
+    X-Organization-Id (was hard-coded to the default org → 404 → empty list)."""
+    org = client.post(
+        "/api/v1/organizations",
+        headers=_auth(auth_token),
+        json={"slug": "catalog-scope", "name": "Catalog Scope"},
+    )
+    assert org.status_code == 201, org.text
+    org_id = org.json()["id"]
+
+    with (
+        patch(
+            "app.api.v1.organizations.model_catalog.get_provider",
+            new=AsyncMock(return_value=_catalog_entry()),
+        ),
+        patch(
+            "app.api.v1.organizations.model_catalog.list_models_for_catalog_provider",
+            new=AsyncMock(return_value=([_gpt4o_info()], False)),
+        ),
+    ):
+        create = client.post(
+            f"/api/v1/organizations/{org_id}/providers",
+            headers=_auth(auth_token),
+            json={
+                "origin": "catalog",
+                "catalog_provider_id": "openai",
+                "api_key_ref": "OPENAI_API_KEY",
+            },
+        )
+    assert create.status_code == 201, create.text
+    provider_id = create.json()["id"]
+
+    with patch(
+        "app.api.v1.model_catalog.model_catalog.list_models",
+        new=AsyncMock(return_value=[_gpt4o_info()]),
+    ):
+        via_header = client.get(
+            "/api/v1/model-catalog",
+            params={"provider_id": provider_id},
+            headers={**_auth(auth_token), "X-Organization-Id": org_id},
+        )
+        via_contract = client.get(
+            "/api/v1/model-catalog",
+            params={"provider_id": provider_id},
+            headers=_auth(auth_token),
+        )
+    assert via_header.status_code == 200, via_header.text
+    assert via_header.json()["items"][0]["id"] == "gpt-4o"
+    # Sole active contract resolves to the same org even without the header.
+    assert via_contract.status_code == 200, via_contract.text
+    assert via_contract.json()["items"][0]["id"] == "gpt-4o"

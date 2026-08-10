@@ -130,6 +130,7 @@ class OrganizationProviderUpdate(BaseModel):
     api_key_ref: str | None = None
     default_model: str | None = None
     models_allowlist: list[str] | None = None
+    model_overrides: dict[str, Any] | None = None
     verify_ssl: bool | None = None
     models_endpoint_mode: ModelsEndpointMode | None = None
     models_base_url: str | None = None
@@ -150,6 +151,7 @@ class OrganizationProviderOut(BaseModel):
     api_key_ref: str
     default_model: str
     models_allowlist: list[str] | None = None
+    model_overrides: dict[str, Any] | None = None
     verify_ssl: bool
     models_endpoint_mode: str
     models_base_url: str | None = None
