@@ -58,6 +58,11 @@ class OrganizationProvider(BaseModel, Base):
     api_key_ref: Mapped[str] = mapped_column(Text, nullable=False)
     default_model: Mapped[str] = mapped_column(String(255), nullable=False)
     models_allowlist: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    # Per-model capability overrides, keyed by model id (display name / extended
+    # params / capability toggles). models_allowlist stays a plain id array.
+    model_overrides: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB, nullable=True
+    )
     verify_ssl: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default=text("true")
     )

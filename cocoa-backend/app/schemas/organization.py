@@ -246,6 +246,13 @@ class CatalogModelOut(BaseModel):
     name: str
     provider: str
     context_length: int | None = None
+    description: str | None = None
+    reasoning: bool | None = None
+    tool_call: bool | None = None
+    attachment: bool | None = None
+    modalities: dict[str, Any] | None = None
+    limit_output: int | None = None
+    cost: dict[str, Any] | None = None
 
 
 class CatalogModelsOut(BaseModel):

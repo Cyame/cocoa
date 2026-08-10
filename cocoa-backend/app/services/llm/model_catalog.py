@@ -37,6 +37,13 @@ class ModelInfo:
     provider: str
     context_length: int | None = None
     pricing: dict[str, Any] | None = None
+    description: str | None = None
+    reasoning: bool | None = None
+    tool_call: bool | None = None
+    attachment: bool | None = None
+    modalities: dict[str, Any] | None = None
+    limit_output: int | None = None
+    cost: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -204,6 +211,76 @@ def _builtin_provider_infos() -> list[ProviderInfo]:
             )
         )
     return out
+
+
+def _modality_set(
+    modalities: dict[str, Any] | None, key: str
+) -> set[str] | None:
+    if not isinstance(modalities, dict):
+        return None
+    raw = modalities.get(key)
+    if not isinstance(raw, list):
+        return None
+    return {str(x).lower() for x in raw}
+
+
+def infer_vision(
+    modalities: dict[str, Any] | None,
+    attachment: bool | None = None,
+) -> bool | None:
+    """vision = input modalities contain image, or the attachment flag."""
+    inputs = _modality_set(modalities, "input")
+    if inputs is not None:
+        return "image" in inputs or bool(attachment)
+    if attachment is not None:
+        return bool(attachment)
+    return None
+
+
+def infer_image_gen(modalities: dict[str, Any] | None) -> bool | None:
+    """image generation = output modalities contain image."""
+    outputs = _modality_set(modalities, "output")
+    if outputs is not None:
+        return "image" in outputs
+    return None
+
+
+def infer_video(modalities: dict[str, Any] | None) -> bool | None:
+    """video recognition = input modalities contain video."""
+    inputs = _modality_set(modalities, "input")
+    if inputs is not None:
+        return "video" in inputs
+    return None
+
+
+def infer_web_search(
+    modalities: dict[str, Any] | None,  # noqa: ARG001
+) -> None:
+    """models.dev snapshot carries no web_search signal; always undetermined."""
+    return None
+
+
+def infer_model_type(modalities: dict[str, Any] | None) -> str | None:
+    """Suggest a model type from modalities (chat/embedding/tts/asr/image/video/
+    text2music/realtime). None when undetermined — the portal falls back to
+    manual selection."""
+    inputs = _modality_set(modalities, "input")
+    outputs = _modality_set(modalities, "output")
+    if inputs is None or outputs is None:
+        return None
+    if "audio" in inputs and "audio" in outputs:
+        return "realtime"
+    if "text" in inputs and "audio" in outputs:
+        return "tts"
+    if "audio" in inputs and "text" in outputs:
+        return "asr"
+    if "image" in outputs and "image" not in inputs:
+        return "image"
+    if "video" in outputs:
+        return "video"
+    if "text" in inputs and "text" in outputs:
+        return "chat"
+    return None
 
 
 class ModelCatalog:
@@ -378,6 +455,10 @@ class ModelCatalog:
                     continue
                 limit = model_data.get("limit")
                 context = limit.get("context") if isinstance(limit, dict) else None
+                limit_output = limit.get("output") if isinstance(limit, dict) else None
+                modalities = model_data.get("modalities")
+                if not isinstance(modalities, dict):
+                    modalities = None
                 models.append(
                     ModelInfo(
                         id=model_id,
@@ -385,6 +466,25 @@ class ModelCatalog:
                         provider=provider_id,
                         context_length=context,
                         pricing=model_data.get("cost"),
+                        description=model_data.get("description"),
+                        reasoning=(
+                            model_data["reasoning"]
+                            if isinstance(model_data.get("reasoning"), bool)
+                            else None
+                        ),
+                        tool_call=(
+                            model_data["tool_call"]
+                            if isinstance(model_data.get("tool_call"), bool)
+                            else None
+                        ),
+                        attachment=(
+                            model_data["attachment"]
+                            if isinstance(model_data.get("attachment"), bool)
+                            else None
+                        ),
+                        modalities=modalities,
+                        limit_output=limit_output,
+                        cost=model_data.get("cost"),
                     )
                 )
         return models

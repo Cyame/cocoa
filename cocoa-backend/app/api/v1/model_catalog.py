@@ -54,14 +54,38 @@ async def get_model_catalog(
 
     # Persisted list from setup-time fetch is the selection source of truth.
     if has_allowlist and not refresh:
-        items = [
-            CatalogModelOut(
-                id=str(mid),
-                name=str(mid),
-                provider=provider.slug,
+        # Enrich each allowlisted id with capability fields from the catalog
+        # snapshot; ids absent from the snapshot keep id-only entries.
+        models = await model_catalog.list_models()
+        by_id = {m.id: m for m in models}
+        items = []
+        for mid in allowlist:
+            mid = str(mid)
+            found = by_id.get(mid)
+            if found is None:
+                items.append(
+                    CatalogModelOut(
+                        id=mid,
+                        name=mid,
+                        provider=provider.slug,
+                    )
+                )
+                continue
+            items.append(
+                CatalogModelOut(
+                    id=found.id,
+                    name=found.name,
+                    provider=found.provider,
+                    context_length=found.context_length,
+                    description=found.description,
+                    reasoning=found.reasoning,
+                    tool_call=found.tool_call,
+                    attachment=found.attachment,
+                    modalities=found.modalities,
+                    limit_output=found.limit_output,
+                    cost=found.cost,
+                )
             )
-            for mid in allowlist
-        ]
         error = None
         degraded = False
     elif provider.origin == "catalog" and provider.catalog_provider_id:
