@@ -144,6 +144,148 @@ test("chat bridge falls back to agent_end message text when no deltas", async ()
   assert.equal(sent[1]?.payload.text, "最终答复");
 });
 
+test("chat bridge maps control.interrupt to pi.kill (no tunnel send)", async () => {
+  const sent: Array<{ type: string; payload: Record<string, unknown> }> = [];
+  const fakeTunnel = {
+    send(msg: { type: string; payload: Record<string, unknown> }) {
+      sent.push(msg);
+      return true;
+    },
+  };
+  const fakePi = new PiRpc({ log: () => {} });
+  Object.defineProperty(fakePi, "running", { get: () => true });
+  let kills = 0;
+  fakePi.kill = () => {
+    kills += 1;
+  };
+
+  const bridge = new ChatBridge({
+    tunnel: fakeTunnel as unknown as TunnelClient,
+    pi: fakePi,
+    log: () => {},
+  });
+
+  await bridge.handleTunnelMessage(
+    makeMessage("control", { action: "interrupt" }),
+  );
+  assert.equal(kills, 1, "interrupt must kill the pi process");
+  assert.equal(sent.length, 0, "interrupt is host-internal, no tunnel frame");
+
+  // Unrelated control actions must not touch the process.
+  await bridge.handleTunnelMessage(makeMessage("control", { action: "nudge" }));
+  assert.equal(kills, 1, "unknown control action must not kill pi");
+});
+
+test("chat bridge done payload carries no finish_reason", async () => {
+  const sent: Array<{ type: string; payload: Record<string, unknown> }> = [];
+  const fakeTunnel = {
+    send(msg: { type: string; payload: Record<string, unknown> }) {
+      sent.push(msg);
+      return true;
+    },
+  };
+  const fakePi = new PiRpc({ log: () => {} });
+  Object.defineProperty(fakePi, "running", { get: () => true });
+  fakePi.prompt = () => true;
+  fakePi.start = () => {};
+
+  const bridge = new ChatBridge({
+    tunnel: fakeTunnel as unknown as TunnelClient,
+    pi: fakePi,
+    log: () => {},
+  });
+
+  await bridge.handleTunnelMessage(
+    makeMessage(
+      "chat.request",
+      { turn_id: "turn-c", text: "hello", target_entity: "alice" },
+      { turn_id: "turn-c" },
+    ),
+  );
+  fakePi.emit("event", { type: "agent_end" });
+
+  const done = sent.find((m) => m.type === "chat.response.done");
+  assert.ok(done, "expected a done frame");
+  assert.equal(done.payload.status, "completed");
+  assert.equal(done.payload.turn_id, "turn-c");
+  assert.ok(
+    !("finish_reason" in done.payload),
+    "Tunnel done frame must not expose finish_reason",
+  );
+  assert.deepEqual(Object.keys(done.payload).sort(), [
+    "status",
+    "target_entity",
+    "text",
+    "turn_id",
+  ]);
+});
+
+test("chat bridge error codes are runtime-neutral (no pi RPC names)", async () => {
+  const sent: Array<{ type: string; payload: Record<string, unknown> }> = [];
+  const fakeTunnel = {
+    send(msg: { type: string; payload: Record<string, unknown> }) {
+      sent.push(msg);
+      return true;
+    },
+  };
+  const fakePi = new PiRpc({ log: () => {} });
+  Object.defineProperty(fakePi, "running", { get: () => true });
+  fakePi.start = () => {};
+  fakePi.prompt = () => true;
+
+  const bridge = new ChatBridge({
+    tunnel: fakeTunnel as unknown as TunnelClient,
+    pi: fakePi,
+    log: () => {},
+  });
+  const startTurn = async (turnId: string) => {
+    sent.length = 0; // reset before the request so request-time errors are captured
+    await bridge.handleTunnelMessage(
+      makeMessage("chat.request", { turn_id: turnId, text: "hi" }, { turn_id: turnId }),
+    );
+  };
+  const allErrorCodes: string[] = [];
+  const lastError = () => {
+    const err = sent.find((m) => m.type === "chat.response.error");
+    assert.ok(err, "expected a chat.response.error frame");
+    const message = String(err.payload.message ?? "");
+    allErrorCodes.push(message);
+    return message;
+  };
+
+  // pi spawn error (emitter "error" without message) -> host_spawn_error
+  await startTurn("t-spawn");
+  fakePi.emit("error", new Error(""));
+  assert.equal(lastError(), "host_spawn_error");
+
+  // prompt() returned false (stdin not writable) -> host_stdin_closed
+  fakePi.prompt = () => false;
+  await startTurn("t-stdin");
+  assert.equal(lastError(), "host_stdin_closed");
+
+  // response success=false without error payload -> turn_rejected
+  // (bridge JSON-stringifies the fallback, so match the neutral code loosely)
+  fakePi.prompt = () => true;
+  await startTurn("t-reject");
+  fakePi.emit("event", { type: "response", success: false });
+  const rejectedMsg = lastError();
+  assert.ok(rejectedMsg.includes("turn_rejected"), `got ${rejectedMsg}`);
+  assert.ok(!rejectedMsg.includes("prompt_rejected"), `got ${rejectedMsg}`);
+
+  // top-level agent_error without fields -> host_error
+  await startTurn("t-error");
+  fakePi.emit("event", { type: "agent_error" });
+  assert.equal(lastError(), "host_error");
+
+  // Contract: no leaked pi RPC command names anywhere in Tunnel error codes.
+  const leaked = ["pi_spawn_error", "pi_stdin_closed", "prompt_rejected", "pi_error"];
+  for (const code of allErrorCodes) {
+    for (const name of leaked) {
+      assert.ok(!code.includes(name), `error code must not contain leaked name '${name}': ${code}`);
+    }
+  }
+});
+
 test("pi rpc framing splits only on LF", () => {
   class TestRpc extends PiRpc {
     feed(s: string) {
