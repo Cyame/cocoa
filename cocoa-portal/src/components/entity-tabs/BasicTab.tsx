@@ -1,9 +1,11 @@
 import { AlertCircle, Check, Hash, LoaderCircle, ShieldAlert } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import SubagentChips, { extractSubagentCapabilities } from '@/components/SubagentChips';
 import { ApiError } from '@/lib/api';
-import { type EntityDetail, patchEntity } from '@/lib/api/entities';
+import { type EntityDetail, fetchBaseClass, patchEntity } from '@/lib/api/entities';
 import { resolveError } from '@/lib/apiError';
+import type { JsonObject } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
 const DISPLAY_NAME_MAX = 32;
@@ -33,6 +35,21 @@ export default function BasicTab({ entity, canEdit, onUpdated, onFindInWorkspace
   const [toast, setToast] = useState<Toast | null>(null);
   const [slugTaken, setSlugTaken] = useState(false);
   const [displayNameConflict, setDisplayNameConflict] = useState(false);
+  const [baseClassManifest, setBaseClassManifest] = useState<JsonObject | null>(null);
+
+  const loadBaseClass = useCallback(async () => {
+    if (!entity.base_class_slug) return;
+    try {
+      const bc = await fetchBaseClass(entity.base_class_slug);
+      setBaseClassManifest(bc.manifest);
+    } catch {
+      setBaseClassManifest(null);
+    }
+  }, [entity.base_class_slug]);
+
+  useEffect(() => {
+    void loadBaseClass();
+  }, [loadBaseClass]);
 
   useEffect(() => {
     setDisplayName(entity.display_name ?? entity.name);
@@ -314,6 +331,8 @@ export default function BasicTab({ entity, canEdit, onUpdated, onFindInWorkspace
           value={<span className="font-mono text-xs text-slate-700">{entity.created_at}</span>}
         />
       </dl>
+
+      <SubagentChips capabilities={extractSubagentCapabilities(baseClassManifest)} />
 
       <div className="flex items-center justify-end gap-3 border-t border-slate-200 pt-4">
         {readOnly ? (

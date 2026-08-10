@@ -1,4 +1,13 @@
 {
+  "subagent": {
+    "intent": "Intent",
+    "architecture": "Architecture",
+    "quality": "Quality",
+    "explore": "Search",
+    "research": "Research",
+    "vision": "Vision",
+    "heading": "Available Subagent Capabilities"
+  },
   "common": {
     "appName": "Cocoa",
     "appTagline": "Multi-agent control studio",

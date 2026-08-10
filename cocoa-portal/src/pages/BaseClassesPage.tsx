@@ -12,6 +12,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, Navigate, useParams } from 'react-router';
 import CloneDialog from '@/components/CloneDialog';
+import SubagentChips, { extractSubagentCapabilities } from '@/components/SubagentChips';
 import { ApiError } from '@/lib/api';
 import { fetchMe } from '@/lib/api/auth';
 import { fetchBaseClassesPage } from '@/lib/api/baseClasses';
@@ -238,6 +239,9 @@ function BaseClassGrid({
                 {translateBaseClassTag(tag, t)}
               </span>
             ))}
+          </div>
+          <div className="mt-3">
+            <SubagentChips capabilities={extractSubagentCapabilities(bc.manifest)} />
           </div>
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <button

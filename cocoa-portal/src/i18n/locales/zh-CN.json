@@ -1,4 +1,13 @@
 {
+  "subagent": {
+    "intent": "意图",
+    "architecture": "调试",
+    "quality": "审阅",
+    "explore": "检索",
+    "research": "参考",
+    "vision": "视觉",
+    "heading": "可用 Subagent 能力"
+  },
   "common": {
     "appName": "Cocoa",
     "appTagline": "多智能体控制平台",
