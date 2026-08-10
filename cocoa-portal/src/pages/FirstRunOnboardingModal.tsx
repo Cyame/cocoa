@@ -34,6 +34,7 @@ export default function FirstRunOnboardingModal({
 }: FirstRunOnboardingModalProps) {
   const { t } = useTranslation();
   const presetSlug = useOnboardingModalStore((state) => state.baseClassSlug);
+  const modalNamespaceId = useOnboardingModalStore((state) => state.namespaceId);
 
   const step = useOnboardingStore((state) => state.step);
   const selectedBaseClass = useOnboardingStore((state) => state.selectedBaseClass);
@@ -57,6 +58,12 @@ export default function FirstRunOnboardingModal({
       reset();
     };
   }, [reset]);
+
+  useEffect(() => {
+    if (modalNamespaceId) {
+      useOnboardingStore.getState().setNamespaceId(modalNamespaceId);
+    }
+  }, [modalNamespaceId]);
 
   useEffect(() => {
     if (!presetSlug) {

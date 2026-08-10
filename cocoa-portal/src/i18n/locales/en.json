@@ -1023,6 +1023,10 @@
       "knowledgeFileAdd": "+ Upload file",
       "knowledgeFileEmpty": "No files selected",
       "freezeWarning": "These properties are frozen after creation. To change them, create a new bloodline.",
+      "namespaceLabel": "Region",
+      "namespaceHelp": "The region where this bloodline will be created.",
+      "loadingNamespaces": "Loading regions...",
+      "noNamespaces": "No regions available.",
       "summon": "Create bloodline",
       "summoning": "Creating...",
       "submitFailed": "Create failed. Please retry."

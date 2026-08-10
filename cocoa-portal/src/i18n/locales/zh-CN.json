@@ -856,6 +856,10 @@
       "knowledgeFileAdd": "+ 上传 file",
       "knowledgeFileEmpty": "尚未选择文件",
       "freezeWarning": "上述属性创建后将冻结。如需改变，请新建 Entity。",
+      "namespaceLabel": "区域",
+      "namespaceHelp": "血脉将被创建到该区域。",
+      "loadingNamespaces": "正在加载区域…",
+      "noNamespaces": "暂无可用区域。",
       "summon": "创生血脉",
       "summoning": "创生中...",
       "submitFailed": "创生失败，请重试。"

@@ -480,6 +480,7 @@ export type OnboardingPayload = {
   readonly slug: string;
   readonly preset_slug: string;
   readonly display_name: string;
+  readonly namespace_id: string;
   readonly system_prompt?: string | null;
   readonly config_override?: EntityConfigOverride | null;
 };

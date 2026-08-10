@@ -105,6 +105,22 @@ function mockApiSuccess() {
     if (path.startsWith('/base-classes/by-id/') && path.endsWith('/provider-default')) {
       return Promise.resolve(null);
     }
+    if (path.startsWith('/namespaces') && (init?.method ?? 'GET') === 'GET') {
+      return Promise.resolve({
+        items: [
+          {
+            id: 'ns-default',
+            name: 'Default',
+            slug: 'default',
+            workspace_count: 0,
+            entity_count: 0,
+          },
+        ],
+        offset: 0,
+        limit: 50,
+        total: 1,
+      });
+    }
     if (path === '/entities' && init?.method === 'POST') {
       return Promise.resolve(CREATED_EMPLOYEE);
     }
@@ -126,9 +142,10 @@ function resetOnboardingStores() {
       knowledgeRows: [],
       knowledgeFiles: [],
       knowledgeScope: 'instance',
+      namespaceId: '',
       submitError: null,
     });
-    useOnboardingModalStore.setState({ isOpen: false, baseClassSlug: null });
+    useOnboardingModalStore.setState({ isOpen: false, baseClassSlug: null, namespaceId: null });
   });
 }
 
@@ -319,6 +336,7 @@ describe('FirstRunOnboardingModal', () => {
           slug: 'nyar-proutzi',
           preset_slug: 'fox',
           display_name: 'nyar-proutzi',
+          namespace_id: 'ns-default',
           system_prompt: null,
           config_override: {
             provider_id: 'prov-1',

@@ -14,6 +14,7 @@ import {
 import { type ChangeEvent, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ModelInputCombobox } from '@/components/ModelInputCombobox';
+import { fetchNamespaces, type NamespaceWithStats } from '@/lib/api/namespaces';
 import {
   type CatalogModel,
   fetchBaseClassProviderDefault,
@@ -60,11 +61,13 @@ export default function Step2EntityForm({
   const knowledgeRows = useOnboardingStore((state) => state.knowledgeRows);
   const knowledgeFiles = useOnboardingStore((state) => state.knowledgeFiles);
   const selectedBaseClass = useOnboardingStore((state) => state.selectedBaseClass);
+  const namespaceId = useOnboardingStore((state) => state.namespaceId);
   const setDisplayName = useOnboardingStore((state) => state.setDisplayName);
   const setSlug = useOnboardingStore((state) => state.setSlug);
   const setProviderId = useOnboardingStore((state) => state.setProviderId);
   const setModel = useOnboardingStore((state) => state.setModel);
   const setDescription = useOnboardingStore((state) => state.setDescription);
+  const setNamespaceId = useOnboardingStore((state) => state.setNamespaceId);
   const addKnowledgeRow = useOnboardingStore((state) => state.addKnowledgeRow);
   const updateKnowledgeRow = useOnboardingStore((state) => state.updateKnowledgeRow);
   const removeKnowledgeRow = useOnboardingStore((state) => state.removeKnowledgeRow);
@@ -73,6 +76,8 @@ export default function Step2EntityForm({
 
   const [providers, setProviders] = useState<readonly OrganizationProvider[]>([]);
   const [models, setModels] = useState<readonly CatalogModel[]>([]);
+  const [namespaces, setNamespaces] = useState<readonly NamespaceWithStats[]>([]);
+  const [namespacesLoading, setNamespacesLoading] = useState(true);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [systemHubConfigured, setSystemHubConfigured] = useState(false);
   const [providersLoading, setProvidersLoading] = useState(true);
@@ -101,6 +106,28 @@ export default function Step2EntityForm({
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    fetchNamespaces()
+      .then((page) => {
+        if (!active) return;
+        setNamespaces(page.items);
+        const currentNs = useOnboardingStore.getState().namespaceId;
+        if (currentNs.length === 0 && page.items.length > 0) {
+          setNamespaceId(page.items[0].id);
+        }
+      })
+      .catch(() => {
+        if (active) setNamespaces([]);
+      })
+      .finally(() => {
+        if (active) setNamespacesLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [setNamespaceId]);
 
   useEffect(() => {
     if (selectedBaseClass === null || providers.length === 0) return;
@@ -228,6 +255,38 @@ export default function Step2EntityForm({
 
       <div className="grid gap-5 lg:grid-cols-2">
         <form className="space-y-5" noValidate>
+          <div>
+            <label
+              htmlFor="onboarding-namespace"
+              className="block text-xs font-semibold uppercase tracking-wide text-slate-600"
+            >
+              {t('onboarding.step2.namespaceLabel')}
+            </label>
+            {namespacesLoading ? (
+              <p className="mt-2 flex items-center gap-2 text-xs text-slate-500">
+                <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />
+                {t('onboarding.step2.loadingNamespaces')}
+              </p>
+            ) : namespaces.length === 0 ? (
+              <p className="mt-2 text-xs text-slate-500">{t('onboarding.step2.noNamespaces')}</p>
+            ) : (
+              <select
+                id="onboarding-namespace"
+                name="namespace_id"
+                value={namespaceId}
+                onChange={(event) => setNamespaceId(event.currentTarget.value)}
+                className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              >
+                {namespaces.map((ns) => (
+                  <option key={ns.id} value={ns.id}>
+                    {ns.name}
+                  </option>
+                ))}
+              </select>
+            )}
+            <p className="mt-1.5 text-xs text-slate-500">{t('onboarding.step2.namespaceHelp')}</p>
+          </div>
+
           <div>
             <label
               htmlFor="onboarding-display-name"

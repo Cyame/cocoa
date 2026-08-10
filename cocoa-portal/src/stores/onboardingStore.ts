@@ -41,6 +41,7 @@ export type OnboardingState = {
   readonly knowledgeRows: readonly KnowledgeRow[];
   readonly knowledgeFiles: readonly KnowledgeFileRow[];
   readonly knowledgeScope: KnowledgeScope;
+  readonly namespaceId: string;
   readonly submitError: string | null;
   readonly setStep: (step: OnboardingStep) => void;
   readonly next: () => void;
@@ -52,6 +53,7 @@ export type OnboardingState = {
   readonly setProviderId: (providerId: string) => void;
   readonly setModel: (model: string) => void;
   readonly setDescription: (description: string) => void;
+  readonly setNamespaceId: (namespaceId: string) => void;
   readonly addKnowledgeRow: () => void;
   readonly updateKnowledgeRow: (id: string, patch: { key?: string; value?: string }) => void;
   readonly removeKnowledgeRow: (id: string) => void;
@@ -76,6 +78,7 @@ const INITIAL_STATE: Pick<
   | 'knowledgeRows'
   | 'knowledgeFiles'
   | 'knowledgeScope'
+  | 'namespaceId'
   | 'submitError'
 > = {
   step: 1,
@@ -89,6 +92,7 @@ const INITIAL_STATE: Pick<
   knowledgeRows: [],
   knowledgeFiles: [],
   knowledgeScope: 'instance',
+  namespaceId: '',
   submitError: null,
 };
 
@@ -167,6 +171,7 @@ export const useOnboardingStore = create<OnboardingState>()((set, get) => ({
   setProviderId: (providerId) => set({ providerId }),
   setModel: (model) => set({ model }),
   setDescription: (description) => set({ description }),
+  setNamespaceId: (namespaceId) => set({ namespaceId }),
   addKnowledgeRow: () =>
     set((current) => ({
       knowledgeRows: [...current.knowledgeRows, { id: makeRowId(), key: '', value: '' }],
@@ -201,6 +206,7 @@ export const useOnboardingStore = create<OnboardingState>()((set, get) => ({
       slug: state.slug.trim(),
       preset_slug: presetSlug,
       display_name: state.displayName.trim(),
+      namespace_id: state.namespaceId,
       system_prompt: description.length > 0 ? description : null,
       config_override: configOverride,
     };
