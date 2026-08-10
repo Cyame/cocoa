@@ -536,6 +536,13 @@
       "sendGeneral": "Send general message",
       "noDirectives": "No directives yet",
       "chatLabel": "Chat"
+    },
+    "activity": {
+      "thinkingLabel": "Thinking",
+      "delegated": "→ Delegated to {{agent}}",
+      "toolRunning": "Running",
+      "toolDone": "Done",
+      "toolFailed": "Failed"
     }
   },
   "debug": {

@@ -23,6 +23,7 @@ describe('composerTranscript', () => {
       status: 'completed',
       text: 'hello from model',
       thinking: '',
+      activities: [],
     });
     const server = [
       {
@@ -51,6 +52,7 @@ describe('composerTranscript', () => {
       status: 'completed',
       text: 'reply',
       thinking: '',
+      activities: [],
     });
     expect(both).toHaveLength(2);
     expect(both.map((m) => m.role)).toEqual(['user', 'assistant']);

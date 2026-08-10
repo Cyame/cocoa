@@ -1,6 +1,7 @@
 import { AlertCircle, Hash, LoaderCircle, MessageSquare, Send, Settings } from 'lucide-react';
 import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ActivityBlock } from '@/components/ActivityBlock';
 import { CommandAutocomplete } from '@/components/CommandAutocomplete';
 import { type IntroduceTarget, MentionAutocomplete } from '@/components/MentionAutocomplete';
 import {
@@ -14,6 +15,7 @@ import { resolveError } from '@/lib/apiError';
 import { streamComposerTurn } from '@/lib/composerStream';
 import {
   buildOptimisticUserBubbles,
+  ingestActivityFrame,
   reconcileTranscript,
   type StreamLane,
   type TranscriptMessage,
@@ -470,6 +472,7 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
             status: 'responding',
             text: '',
             thinking: '',
+            activities: [],
           })),
         );
         await Promise.all(
@@ -522,6 +525,17 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
                           error: frame.message ?? t('composer.instanceOffline'),
                         };
                       }
+                      if (frame.type === 'chat.response.activity' && frame.kind) {
+                        return {
+                          ...lane,
+                          activities: ingestActivityFrame(lane.activities, {
+                            kind: frame.kind,
+                            status: frame.status ?? 'delta',
+                            tool_name: frame.tool_name,
+                            delta: frame.delta,
+                          }),
+                        };
+                      }
                       return lane;
                     });
                     const updated = next.find((l) => l.turnId === turnId);
@@ -541,6 +555,7 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
                 status: 'failed',
                 text: '',
                 thinking: '',
+                activities: [],
                 error: e instanceof Error ? e.message : t('composer.streamFailed'),
               };
               setLanes((prev) => prev.map((lane) => (lane.turnId === turnId ? failedLane : lane)));
@@ -786,6 +801,7 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
                 <StatusBadge status={lane.status} />
               </div>
               {showThinkingChain && lane.thinking ? <ThinkingBlock text={lane.thinking} /> : null}
+              <ActivityBlock activities={lane.activities} />
               <MessageBody
                 text={lane.text || (lane.status === 'responding' ? '…' : '')}
                 renderMd={renderMd}

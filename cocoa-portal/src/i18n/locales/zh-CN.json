@@ -369,6 +369,13 @@
       "sendGeneral": "发送通用消息",
       "noDirectives": "暂无指令",
       "chatLabel": "对话"
+    },
+    "activity": {
+      "thinkingLabel": "思考过程",
+      "delegated": "→ 委派 {{agent}}",
+      "toolRunning": "执行中",
+      "toolDone": "完成",
+      "toolFailed": "失败"
     }
   },
   "debug": {

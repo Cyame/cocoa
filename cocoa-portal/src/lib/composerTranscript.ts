@@ -24,6 +24,17 @@ export type TranscriptMessage = {
   readonly instance_id?: string | null;
 };
 
+let activityIdCounter = 0;
+
+export type ActivityItem = {
+  readonly id: number;
+  readonly kind: 'thinking' | 'tool_use';
+  readonly toolName?: string;
+  status: 'start' | 'delta' | 'end';
+  deltas: string;
+  readonly isDelegation?: boolean;
+};
+
 export type StreamLane = {
   readonly turnId: string;
   readonly target: string;
@@ -33,6 +44,7 @@ export type StreamLane = {
   status: 'responding' | 'completed' | 'failed';
   text: string;
   thinking: string;
+  activities: ActivityItem[];
   error?: string;
 };
 
@@ -132,6 +144,82 @@ export function upsertAssistantBubble(
       created_at: new Date().toISOString(),
     },
   ];
+}
+
+const SUBAGENT_TOOL_RE = /subagent/i;
+
+export function isSubagentTool(toolName: string): boolean {
+  return SUBAGENT_TOOL_RE.test(toolName);
+}
+
+export function ingestActivityFrame(
+  activities: ActivityItem[],
+  frame: { kind: 'thinking' | 'tool_use'; status: string; tool_name?: string; delta?: string },
+): ActivityItem[] {
+  const status = frame.status as 'start' | 'delta' | 'end';
+
+  if (frame.kind === 'thinking') {
+    const existing = activities.find((a) => a.kind === 'thinking');
+    if (existing) {
+      if (status === 'delta' && frame.delta) {
+        return activities.map((a) =>
+          a.kind === 'thinking' ? { ...a, status, deltas: a.deltas + frame.delta } : a,
+        );
+      }
+      if (status === 'end') {
+        return activities.map((a) => (a.kind === 'thinking' ? { ...a, status: 'end' } : a));
+      }
+      return activities;
+    }
+    if (status === 'start' || status === 'delta') {
+      return [
+        ...activities,
+        { id: ++activityIdCounter, kind: 'thinking', status, deltas: frame.delta ?? '' },
+      ];
+    }
+    return activities;
+  }
+
+  const toolName = frame.tool_name ?? 'unknown';
+  const isDelegation = isSubagentTool(toolName);
+
+  if (status === 'start') {
+    const openExisting = activities.find(
+      (a) => a.kind === 'tool_use' && a.toolName === toolName && a.status !== 'end',
+    );
+    if (openExisting) {
+      return activities;
+    }
+    return [
+      ...activities,
+      {
+        id: ++activityIdCounter,
+        kind: 'tool_use',
+        toolName,
+        status: 'start',
+        deltas: '',
+        isDelegation,
+      },
+    ];
+  }
+
+  if (status === 'delta' && frame.delta) {
+    return activities.map((a) =>
+      a.kind === 'tool_use' && a.toolName === toolName && a.status !== 'end'
+        ? { ...a, status: 'delta', deltas: a.deltas + frame.delta }
+        : a,
+    );
+  }
+
+  if (status === 'end') {
+    return activities.map((a) =>
+      a.kind === 'tool_use' && a.toolName === toolName && a.status !== 'end'
+        ? { ...a, status: 'end' }
+        : a,
+    );
+  }
+
+  return activities;
 }
 
 export function buildOptimisticUserBubbles(

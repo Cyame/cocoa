@@ -14,6 +14,10 @@ export type ComposerStreamFrame = {
   readonly message?: string;
   readonly finish_reason?: string;
   readonly text?: string;
+  /** Activity fields (chat_response_activity / chat.response.activity). */
+  readonly kind?: 'thinking' | 'tool_use';
+  readonly tool_name?: string;
+  readonly delta?: string;
 };
 
 export async function streamComposerTurn(
