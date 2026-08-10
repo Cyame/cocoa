@@ -215,7 +215,14 @@ kubectl rollout status deployment/cocoa-portal -n "$NS" --timeout="${KUBECTL_TIM
 
 log "Running alembic upgrade head"
 # Re-fetch the pod name AFTER the rollout so it points at the NEW pod.
-BACKEND_POD="$(kubectl get pod -l app=cocoa-backend -n "$NS" -o jsonpath='{.items[0].metadata.name}')"
+# NB: `kubectl get pod` default order is by name, and the OLD pod (smaller
+# hash) sorts first while it is still terminating — that silently makes
+# alembic run against the STALE image. Sort by creationTimestamp and take
+# the newest Running pod instead (v5.2.1 T10 hit: alembic no-op'd on the old
+# pod and the /health smoke check then died with exit 137 as the old pod
+# was reaped mid-exec).
+BACKEND_POD="$(kubectl get pod -l app=cocoa-backend -n "$NS" --field-selector=status.phase=Running \
+  --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[-1:].metadata.name}')"
 ALEMBIC_OK=0
 for attempt in 1 2 3; do
   if kubectl exec -n "$NS" "$BACKEND_POD" -- uv run alembic upgrade head; then
@@ -225,7 +232,8 @@ for attempt in 1 2 3; do
   err "Alembic migration failed (attempt $attempt/3); retrying in 5s"
   sleep 5
   # The pod may have been replaced mid-retry; re-resolve the current name.
-  BACKEND_POD="$(kubectl get pod -l app=cocoa-backend -n "$NS" -o jsonpath='{.items[0].metadata.name}')"
+  BACKEND_POD="$(kubectl get pod -l app=cocoa-backend -n "$NS" --field-selector=status.phase=Running \
+    --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[-1:].metadata.name}')"
 done
 if (( ALEMBIC_OK != 1 )); then
   err "Alembic migration failed after 3 attempts"
