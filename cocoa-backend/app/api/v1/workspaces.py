@@ -398,7 +398,6 @@ async def introduce_entity(
         if _is_k8s_available():
             _record_id, ctx = await deploy_existing_instance(
                 instance.id,
-                image_version="latest",
                 triggered_by=current_user.user_id,
                 db=db,
             )

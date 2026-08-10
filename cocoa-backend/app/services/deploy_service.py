@@ -48,7 +48,40 @@ DEPLOY_PIPELINE_TIMEOUT_SECONDS = 300  # healthz watch window (image start + rea
 DEPLOY_HEALTHZ_PATH = "/healthz"  # reserved; pipeline only checks ready_replicas
 GATEWAY_CLUSTER_ID = "_gateway"  # sentinel; gateway client is the single API surface
 
+# v5.1 N2: pi engine pin — MUST stay in sync with
+# `cocoa-instance-host/package.json` `@earendil-works/pi-coding-agent` version.
+ENGINE_VERSION: Final[str] = "0.83.0"
+
+# v5.1 N2: the 5 builtin ancestors (镜像 1+5). Matches the 5 始祖 presets in
+# `builtin_presets.py`; anything else falls back to `cocoa-instance-base` (G9).
+_INSTANCE_ANCESTOR_SLUGS: frozenset[str] = frozenset(
+    {"fox", "beaver", "sparrow", "coyote", "lion"}
+)
+
 _TASK_REGISTRY: dict[str, asyncio.Task[None]] = {}
+
+
+def _resolve_instance_image(
+    preset_slug: str | None,
+    image_version: str | None,
+) -> str:
+    """Resolve the full instance image reference (G9 / G10).
+
+    - ``preset_slug ∈ 5 大始祖`` → ``{registry}/cocoa-instance-{slug}:{version}``
+    - 其余（自定义 preset）→ ``{registry}/cocoa-instance-base:{version}``（G9 回退，
+      不动态 build 薄层）
+    - ``image_version`` 缺省/None → ``ENGINE_VERSION``（G10：弃用 ``"latest"``
+      作为隐式默认；显式值优先）
+    - registry 前缀取 env ``COCOA_INSTANCE_REGISTRY``（默认 ``localhost:5000``）；
+      registry 为空串时不加前缀（兼容本地无 registry 构建）
+    """
+    version = image_version or ENGINE_VERSION
+    slug = preset_slug if preset_slug in _INSTANCE_ANCESTOR_SLUGS else None
+    image_name = f"cocoa-instance-{slug}" if slug else "cocoa-instance-base"
+    registry = os.environ.get("COCOA_INSTANCE_REGISTRY", "localhost:5000").strip()
+    if not registry:
+        return f"{image_name}:{version}"
+    return f"{registry}/{image_name}:{version}"
 
 
 def register_deploy_task(deploy_id: str, task: asyncio.Task[None]) -> None:
@@ -304,6 +337,7 @@ class _DeployContext:
     proxy_token: str
     workspace_id: str = ""
     agent_bundle: dict[str, str] = field(default_factory=dict)
+    preset_slug: str | None = None
 
 
 @dataclass
@@ -374,6 +408,7 @@ async def deploy_instance(
     env_vars: dict[str, str] | None = None,
     proxy_token: str = "",
     triggered_by: str | None = None,
+    preset_slug: str | None = None,
     db: AsyncSession | None = None,
 ) -> tuple[str, _DeployContext]:
     """Create Instance + DeployRecord synchronously; return ``(record_id, ctx)``.
@@ -395,8 +430,15 @@ async def deploy_instance(
                 mem_request=mem_request, mem_limit=mem_limit,
                 storage_size=storage_size, replicas=replicas,
                 env_vars=env_vars, proxy_token=proxy_token,
-                triggered_by=triggered_by, db=session,
+                triggered_by=triggered_by, preset_slug=preset_slug,
+                db=session,
             )
+
+    if preset_slug is None:
+        from app.models.entity import Entity
+
+        entity = await db.get(Entity, entity_id)
+        preset_slug = entity.preset_slug if entity is not None else None
 
     instance = Instance(
         workspace_path=name,
@@ -437,6 +479,7 @@ async def deploy_instance(
         proxy_token=proxy_token,
         workspace_id=workspace_id,
         agent_bundle=agent_bundle,
+        preset_slug=preset_slug,
     )
     record.config_snapshot = _dump_deploy_config_snapshot(asdict(ctx))
     _set_progress_step_names(record, PROGRESS_STEP_NAMES)
@@ -447,7 +490,7 @@ async def deploy_instance(
 async def deploy_existing_instance(
     instance_id: str,
     *,
-    image_version: str = "latest",
+    image_version: str | None = None,
     cpu_request: str = "100m",
     cpu_limit: str = "500m",
     mem_request: str = "256Mi",
@@ -467,6 +510,11 @@ async def deploy_existing_instance(
     if instance is None or instance.deleted_at is not None:
         raise ValueError(f"Instance '{instance_id}' not found")
 
+    image_version = image_version or ENGINE_VERSION
+    from app.models.entity import Entity
+
+    entity = await db.get(Entity, instance.entity_id)
+    preset_slug = entity.preset_slug if entity is not None else None
     name = _k8s_resource_name(instance_id)
     proxy_token = instance.proxy_token or ""
     revision = await _next_deploy_revision(db, instance_id)
@@ -500,6 +548,7 @@ async def deploy_existing_instance(
         proxy_token=proxy_token,
         workspace_id=instance.workspace_id or "",
         agent_bundle=agent_bundle,
+        preset_slug=preset_slug,
     )
     record.config_snapshot = _dump_deploy_config_snapshot(asdict(ctx))
     _set_progress_step_names(record, PROGRESS_STEP_NAMES)
@@ -597,7 +646,8 @@ async def _execute_deploy_pipeline(ctx: _DeployContext) -> None:
 
             shared_path = shared_host_path(ctx.workspace_id)
         dep = build_deployment(
-            ctx.name, ctx.namespace, image=f"cocoa-instance:{ctx.image_version}",
+            ctx.name, ctx.namespace,
+            image=_resolve_instance_image(ctx.preset_slug, ctx.image_version),
             replicas=ctx.replicas, labels=labels,
             configmap_name=f"{ctx.name}-config", secret_name=f"{ctx.name}-env",
             pvc_name=f"{ctx.name}-data",

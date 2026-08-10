@@ -50,7 +50,7 @@ async def test_deploy_instance_creates_record(
 ) -> None:
     """``deploy_instance`` persists Instance + DeployRecord and returns ctx."""
     workspace = await workspace_factory()
-    entity = await entity_factory()
+    entity = await entity_factory(preset_slug="fox")
 
     record_id, ctx = await deploy_instance(
         name="test-deploy-2",
@@ -66,6 +66,7 @@ async def test_deploy_instance_creates_record(
     assert ctx.namespace == f"cocoa-inst-{ctx.instance_id.replace('-', '').lower()[:20]}"
     assert ctx.cluster_id == "_gateway"
     assert ctx.image_version == "v1.0"
+    assert ctx.preset_slug == "fox"
     assert ctx.env_vars["COCOA_INSTANCE_ID"] == ctx.instance_id
     assert ctx.env_vars["COCOA_POD_MODE"] == "true"
     assert "COCOA_API_URL" in ctx.env_vars

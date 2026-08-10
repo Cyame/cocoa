@@ -140,7 +140,9 @@ async def test_deploy_calls_deploy_service(
     ``svc_execute_deploy_pipeline`` references in the instances module
     with stubs that return a fake record id and a no-op pipeline. The
     endpoint should respond 200 with a ``DeployRecordOut`` body whose
-    fields mirror the fake record id and ``latest`` image version.
+    fields mirror the fake record id and the engine image version
+    (``0.83.0`` — v5.1 default; the call site no longer passes
+    ``image_version``).
     """
     import app.api.v1.instances as instances_mod
     import app.core.db as db_mod
@@ -152,7 +154,7 @@ async def test_deploy_calls_deploy_service(
     monkeypatch.setenv("KUBECONFIG", "/tmp/cocoa-fake-kubeconfig.yaml")
 
     fake_record_id = "rec-" + uuid.uuid4().hex[:12]
-    fake_ctx = SimpleNamespace(image_version="latest", revision=1)
+    fake_ctx = SimpleNamespace(image_version="0.83.0", revision=1)
 
     async def fake_deploy(*args, **kwargs):
         return fake_record_id, fake_ctx
@@ -187,7 +189,7 @@ async def test_deploy_calls_deploy_service(
     assert body["instance_id"] == instance.id
     assert body["action"] == "deploy"
     assert body["status"] == "running"
-    assert body["image_version"] == "latest"
+    assert body["image_version"] == "0.83.0"
     assert body["revision"] == 1
 
 

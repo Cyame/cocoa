@@ -648,7 +648,6 @@ async def deploy_instance(
 
     record_id, ctx = await svc_deploy_existing_instance(
         instance_id,
-        image_version="latest",
         triggered_by=current_user.user_id,
         db=db,
     )
