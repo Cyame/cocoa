@@ -1,6 +1,6 @@
-import { AlertTriangle, FileText, KeyRound, LoaderCircle, ShieldAlert } from 'lucide-react';
+import { AlertTriangle, Check, FileText, KeyRound, LoaderCircle } from 'lucide-react';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { KnowledgeScope } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { useOnboardingStore } from '@/stores/onboardingStore';
 
@@ -9,42 +9,31 @@ type Step3Props = {
   readonly submitError: string | null;
 };
 
-const SCOPE_OPTIONS: ReadonlyArray<{
-  readonly value: KnowledgeScope;
-  readonly labelKey: 'knowledgeScopeInstance' | 'knowledgeScopeEntity' | 'knowledgeScopeWorkspace';
-  readonly helpKey:
-    | 'knowledgeScopeInstanceHelp'
-    | 'knowledgeScopeEntityHelp'
-    | 'knowledgeScopeWorkspaceHelp';
-}> = [
-  {
-    value: 'instance',
-    labelKey: 'knowledgeScopeInstance',
-    helpKey: 'knowledgeScopeInstanceHelp',
-  },
-  {
-    value: 'entity',
-    labelKey: 'knowledgeScopeEntity',
-    helpKey: 'knowledgeScopeEntityHelp',
-  },
-  {
-    value: 'workspace',
-    labelKey: 'knowledgeScopeWorkspace',
-    helpKey: 'knowledgeScopeWorkspaceHelp',
-  },
-];
-
 export default function Step3KnowledgeConfirm({ isSubmitting, submitError }: Step3Props) {
   const { t } = useTranslation();
   const knowledgeRows = useOnboardingStore((state) => state.knowledgeRows);
   const knowledgeFiles = useOnboardingStore((state) => state.knowledgeFiles);
-  const knowledgeScope = useOnboardingStore((state) => state.knowledgeScope);
-  const setKnowledgeScope = useOnboardingStore((state) => state.setKnowledgeScope);
   const displayName = useOnboardingStore((state) => state.displayName);
+  const selectedBaseClass = useOnboardingStore((state) => state.selectedBaseClass);
+  const inheritedKnowledge = useOnboardingStore((state) => state.inheritedKnowledge);
+  const setInheritedKnowledge = useOnboardingStore((state) => state.setInheritedKnowledge);
 
   const trimmedDisplayName = displayName.trim() === '' ? '（未命名）' : displayName.trim();
   const validEnvEntries = knowledgeRows.filter((row) => row.key.trim() !== '');
   const hasKnowledge = validEnvEntries.length > 0 || knowledgeFiles.length > 0;
+
+  const availableInherited = useMemo(() => {
+    return selectedBaseClass?.has_knowledge ?? [];
+  }, [selectedBaseClass?.has_knowledge]);
+
+  function toggleInherited(slug: string) {
+    const current = inheritedKnowledge;
+    if (current.includes(slug)) {
+      setInheritedKnowledge(current.filter((s) => s !== slug));
+    } else {
+      setInheritedKnowledge([...current, slug]);
+    }
+  }
 
   return (
     <div className="space-y-5" data-testid="onboarding-step3">
@@ -57,7 +46,7 @@ export default function Step3KnowledgeConfirm({ isSubmitting, submitError }: Ste
 
       <section>
         <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-          {t('onboarding.step3.knowledgeSummary')}
+          {t('onboarding.step3.lineageKnowledge')}
         </h4>
         <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
           {hasKnowledge ? (
@@ -92,50 +81,48 @@ export default function Step3KnowledgeConfirm({ isSubmitting, submitError }: Ste
         </div>
       </section>
 
-      <fieldset>
-        <legend className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-          {t('onboarding.step3.knowledgeScopeHeading')}
-        </legend>
-        <div className="mt-2 space-y-2">
-          {SCOPE_OPTIONS.map((option) => {
-            const isChecked = knowledgeScope === option.value;
-            const isWorkspace = option.value === 'workspace';
-            return (
-              <label
-                key={option.value}
-                className={cn(
-                  'flex cursor-pointer items-start gap-2 rounded-md border px-3 py-2 text-sm transition-colors',
-                  isChecked
-                    ? isWorkspace
-                      ? 'border-red-400 bg-red-50 text-red-900'
-                      : 'border-blue-500 bg-blue-50 text-blue-900'
-                    : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50',
-                )}
-              >
-                <input
-                  type="radio"
-                  name="knowledge_scope"
-                  value={option.value}
-                  checked={isChecked}
-                  onChange={() => setKnowledgeScope(option.value)}
-                  className="mt-0.5 size-4 accent-blue-600"
-                />
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    {isWorkspace ? (
-                      <ShieldAlert className="size-3.5 text-red-600" aria-hidden="true" />
-                    ) : null}
-                    <span>{t(`onboarding.step3.${option.labelKey}`)}</span>
-                  </div>
-                  <p className="mt-0.5 text-xs text-slate-500">
-                    {t(`onboarding.step3.${option.helpKey}`)}
-                  </p>
-                </div>
-              </label>
-            );
-          })}
-        </div>
-      </fieldset>
+      {availableInherited.length > 0 ? (
+        <section>
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+            {t('onboarding.step3.inheritedKnowledge')}
+          </h4>
+          <p className="mt-1 text-xs text-slate-500">
+            {t('onboarding.step3.inheritedKnowledgeHelp')}
+          </p>
+          <div className="mt-2 space-y-1.5">
+            {availableInherited.map((slug) => {
+              const isChecked = inheritedKnowledge.includes(slug);
+              return (
+                <label
+                  key={slug}
+                  className={cn(
+                    'flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors',
+                    isChecked
+                      ? 'border-blue-500 bg-blue-50 text-blue-900'
+                      : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50',
+                  )}
+                  data-testid={`step3-inherited-${slug}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={() => toggleInherited(slug)}
+                    className="size-4 rounded accent-blue-600"
+                  />
+                  <Check
+                    className={cn(
+                      'size-3.5 shrink-0',
+                      isChecked ? 'text-blue-600' : 'text-slate-300',
+                    )}
+                    aria-hidden="true"
+                  />
+                  <span className="font-mono text-xs">{slug}</span>
+                </label>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
 
       {submitError !== null ? (
         <div

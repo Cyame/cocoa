@@ -6,7 +6,6 @@ import type {
   EntityConfigOverride,
   KnowledgeEnvEntry,
   KnowledgeFileEntry,
-  KnowledgeScope,
   OnboardingPayload,
 } from '@/lib/types';
 
@@ -40,7 +39,7 @@ export type OnboardingState = {
   readonly description: string;
   readonly knowledgeRows: readonly KnowledgeRow[];
   readonly knowledgeFiles: readonly KnowledgeFileRow[];
-  readonly knowledgeScope: KnowledgeScope;
+  readonly inheritedKnowledge: readonly string[];
   readonly namespaceId: string;
   readonly submitError: string | null;
   readonly setStep: (step: OnboardingStep) => void;
@@ -59,7 +58,7 @@ export type OnboardingState = {
   readonly removeKnowledgeRow: (id: string) => void;
   readonly addKnowledgeFile: (file: KnowledgeFileRow) => void;
   readonly removeKnowledgeFile: (id: string) => void;
-  readonly setKnowledgeScope: (scope: KnowledgeScope) => void;
+  readonly setInheritedKnowledge: (slugs: readonly string[]) => void;
   readonly setSubmitError: (error: string | null) => void;
   readonly buildPayload: () => OnboardingPayload;
   readonly reset: () => void;
@@ -77,7 +76,7 @@ const INITIAL_STATE: Pick<
   | 'description'
   | 'knowledgeRows'
   | 'knowledgeFiles'
-  | 'knowledgeScope'
+  | 'inheritedKnowledge'
   | 'namespaceId'
   | 'submitError'
 > = {
@@ -91,7 +90,7 @@ const INITIAL_STATE: Pick<
   description: '',
   knowledgeRows: [],
   knowledgeFiles: [],
-  knowledgeScope: 'instance',
+  inheritedKnowledge: [],
   namespaceId: '',
   submitError: null,
 };
@@ -194,7 +193,7 @@ export const useOnboardingStore = create<OnboardingState>()((set, get) => ({
     set((current) => ({
       knowledgeFiles: current.knowledgeFiles.filter((entry) => entry.id !== id),
     })),
-  setKnowledgeScope: (knowledgeScope) => set({ knowledgeScope }),
+  setInheritedKnowledge: (inheritedKnowledge) => set({ inheritedKnowledge }),
   setSubmitError: (submitError) => set({ submitError }),
   buildPayload: () => {
     const state = get();

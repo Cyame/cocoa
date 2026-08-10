@@ -141,7 +141,7 @@ function resetOnboardingStores() {
       description: '',
       knowledgeRows: [],
       knowledgeFiles: [],
-      knowledgeScope: 'instance',
+      inheritedKnowledge: [],
       namespaceId: '',
       submitError: null,
     });

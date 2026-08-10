@@ -485,8 +485,6 @@ export type OnboardingPayload = {
   readonly config_override?: EntityConfigOverride | null;
 };
 
-export type KnowledgeScope = 'instance' | 'entity' | 'workspace';
-
 export type UserBrief = {
   readonly id: string;
   readonly username: string;
