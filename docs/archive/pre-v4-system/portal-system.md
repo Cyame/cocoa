@@ -1,7 +1,7 @@
 > **Pre-v4 reference**: Conflict with `.omo/evidence/audit-product-design.md` → audit wins. Awaiting v4 PRD rewrite.
 >
 
-# Cocoa Portal System
+# Eyot Portal System
 
 > **15d naming convention** (effective 2026-07-28): This document uses the 15d naming scheme.
 > | Old term | New term | Display |
@@ -14,7 +14,7 @@
 >
 > React component names and API route paths remain unchanged. Only prose descriptions and conceptual labels use the new terms.
 
-The P9 Portal is Cocoa's operator console — a React 19 single-page application that visualizes the backend control plane (P3.5 event stream, P5 message topology, P8 Harness Supervisor, P4 preset registry, Membership coordinates, and glow-mapped loop-status states). This document covers the architecture, page inventory, backend API surface, and visualization algorithms that any contributor or downstream phase (P9.5 polish, P10 learning) must internalize before editing the portal or its data contracts.
+The P9 Portal is Eyot's operator console — a React 19 single-page application that visualizes the backend control plane (P3.5 event stream, P5 message topology, P8 Harness Supervisor, P4 preset registry, Membership coordinates, and glow-mapped loop-status states). This document covers the architecture, page inventory, backend API surface, and visualization algorithms that any contributor or downstream phase (P9.5 polish, P10 learning) must internalize before editing the portal or its data contracts.
 
 ## 1. Portal Architecture
 
@@ -22,7 +22,7 @@ The portal is a client-side React application with zero additional npm dependenc
 
 ```
 +---------------------------------------------------+
-|                   Cocoa Portal                     |
+|                   Eyot Portal                     |
 |  React 19 + Vite 8 + TypeScript + Tailwind v4     |
 +---------------------------------------------------+
 |  Pages (10)      |  Components (4)  |  Stores (2) |
@@ -53,7 +53,7 @@ The portal is a client-side React application with zero additional npm dependenc
 **Key architectural decisions:**
 
 - **API client**: `src/lib/api.ts` — a typed `fetch` wrapper that injects `Authorization: Bearer <token>`, auto-redirects to `/login` on 401, and throws typed `ApiError`.
-- **State management**: Zustand with `persist` middleware. `useSessionStore` holds JWT in localStorage. `useSelectedStore` holds `officeId`, `instanceId`, and `interactionMode` (persisted as `cocoa.topology.mode`).
+- **State management**: Zustand with `persist` middleware. `useSessionStore` holds JWT in localStorage. `useSelectedStore` holds `officeId`, `instanceId`, and `interactionMode` (persisted as `eyot.topology.mode`).
 - **Routing**: `react-router` v7 with `createBrowserRouter`. The root path `/` redirects to `/login` (unauthenticated) or `/offices` (authenticated). Nine nested routes live under the `App` layout shell (`/login` is outside).
 - **Topology rendering**: Pure SVG with `<svg viewBox>`, `<g transform="translate(pan_x, pan_y) scale(zoom)">`, and `<defs><filter>` for glow effects. Mouse wheel zoom + drag-to-pan via React state. Nodes are exclusively User Memberships and Instance Memberships — CorridorNode was dropped in 15d.
 - **Live status polling**: `setInterval` at 2-second intervals on `GET /offices/{id}/live-status`. No WebSocket or SSE — debug-first simplicity.
@@ -94,7 +94,7 @@ The portal has 10 route-level pages and 4 shared components. Each page maps to o
 | Store | File | Persisted Fields |
 |-------|------|-----------------|
 | `useSessionStore` | `src/stores/session.ts` | `token` (JWT string), `user` (CurrentUser object) — localStorage |
-| `useSelectedStore` | `src/stores/selected.ts` | `officeId`, `instanceId`, `interactionMode` — only `interactionMode` persisted to localStorage as `cocoa.topology.mode` |
+| `useSelectedStore` | `src/stores/selected.ts` | `officeId`, `instanceId`, `interactionMode` — only `interactionMode` persisted to localStorage as `eyot.topology.mode` |
 
 ## 3. Event Query API
 
@@ -185,7 +185,7 @@ The mapping lives in `app/core/glow.py` as a `dict[str, GlowColor]` lookup. The 
 
 ## 5. Passage (Corridor) API
 
-Passages are the connectivity edges of Cocoa's messaging fabric (originally called Corridors in P5). They connect two Membership records and carry messages between them under the neighbor-only delivery rule.
+Passages are the connectivity edges of Eyot's messaging fabric (originally called Corridors in P5). They connect two Membership records and carry messages between them under the neighbor-only delivery rule.
 
 ### Model
 
@@ -218,7 +218,7 @@ All endpoints live under `/api/v1/messaging/corridors`.
 
 ## 6. Composer Compartmentalization Semantics
 
-The Composer page (`/offices/:id/composer`) implements Cocoa's multi-recipient messaging model: a single text area that the operator types into, with real-time compartmentalization driven by `@{slug}` mentions.
+The Composer page (`/offices/:id/composer`) implements Eyot's multi-recipient messaging model: a single text area that the operator types into, with real-time compartmentalization driven by `@{slug}` mentions.
 
 ### Compartmentalization Algorithm
 
@@ -317,7 +317,7 @@ Mouse wheel events on the SVG adjust the `zoom` state (clamped to `[0.1, 3.0]`).
 
 ### Interaction Modes
 
-The `TopologyToolbar` component switches between three modes, persisted to `localStorage` under `cocoa.topology.mode`:
+The `TopologyToolbar` component switches between three modes, persisted to `localStorage` under `eyot.topology.mode`:
 
 | Mode | Key | Behavior |
 |------|-----|----------|

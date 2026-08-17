@@ -1,11 +1,11 @@
 > **Pre-v4 reference**: Conflict with `.omo/evidence/audit-product-design.md` → audit wins. Awaiting v4 PRD rewrite.
 >
 
-# Cocoa Harness System
+# Eyot Harness System
 
 > **Code rename pending (15d-rename wave)**: This doc describes target architecture (15d+). Current code uses old naming.
 
-The P8 Harness layer is Cocoa's D11 **control plane** — the active counterpart to P6's passive Blackboard. Where Blackboard stores collaboration state, the Harness decides when an Instance runs, when it stops, and how external commands reach it. This document covers the seven reference points that any contributor or downstream phase (P9 portal, P10 learning) must internalize before editing `app/core/harness_supervisor.py` or any sibling module.
+The P8 Harness layer is Eyot's D11 **control plane** — the active counterpart to P6's passive Blackboard. Where Blackboard stores collaboration state, the Harness decides when an Instance runs, when it stops, and how external commands reach it. This document covers the seven reference points that any contributor or downstream phase (P9 portal, P10 learning) must internalize before editing `app/core/harness_supervisor.py` or any sibling module.
 
 ## 1. D11 Control Plane Architecture
 
@@ -206,7 +206,7 @@ The constant ``VALID_NOTEPADS = ["learnings", "issues", "decisions", "problems"]
 The agent runtime resolves the workspace path through ``_resolve_workspace_path``:
 
 1. Read ``Instance.workspace_path`` from the DB (P7-generated ``.pi/workspace/<slug>-<id[:8]>/``).
-2. If the row is missing or the column is ``NULL``, fall back to ``tempfile.mkdtemp(prefix=f"cocoa-agent-{instance_id}-")``.
+2. If the row is missing or the column is ``NULL``, fall back to ``tempfile.mkdtemp(prefix=f"eyot-agent-{instance_id}-")``.
 3. Notepad writes go to that path's ``.omo/notepads/`` subtree.
 
 This means the notepad lives on the Instance's PVC in production and on the local filesystem in dev — the API contract is identical.

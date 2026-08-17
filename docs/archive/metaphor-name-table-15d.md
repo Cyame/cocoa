@@ -10,14 +10,14 @@
 > **Pre-v4 reference**: Conflict with `.omo/evidence/audit-product-design.md` → audit wins. Awaiting v4 PRD rewrite.
 >
 
-# Cocoa Metaphor Name Table (15d)
+# Eyot Metaphor Name Table (15d)
 
 > **Canonical source**: `.omo/drafts/archive/phase-15d-naming-system.md` §3–§4（已归档；活表为本文件）。
 > **Code rename pending**: This table describes the target architecture. Current code (P0-P15b) still uses old naming.
 
 ## Preamble
 
-Cocoa uses a **two-axis naming system**: backend uses strict technical English, frontend uses Cthulhu/Lovecraft-themed Chinese. This table is the single source of truth mapping every concept from code-term → frontend display-name. Downstream documents (terminology, domain model, preset manifests, UI) derive their identifiers from the rows below.
+Eyot uses a **two-axis naming system**: backend uses strict technical English, frontend uses Cthulhu/Lovecraft-themed Chinese. This table is the single source of truth mapping every concept from code-term → frontend display-name. Downstream documents (terminology, domain model, preset manifests, UI) derive their identifiers from the rows below.
 
 Database columns use the backend names. UI labels use the frontend names. Backend code internally uses backend names. DB does NOT store display_name columns — the UI layer resolves display via i18n JSON keys.
 

@@ -2,11 +2,11 @@
 >
 > **v4.6 旁注**（勿把本归档文当 SoT）：Learning 写回（promote/transmute/reap/compose 只写 junction）、Memory∪Notepad 合一（`MemoryKind.notepad`）、H4 entity_id 解析、`loop_state.notepad_refs` 存量迁移与学习审计事件对齐 —— 契约见 `.omo/evidence/v4-6-learning-writeback.md`，实现见 `.omo/plans/v4-6-learning-writeback.md`。
 
-# Cocoa Learning System
+# Eyot Learning System
 
 > **Code rename pending (15d-rename wave)**: This document uses target (15d) naming — BaseClass, Entity, Workspace, Memory. The source code still uses legacy names (EmployeePreset, Employee, Office, MemoryEntry). API paths in this document reflect the current code; they will be renamed in the 15d-rename wave. See §7 for the full rename map.
 
-The P10 Learning layer is Cocoa's skill-distillation subsystem — the bridge between accumulated entity memory and reusable base classes. It reads an Entity's Memory records, distills them into a structured `PresetManifest`, and creates a new BaseClass row. Two distinct actions drive this: **promote** (晋升, Instance → Entity) extracts a reusable Entity from a running Instance, and **transmute** (炼化, Entity → BaseClass) derives a BaseClass template from an Entity's accumulated memory. This document covers the architecture, Protocol interface, default algorithm, command integration, API reference, and future directions.
+The P10 Learning layer is Eyot's skill-distillation subsystem — the bridge between accumulated entity memory and reusable base classes. It reads an Entity's Memory records, distills them into a structured `PresetManifest`, and creates a new BaseClass row. Two distinct actions drive this: **promote** (晋升, Instance → Entity) extracts a reusable Entity from a running Instance, and **transmute** (炼化, Entity → BaseClass) derives a BaseClass template from an Entity's accumulated memory. This document covers the architecture, Protocol interface, default algorithm, command integration, API reference, and future directions.
 
 ## 1. Learning Subsystem Architecture
 

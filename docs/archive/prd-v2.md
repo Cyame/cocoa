@@ -1,4 +1,4 @@
-# Cocoa PRD v2 — 多租户架构与 Agent 栈重构
+# Eyot PRD v2 — 多租户架构与 Agent 栈重构
 
 > **Status**: 决策完成 (decision-complete) — **active product target** for next implementation wave
 > **基线**: 2026-07-29 diary 三张图 + PRD-v1 模板 + 9 份 evidence 文件
@@ -14,7 +14,7 @@
 
 **你会得到什么**：一个从零开始按本体论设计的 Agent 控制台。11 个可复用 AI 角色模板（神职），真人用户按需召唤角色、注入业务知识、在 Workspace 拓扑画布上调度多个 AI 化身并行工作。AI 的每一次运行经验（Memory）会自动积累到"眷族"的身份记录里，真人通过"晋升"和"炼化"把经验提炼为可跨 Workspace 复用的能力和新角色。
 
-**为什么这样做**：传统的聊天 Agent 每次对话都是新的——没有记忆、没有可观测状态、不能多人协作。Cocoa 用三层抽象解决这个问题：神职定义"是什么角色"（战略家还是执行者），眷族承载"面向什么场景"（内容营销还是代码审查），化身负责"在具体业务里干活"（写科技公众号文章还是修 API bug）。三者收敛到一起，AI 的经验才会积累，而不像现有工具一样每次关掉就归零。
+**为什么这样做**：传统的聊天 Agent 每次对话都是新的——没有记忆、没有可观测状态、不能多人协作。Eyot 用三层抽象解决这个问题：神职定义"是什么角色"（战略家还是执行者），眷族承载"面向什么场景"（内容营销还是代码审查），化身负责"在具体业务里干活"（写科技公众号文章还是修 API bug）。三者收敛到一起，AI 的经验才会积累，而不像现有工具一样每次关掉就归零。
 
 **不会去做的事情**：不是通用聊天助手。不是无代码平台。不带语音网关。不做 RAG/向量检索知识库（至少这版不做）。单租户部署模式下只有一个 Organization，多租户是远期架构储备，当前所有数据都在同一个 Organization 内。
 
@@ -30,7 +30,7 @@
 
 **多 Agent 控制台** — 多租户控制面：真人在 Organization 内召唤、观察、调度 AI 智能体。每个 Organization 是一套独立的租户隔离边界，内部按 Namespace（场景分区）→ Workspace（具体协作空间）级联展开。
 
-> **核心身份区分**：Cocoa 中只有**真人用户**（User，觉醒者）能注册登录。所有"神职"（BaseClass）、"眷族"（Entity）、"化身"（Instance）都是 **AI 智能体**，由真人召唤、配置、调度，不与真人平级。真人永远是觉醒者；AI 永远是浅识者或深潜者——两类身份不互通。
+> **核心身份区分**：Eyot 中只有**真人用户**（User，觉醒者）能注册登录。所有"神职"（BaseClass）、"眷族"（Entity）、"化身"（Instance）都是 **AI 智能体**，由真人召唤、配置、调度，不与真人平级。真人永远是觉醒者；AI 永远是浅识者或深潜者——两类身份不互通。
 
 ### 与 PRD-v1 的核心差异
 
@@ -68,13 +68,13 @@ System（逻辑控制面，非 DB 表）
 | Namespace | `Namespace` | 次元 | **场景分区**（不是 dev/staging/prod）。Entity 属于 Namespace |
 | Workspace | `Workspace` | 空间 | 场景内的具体工作流容器。Instance / Membership / CentralHub / Vault 绑定 Workspace |
 
-**Namespace ≠ 环境分区。** Namespace 按**业务场景**切分——例如 `coding` 与 `social-media` 是两个次元。同一场景下可以有多个 Workspace（例如 social-media 下「公众号发布」「小红书运营」；coding 下「Cocoa API」「Portal 前端」）。这正是 **Entity 绑定 Namespace** 的原因：眷族身份与场景经验跨该场景内多个 Workspace 复用，而不是跟着某一个具体工作流走。
+**Namespace ≠ 环境分区。** Namespace 按**业务场景**切分——例如 `coding` 与 `social-media` 是两个次元。同一场景下可以有多个 Workspace（例如 social-media 下「公众号发布」「小红书运营」；coding 下「Eyot API」「Portal 前端」）。这正是 **Entity 绑定 Namespace** 的原因：眷族身份与场景经验跨该场景内多个 Workspace 复用，而不是跟着某一个具体工作流走。
 
 ```
 Organization "default"
   ├── Namespace "coding"              ← 场景：写代码 / 工程
   │     ├── Entity: 暗行-backend、衡判-qa …   (per-Namespace)
-  │     ├── Workspace "cocoa-api"            (具体系统)
+  │     ├── Workspace "eyot-api"            (具体系统)
   │     └── Workspace "portal-ui"            (具体系统)
   └── Namespace "social-media"        ← 场景：社媒内容
         ├── Entity: 密士-content、百瞳-media …
@@ -94,7 +94,7 @@ Organization "default"
 
 ### 与传统 chat 工具的核心差异
 
-| 维度 | 传统 chat | Cocoa |
+| 维度 | 传统 chat | Eyot |
 |---|---|---|
 | 化身存在 | 一次性回复，关闭即结束 | 持续 loop + Memory + 共享主脑，不结束 |
 | 状态可见 | 看不见化身内部 | 化身 LoopState.loop_status 通过 glow 颜色实时反映 |
@@ -145,11 +145,11 @@ Organization "default"
 | N:N 关联 | `base_class_ai_genes` | `user_user_genes` |
 | 变更成本 | **高**（需 spawn 新 Instance） | **低**（立即生效） |
 
-#### Cocoa vs nodeskclaw：基因系统设计对比
+#### Eyot vs nodeskclaw：基因系统设计对比
 
-Cocoa 刻意丢弃 nodeskclaw 的 4 类基因形态。原则：**基因回答"能做什么"，编排回答"怎么做"，两者正交**。
+Eyot 刻意丢弃 nodeskclaw 的 4 类基因形态。原则：**基因回答"能做什么"，编排回答"怎么做"，两者正交**。
 
-| nodeskclaw | Cocoa 处理 |
+| nodeskclaw | Eyot 处理 |
 |---|---|
 | `tool-gene`（工具基因） | 保留，统一 manifest |
 | `meta-gene`（元基因） | 保留，统一 manifest（所有基因本质是 meta-gene） |
@@ -301,7 +301,7 @@ Role archetype          Scenario identity       Concrete runtime
 (business-AGNOSTIC)     (scenario-SPECIFIC)     (business-CONCRETE)
 
 "密士 = 战略规划者"      "密士 for 内容营销"     "密士 writing 科技公众号文章"
-"暗行 = 全栈开发者"      "暗行 for 后端架构"     "暗行 building Cocoa's API"
+"暗行 = 全栈开发者"      "暗行 for 后端架构"     "暗行 building Eyot's API"
 ```
 
 ### 4.3 关键字段
@@ -536,9 +536,9 @@ Memory 是能力生命周期的原料：Memory → (reap) → Capability → (co
 
 ### 9.0 Runtime spine（两层勿混）
 
-| 层 | 对标 / 驱动 | Cocoa 职责 |
+| 层 | 对标 / 驱动 | Eyot 职责 |
 |---|---|---|
-| **Workspace 控制面** | senpi · oh-my-openagent · oh-my-pi（Cocoa 目标：更灵活、更可观测） | Portal、Harness Supervisor、Boulder、Passage、CentralHub、部署与可观测 |
+| **Workspace 控制面** | senpi · oh-my-openagent · oh-my-pi（Eyot 目标：更灵活、更可观测） | Portal、Harness Supervisor、Boulder、Passage、CentralHub、部署与可观测 |
 | **化身 Instance runtime** | **pi**（沙箱优先；React runtime 备选） | 每个化身 pod 的 agent loop；接收 AgentConfig |
 
 Entity 的 `system_prompt` 与 `config_override` 通过 AgentOverrideConfigSchema overlay 序列化为 **pi AgentConfig**，由 **pi** 驱动该化身。Harness/Boulder 是 Workspace 控制面引擎，不是 Senpi CLI，也不是「把 pi 叫成 Senpi」。
@@ -774,7 +774,7 @@ Entity 聚合卡片 grid。每张卡：display_name + slug + rank badge + BaseCl
 
 ### 13.5 Composer Side Panel
 
-常驻右侧 360px（进入 `/workspaces/:id` 自动展开），可拖拽左侧边框 resize（100–800px），宽度存入 localStorage key `cocoa.composer-width`。折叠按钮 `PanelRightClose` → 0px。全屏 `Cmd+Shift+F` → 覆盖整个 viewport。
+常驻右侧 360px（进入 `/workspaces/:id` 自动展开），可拖拽左侧边框 resize（100–800px），宽度存入 localStorage key `eyot.composer-width`。折叠按钮 `PanelRightClose` → 0px。全屏 `Cmd+Shift+F` → 覆盖整个 viewport。
 
 **布局**：Header（当前对话下拉 + 折叠/全屏按钮）→ 消息流（flex-1, overflow-y-auto）→ 输入区（底部固定）。
 
@@ -992,7 +992,7 @@ classDiagram
         +slug: str unique per namespace
         +name: str
         deleted_at: datetime?
-        note: 场景内具体工作流 e.g. wechat / cocoa-api
+        note: 场景内具体工作流 e.g. wechat / eyot-api
     }
     class User {
         +id: UUID PK

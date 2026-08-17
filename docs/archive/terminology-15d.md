@@ -10,12 +10,12 @@
 > **Pre-v4 reference**: Conflict with `.omo/evidence/audit-product-design.md` → audit wins. Awaiting v4 PRD rewrite.
 >
 
-# Cocoa Terminology Glossary (15d)
+# Eyot Terminology Glossary (15d)
 
 > **Canonical source**: Naming decisions locked in `.omo/drafts/archive/phase-15d-naming-system.md`（已归档；活文档为本文件 + `metaphor-name-table.md`）。
 > **Code rename pending**: This doc describes the target architecture (15d+). The current codebase (P0-P15b) still uses old naming; a dedicated rename wave (15d-rename) is deferred until after P16d Org model decision.
 
-One-line definitions for every Cocoa code-term (backend), display-name (frontend Cthulhu-themed), and protocol entity. Derived from the naming system and the core domain model. Code-terms stay English; display-names in parentheses are for product UI reference.
+One-line definitions for every Eyot code-term (backend), display-name (frontend Cthulhu-themed), and protocol entity. Derived from the naming system and the core domain model. Code-terms stay English; display-names in parentheses are for product UI reference.
 
 ---
 
@@ -48,13 +48,13 @@ One-line definitions for every Cocoa code-term (backend), display-name (frontend
 
 ### Runtime Concepts
 
-- **Workspace control plane** — Cocoa's operator + harness surface (Portal, Supervisor, Boulder, Passage, CentralHub, deploy, observability). Product peer: a more flexible / observable **senpi · oh-my-openagent · oh-my-pi**. Not the per-Instance agent binary.
+- **Workspace control plane** — Eyot's operator + harness surface (Portal, Supervisor, Boulder, Passage, CentralHub, deploy, observability). Product peer: a more flexible / observable **senpi · oh-my-openagent · oh-my-pi**. Not the per-Instance agent binary.
 - **pi runtime** — Preferred sandboxed agent loop that drives each **Instance / 化身**. Entity `system_prompt` + `config_override` serialize to pi AgentConfig. React runtime is an optional alternative (less preferred for sandbox stability). **Not** Senpi CLI.
 - **LoopState** (心智状态) — Harness runtime state for an Instance: loop_status (6 states), continuation_count, breaker_config, last_checkpoint_at.
 - **DeployRecord** (降世记录) — K8s deployment lifecycle record: 9-step pipeline from build to pod-ready.
 - **InstanceProviderConfig** — LLM provider configuration for an Instance (openai-compatible, anthropic, etc.). Internal config, no UI equivalent.
 - **Topology** (心灵图景) — Spatial visualization of Workspace members as SVG nodes with glow halos, 3 interaction modes (Select/Connect/Move), and message-flow particle animation.
-- **delivery_mode** (投递模式, v4.7) — How a collaboration/inject payload reaches an Instance: `notify` (event only, no auto-wake), `soft_inject` (safe-point insert into running loop), `wake` (start/resume turn if idle). Normative in `.omo/plans/v4-7-harness-collab.md` / `audit-product-design.md` §九. Pattern study: [jcode](https://github.com/1jehuang/jcode) soft interrupt — not a Cocoa product synonym for swarm chat.
+- **delivery_mode** (投递模式, v4.7) — How a collaboration/inject payload reaches an Instance: `notify` (event only, no auto-wake), `soft_inject` (safe-point insert into running loop), `wake` (start/resume turn if idle). Normative in `.omo/plans/v4-7-harness-collab.md` / `audit-product-design.md` §九. Pattern study: [jcode](https://github.com/1jehuang/jcode) soft interrupt — not a Eyot product synonym for swarm chat.
 
 ---
 

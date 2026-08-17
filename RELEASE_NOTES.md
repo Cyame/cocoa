@@ -31,6 +31,18 @@ pre-1.0 trajectory.
 - **Tests**: full backend suite green (**1047 passed / 1 skipped**);
   portal lint + build + **264 vitest tests** green.
 
+### 2026-08-17 — 0.5.2.dev2（cocoa 残留对齐）
+
+- 全量对齐文档中的 `cocoa` 残留为 `eyot`：`.omo/` 活跃 + 归档（plans / evidence /
+  drafts / notepads）、`docs/archive/`（`docs/roadmap.md` 改名叙事句保留 `Cocoa → Eyot` 原意，仅修语义）。
+- 重命名 8 个 `cocoa-*.md` 证据/归档文档为 `eyot-*.md` 并更新全部交叉引用
+  （capability-map / capability-gap-table / vs-nodeskclaw-drift / deployment-state +
+  archive 的 roadmap / v2-roadmap / v2-program / capability-map-p0-p10-snapshot）。
+- `.github/workflows/ci.yml` 内 `cocoa-backend`/`cocoa-portal` → `eyot-backend`/`eyot-portal`
+  （CI 路径修复，本地生效；`.github/` 仍按 `.gitignore` 不追踪）。
+- 上述 `.omo/`、`AGENTS.md`、`.github/` 改动为本地态（gitignored，不入库）；
+  本 commit 仅含 `docs/archive/` 12 个追踪文档。版号 0.5.2.dev1 → **0.5.2.dev2**。
+
 ## 1.0
 
 _To be tagged. Sections for 1.x releases land here; `*.devN` builds above fold

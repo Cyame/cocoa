@@ -47,7 +47,7 @@ Each command entry is a dict with two fields:
 
 ## 2. Eleven Built-in BaseClasses
 
-Cocoa ships with eleven built-in BaseClasses seeded into the `employee_presets`
+Eyot ships with eleven built-in BaseClasses seeded into the `employee_presets`
 table by Alembic migration. Their slugs use P1 Chinese naming.
 
 | Slug        | Name   | Version | Commands |

@@ -1,13 +1,13 @@
 > **Pre-v4 reference**: Conflict with `.omo/evidence/audit-product-design.md` → audit wins. Awaiting v4 PRD rewrite.
 >
 
-# Cocoa Runtime System
+# Eyot Runtime System
 
 > **Code rename pending (15d-rename wave)**: This doc describes target architecture (15d+). Current code uses old naming.
 
-The Instance runtime system is Cocoa's execution substrate. An Instance is the running embodiment of an Entity within a Workspace — it owns an isolated workspace, consumes configuration from the database, receives messages via the P5 messaging topology, and writes results to the P6 blackboard. P7 delivers the Instance CRUD API, lifecycle state machine, and K8s deployment scaffolding; the control-plane harness arrives in P8.
+The Instance runtime system is Eyot's execution substrate. An Instance is the running embodiment of an Entity within a Workspace — it owns an isolated workspace, consumes configuration from the database, receives messages via the P5 messaging topology, and writes results to the P6 blackboard. P7 delivers the Instance CRUD API, lifecycle state machine, and K8s deployment scaffolding; the control-plane harness arrives in P8.
 
-**Driver lock (2026-07-30):** each 化身 is driven by a sandboxed **pi** agent runtime (React optional). The Workspace control plane (Supervisor / Boulder / Portal) is Cocoa's evolution of senpi · oh-my-openagent · oh-my-pi — it is **not** Senpi CLI acting as the Instance driver. Path prefix `.pi/workspace/...` names the Instance filesystem root under that pi-oriented layout; it does not mean "Senpi owns the Workspace product surface."
+**Driver lock (2026-07-30):** each 化身 is driven by a sandboxed **pi** agent runtime (React optional). The Workspace control plane (Supervisor / Boulder / Portal) is Eyot's evolution of senpi · oh-my-openagent · oh-my-pi — it is **not** Senpi CLI acting as the Instance driver. Path prefix `.pi/workspace/...` names the Instance filesystem root under that pi-oriented layout; it does not mean "Senpi owns the Workspace product surface."
 
 ## 1. Instance Lifecycle Model
 
@@ -113,16 +113,16 @@ Each lifecycle transition emits an event via the P3.5 event system (`app.core.ev
 
 ## 4. K8s Deployment Manifests
 
-All manifests live under `cocoa-artifacts/k8s/instance/`. Each file uses `{instance_id}` and `{office_id}` template variables that a deploy script substitutes before applying.
+All manifests live under `eyot-artifacts/k8s/instance/`. Each file uses `{instance_id}` and `{office_id}` template variables that a deploy script substitutes before applying.
 
 | File | Kind | Purpose |
 |------|------|---------|
-| `deployment.yaml` | Deployment | Single-replica pod running `cocoa-instance:latest`. Mounts workspace PVC at `/data` (pi cwd), ConfigMap at `/etc/config` (SYSTEM.md bundle), optional workspace `shared` hostPath at `/data/shared`. Env from Secret. Resources: 100m CPU / 256Mi memory. |
+| `deployment.yaml` | Deployment | Single-replica pod running `eyot-instance:latest`. Mounts workspace PVC at `/data` (pi cwd), ConfigMap at `/etc/config` (SYSTEM.md bundle), optional workspace `shared` hostPath at `/data/shared`. Env from Secret. Resources: 100m CPU / 256Mi memory. |
 | `configmap.yaml` | ConfigMap | Injects `RUNTIME_CONFIG` (JSON) and `INSTANCE_ID` into the container. |
 | `pvc.yaml` | PersistentVolumeClaim | 1Gi `ReadWriteOnce` volume for the Instance workspace. One PVC per Instance. |
 | `service.yaml` | Service | `ClusterIP` on port 8080. Internal-only communication. |
 | `networkpolicy.yaml` | NetworkPolicy | Ingress isolation: only Pods with `office-id={office_id}` can connect. |
-| `kustomization.yaml` | Kustomization | Groups all resources with common label `app: cocoa-instance`. |
+| `kustomization.yaml` | Kustomization | Groups all resources with common label `app: eyot-instance`. |
 
 ### Template Variable Reference
 
@@ -135,16 +135,16 @@ All manifests live under `cocoa-artifacts/k8s/instance/`. Each file uses `{insta
 
 ```bash
 # Build the instance image
-docker build -t cocoa-instance:latest -f cocoa-artifacts/docker/Dockerfile.instance .
+docker build -t eyot-instance:latest -f eyot-artifacts/docker/Dockerfile.instance .
 
 # Dry-run validation (no actual resources created)
-kubectl apply --dry-run=server -k cocoa-artifacts/k8s/instance/
+kubectl apply --dry-run=server -k eyot-artifacts/k8s/instance/
 
 # Apply (after substituting template variables)
-kubectl apply -k cocoa-artifacts/k8s/instance/
+kubectl apply -k eyot-artifacts/k8s/instance/
 
 # Tear down
-kubectl delete -k cocoa-artifacts/k8s/instance/
+kubectl delete -k eyot-artifacts/k8s/instance/
 ```
 
 ## 5. Multi-Instance Isolation
@@ -174,7 +174,7 @@ In Kubernetes, each Instance Deployment references a dedicated PVC named `{insta
 
 ## 6. Langfuse Integration Plan
 
-Langfuse is the planned observability backend for agent tracing in Cocoa. P8's harness will initialize a Langfuse client per running Instance, using credentials stored in `Instance.runtime_config`.
+Langfuse is the planned observability backend for agent tracing in Eyot. P8's harness will initialize a Langfuse client per running Instance, using credentials stored in `Instance.runtime_config`.
 
 ### Reserved Fields in `runtime_config`
 
@@ -206,7 +206,7 @@ app.agent_runtime (legacy checkpoint loop; optional)
 
 ## Tunnel + pi Host (PRD-v3.5)
 
-Instance pods run **`cocoa-instance-host`** (Node) as the main process:
+Instance pods run **`eyot-instance-host`** (Node) as the main process:
 
 1. Outbound WebSocket to Backend `WS /api/v1/tunnel/connect`
 2. First frame `auth` with `instance_id` + `proxy_token` → `auth.ok`

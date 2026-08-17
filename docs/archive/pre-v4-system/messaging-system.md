@@ -6,7 +6,7 @@
 > **Code rename pending (15d-rename wave)**: This doc describes target architecture (15d+). Current code uses old naming.
 
 > Message topology, neighbor-only delivery, activation triggers, and directive
-> routing for Cocoa P5. Covers the messaging API, passage-gated message flow,
+> routing for Eyot P5. Covers the messaging API, passage-gated message flow,
 > and the intern hot-load lifecycle.
 
 ---
@@ -144,7 +144,7 @@ Audit events only (no message rows)
 
 ### Audit Event Types
 
-Defined in `app/core/event_types.py`. The full Cocoa event taxonomy spans five
+Defined in `app/core/event_types.py`. The full Eyot event taxonomy spans five
 families; messaging contributes three:
 
 ```python
@@ -327,7 +327,7 @@ targets an intern. If the entity is not intern-rank, this function returns
 Two endpoints return HTTP 501 (`not_implemented`) as placeholders:
 
 ```python
-# cocoa-backend/app/api/v1/messaging.py
+# eyot-backend/app/api/v1/messaging.py
 
 @router.post("/meetings", status_code=501)
 async def create_meeting():
