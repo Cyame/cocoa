@@ -1,9 +1,9 @@
 {
-  "name": "cocoa-instance-host",
-  "version": "3.5.2",
+  "name": "eyot-instance-host",
+  "version": "0.5.2.dev1",
   "private": true,
   "type": "module",
-  "description": "Cocoa Instance Host — Tunnel WS client + pi --mode rpc bridge",
+  "description": "Eyot Instance Host — Tunnel WS client + pi --mode rpc bridge",
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",

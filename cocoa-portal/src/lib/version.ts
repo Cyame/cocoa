@@ -1,11 +1,11 @@
 /**
  * Product version shown in the AppShell sidebar footer (`vMAJOR.MINOR.PATCH`).
  *
- * - MAJOR — product generation (current 5; v5 = naming → definition → UIUX →
- *   visual waves per v5-roadmap)
- * - MINOR — bumps once per completed v5 slice (v5.0 → .0, v5.1 → .1, …)
+ * - MAJOR — product generation (current 0; 0.x = pre-1.0, features not yet
+ *   complete; the project reset from 5.x to 0.5.x as part of the Eyot rename)
+ * - MINOR — bumps once per completed slice
  * - PATCH — bumps on each small change / hotfix within the current slice
  *
- * Keep in sync with `cocoa-portal/package.json` and `cocoa-backend/pyproject.toml`.
+ * Keep in sync with `eyot-portal/package.json` and `eyot-backend/pyproject.toml`.
  */
-export const APP_VERSION = '5.2.1';
+export const APP_VERSION = '0.5.2.dev1';

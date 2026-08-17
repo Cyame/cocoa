@@ -1,7 +1,7 @@
 {
-  "name": "cocoa-portal",
+  "name": "eyot-portal",
   "private": true,
-  "version": "5.2.1",
+  "version": "0.5.2.dev1",
   "type": "module",
   "scripts": {
     "dev": "vite",
