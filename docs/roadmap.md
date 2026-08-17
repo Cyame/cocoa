@@ -284,10 +284,11 @@ Full history: `.omo/plans/archive/` + `.omo/plans/archive/eyot-v2-roadmap.md` (p
 | **3.5.x / 3.6** | 主流程闭环 + 纯视觉 UI 大重构（历史轨，已被 v4/v5 取代）| `.omo/plans/archive/product-version-track-3-5-3-6.md` |
 | **4.x** | v4 功能收口（已完成 v4.0–v4.10 + v4.9.5 closeout）| `.omo/plans/v4-roadmap.md` |
 | **5.x** | **v5 完整世代**：更名（命名波）→ 定义（抽象落地）→ UIUX → 视觉（原 3.6 内容并入尾段）| `.omo/plans/v5-roadmap.md` |
+| **0.x (Eyot)** | **2026-08-17 项目 Cocoa → Eyot 重置**：版本回退 5.2.1 → `0.5.2.dev1`（pre-1.0，正式 tag 从 1.0 起）；alembic 压平为单一 schema 基线，默认数据改由 app 层 idempotent seeder 注入。v5 的山海+生物命名（始祖/血脉/后裔、大陆/区域/生境）与抽象延续，但项目身份、版本轨与标识符（EYOT_*/eyot_dev/eyot_*）均为 Eyot | 见 `RELEASE_NOTES.md` |
 
 **Working agreement:** 主功能仍有不通处与未修正项，随产品迭代逐步设计与变更；**不做**「先大改 UI 再通主流程」（v4 已闭环主流程；v5 视觉波在命名/定义/UIUX 之后）。
 
-> **历史轨**：3.5.x / 3.6 为文档纠偏与纯视觉轨；当前实现轨 **4.x 收尾 + 5.x 世代** 见 `.omo/plans/v4-roadmap.md` / `.omo/plans/v5-roadmap.md`。
+> **历史轨**：3.5.x / 3.6 为文档纠偏与纯视觉轨；4.x/5.x 为已实施世代的实现轨（v5 命名与抽象沿用至今）；**当前为 Eyot 0.x pre-1.0 轨**（2026-08-17 Cocoa → Eyot 重置，见 §5.2 表格末行与 `RELEASE_NOTES.md`）。`v4-roadmap.md` / `v5-roadmap.md` 作为历史实现参考。
 
 ### 5.3 Now（历史轨 3.5.x 遗留；当前 v4 收尾 + v5 世代见 §5.2）
 
