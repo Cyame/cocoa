@@ -6,7 +6,7 @@
 > **Code rename pending (15d-rename wave)**: This doc describes target architecture (15d+). Current code uses old naming.
 
 > P3 落地的后端 API 权威参考。P4-P10 所有业务端点必须遵循本文约定；调整约定时先改本文、再改代码。
-> 代码位置：`cocoa-backend/app/` —— 路由 `app/api/`、中间件 `app/core/middleware/`、错误 `app/core/errors.py`、分页 `app/core/pagination.py`、OpenAPI `app/core/openapi.py`。
+> 代码位置：`eyot-backend/app/` —— 路由 `app/api/`、中间件 `app/core/middleware/`、错误 `app/core/errors.py`、分页 `app/core/pagination.py`、OpenAPI `app/core/openapi.py`。
 
 ## 1. RESTful URL 规则集
 
@@ -56,7 +56,7 @@ snake_case 端到端：Pydantic 字段名即线上字段名，**无别名转换�
 
 端点弃用分三步，全部通过响应头表达：
 
-1. 宣告：`Deprecation: @<unix时间戳>`（RFC 9745，表示弃用生效时刻）+ `Link: <https://docs.cocoa.dev/api/deprecations/xxx>; rel="deprecation"`。
+1. 宣告：`Deprecation: @<unix时间戳>`（RFC 9745，表示弃用生效时刻）+ `Link: <https://docs.eyot.dev/api/deprecations/xxx>; rel="deprecation"`。
 2. 限期：`Sunset: <HTTP-date>`（RFC 8594，如 `Sunset: Sat, 01 Nov 2026 00:00:00 GMT`），到期后端点移除。
 3. 移除：再次请求返回 `410 Gone`，错误体仍为第 3 节标准信封。
 

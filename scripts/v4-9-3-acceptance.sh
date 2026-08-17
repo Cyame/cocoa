@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # v4.9.3 Wave 用户验收一键脚本（orbstack）
 # 用法: bash scripts/v4-9-3-acceptance.sh
-# 前置: kubectl context = orbstack; cocoa namespace 3 pods Ready
+# 前置: kubectl context = orbstack; eyot namespace 3 pods Ready
 # v4.9.3 = 炼化体系对齐（distill=memory→capability / promote=Instance→Entity /
 #          transmute=Entity→BaseClass）+ knowledge 双维度（require/has）+ spawn 自洽非阻断提示
 set -euo pipefail
@@ -20,24 +20,24 @@ echo "context: $CTX"
 [ "$CTX" = "orbstack" ] || { echo "FAIL: 非 orbstack, 中止"; exit 1; }
 
 echo "== 2. pods 状态（应 3 pods Ready）=="
-kubectl get pods -n cocoa
+kubectl get pods -n eyot
 
 echo "== 3. 后端 health + alembic head =="
-kubectl port-forward -n cocoa svc/cocoa-backend 4510:4510 >/dev/null 2>&1 &
+kubectl port-forward -n eyot svc/eyot-backend 4510:4510 >/dev/null 2>&1 &
 PF_PIDS+=($!)
 sleep 2
 HTTP=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:4510/health || true)
 echo "health http: $HTTP"
 curl -s http://localhost:4510/health || true; echo
 echo "alembic head:"
-kubectl exec -n cocoa deploy/cocoa-backend -- alembic current 2>/dev/null | tail -1
+kubectl exec -n eyot deploy/eyot-backend -- alembic current 2>/dev/null | tail -1
 
 echo "== 4. v4.9.3 语义烟测（distill → capability_market + required_knowledge）=="
 TS=$(date +%s)
 BASE=http://localhost:4510/api/v1
 # 注册用户
 REG=$(curl -s -X POST "$BASE/auth/register" -H "Content-Type: application/json" \
-  -d "{\"username\":\"e2e_493_$TS\",\"email\":\"e2e_493_$TS@cocoa.e2e\",\"password\":\"e2e-pass-493\"}")
+  -d "{\"username\":\"e2e_493_$TS\",\"email\":\"e2e_493_$TS@eyot.e2e\",\"password\":\"e2e-pass-493\"}")
 TOKEN=$(echo "$REG" | python3 -c "import sys,json;print(json.load(sys.stdin)['access_token'])" 2>/dev/null || echo "")
 [ -n "$TOKEN" ] && echo "OK: register token" || { echo "FAIL: register 无 token: $REG"; exit 1; }
 AUTH="Authorization: Bearer $TOKEN"

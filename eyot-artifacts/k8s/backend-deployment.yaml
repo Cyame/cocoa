@@ -1,0 +1,103 @@
+# Eyot Backend Deployment for OrbStack.
+#
+# Wave 1 of P14b: OrbStack-ready backend with HTTP health probes and secrets
+# sourced from `eyot-backend-secrets`. The Secret must be created out-of-band
+# (e.g. `kubectl create secret generic eyot-backend-secrets -n eyot ...`)
+# with the keys: DATABASE_URL, JWT_SECRET, ENCRYPTION_KEY, EYOT_K8S_DISABLED.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eyot-backend
+  namespace: eyot
+  labels:
+    app: eyot-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: eyot-backend
+  template:
+    metadata:
+      labels:
+        app: eyot-backend
+    spec:
+      serviceAccountName: eyot-backend
+      containers:
+        - name: backend
+          image: eyot-backend:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 4510
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: eyot-backend-secrets
+                  key: DATABASE_URL
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: eyot-backend-secrets
+                  key: JWT_SECRET
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: eyot-backend-secrets
+                  key: ENCRYPTION_KEY
+            - name: EYOT_K8S_DISABLED
+              valueFrom:
+                secretKeyRef:
+                  name: eyot-backend-secrets
+                  key: EYOT_K8S_DISABLED
+            - name: EYOT_INSTANCE_IMAGE_PULL_POLICY
+              valueFrom:
+                secretKeyRef:
+                  name: eyot-backend-secrets
+                  key: EYOT_INSTANCE_IMAGE_PULL_POLICY
+                  optional: true
+            - name: EYOT_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: eyot-backend-secrets
+                  key: EYOT_API_TOKEN
+                  optional: true
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 4510
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 4510
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+          volumeMounts:
+            # v4.5 H3: the backend dual-writes FornixFile content into the
+            # same Host shared tree that instance pods mount at /data/shared.
+            - name: fornix-shared
+              mountPath: /var/eyot/workspaces
+      volumes:
+        - name: fornix-shared
+          hostPath:
+            path: /var/eyot/workspaces
+            type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: eyot-backend
+  namespace: eyot
+spec:
+  type: ClusterIP
+  selector:
+    app: eyot-backend
+  ports:
+    - port: 4510
+      targetPort: 4510

@@ -1,0 +1,91 @@
+# Eyot PostgreSQL Deployment for OrbStack.
+#
+# Wave 1 of P14b: OrbStack-ready PostgreSQL with local-image pull policy
+# (OrbStack shares the host Docker daemon) and a pg_isready readiness probe.
+# Shared by backend + portal pods running in the same cluster.
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: eyot
+  labels:
+    name: eyot
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: eyot-postgres-secret
+  namespace: eyot
+type: Opaque
+stringData:
+  POSTGRES_DB: eyot
+  POSTGRES_USER: postgres
+  POSTGRES_PASSWORD: eyot_dev_password
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: eyot-postgres-data
+  namespace: eyot
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eyot-postgres
+  namespace: eyot
+  labels:
+    app: eyot-postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: eyot-postgres
+  template:
+    metadata:
+      labels:
+        app: eyot-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16.4-alpine
+          imagePullPolicy: Never
+          envFrom:
+            - secretRef:
+                name: eyot-postgres-secret
+          ports:
+            - containerPort: 5432
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: eyot-postgres-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: eyot-postgres
+  namespace: eyot
+spec:
+  type: ClusterIP
+  selector:
+    app: eyot-postgres
+  ports:
+    - port: 5432
+      targetPort: 5432

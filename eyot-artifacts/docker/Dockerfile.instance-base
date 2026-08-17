@@ -1,0 +1,62 @@
+# syntax=docker/dockerfile:1.7
+# Eyot Instance Base image — Node Host + pinned pi CLI + subagent extension.
+#
+# Part of the v5.1 "1+5" instance image family (see .omo/plans/v5-1-definition.md N2):
+#   - eyot-instance-base:{engine-v}        <- this file (extension, agents dir EMPTY)
+#   - eyot-instance-{slug}:{engine-v}      <- Dockerfile.instance-ancestor (thin layer)
+#
+# Build from repo root:
+#   docker build -t eyot-instance-base:0.83.0 \
+#     -f eyot-artifacts/docker/Dockerfile.instance-base .
+#
+# Pod main process: eyot-instance-host (Tunnel WS client + pi --mode rpc).
+# pi loads the vendored subagent extension from ~/.pi/agent/extensions/subagent/
+# and user-level agents from ~/.pi/agent/agents/*.md (kept empty here; ancestor
+# images bake their enabled agents into that dir in a thin layer — G7).
+
+FROM node:24-bookworm-slim AS host-builder
+WORKDIR /build
+
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/*.sources 2>/dev/null || \
+    sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list
+
+COPY eyot-instance-host/package.json eyot-instance-host/package-lock.json* ./
+COPY eyot-instance-host/tsconfig.json ./
+COPY eyot-instance-host/src ./src
+
+RUN npm config set registry https://registry.npmmirror.com && \
+    npm install && \
+    npm run build && \
+    npm prune --omit=dev && \
+    test -x node_modules/.bin/pi || test -f node_modules/@earendil-works/pi-coding-agent/dist/cli.js
+
+FROM node:24-bookworm-slim
+WORKDIR /app
+
+# node:24-bookworm-slim runs as root; make HOME explicit (used by pi's ~/.pi).
+ENV HOME=/root
+
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/*.sources 2>/dev/null || \
+    sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list
+
+COPY --from=host-builder /build/dist ./dist
+COPY --from=host-builder /build/node_modules ./node_modules
+COPY --from=host-builder /build/package.json ./package.json
+
+# Vendored subagent extension (versioned with the repo, byte-identical to pi
+# 0.83.0 examples/extensions/subagent/): loaded from
+# ~/.pi/agent/extensions/subagent/index.ts. The agents dir is intentionally
+# EMPTY on base — custom slugs fall back to this image + ConfigMap (G9).
+COPY eyot-instance-host/subagents/extension/ ${HOME}/.pi/agent/extensions/subagent/
+RUN mkdir -p ${HOME}/.pi/agent/agents
+
+ENV EYOT_POD_MODE=true
+ENV EYOT_WORKSPACE_PATH=/data
+ENV EYOT_HOST_PORT=8080
+ENV NODE_ENV=production
+# Prefer package-local pi binary from @earendil-works/pi-coding-agent@0.83.0
+ENV PI_BIN=/app/node_modules/.bin/pi
+ENV PATH="/app/node_modules/.bin:${PATH}"
+
+EXPOSE 8080
+CMD ["node", "dist/main.js"]

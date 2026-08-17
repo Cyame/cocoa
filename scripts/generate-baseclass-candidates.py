@@ -105,7 +105,7 @@ def generate(key: str, prompt: str) -> str:
 
 def download(url: str, dest: Path) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
-    req = urllib.request.Request(url, headers={"User-Agent": "cocoa-asset-gen/2.0"})
+    req = urllib.request.Request(url, headers={"User-Agent": "eyot-asset-gen/2.0"})
     with urllib.request.urlopen(req, timeout=180) as resp:
         dest.write_bytes(resp.read())
 

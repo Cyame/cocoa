@@ -18,11 +18,11 @@
 
 set -euo pipefail
 
-NS="cocoa"
+NS="eyot"
 KUBECTL_TIMEOUT="${KUBECTL_TIMEOUT:-180}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-MANIFEST_DIR="$ROOT_DIR/cocoa-artifacts/k8s"
+MANIFEST_DIR="$ROOT_DIR/eyot-artifacts/k8s"
 MODE="deploy"
 
 log() { printf '\033[1;34m[deploy]\033[0m %s\n' "$*"; }
@@ -77,7 +77,7 @@ if [[ "$MODE" == "status" ]]; then
 fi
 
 if [[ "$MODE" == "logs" ]]; then
-  POD="$(kubectl get pod -l app=cocoa-backend -n "$NS" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
+  POD="$(kubectl get pod -l app=eyot-backend -n "$NS" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
   [[ -n "$POD" ]] || { err "No backend pod found in namespace $NS"; exit 1; }
   kubectl logs -n "$NS" "$POD" --tail=200 --since=1h
   exit 0
@@ -87,7 +87,7 @@ require_command docker
 
 # v5.1 N2/G10: engine-v comes from the pi package pin — same extraction as
 # scripts/build-instance-images.sh (single source of truth, never hardcode).
-PACKAGE_JSON="$ROOT_DIR/cocoa-instance-host/package.json"
+PACKAGE_JSON="$ROOT_DIR/eyot-instance-host/package.json"
 ENGINE_V="$(python3 -c '
 import json, sys
 with open(sys.argv[1]) as f:
@@ -101,21 +101,21 @@ log "engine-v = ${ENGINE_V} (pi package pin)"
 
 # v5.1 N2/G8: the 1+5 instance image family. Instance Deployment image refs are
 # resolved at runtime by the backend DeployService (_resolve_instance_image →
-# {registry}/cocoa-instance-{slug}:{engine-v}, registry env
-# COCOA_INSTANCE_REGISTRY default localhost:5000), so the deploy script only
+# {registry}/eyot-instance-{slug}:{engine-v}, registry env
+# EYOT_INSTANCE_REGISTRY default localhost:5000), so the deploy script only
 # preflights local presence of the six images. Keep the registry env in sync
 # with both build-instance-images.sh and deploy_service.py.
-REGISTRY="${COCOA_INSTANCE_REGISTRY:-localhost:5000}"
+REGISTRY="${EYOT_INSTANCE_REGISTRY:-localhost:5000}"
 INSTANCE_IMAGES=(
-  "$REGISTRY/cocoa-instance-base:${ENGINE_V}"
-  "$REGISTRY/cocoa-instance-fox:${ENGINE_V}"
-  "$REGISTRY/cocoa-instance-beaver:${ENGINE_V}"
-  "$REGISTRY/cocoa-instance-sparrow:${ENGINE_V}"
-  "$REGISTRY/cocoa-instance-coyote:${ENGINE_V}"
-  "$REGISTRY/cocoa-instance-lion:${ENGINE_V}"
+  "$REGISTRY/eyot-instance-base:${ENGINE_V}"
+  "$REGISTRY/eyot-instance-fox:${ENGINE_V}"
+  "$REGISTRY/eyot-instance-beaver:${ENGINE_V}"
+  "$REGISTRY/eyot-instance-sparrow:${ENGINE_V}"
+  "$REGISTRY/eyot-instance-coyote:${ENGINE_V}"
+  "$REGISTRY/eyot-instance-lion:${ENGINE_V}"
 )
 MISSING=()
-for image in cocoa-backend:latest "${INSTANCE_IMAGES[@]}" cocoa-portal:latest; do
+for image in eyot-backend:latest "${INSTANCE_IMAGES[@]}" eyot-portal:latest; do
   if ! docker images --format '{{.Repository}}:{{.Tag}}' | grep -qx "$image"; then
     MISSING+=("$image")
   fi
@@ -123,7 +123,7 @@ done
 if (( ${#MISSING[@]} > 0 )); then
   err "Missing Docker images: ${MISSING[*]}"
   err "Build them locally before deploying, for example:"
-  err "  docker build -t cocoa-backend:latest ..."
+  err "  docker build -t eyot-backend:latest ..."
   err "  ./scripts/build-instance-images.sh --push   # 1+5 family (base + 5 ancestors)"
   exit 2
 fi
@@ -137,21 +137,21 @@ kubectl apply -f "$MANIFEST_DIR/postgresql-deployment.yaml"
 
 POSTGRES_USER="${POSTGRES_USER:-postgres}"
 POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-devpassword}"
-POSTGRES_DB="${POSTGRES_DB:-cocoa_dev}"
-DATABASE_URL="${DATABASE_URL:-postgresql+asyncpg://postgres:devpassword@cocoa-postgres:5432/cocoa_dev}"
+POSTGRES_DB="${POSTGRES_DB:-eyot_dev}"
+DATABASE_URL="${DATABASE_URL:-postgresql+asyncpg://postgres:devpassword@eyot-postgres:5432/eyot_dev}"
 JWT_SECRET="${JWT_SECRET:-dev-secret-not-for-production-32-chars-min-OK}"
 ENCRYPTION_KEY="${ENCRYPTION_KEY:-dev-encrypt-key-32-bytes-long-AAA}"
-COCOA_K8S_DISABLED="${COCOA_K8S_DISABLED:-false}"
+EYOT_K8S_DISABLED="${EYOT_K8S_DISABLED:-false}"
 # v5.1 G8: registry images may be updated in place, so instance pods must
 # always re-pull (Never was the old shared-daemon assumption).
-COCOA_INSTANCE_IMAGE_PULL_POLICY="${COCOA_INSTANCE_IMAGE_PULL_POLICY:-Always}"
+EYOT_INSTANCE_IMAGE_PULL_POLICY="${EYOT_INSTANCE_IMAGE_PULL_POLICY:-Always}"
 # Stable internal token for instance pods ↔ backend /api/v1/internal/*.
 # Reuse the live secret value when present so redeploys do not rotate it.
 EXISTING_API_TOKEN="$(
-  kubectl get secret cocoa-backend-secrets -n "$NS" \
-    -o jsonpath='{.data.COCOA_API_TOKEN}' 2>/dev/null | base64 -d 2>/dev/null || true
+  kubectl get secret eyot-backend-secrets -n "$NS" \
+    -o jsonpath='{.data.EYOT_API_TOKEN}' 2>/dev/null | base64 -d 2>/dev/null || true
 )"
-COCOA_API_TOKEN="${COCOA_API_TOKEN:-${EXISTING_API_TOKEN:-$(openssl rand -base64 32)}}"
+EYOT_API_TOKEN="${EYOT_API_TOKEN:-${EXISTING_API_TOKEN:-$(openssl rand -base64 32)}}"
 
 apply_secret() {
   local name="$1"; shift
@@ -161,17 +161,17 @@ apply_secret() {
 }
 
 log "Ensuring deployment Secrets"
-apply_secret cocoa-postgres-secret \
+apply_secret eyot-postgres-secret \
   --from-literal=POSTGRES_USER="$POSTGRES_USER" \
   --from-literal=POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
   --from-literal=POSTGRES_DB="$POSTGRES_DB"
 
 log "Waiting for PostgreSQL"
-kubectl wait --for=condition=ready pod -l app=cocoa-postgres -n "$NS" --timeout="${KUBECTL_TIMEOUT}s" || {
+kubectl wait --for=condition=ready pod -l app=eyot-postgres -n "$NS" --timeout="${KUBECTL_TIMEOUT}s" || {
   err "PostgreSQL pod was not Ready within ${KUBECTL_TIMEOUT}s"; exit 3;
 }
 
-POSTGRES_POD="$(kubectl get pod -l app=cocoa-postgres -n "$NS" -o jsonpath='{.items[0].metadata.name}')"
+POSTGRES_POD="$(kubectl get pod -l app=eyot-postgres -n "$NS" -o jsonpath='{.items[0].metadata.name}')"
 # The manifest's PVC may already be initialized with another database name.
 # Create the configured database if it is absent; this is safe to repeat.
 # NB: capture the full psql output first (no pipe into grep -q), because
@@ -184,13 +184,13 @@ if [[ "$DB_PRESENT" != "1" ]]; then
   kubectl exec -n "$NS" "$POSTGRES_POD" -- createdb -U "$POSTGRES_USER" "$POSTGRES_DB"
 fi
 
-apply_secret cocoa-backend-secrets \
+apply_secret eyot-backend-secrets \
   --from-literal=DATABASE_URL="$DATABASE_URL" \
   --from-literal=JWT_SECRET="$JWT_SECRET" \
   --from-literal=ENCRYPTION_KEY="$ENCRYPTION_KEY" \
-  --from-literal=COCOA_K8S_DISABLED="$COCOA_K8S_DISABLED" \
-  --from-literal=COCOA_INSTANCE_IMAGE_PULL_POLICY="$COCOA_INSTANCE_IMAGE_PULL_POLICY" \
-  --from-literal=COCOA_API_TOKEN="$COCOA_API_TOKEN"
+  --from-literal=EYOT_K8S_DISABLED="$EYOT_K8S_DISABLED" \
+  --from-literal=EYOT_INSTANCE_IMAGE_PULL_POLICY="$EYOT_INSTANCE_IMAGE_PULL_POLICY" \
+  --from-literal=EYOT_API_TOKEN="$EYOT_API_TOKEN"
 
 log "Applying backend RBAC + backend and portal manifests"
 kubectl apply -f "$MANIFEST_DIR/backend-rbac.yaml"
@@ -201,15 +201,15 @@ kubectl apply -f "$MANIFEST_DIR/portal-deployment.yaml"
 # pod when the image was rebuilt with the same tag. Force a rollout so alembic
 # and the smoke check always run against the NEW code, never the stale pod.
 log "Forcing rollout of rebuilt image (fixed latest tag)"
-kubectl rollout restart deployment/cocoa-backend -n "$NS"
-kubectl rollout restart deployment/cocoa-portal -n "$NS"
+kubectl rollout restart deployment/eyot-backend -n "$NS"
+kubectl rollout restart deployment/eyot-portal -n "$NS"
 
 log "Waiting for backend rollout (timeout ${KUBECTL_TIMEOUT}s)"
-kubectl rollout status deployment/cocoa-backend -n "$NS" --timeout="${KUBECTL_TIMEOUT}s" || {
+kubectl rollout status deployment/eyot-backend -n "$NS" --timeout="${KUBECTL_TIMEOUT}s" || {
   err "Backend pod was not Ready within ${KUBECTL_TIMEOUT}s"; exit 3;
 }
 log "Waiting for portal rollout (timeout ${KUBECTL_TIMEOUT}s)"
-kubectl rollout status deployment/cocoa-portal -n "$NS" --timeout="${KUBECTL_TIMEOUT}s" || {
+kubectl rollout status deployment/eyot-portal -n "$NS" --timeout="${KUBECTL_TIMEOUT}s" || {
   err "Portal pod was not Ready within ${KUBECTL_TIMEOUT}s"; exit 3;
 }
 
@@ -221,7 +221,7 @@ log "Running alembic upgrade head"
 # the newest Running pod instead (v5.2.1 T10 hit: alembic no-op'd on the old
 # pod and the /health smoke check then died with exit 137 as the old pod
 # was reaped mid-exec).
-BACKEND_POD="$(kubectl get pod -l app=cocoa-backend -n "$NS" --field-selector=status.phase=Running \
+BACKEND_POD="$(kubectl get pod -l app=eyot-backend -n "$NS" --field-selector=status.phase=Running \
   --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[-1:].metadata.name}')"
 ALEMBIC_OK=0
 for attempt in 1 2 3; do
@@ -232,7 +232,7 @@ for attempt in 1 2 3; do
   err "Alembic migration failed (attempt $attempt/3); retrying in 5s"
   sleep 5
   # The pod may have been replaced mid-retry; re-resolve the current name.
-  BACKEND_POD="$(kubectl get pod -l app=cocoa-backend -n "$NS" --field-selector=status.phase=Running \
+  BACKEND_POD="$(kubectl get pod -l app=eyot-backend -n "$NS" --field-selector=status.phase=Running \
     --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[-1:].metadata.name}')"
 done
 if (( ALEMBIC_OK != 1 )); then

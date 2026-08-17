@@ -150,7 +150,7 @@ Topology is the flagship: SVG nodes + glow(`loop_status`) + Select/Connect/Move 
 | Layer | Mechanism | Status vs PRD-v2 |
 |---|---|---|
 | Harness | Supervisor + 4 breakers + control commands | Done (P8); keep (Workspace layer) |
-| Instance driver | **pi via Host RPC + Tunnel WS** | Done (PRD-v3.5): `cocoa-instance-host` + `WS /api/v1/tunnel/connect`; stub fallback when offline |
+| Instance driver | **pi via Host RPC + Tunnel WS** | Done (PRD-v3.5): `eyot-instance-host` + `WS /api/v1/tunnel/connect`; stub fallback when offline |
 | Deploy | 9-step K8s pipeline + DeployRecord + SSE | Done (P11–P15a); keep |
 | LLM | 4 providers + ModelCatalog + LLMDistiller | Done (P14a); keep |
 | Messaging | Passage-gated near-neighbor + 4 command families | Done (P5/P8/P10); rename Corridor→Passage pending |
@@ -228,7 +228,7 @@ These are the structural deltas the next wave must close (not polish):
 
 ### 3.3 Live test environment
 
-Orbstack namespace `cocoa` is the **persistent human inspection environment**. See `.omo/evidence/orbstack-operations.md` + `.omo/evidence/cocoa-deployment-state.md`. Every implementation wave that changes backend/portal/deploy **must** end with `scripts/deploy-to-orbstack.sh` (§6).
+Orbstack namespace `eyot` is the **persistent human inspection environment**. See `.omo/evidence/orbstack-operations.md` + `.omo/evidence/eyot-deployment-state.md`. Every implementation wave that changes backend/portal/deploy **must** end with `scripts/deploy-to-orbstack.sh` (§6).
 
 ---
 
@@ -251,13 +251,13 @@ Entity overlays serialize toward **pi AgentConfig** (schema family shared with o
 
 ```
 orbstack K8s
-  namespace cocoa
-    cocoa-backend  : API + harness + deploy controller
-    cocoa-portal   : React operator UI
-    cocoa-postgres : tenant DB for the live env
+  namespace eyot
+    eyot-backend  : API + harness + deploy controller
+    eyot-portal   : React operator UI
+    eyot-postgres : tenant DB for the live env
 ```
 
-Local pytest continues to use `cocoa_test_*` clones on `local-pgvector` — never `cocoa_dev` on that shared instance.
+Local pytest continues to use `eyot_test_*` clones on `local-pgvector` — never `eyot_dev` on that shared instance.
 
 ---
 
@@ -265,7 +265,7 @@ Local pytest continues to use `cocoa_test_*` clones on `local-pgvector` — neve
 
 ### 5.1 Completed (archive only)
 
-Full history: `.omo/plans/archive/` + `.omo/plans/archive/cocoa-v2-roadmap.md` (pre-PRD era status table) + `.omo/plans/archive/phase-15-foundation-roadmap.md` (P15 foundation notes).
+Full history: `.omo/plans/archive/` + `.omo/plans/archive/eyot-v2-roadmap.md` (pre-PRD era status table) + `.omo/plans/archive/phase-15-foundation-roadmap.md` (P15 foundation notes).
 
 | Milestone | Outcome |
 |---|---|
@@ -325,10 +325,10 @@ Priority among remaining 3.5.x slices is **re-decided from orbstack human QA**, 
 1. Commit on the feature branch → merge to `main` (fast-forward when possible).
 2. Run `bash scripts/deploy-to-orbstack.sh` (idempotent).
 3. Verify pods Ready; smoke via curl + browser on the live cluster.
-4. Leave the `cocoa` namespace running for human inspection.
+4. Leave the `eyot` namespace running for human inspection.
 5. Record evidence under `.omo/evidence/` when material.
 
-**Forbidden**: ship "code done" without orbstack update; fix live DB with ad-hoc SQL; delete namespace `cocoa`.
+**Forbidden**: ship "code done" without orbstack update; fix live DB with ad-hoc SQL; delete namespace `eyot`.
 
 Full ops: AGENTS.md "Eyot Deployment Operations Rules" + "Persistent Fix Policy"; `.omo/evidence/orbstack-operations.md`.
 
@@ -338,7 +338,7 @@ Full ops: AGENTS.md "Eyot Deployment Operations Rules" + "Persistent Fix Policy"
 - Alembic autogenerate for schema; never hand-written fake revision IDs.
 - No emoji in product/UI/docs/commits without explicit user permission; icons via `lucide-react`.
 - i18n for user-visible strings (`zh-CN` / `en`).
-- pytest never touches shared `cocoa_dev` on `local-pgvector`.
+- pytest never touches shared `eyot_dev` on `local-pgvector`.
 - Persistent Fix Policy: fixes are code → commit → image → rollout — not monkey-patches.
 
 ### 6.3 Branch workflow
@@ -398,7 +398,7 @@ Recorded so future planners do not lose intent:
 | 2026-07-28 | P15 renamed foundation wave; multi-tenant deferred out of P15; Persistent Fix + orbstack rules locked in AGENTS.md |
 | 2026-07-28 | P15d naming + 36 decisions approved; `docs/` becomes product SoT |
 | 2026-07-29 | PRD-v1 implemented (P15f); PRD-v2 written (multi-tenant + agent stack) |
-| 2026-07-29 | **Roadmap canonicalized to `docs/roadmap.md`**; archive `.omo/plans/cocoa-v2-roadmap.md` + `phase-15-foundation-roadmap.md`; next engineering wave = PRD-v2 implementation after Plan-mode plan |
+| 2026-07-29 | **Roadmap canonicalized to `docs/roadmap.md`**; archive `.omo/plans/eyot-v2-roadmap.md` + `phase-15-foundation-roadmap.md`; next engineering wave = PRD-v2 implementation after Plan-mode plan |
 | 2026-07-29 | Reaffirm: every completed development wave deploys to orbstack for human test |
 | 2026-07-29 | PRD-v2 修订：Namespace = **场景分区**（非 env）；Vault = DB KV（MinIO/S3 远期）；ER 补全 **CerebellumAgent 中央智能体 1:1** |
 | 2026-07-29 | **PRD-v2 implementation Done** — hard-cut tenant/genes/portal; plan at `.omo/plans/prd-v2-implementation.md` |

@@ -6,8 +6,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-BACKEND_DIR="$SCRIPT_DIR/cocoa-backend"
-PORTAL_DIR="$SCRIPT_DIR/cocoa-portal"
+BACKEND_DIR="$SCRIPT_DIR/eyot-backend"
+PORTAL_DIR="$SCRIPT_DIR/eyot-portal"
 LOG_DIR="$SCRIPT_DIR/logs"
 
 BACKEND_PORT=4510

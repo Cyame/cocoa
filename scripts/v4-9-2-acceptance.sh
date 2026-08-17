@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # v4.9.2 Wave 用户验收一键脚本（orbstack）
 # 用法: bash scripts/v4-9-2-acceptance.sh
-# 前置: kubectl context = orbstack; cocoa namespace 3 pods Ready
+# 前置: kubectl context = orbstack; eyot namespace 3 pods Ready
 # v4.9.2 = 基因/能力创建补全 + 基因多选能力（全走 manifest + 运行时展开去重）
 set -euo pipefail
 
@@ -19,10 +19,10 @@ echo "context: $CTX"
 [ "$CTX" = "orbstack" ] || { echo "FAIL: 非 orbstack, 中止"; exit 1; }
 
 echo "== 2. pods 状态（应 3 pods Ready）=="
-kubectl get pods -n cocoa
+kubectl get pods -n eyot
 
 echo "== 3. 后端 health =="
-kubectl port-forward -n cocoa svc/cocoa-backend 4510:4510 >/dev/null 2>&1 &
+kubectl port-forward -n eyot svc/eyot-backend 4510:4510 >/dev/null 2>&1 &
 PF_PIDS+=($!)
 sleep 2
 HTTP=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:4510/health || true)
@@ -41,7 +41,7 @@ echo "bundle 内版本: $VERSION"
 echo "（若上方无输出或为空, 请浏览器打开 http://localhost:30173/ 看侧栏页脚应显示 v4.9.2）"
 
 echo "== 5. alembic head（应显示 head, 提示无新迁移）=="
-kubectl exec -n cocoa deploy/cocoa-backend -- alembic current 2>/dev/null | tail -1
+kubectl exec -n eyot deploy/eyot-backend -- alembic current 2>/dev/null | tail -1
 echo "   （v4.9.2 无 schema 变更: 无新迁移, head 即当前线上版本）"
 
 echo

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Build the v5.1 "1+5" instance image family (see .omo/plans/v5-1-definition.md N2):
-#   cocoa-instance-base:{engine-v}                 Node host + pi + subagent extension
-#   cocoa-instance-{slug}:{engine-v}  (5 始祖)      thin layer: enabled agents baked
+#   eyot-instance-base:{engine-v}                 Node host + pi + subagent extension
+#   eyot-instance-{slug}:{engine-v}  (5 始祖)      thin layer: enabled agents baked
 #
 # Single sources of truth:
-#   - engine-v: cocoa-instance-host/package.json pin of @earendil-works/pi-coding-agent
-#   - enabled agent set per slug: cocoa-backend/app/core/builtin_presets.py
+#   - engine-v: eyot-instance-host/package.json pin of @earendil-works/pi-coding-agent
+#   - enabled agent set per slug: eyot-backend/app/core/builtin_presets.py
 #     (manifest.subagent_strategy.enabled) — no hardcoded copy here.
 #
 # USAGE:
@@ -13,7 +13,7 @@
 #   ./scripts/build-instance-images.sh --push   # build + push + registry check
 #
 # ENV:
-#   COCOA_INSTANCE_REGISTRY   registry prefix (default localhost:5000)
+#   EYOT_INSTANCE_REGISTRY   registry prefix (default localhost:5000)
 #
 # Idempotent: always rebuilds + (with --push) overwrites existing tags.
 
@@ -21,12 +21,12 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-AGENTS_SRC="$ROOT_DIR/cocoa-instance-host/subagents/agents"
-PRESETS_PY="$ROOT_DIR/cocoa-backend/app/core/builtin_presets.py"
-PACKAGE_JSON="$ROOT_DIR/cocoa-instance-host/package.json"
-DOCKER_DIR="$ROOT_DIR/cocoa-artifacts/docker"
+AGENTS_SRC="$ROOT_DIR/eyot-instance-host/subagents/agents"
+PRESETS_PY="$ROOT_DIR/eyot-backend/app/core/builtin_presets.py"
+PACKAGE_JSON="$ROOT_DIR/eyot-instance-host/package.json"
+DOCKER_DIR="$ROOT_DIR/eyot-artifacts/docker"
 
-REGISTRY="${COCOA_INSTANCE_REGISTRY:-localhost:5000}"
+REGISTRY="${EYOT_INSTANCE_REGISTRY:-localhost:5000}"
 MODE="build"
 
 log() { printf '[build-instance-images] %s\n' "$*"; }
@@ -65,7 +65,7 @@ log "engine-v = ${ENGINE_V} (pi package pin)"
 # subagent_strategy). Fails loudly if T2-style manifest blocks are missing.
 SNAPSHOT="$(cd "$ROOT_DIR" && python3 -c '
 import os, sys
-sys.path.insert(0, os.path.join(os.getcwd(), "cocoa-backend"))
+sys.path.insert(0, os.path.join(os.getcwd(), "eyot-backend"))
 from app.core.builtin_presets import BUILTIN_PRESETS
 rows = []
 for p in BUILTIN_PRESETS:
@@ -100,19 +100,19 @@ for enabled in "${ENABLED_SETS[@]}"; do
 done
 
 # --- build ------------------------------------------------------------------
-BASE_IMAGE="${REGISTRY}/cocoa-instance-base:${ENGINE_V}"
+BASE_IMAGE="${REGISTRY}/eyot-instance-base:${ENGINE_V}"
 log "build ${BASE_IMAGE}"
 docker build -f "$DOCKER_DIR/Dockerfile.instance-base" -t "$BASE_IMAGE" "$ROOT_DIR"
 
-# Local alias so BuildKit resolves `FROM cocoa-instance-base:{engine-v}` in
+# Local alias so BuildKit resolves `FROM eyot-instance-base:{engine-v}` in
 # Dockerfile.instance-ancestor against the local store (no registry needed).
-docker tag "$BASE_IMAGE" "cocoa-instance-base:${ENGINE_V}"
+docker tag "$BASE_IMAGE" "eyot-instance-base:${ENGINE_V}"
 
 ANCESTOR_IMAGES=()
 for i in "${!SLUGS[@]}"; do
   slug="${SLUGS[$i]}"
   enabled="${ENABLED_SETS[$i]}"
-  image="${REGISTRY}/cocoa-instance-${slug}:${ENGINE_V}"
+  image="${REGISTRY}/eyot-instance-${slug}:${ENGINE_V}"
   ANCESTOR_IMAGES+=("$image")
   log "build ${image} (enabled: ${enabled})"
   docker build -f "$DOCKER_DIR/Dockerfile.instance-ancestor" \
@@ -165,7 +165,7 @@ if [[ "$MODE" == "push" ]]; then
   done
   if [[ "$reachable" -ne 1 ]]; then
     err "registry ${REGISTRY} not reachable at /v2/; start it first, e.g.:"
-    err "  docker run -d -p 5000:5000 --name cocoa-registry registry:2"
+    err "  docker run -d -p 5000:5000 --name eyot-registry registry:2"
     exit 1
   fi
   log "registry ${REGISTRY} reachable"

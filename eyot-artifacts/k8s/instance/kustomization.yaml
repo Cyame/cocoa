@@ -1,0 +1,21 @@
+# Eyot Instance Kustomization
+#
+# Aggregates all per-instance Kubernetes resources.
+# Template variables (e.g. {instance_id}) must be substituted
+# before applying — run through a deploy script or sed first.
+#
+# Apply (after substitution):
+#   kubectl apply -k eyot-artifacts/k8s/instance/
+#
+# Delete:
+#   kubectl delete -k eyot-artifacts/k8s/instance/
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- deployment.yaml
+- configmap.yaml
+- pvc.yaml
+- service.yaml
+- networkpolicy.yaml
+commonLabels:
+  app: eyot-instance

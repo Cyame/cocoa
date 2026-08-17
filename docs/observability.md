@@ -6,7 +6,7 @@
 > **Code rename pending (15d-rename wave)**: This doc describes target architecture (15d+). Current code uses old naming.
 
 > P3.5 落地的日志、事件审计、任务队列权威参考。与 `docs/api-architecture.md`（P3 API 约定）构成姊妹文档。
-> 代码位置：`cocoa-backend/app/core/` —— 日志 `logging.py`、事件 `events.py` / `event_types.py`、队列 `queue.py`、中间件 `middleware/logging.py`、模型 `models/event.py`。
+> 代码位置：`eyot-backend/app/core/` —— 日志 `logging.py`、事件 `events.py` / `event_types.py`、队列 `queue.py`、中间件 `middleware/logging.py`、模型 `models/event.py`。
 
 ## 1. 日志约定
 

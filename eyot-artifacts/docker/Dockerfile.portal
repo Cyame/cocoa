@@ -1,0 +1,76 @@
+# syntax=docker/dockerfile:1.7
+# Eyot Portal Static Image — built with npmmirror (China) + served by nginx:alpine.
+#
+# Multi-stage build: an `oven/bun:1.2` builder runs `bun install --frozen-lockfile`
+# and `bun run build` to produce the React SPA, then nginx:alpine serves the
+# resulting `dist/` directory on port 5173 with SPA fallback to /index.html.
+#
+# Build context must be the repository root so `eyot-portal/...` paths resolve.
+# Build: docker build -t eyot-portal:latest -f eyot-artifacts/docker/Dockerfile.portal .
+# Pinned base images — fix for "bun not in node base image" (pre-14b):
+#   Builder: oven/bun:1.2 (has bun pre-installed; matches Eyot portal's bun 1.x lockfile)
+#   Runtime: nginx:1.27.4-alpine
+# Pull commands:
+#   docker pull oven/bun:1.2
+#   docker pull nginx:1.27.4-alpine
+FROM oven/bun:1.2 AS builder
+WORKDIR /build
+
+# npmmirror (China) for bun. oven/bun reads .npmrc / bunfig.toml; bun 1.2 has
+# no `bun config` CLI subcommand, so we drop a bunfig.toml into /build.
+RUN printf '[install]\nregistry = "https://registry.npmmirror.com"\n' > /build/bunfig.toml
+
+# Install dependencies first to maximise layer caching.
+COPY eyot-portal/package.json eyot-portal/bun.lock* ./
+RUN bun install --frozen-lockfile
+
+# Copy the rest of the portal and build.
+COPY eyot-portal ./
+RUN bun run build
+
+# Pinned runtime base image (nginx 1.27 LTS).
+# Pull: docker pull nginx:1.27.4-alpine
+FROM nginx:1.27.4-alpine
+WORKDIR /usr/share/nginx/html
+
+# Replace the default nginx site with a minimal SPA + healthz + backend proxy
+# config on port 5173. The /api/ location proxies to the eyot-backend service
+# in the same K8s namespace so the SPA can use same-origin fetch without CORS.
+RUN cat > /etc/nginx/conf.d/default.conf <<'EOF'
+server {
+    listen 5173;
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Static assets: try file, fall back to index.html (SPA).
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Backend API reverse proxy. Backend runs on port 4510 in-cluster.
+    location /api/ {
+        proxy_pass http://eyot-backend:4510;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        # SSE support for future P14b composer streaming.
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_set_header Connection '';
+        proxy_http_version 1.1;
+    }
+
+    location = /healthz {
+        default_type text/plain;
+        return 200 "ok";
+    }
+}
+EOF
+
+# Serve the built SPA.
+COPY --from=builder /build/dist ./
+
+EXPOSE 5173
+CMD ["nginx", "-g", "daemon off;"]
