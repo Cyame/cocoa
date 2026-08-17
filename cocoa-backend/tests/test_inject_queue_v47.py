@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from sqlalchemy import select
 
-from app.core.errors import CocoaError
+from app.core.errors import EyotError
 from app.core.event_types import (
     HARNESS_INJECT_APPLIED,
     HARNESS_INJECT_FAILED,
@@ -441,12 +441,12 @@ def test_prose_length_deterministic() -> None:
 
 def test_tldr_too_long_rejected_by_schema() -> None:
     """tldr > 200 chars fails with the tldr_too_long message_key."""
-    with pytest.raises(CocoaError) as exc_info:
+    with pytest.raises(EyotError) as exc_info:
         InjectEnqueueRequest(kind="collab_inject", delivery_mode="notify", tldr="x" * 201)
     assert exc_info.value.message_key == "errors.internal.tldr_too_long"
     assert exc_info.value.status_code == 400
 
-    with pytest.raises(CocoaError) as exc_info:
+    with pytest.raises(EyotError) as exc_info:
         ReportRequest(outcome="ok", tldr="x" * 201)
     assert exc_info.value.message_key == "errors.internal.tldr_too_long"
 
@@ -463,7 +463,7 @@ async def test_prose_over_240_requires_tldr_at_enqueue(session, instance_factory
     inst = await instance_factory()
     big = {"body": "x" * 241}
 
-    with pytest.raises(CocoaError) as exc_info:
+    with pytest.raises(EyotError) as exc_info:
         await enqueue_inject(
             session, instance_id=inst.id, kind="collab_inject", delivery_mode="notify", payload=big
         )
@@ -493,7 +493,7 @@ async def test_prose_under_240_accepts_missing_tldr(session, instance_factory) -
 
 def test_report_prose_requires_tldr() -> None:
     """ReportRequest with > 240 chars of changes/validation/blockers needs tldr."""
-    with pytest.raises(CocoaError) as exc_info:
+    with pytest.raises(EyotError) as exc_info:
         ReportRequest(outcome="ok", changes=["x" * 241])
     assert exc_info.value.message_key == "errors.internal.tldr_required"
 
@@ -501,7 +501,7 @@ def test_report_prose_requires_tldr() -> None:
     assert ok.tldr == "tl"
 
     # Text and body fields also count toward the prose budget via payload.
-    with pytest.raises(CocoaError) as exc_info:
+    with pytest.raises(EyotError) as exc_info:
         InjectEnqueueRequest(
             kind="collab_inject",
             delivery_mode="notify",

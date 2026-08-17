@@ -1,4 +1,4 @@
-"""FastAPI application entry point for the Cocoa backend."""
+"""FastAPI application entry point for the Eyot backend."""
 
 import asyncio
 import json
@@ -21,7 +21,7 @@ from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.db import get_session_factory
 from app.core.errors import (
-    CocoaError,
+    EyotError,
     ConflictError,  # noqa: F401
     ForbiddenError,  # noqa: F401
     InternalError,  # noqa: F401
@@ -189,7 +189,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Cocoa API",
+    title="Eyot API",
     description="Multi-agent control studio API",
     version="1.0.0",
     docs_url="/docs",
@@ -211,9 +211,9 @@ app = FastAPI(
 )
 
 
-@app.exception_handler(CocoaError)
-async def cocoa_error_handler(request: Request, exc: CocoaError) -> JSONResponse:
-    """Serialize CocoaError subclasses into the standard error envelope."""
+@app.exception_handler(EyotError)
+async def cocoa_error_handler(request: Request, exc: EyotError) -> JSONResponse:
+    """Serialize EyotError subclasses into the standard error envelope."""
     response = error_response(exc)
     content = json.loads(response.body)
     content["request_id"] = getattr(request.state, "request_id", None)

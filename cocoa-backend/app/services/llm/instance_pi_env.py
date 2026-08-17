@@ -18,7 +18,7 @@ from app.services.llm.org_provider import resolve_api_key
 
 logger = logging.getLogger(__name__)
 
-# Map Cocoa / models.dev provider ids → pi env API key names
+# Map Eyot / models.dev provider ids → pi env API key names
 # (see @earendil-works/pi-coding-agent docs/providers.md).
 _PROVIDER_ENV_KEYS: dict[str, str] = {
     "anthropic": "ANTHROPIC_API_KEY",

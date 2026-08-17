@@ -22,7 +22,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import DB, CurrentUserDep
 from app.core.errors import (
-    CocoaError,
+    EyotError,
     ConflictError,
     ForbiddenError,
     NotFoundError,
@@ -1594,7 +1594,7 @@ async def _contract_slugs(db: DB, contract_id: str) -> set[str]:
 
 def _raise_cannot_lock_self() -> NoReturn:
     """H5 防自锁 — 400 errors.org.cannot_lock_self (locked pair)."""
-    raise CocoaError(
+    raise EyotError(
         "errors.org.cannot_lock_self",
         "organization.cannot_lock_self",
         "Cannot strip your own last can_manage_org_members grant",

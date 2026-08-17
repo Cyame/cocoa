@@ -1,4 +1,4 @@
-# Cocoa Instance PersistentVolumeClaim
+# Eyot Instance PersistentVolumeClaim
 #
 # Template variables:
 #   {instance_id}  — unique Instance UUID

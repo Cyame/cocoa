@@ -14,7 +14,7 @@ Covers:
   for > 240 chars of prose) and ``harness.report_received`` event emission.
 
 Mounts the internal router on a bare FastAPI app (phase11c convention) with
-the production error handlers so CocoaError (e.g. V47-10) serializes to the
+the production error handlers so EyotError (e.g. V47-10) serializes to the
 standard envelope instead of a bare 500.
 """
 
@@ -34,7 +34,7 @@ import app.core.db as db_mod
 from app.api.deps import get_db
 from app.api.v1.internal import router as internal_router
 from app.core.db import get_session_factory
-from app.core.errors import CocoaError
+from app.core.errors import EyotError
 from app.core.event_types import (
     FORNIX_FILE_WRITTEN,
     HARNESS_REPORT_RECEIVED,
@@ -56,7 +56,7 @@ def internal_client(db_url: str, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     """Minimal TestClient mounting only the internal router.
 
     Same pattern as test_phase11c_internal_endpoints.py, plus the production
-    CocoaError / validation handlers so domain errors (V47-10 tldr rules,
+    EyotError / validation handlers so domain errors (V47-10 tldr rules,
     path traversal) come back in the standard error envelope.
     """
     monkeypatch.setattr("app.core.config.settings.DATABASE_URL", db_url)
@@ -69,7 +69,7 @@ def internal_client(db_url: str, monkeypatch: pytest.MonkeyPatch) -> TestClient:
             yield s
 
     app = FastAPI()
-    app.add_exception_handler(CocoaError, cocoa_error_handler)
+    app.add_exception_handler(EyotError, cocoa_error_handler)
     app.add_exception_handler(
         RequestValidationError, validation_exception_handler
     )

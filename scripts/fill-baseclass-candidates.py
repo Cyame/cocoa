@@ -97,7 +97,7 @@ def main() -> None:
             if dest.exists() and dest.stat().st_size > 1000:
                 continue
             prompt = (
-                f"Square avatar portrait of Cocoa BaseClass '{name}' ({slug}), variant {i}. "
+                f"Square avatar portrait of Eyot BaseClass '{name}' ({slug}), variant {i}. "
                 f"{motif}. {BASE}"
             )
             jobs.append((dest, prompt))

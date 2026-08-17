@@ -18,9 +18,9 @@ logger = logging.getLogger(__name__)
 class K8sClient(K8sClientWatchMixin):
     """Wraps kubernetes-asyncio APIs for a single cluster.
 
-    Exposes the five sub-clients Cocoa uses today (core / apps /
+    Exposes the five sub-clients Eyot uses today (core / apps /
     networking / version / custom) plus convenience methods for the
-    common operations Cocoa needs (deployment scale, restart, env;
+    common operations Eyot needs (deployment scale, restart, env;
     pod listing; namespace ensure; service/ingress/PVC reads).
     Watch + streaming APIs are inherited from
     :class:`K8sClientWatchMixin`.

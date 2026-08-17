@@ -1,4 +1,4 @@
-# Cocoa Metaphor Name Table (v5 山海+生物世界观)
+# Eyot Metaphor Name Table (v5 山海+生物世界观)
 
 > **Canonical source**: v5 命名基线（2026-08-07 终稿）。决策 SoT：`.omo/evidence/v5-rename-decisions.md`。
 > **Prior**: 15d（克苏鲁）命名快照归档于 `docs/archive/metaphor-name-table-15d.md`（只读）。
@@ -6,7 +6,7 @@
 
 ## Preamble
 
-Cocoa uses a **two-axis naming system**: backend uses strict technical English, frontend uses 山海+生物（自然地理/动物）世界观 Chinese terms. This table is the single source of truth mapping every concept from code-term → frontend display-name.
+Eyot uses a **two-axis naming system**: backend uses strict technical English, frontend uses 山海+生物（自然地理/动物）世界观 Chinese terms. This table is the single source of truth mapping every concept from code-term → frontend display-name.
 
 Database columns use the backend names. UI labels use the frontend names. Backend code internally uses backend names. DB does NOT store display_name columns — the UI layer resolves display via i18n JSON keys.
 

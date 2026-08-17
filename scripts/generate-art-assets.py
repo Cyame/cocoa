@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate Cocoa art assets via MiniMax image_generation API.
+"""Generate Eyot art assets via MiniMax image_generation API.
 
 Requires env MINIMAX_API_KEY. Does not write the key anywhere.
 Downloads JPEG URLs into assets/ under the repo root.
@@ -166,13 +166,13 @@ def build_jobs() -> list[tuple[Path, str, str]]:
     jobs: list[tuple[Path, str, str]] = []
     for slug, name, motif in BASE_CLASSES:
         prompt = (
-            f"Square portrait emblem of Cocoa BaseClass '{name}' ({slug}): {motif}. "
+            f"Square portrait emblem of Eyot BaseClass '{name}' ({slug}): {motif}. "
             f"Half-body character centered, iconic and memorable. {STYLE}"
         )
         jobs.append((ROOT / "base-classes" / f"{slug}.jpg", prompt, "1:1"))
         # secondary pose / alt for later UI
         alt = (
-            f"Alternate square icon bust for Cocoa BaseClass '{name}': {motif}, "
+            f"Alternate square icon bust for Eyot BaseClass '{name}': {motif}, "
             f"more emblematic and simpler silhouette, still recognizable. {STYLE}"
         )
         jobs.append((ROOT / "base-classes" / f"{slug}-alt.jpg", alt, "1:1"))

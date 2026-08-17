@@ -1,4 +1,4 @@
-"""ResourceBuilder: programmatic K8s manifest construction for Cocoa instances.
+"""ResourceBuilder: programmatic K8s manifest construction for Eyot instances.
 
 Each ``build_*`` function returns a typed ``V1*`` object from
 ``kubernetes_asyncio.client``. Functions never call the K8s API — they
@@ -65,13 +65,13 @@ SHARED_MOUNT_PATH = "/data/shared"
 
 
 def build_labels(instance_id: str, image_tag: str = "") -> dict[str, str]:
-    """Build the standard label set applied to every Cocoa-owned resource.
+    """Build the standard label set applied to every Eyot-owned resource.
 
     Required keys (always present):
 
     * ``app.kubernetes.io/name`` — K8s recommended app identifier
     * ``app.kubernetes.io/managed-by`` — always ``"cocoa"``
-    * ``cocoa/instance-id`` — links the resource back to a Cocoa instance
+    * ``cocoa/instance-id`` — links the resource back to a Eyot instance
 
     Optional:
 

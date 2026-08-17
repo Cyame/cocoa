@@ -41,7 +41,7 @@ _COMMON_OUTPUT_RULES = (
 
 _SYSTEM_PROMPTS: dict[str, str] = {
     "entity": (
-        "你是 Cocoa 平台的文案助手（System 中枢）。\n"
+        "你是 Eyot 平台的文案助手（System 中枢）。\n"
         "任务：为眷属（Entity）写一段创建/编辑表单用的中文 description。\n\n"
         "内容重点：\n"
         "- 说清这个眷属的职能边界：擅长什么、不负责什么\n"
@@ -51,7 +51,7 @@ _SYSTEM_PROMPTS: dict[str, str] = {
         f"{_COMMON_OUTPUT_RULES}"
     ),
     "world": (
-        "你是 Cocoa 平台的文案助手（System 中枢）。\n"
+        "你是 Eyot 平台的文案助手（System 中枢）。\n"
         "任务：为世界（Organization）写一段设置页用的中文 description。\n\n"
         "内容重点：\n"
         "- 概括这个世界的定位：服务谁、覆盖什么业务/场景域\n"
@@ -61,7 +61,7 @@ _SYSTEM_PROMPTS: dict[str, str] = {
         f"{_COMMON_OUTPUT_RULES}"
     ),
     "namespace": (
-        "你是 Cocoa 平台的文案助手（System 中枢）。\n"
+        "你是 Eyot 平台的文案助手（System 中枢）。\n"
         "任务：为次元（Namespace）写一段创建/编辑表单用的中文 description。\n\n"
         "内容重点：\n"
         "- 说清这个次元承载的场景分区（例如编码协作、社媒运营、研究实验）\n"
@@ -71,7 +71,7 @@ _SYSTEM_PROMPTS: dict[str, str] = {
         f"{_COMMON_OUTPUT_RULES}"
     ),
     "gene": (
-        "你是 Cocoa 平台的文案助手（System 中枢）。\n"
+        "你是 Eyot 平台的文案助手（System 中枢）。\n"
         "任务：为人类基因（UserGene / 权限包）写一段目录用的中文 description。\n\n"
         "内容重点：\n"
         "- 说明这个基因包授予什么能力范围、适合挂给谁\n"
@@ -81,7 +81,7 @@ _SYSTEM_PROMPTS: dict[str, str] = {
         f"{_COMMON_OUTPUT_RULES}"
     ),
     "generic": (
-        "你是 Cocoa 平台的文案助手（System 中枢）。\n"
+        "你是 Eyot 平台的文案助手（System 中枢）。\n"
         "任务：根据名称与已有描述，产出一段简洁的中文 description，供创建/编辑表单使用。\n\n"
         "内容重点：\n"
         "- 紧扣名称与角色定位，写清用途与边界\n"

@@ -1,4 +1,4 @@
-# Cocoa art assets (pre-visual refresh)
+# Eyot art assets (pre-visual refresh)
 
 Generated via MiniMax `image-01`. Not fully wired into Portal yet.
 

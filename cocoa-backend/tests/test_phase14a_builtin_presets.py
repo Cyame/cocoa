@@ -15,7 +15,7 @@ from app.schemas.llm import LLMProviderConfig, ProviderType
 
 
 def test_public_presets_count_and_provider_config():
-    assert len(BUILTIN_PRESETS) == 5, "Cocoa ships exactly 5 常驻始祖"
+    assert len(BUILTIN_PRESETS) == 5, "Eyot ships exactly 5 常驻始祖"
     assert len(INTERNAL_PRESETS) == 1
     assert INTERNAL_PRESETS[0]["slug"] == "zong-jian"
     assert "internal" in (INTERNAL_PRESETS[0].get("tags") or [])

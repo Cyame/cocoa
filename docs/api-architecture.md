@@ -1,7 +1,7 @@
 > **Pre-v4 reference**: Conflict with `.omo/evidence/audit-product-design.md` → audit wins. Awaiting v4 PRD rewrite.
 >
 
-# Cocoa API 架构约定
+# Eyot API 架构约定
 
 > **Code rename pending (15d-rename wave)**: This doc describes target architecture (15d+). Current code uses old naming.
 
@@ -170,7 +170,7 @@ app.add_middleware(RequestIDMiddleware)
 
 | 类 | status_code | 用途 |
 |----|------------|------|
-| `CocoaError` | 500（构造时可覆盖） | 全部 Cocoa 错误的基类 |
+| `EyotError` | 500（构造时可覆盖） | 全部 Eyot 错误的基类 |
 | `NotFoundError` | 404 | 资源不存在 |
 | `ValidationError` | 422 | 领域层校验失败（非请求 schema 校验） |
 | `UnauthorizedError` | 401 | 缺失或无效凭证 |
@@ -182,7 +182,7 @@ app.add_middleware(RequestIDMiddleware)
 
 | 异常来源 | 映射结果 |
 |----------|----------|
-| `CocoaError` 及其子类 | 按 `exc.status_code` 序列化为信封 |
+| `EyotError` 及其子类 | 按 `exc.status_code` 序列化为信封 |
 | `StarletteHTTPException`（路由未匹配、405 等） | `error_code = "http.{status}"`，**透传 `exc.headers`**（如 405 的 `Allow`） |
 | `RequestValidationError`（Pydantic 请求校验） | 422 + `error_code = "validation_error"` + `details.errors` |
 | `RateLimitMiddleware` 超限 | 429 + `error_code = "rate_limit_exceeded"` + `Retry-After` 头 |
@@ -205,7 +205,7 @@ async def get_instance(instance_id: str, db: DB) -> InstanceOut:
     return instance
 ```
 
-不要在业务代码里 `raise HTTPException(...)` 或手写 `JSONResponse(status_code=404, ...)`——那会绕过统一信封。中间件内部（如 RateLimit 的 429）是例外：`CocoaError` 处理器挂在内层 `ExceptionMiddleware`，捕获不到中间件里抛出的异常，因此中间件必须自行构造标准信封 JSON。
+不要在业务代码里 `raise HTTPException(...)` 或手写 `JSONResponse(status_code=404, ...)`——那会绕过统一信封。中间件内部（如 RateLimit 的 429）是例外：`EyotError` 处理器挂在内层 `ExceptionMiddleware`，捕获不到中间件里抛出的异常，因此中间件必须自行构造标准信封 JSON。
 
 ## 4. 分页标准
 
@@ -323,7 +323,7 @@ async def list_workspace_entities(
 ## 6. OpenAPI 规范
 
 - 文档入口（根路径、不版本化）：Swagger UI `/docs`，ReDoc `/redoc`，schema `/openapi.json`。
-- 应用元数据在 `app/main.py` 的 `FastAPI(...)` 构造中：`title="Cocoa API"`、`version="1.0.0"`、`swagger_ui_parameters={"defaultModelsExpandDepth": -1}`（默认折叠 model 区，保持端点列表可读）。
+- 应用元数据在 `app/main.py` 的 `FastAPI(...)` 构造中：`title="Eyot API"`、`version="1.0.0"`、`swagger_ui_parameters={"defaultModelsExpandDepth": -1}`（默认折叠 model 区，保持端点列表可读）。
 - 标签组织（`openapi_tags`）：`Health`、`Auth`、`BaseClasses`、`Entities`、`Workspaces`、`Instances`、`Messaging`、`Blackboard`、`Learning`（共 9 个）。每个子路由文件用 `APIRouter(prefix="/entities", tags=["Entities"])` 对齐其一，禁止自造新标签名。
 - 标准错误响应：`app/core/openapi.py` 的 `STANDARD_ERROR_RESPONSES` 定义了 401 / 403 / 404 / 422 / 500 五个状态码的信封示例。每个业务路由注册一次：
 

@@ -54,7 +54,7 @@ export function materializeAgentBundle(root: string, log: (m: string, ...a: unkn
     const slug = process.env.COCOA_INSTANCE_ID || "instance";
     fs.writeFileSync(
       systemDest,
-      `# Identity\n\nYou are Cocoa Lost One instance ${slug}.\n`,
+      `# Identity\n\nYou are Eyot Lost One instance ${slug}.\n`,
       "utf8",
     );
   }

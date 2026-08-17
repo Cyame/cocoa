@@ -1,6 +1,6 @@
-# Cocoa Instance Host — Tunnel WS client + pi RPC bridge (PRD-v3.5)
+# Eyot Instance Host — Tunnel WS client + pi RPC bridge (PRD-v3.5)
 
-Outbound WebSocket client that authenticates to Cocoa Backend
+Outbound WebSocket client that authenticates to Eyot Backend
 `/api/v1/tunnel/connect`, receives `chat.request`, drives
 `pi --mode rpc`, and streams `chat.response.chunk|done|error`.
 

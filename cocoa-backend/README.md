@@ -1,4 +1,4 @@
-# Cocoa Backend
+# Eyot Backend
 
 FastAPI + SQLAlchemy async + Alembic backend service.
 

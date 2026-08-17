@@ -1,4 +1,4 @@
-"""DeployService — K8s-native deploy pipeline for Cocoa Instances.
+"""DeployService — K8s-native deploy pipeline for Eyot Instances.
 
 P11c replaces P7's in-process ``Instance.deploy`` DB transition with a
 9-step K8s pipeline driven by ``kubernetes_asyncio``:
@@ -371,7 +371,7 @@ async def _next_deploy_revision(db: AsyncSession, instance_id: str) -> int:
 async def precheck(instance_name: str, db: AsyncSession) -> PrecheckResult:
     """Verify the instance ``name`` is unique among active rows.
 
-    The Cocoa :class:`Instance` table has no ``name`` column — the
+    The Eyot :class:`Instance` table has no ``name`` column — the
     API-facing identifier is ``workspace_path`` (per P7). We treat
     ``instance_name`` as the requested ``workspace_path`` for precheck
     purposes; a real production deployment would key on the partial

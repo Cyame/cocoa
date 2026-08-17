@@ -1,4 +1,4 @@
-# Cocoa Portal Deployment for OrbStack.
+# Eyot Portal Deployment for OrbStack.
 #
 # Wave 1 of P14b: nginx serving the React SPA built by Dockerfile.portal.
 # The container exposes /healthz for kubelet probes; SPA routes fall back to

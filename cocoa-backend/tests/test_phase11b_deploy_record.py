@@ -13,7 +13,7 @@ Covers:
      collide via ``IntegrityError``;
    - after soft-deleting the first, a new row at the same ``(instance_id,
      revision)`` must commit cleanly (the partial index excludes
-     ``deleted_at IS NOT NULL`` rows, mirroring the rest of Cocoa).
+     ``deleted_at IS NOT NULL`` rows, mirroring the rest of Eyot).
 
 Shared fixtures (``session``, ``instance_factory``) live in
 ``tests/conftest.py``.

@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
-_COMPOSE_INSTRUCTIONS = """你是 Cocoa 世界中枢。请把下面的结构化素材整理成一份化身 SYSTEM 提示词（Markdown）。
+_COMPOSE_INSTRUCTIONS = """你是 Eyot 世界中枢。请把下面的结构化素材整理成一份化身 SYSTEM 提示词（Markdown）。
 
 硬性要求：
 1. 神职（BaseClass）只是静态模板：说明「运行形式 / 思维模式」，不要把它当成实时能力清单。
@@ -169,7 +169,7 @@ async def compose_system_prompt_with_world_hub(
         )
         resp = await client.complete(
             messages=[
-                {"role": "system", "content": "你是 Cocoa 世界中枢，负责整理实例（Instance）的 SYSTEM 提示词。"},
+                {"role": "system", "content": "你是 Eyot 世界中枢，负责整理实例（Instance）的 SYSTEM 提示词。"},
                 {"role": "user", "content": user_content},
             ],
             model=model or provider.default_model,

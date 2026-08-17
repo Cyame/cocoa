@@ -1,6 +1,6 @@
-"""Cocoa filesystem path conventions.
+"""Eyot filesystem path conventions.
 
-Pure functions that define where Cocoa stores its runtime artifacts.
+Pure functions that define where Eyot stores its runtime artifacts.
 All paths are relative (no leading slash) so callers can compose them
 with a configurable data root.
 
@@ -8,7 +8,7 @@ with a configurable data root.
 
 The Instance Host sets ``cwd`` / ``COCOA_WORKSPACE_PATH`` to the PVC root
 (default ``/data``). Upstream pi reads project config from ``<cwd>/.pi/``.
-Sibling directories are Cocoa conventions, not a second config root::
+Sibling directories are Eyot conventions, not a second config root::
 
     /data/                 # pi cwd
       .pi/                 # upstream pi project config (SYSTEM.md, settings.json, …)
@@ -40,7 +40,7 @@ def _validate_no_traversal(value: str) -> None:
 def entity_dir(entity_slug: str) -> str:
     """Relative path to the per-entity *logical* preset directory (control-plane).
 
-    Historical Cocoa contract: ``.pi/<entity_slug>/`` for control-plane
+    Historical Eyot contract: ``.pi/<entity_slug>/`` for control-plane
     manifests. This is **not** the pi project dir inside a pod — pods use
     ``<cwd>/.pi/`` (see module docstring).
 

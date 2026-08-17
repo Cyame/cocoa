@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Cocoa one-click deploy/update to orbstack K8s cluster.
+# Eyot one-click deploy/update to orbstack K8s cluster.
 #
 # This script is IDEMPOTENT: re-running it updates resources in place.
 # It applies the PostgreSQL, backend, and portal manifests, reconciles the
@@ -127,7 +127,7 @@ if (( ${#MISSING[@]} > 0 )); then
   err "  ./scripts/build-instance-images.sh --push   # 1+5 family (base + 5 ancestors)"
   exit 2
 fi
-ok "All required Cocoa images are present locally (backend/portal + instance 1+5)"
+ok "All required Eyot images are present locally (backend/portal + instance 1+5)"
 
 log "Ensuring namespace $NS exists"
 kubectl create namespace "$NS" --dry-run=client -o yaml | kubectl apply -f - >/dev/null

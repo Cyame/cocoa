@@ -1,6 +1,6 @@
 """Structured error types and the standard error-response envelope.
 
-Every API error returned by Cocoa follows the same shape::
+Every API error returned by Eyot follows the same shape::
 
     {
         "error_code": "instance.not_found",
@@ -21,8 +21,8 @@ from typing import Any
 from fastapi.responses import JSONResponse
 
 
-class CocoaError(Exception):
-    """Base class for all Cocoa API errors."""
+class EyotError(Exception):
+    """Base class for all Eyot API errors."""
 
     def __init__(
         self,
@@ -40,7 +40,7 @@ class CocoaError(Exception):
         self.details = details
 
 
-class NotFoundError(CocoaError):
+class NotFoundError(EyotError):
     """Resource does not exist (404)."""
 
     def __init__(
@@ -53,7 +53,7 @@ class NotFoundError(CocoaError):
         super().__init__(error_code, message_key, message, status_code=404, details=details)
 
 
-class ValidationError(CocoaError):
+class ValidationError(EyotError):
     """Domain-level validation failure (422)."""
 
     def __init__(
@@ -66,7 +66,7 @@ class ValidationError(CocoaError):
         super().__init__(error_code, message_key, message, status_code=422, details=details)
 
 
-class UnauthorizedError(CocoaError):
+class UnauthorizedError(EyotError):
     """Missing or invalid credentials (401)."""
 
     def __init__(
@@ -79,7 +79,7 @@ class UnauthorizedError(CocoaError):
         super().__init__(error_code, message_key, message, status_code=401, details=details)
 
 
-class ForbiddenError(CocoaError):
+class ForbiddenError(EyotError):
     """Authenticated but not allowed (403)."""
 
     def __init__(
@@ -92,7 +92,7 @@ class ForbiddenError(CocoaError):
         super().__init__(error_code, message_key, message, status_code=403, details=details)
 
 
-class ConflictError(CocoaError):
+class ConflictError(EyotError):
     """State conflict, e.g. duplicate key (409)."""
 
     def __init__(
@@ -105,7 +105,7 @@ class ConflictError(CocoaError):
         super().__init__(error_code, message_key, message, status_code=409, details=details)
 
 
-class InternalError(CocoaError):
+class InternalError(EyotError):
     """Unexpected server-side failure (500)."""
 
     def __init__(
@@ -118,8 +118,8 @@ class InternalError(CocoaError):
         super().__init__(error_code, message_key, message, status_code=500, details=details)
 
 
-def error_response(exc: CocoaError) -> JSONResponse:
-    """Serialize a CocoaError into the standard error envelope.
+def error_response(exc: EyotError) -> JSONResponse:
+    """Serialize an EyotError into the standard error envelope.
 
     ``request_id`` is NOT set here — this helper has no access to the
     request. The exception handlers in ``app.main`` inject it.

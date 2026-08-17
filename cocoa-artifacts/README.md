@@ -1,6 +1,6 @@
-# Cocoa Artifacts
+# Eyot Artifacts
 
-Build artifacts and Kubernetes deployment manifests for the Cocoa multi-agent control studio.
+Build artifacts and Kubernetes deployment manifests for the Eyot multi-agent control studio.
 
 ## Directory Structure
 

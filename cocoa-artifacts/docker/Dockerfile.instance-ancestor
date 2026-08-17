@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-# Cocoa Instance Ancestor image — thin layer over cocoa-instance-base with the
+# Eyot Instance Ancestor image — thin layer over cocoa-instance-base with the
 # ancestor's enabled subagent agent .md files baked into ~/.pi/agent/agents/.
 #
 # Part of the v5.1 "1+5" instance image family (see .omo/plans/v5-1-definition.md N2).

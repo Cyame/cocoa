@@ -21,7 +21,7 @@ const mockedFetchMembers = vi.mocked(fetchOrganizationMembers);
 const org: Organization = {
   id: 'org-1',
   slug: 'cocoa',
-  name: 'Cocoa World',
+  name: 'Eyot World',
   description: null,
   system_hub_provider_id: null,
   system_hub_model: null,
@@ -91,7 +91,7 @@ describe('DashboardPage', () => {
     renderDashboard();
 
     expect(
-      await screen.findByRole('heading', { name: 'Cocoa World', level: 1 }),
+      await screen.findByRole('heading', { name: 'Eyot World', level: 1 }),
     ).toBeInTheDocument();
     expect(screen.getByText('cocoa')).toBeInTheDocument();
 

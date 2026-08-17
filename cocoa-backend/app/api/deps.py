@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.db import get_session_factory
-from app.core.errors import CocoaError, UnauthorizedError
+from app.core.errors import EyotError, UnauthorizedError
 from app.core.org_scope import resolve_current_org_id
 from app.core.security import decode_token
 from app.models.user import User
@@ -125,7 +125,7 @@ async def get_current_org(
         db, current_user.user_id, x_organization_id
     )
     if org_id is None:
-        raise CocoaError(
+        raise EyotError(
             "organization.context_required",
             "errors.organization.context_required",
             "Unable to resolve an organization context — set X-Organization-Id "

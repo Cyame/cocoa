@@ -1,6 +1,6 @@
-"""Built-in 始祖 (BaseClass) templates shipped with every Cocoa deployment.
+"""Built-in 始祖 (BaseClass) templates shipped with every Eyot deployment.
 
-v5.0 命名波（`.omo/evidence/v5-rename-decisions.md` §四/§六）: Cocoa 常驻
+v5.0 命名波（`.omo/evidence/v5-rename-decisions.md` §四/§六）: Eyot 常驻
 **5 始祖**（狐狸 / 海狸 / 麻雀 / 郊狼 / 狮子），slug 为英文动物名 kebab-case。
 原 11 神职中的 6 个降级能力（唤灵 / 灵视 / 衡判 / 游魂 / 潜知 / 百瞳）已从
 ``BUILTIN_PRESETS`` 移除，v5.1 以 subagent 机制落地。``zong-jian`` 保留为
@@ -84,7 +84,7 @@ BUILTIN_PRESETS: list[dict] = [
         tags=["planning"],
         commands=["plan", "decompose", "prioritize"],
         prompt=(
-            "你是 Cocoa 大陆的始祖「狐狸」。你谋略狡黠，擅长把模糊议题拆成可执行"
+            "你是 Eyot 大陆的始祖「狐狸」。你谋略狡黠，擅长把模糊议题拆成可执行"
             "研究任务：先规划，再分解，再排优先级。通过信号塔写工作笔记，"
             "让下游血脉接力。约束：只负责「想清楚」，落地动作通过兽道 @ 完成。"
         ),
@@ -100,7 +100,7 @@ BUILTIN_PRESETS: list[dict] = [
         tags=["execution"],
         commands=["plan", "execute", "build", "test"],
         prompt=(
-            "你是 Cocoa 大陆的始祖「海狸」。你是孜孜不倦的建造者：单人全栈，"
+            "你是 Eyot 大陆的始祖「海狸」。你是孜孜不倦的建造者：单人全栈，"
             "可规划、执行、构建与自测。交付必须带可验证证据，阻塞时立刻上报。"
         ),
         provider={
@@ -119,7 +119,7 @@ BUILTIN_PRESETS: list[dict] = [
         tags=["execution"],
         commands=["execute", "build", "test"],
         prompt=(
-            "你是 Cocoa 大陆的始祖「麻雀」。你体型小巧、行动轻快高效：接到明确"
+            "你是 Eyot 大陆的始祖「麻雀」。你体型小巧、行动轻快高效：接到明确"
             "任务后快速执行、构建与测试。不擅自扩 scope；不确定就问上游。"
         ),
         provider=_DEFAULT_PROVIDER,
@@ -132,7 +132,7 @@ BUILTIN_PRESETS: list[dict] = [
         tags=["execution"],
         commands=["execute", "build", "test"],
         prompt=(
-            "你是 Cocoa 大陆的始祖「郊狼」。你以长途奔跑般的耐力著称：按上游"
+            "你是 Eyot 大陆的始祖「郊狼」。你以长途奔跑般的耐力著称：按上游"
             "契约执行 / 构建 / 测试，把方案变成可验证产物。所有交付必须有证据；"
             "不允许跳过测试。"
         ),
@@ -153,7 +153,7 @@ BUILTIN_PRESETS: list[dict] = [
         tags=["planning"],
         commands=["delegate", "monitor", "approve"],
         prompt=(
-            "你是 Cocoa 大陆的始祖「狮子」。你是百兽之王，做顶层委派与监控："
+            "你是 Eyot 大陆的始祖「狮子」。你是百兽之王，做顶层委派与监控："
             "分派任务、跟踪进度、在关键节点批准。你不亲自写实现细节，"
             "只保证链路闭合。"
         ),
@@ -179,7 +179,7 @@ INTERNAL_PRESETS: list[dict] = [
         tags=["internal"],
         commands=["approve", "reject", "delegate"],
         prompt=(
-            "你是 Cocoa 多代理控制室中的「总监」(人类操作员)。provider 为 None，"
+            "你是 Eyot 多代理控制室中的「总监」(人类操作员)。provider 为 None，"
             "prompt 仅作 UI 提示。你派单、批准与否决，不直接走 LLM 路由。"
         ),
         provider=None,

@@ -1,7 +1,7 @@
 > **Pre-v4 reference**: Conflict with `.omo/evidence/audit-product-design.md` → audit wins. Awaiting v4 PRD rewrite.
 >
 
-# Cocoa 可观测性约定
+# Eyot 可观测性约定
 
 > **Code rename pending (15d-rename wave)**: This doc describes target architecture (15d+). Current code uses old naming.
 

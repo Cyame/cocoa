@@ -49,7 +49,7 @@ const mockedFetchWorkspaces = vi.mocked(fetchWorkspaces);
 const org = {
   id: 'org-1',
   slug: 'cocoa',
-  name: 'Cocoa 世界',
+  name: 'Eyot 世界',
   description: null,
   system_hub_provider_id: null,
   system_hub_model: null,
@@ -172,7 +172,7 @@ describe('KnowledgePage', () => {
     expect(screen.getByText('近邻通道约束')).toBeInTheDocument();
     expect(screen.getByText('共享工作区约定')).toBeInTheDocument();
     // org binding resolves to the org name; workspace binding to "ns / ws".
-    expect(screen.getByText('Cocoa 世界')).toBeInTheDocument();
+    expect(screen.getByText('Eyot 世界')).toBeInTheDocument();
     expect(screen.getByText('默认命名空间 / 研究实验室')).toBeInTheDocument();
     // scope badges
     expect(screen.getAllByText('组织').length).toBeGreaterThan(0);

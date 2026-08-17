@@ -1,4 +1,4 @@
-# Cocoa System Roadmap & Blueprint
+# Eyot System Roadmap & Blueprint
 
 > **Status**: Living document. Canonical project roadmap + system goal blueprint.
 > **Authority**: Supersedes archived pre-v4 roadmaps under `.omo/plans/archive/`.
@@ -46,21 +46,21 @@ Out of v4: → **v5 完整世代**（更名/定义/UIUX/视觉，见 `.omo/plans
 
 ### 1.1 One-sentence product
 
-**Cocoa is a K8s-native multi-agent control studio**: human directors summon reusable AI role templates (神职 / BaseClass), specialize them into scenario identities (眷族 / Entity), materialize running pods (化身 / Instance), observe them on a topology canvas, and distill runtime experience back into reusable capability and new roles.
+**Eyot is a K8s-native multi-agent control studio**: human directors summon reusable AI role templates (神职 / BaseClass), specialize them into scenario identities (眷族 / Entity), materialize running pods (化身 / Instance), observe them on a topology canvas, and distill runtime experience back into reusable capability and new roles.
 
 ### 1.2 Why it exists
 
-Traditional chat agents reset every session. Cocoa closes three loops that chat tools leave open:
+Traditional chat agents reset every session. Eyot closes three loops that chat tools leave open:
 
-| Loop | Without Cocoa | With Cocoa |
+| Loop | Without Eyot | With Eyot |
 |---|---|---|
 | **Identity** | Disposable reply | BaseClass → Entity → Instance (L1 / L2 / L3 progressive specialization) |
 | **Memory** | Context window only | Append-only Memory per Entity + promote / transmute |
 | **Collaboration** | 1:1 flat chat | Shared Workspace + Passage near-neighbor messaging + CentralHub + visual Topology |
 
-Inherited from `nodeskclaw`, rebuilt lighter and vision-first. Loop engineering (Boulder / circuit breakers / notepad) is borrowed from `oh-my-openagent` (pin tags; do not trust its unstable `dev` tree) — that family (senpi / oh-my-openagent / oh-my-pi) is the **Workspace-layer** peer Cocoa aims to surpass in flexibility and observability. Each **化身 (Instance)** is driven by a sandboxed **pi** agent runtime (React runtime optional, less preferred) — never by Senpi CLI as the Instance driver.
+Inherited from `nodeskclaw`, rebuilt lighter and vision-first. Loop engineering (Boulder / circuit breakers / notepad) is borrowed from `oh-my-openagent` (pin tags; do not trust its unstable `dev` tree) — that family (senpi / oh-my-openagent / oh-my-pi) is the **Workspace-layer** peer Eyot aims to surpass in flexibility and observability. Each **化身 (Instance)** is driven by a sandboxed **pi** agent runtime (React runtime optional, less preferred) — never by Senpi CLI as the Instance driver.
 
-### 1.3 What Cocoa is / is not
+### 1.3 What Eyot is / is not
 
 | Is | Is not |
 |---|---|
@@ -142,9 +142,9 @@ Topology is the flagship: SVG nodes + glow(`loop_status`) + Select/Connect/Move 
 
 **Two layers — never conflate** (locked 2026-07-30):
 
-| Layer | Peer / driver | Cocoa role |
+| Layer | Peer / driver | Eyot role |
 |---|---|---|
-| **Workspace control plane** | senpi · oh-my-openagent · oh-my-pi (Cocoa = more flexible + more observable evolution) | Portal + Harness Supervisor + Passage + CentralHub + deploy + observability |
+| **Workspace control plane** | senpi · oh-my-openagent · oh-my-pi (Eyot = more flexible + more observable evolution) | Portal + Harness Supervisor + Passage + CentralHub + deploy + observability |
 | **Instance agent runtime** | **pi** (sandboxed; preferred). React runtime optional | Each 化身 pod runs under pi; Entity overlay → AgentConfig → pi |
 
 | Layer | Mechanism | Status vs PRD-v2 |
@@ -163,7 +163,7 @@ Topology is the flagship: SVG nodes + glow(`loop_status`) + Select/Connect/Move 
 
 ## 2. Iteration model — PRD-driven
 
-Cocoa no longer plans primarily as open-ended "P-N feature waves". After foundation (P0–P15b) and naming lock (P15d), **product truth lives in PRD documents under `docs/`**, and engineering waves implement a named PRD slice.
+Eyot no longer plans primarily as open-ended "P-N feature waves". After foundation (P0–P15b) and naming lock (P15d), **product truth lives in PRD documents under `docs/`**, and engineering waves implement a named PRD slice.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -245,7 +245,7 @@ Authoritative detail: 设计 SoT `.omo/evidence/audit-product-design.md`（PRD-v
 
 ### 4.2 Runtime compatibility
 
-Entity overlays serialize toward **pi AgentConfig** (schema family shared with oh-my-openagent `AgentOverrideConfigSchema` overlay; pin `oh-my-openagent` tag, e.g. v4.19.2, for overlay field names only). The **Workspace** control plane (Harness / Boulder / Portal) is Cocoa's evolution of senpi · oh-my-openagent · oh-my-pi. Each **Instance** is driven by **pi**, not by Senpi CLI. Boulder remains the control-plane engine; workflow-gene is rejected — orchestration stays in Harness.
+Entity overlays serialize toward **pi AgentConfig** (schema family shared with oh-my-openagent `AgentOverrideConfigSchema` overlay; pin `oh-my-openagent` tag, e.g. v4.19.2, for overlay field names only). The **Workspace** control plane (Harness / Boulder / Portal) is Eyot's evolution of senpi · oh-my-openagent · oh-my-pi. Each **Instance** is driven by **pi**, not by Senpi CLI. Boulder remains the control-plane engine; workflow-gene is rejected — orchestration stays in Harness.
 
 ### 4.3 Default deployment shape
 
@@ -330,7 +330,7 @@ Priority among remaining 3.5.x slices is **re-decided from orbstack human QA**, 
 
 **Forbidden**: ship "code done" without orbstack update; fix live DB with ad-hoc SQL; delete namespace `cocoa`.
 
-Full ops: AGENTS.md "Cocoa Deployment Operations Rules" + "Persistent Fix Policy"; `.omo/evidence/orbstack-operations.md`.
+Full ops: AGENTS.md "Eyot Deployment Operations Rules" + "Persistent Fix Policy"; `.omo/evidence/orbstack-operations.md`.
 
 ### 6.2 Other non-negotiables (summary)
 

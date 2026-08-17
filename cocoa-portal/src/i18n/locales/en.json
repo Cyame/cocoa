@@ -9,11 +9,11 @@
     "heading": "Available Subagent Capabilities"
   },
   "common": {
-    "appName": "Cocoa",
+    "appName": "Eyot",
     "appTagline": "Multi-agent control studio",
     "controlStudio": "Control studio",
     "operatorConsole": "Operator console",
-    "portalSubtitle": "Cocoa portal",
+    "portalSubtitle": "Eyot portal",
     "save": "Save",
     "cancel": "Cancel",
     "close": "Close",

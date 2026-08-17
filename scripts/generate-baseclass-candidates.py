@@ -131,7 +131,7 @@ def build_jobs() -> list[tuple[Path, str]]:
     for slug, name, motif in PUBLIC:
         for i in range(1, VARIANTS + 1):
             prompt = (
-                f"Square avatar portrait of Cocoa BaseClass '{name}' ({slug}), variant {i}. "
+                f"Square avatar portrait of Eyot BaseClass '{name}' ({slug}), variant {i}. "
                 f"{motif}. {BASE}"
             )
             jobs.append((ROOT / slug / f"v2-{i:02d}.jpg", prompt))

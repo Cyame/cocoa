@@ -1,4 +1,4 @@
-# Cocoa Instance Kustomization
+# Eyot Instance Kustomization
 #
 # Aggregates all per-instance Kubernetes resources.
 # Template variables (e.g. {instance_id}) must be substituted

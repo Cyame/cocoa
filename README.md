@@ -1,8 +1,8 @@
-# Cocoa
+# Eyot
 
 **Multi-agent control studio.** A workspace where humans orchestrate AI agents -- from strategy to execution.
 
-Cocoa is a control surface for running multi-agent systems. A web portal pairs with a Python backend to give operators a single place to plan, delegate, and observe AI-driven work.
+Eyot is a control surface for running multi-agent systems. A web portal pairs with a Python backend to give operators a single place to plan, delegate, and observe AI-driven work.
 
 **Direction / blueprint**: [`docs/roadmap.md`](docs/roadmap.md) · **Active PRD**: [`docs/prd-v2.md`](docs/prd-v2.md) · **Frozen MVP PRD**: [`docs/prd-v1.md`](docs/prd-v1.md) · **Contributor guide**: [`AGENTS.md`](AGENTS.md)
 

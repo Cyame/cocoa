@@ -1,4 +1,4 @@
-"""Pytest fixtures for the Cocoa backend test suite.
+"""Pytest fixtures for the Eyot backend test suite.
 
 Isolation model: a session-scoped template database is built once via Alembic
 migrations. Every DB-touching test clones a private database from that

@@ -12,7 +12,7 @@ from typing import Any, Literal, Self
 
 from pydantic import BaseModel, Field, model_validator
 
-from app.core.errors import CocoaError
+from app.core.errors import EyotError
 
 DeliveryMode = Literal["notify", "soft_inject", "wake"]
 InjectKind = Literal[
@@ -141,13 +141,13 @@ def compute_prose_length(payload: Any) -> int:
 
 
 def validate_tldr(tldr: str | None, *, prose_length: int) -> None:
-    """Enforce the V47-10 tldr rules; raise ``CocoaError`` (400) on violation.
+    """Enforce the V47-10 tldr rules; raise ``EyotError`` (400) on violation.
 
     - ``tldr``, when provided, must be <= 200 characters.
     - Prose above 240 characters requires a non-empty ``tldr``.
     """
     if tldr is not None and len(tldr) > TLDR_MAX_CHARS:
-        raise CocoaError(
+        raise EyotError(
             error_code="internal.tldr_too_long",
             message_key=_ERROR_TLDR_TOO_LONG,
             message=f"tldr exceeds {TLDR_MAX_CHARS} characters",
@@ -155,7 +155,7 @@ def validate_tldr(tldr: str | None, *, prose_length: int) -> None:
             details={"max_length": TLDR_MAX_CHARS, "actual_length": len(tldr)},
         )
     if prose_length > PROSE_THRESHOLD_CHARS and not (tldr and tldr.strip()):
-        raise CocoaError(
+        raise EyotError(
             error_code="internal.tldr_required",
             message_key=_ERROR_TLDR_REQUIRED,
             message=f"tldr is required when prose exceeds {PROSE_THRESHOLD_CHARS} characters",

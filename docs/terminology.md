@@ -2,7 +2,7 @@
 > **Prior**: 15d（克苏鲁）命名已归档至 `docs/archive/terminology-15d.md`（只读）。
 > **执行波**: v5（`.omo/plans/v5-roadmap.md`）——v5.0 命名波起 UI 显示名逐步切换；后端代码名/DB/API 不动。
 
-One-line definitions for every Cocoa code-term (backend), display-name (frontend 山海+生物世界观), and protocol entity. Code-terms stay English; display-names in parentheses are for product UI reference.
+One-line definitions for every Eyot code-term (backend), display-name (frontend 山海+生物世界观), and protocol entity. Code-terms stay English; display-names in parentheses are for product UI reference.
 
 ---
 
@@ -44,7 +44,7 @@ One-line definitions for every Cocoa code-term (backend), display-name (frontend
 
 ### Runtime 概念
 
-- **Workspace control plane** — Cocoa's operator + harness surface (Portal, Supervisor, Boulder, Passage, CentralHub, deploy, observability)。Product peer: a more flexible / observable **senpi · oh-my-openagent · oh-my-pi**。Not the per-Instance agent binary。
+- **Workspace control plane** — Eyot's operator + harness surface (Portal, Supervisor, Boulder, Passage, CentralHub, deploy, observability)。Product peer: a more flexible / observable **senpi · oh-my-openagent · oh-my-pi**。Not the per-Instance agent binary。
 - **pi runtime** — Preferred sandboxed agent loop that drives each **Instance（后裔）**。Entity `system_prompt` + `config_override` serialize to pi AgentConfig。React runtime is an optional alternative。**Not** Senpi CLI。
 - **LoopState**（心智状态）— Harness runtime state for an Instance: loop_status (6 states), continuation_count, breaker_config, last_checkpoint_at。保留中性词。
 - **InstanceProviderConfig** — LLM provider configuration for an Instance。Internal config, no UI equivalent。

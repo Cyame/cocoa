@@ -1,4 +1,4 @@
-# Cocoa Instance Deployment
+# Eyot Instance Deployment
 #
 # Template variables (substituted by a deploy script before apply):
 #   {instance_id}   — unique Instance UUID

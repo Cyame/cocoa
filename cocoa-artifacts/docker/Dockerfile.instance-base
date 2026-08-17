@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-# Cocoa Instance Base image — Node Host + pinned pi CLI + subagent extension.
+# Eyot Instance Base image — Node Host + pinned pi CLI + subagent extension.
 #
 # Part of the v5.1 "1+5" instance image family (see .omo/plans/v5-1-definition.md N2):
 #   - cocoa-instance-base:{engine-v}        <- this file (extension, agents dir EMPTY)

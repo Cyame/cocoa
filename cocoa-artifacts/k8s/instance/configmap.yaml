@@ -1,4 +1,4 @@
-# Cocoa Instance ConfigMap
+# Eyot Instance ConfigMap
 #
 # Template variables:
 #   {instance_id}  — unique Instance UUID

@@ -1,4 +1,4 @@
-# Cocoa PostgreSQL Deployment for OrbStack.
+# Eyot PostgreSQL Deployment for OrbStack.
 #
 # Wave 1 of P14b: OrbStack-ready PostgreSQL with local-image pull policy
 # (OrbStack shares the host Docker daemon) and a pg_isready readiness probe.

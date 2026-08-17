@@ -150,5 +150,5 @@ async def test_openapi_json(client: TestClient):
     response = client.get("/openapi.json")
     assert response.status_code == 200
     spec = response.json()
-    assert spec["info"]["title"] == "Cocoa API"
+    assert spec["info"]["title"] == "Eyot API"
     assert len(spec.get("tags", [])) >= 6

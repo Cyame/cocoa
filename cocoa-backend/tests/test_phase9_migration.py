@@ -241,7 +241,7 @@ async def test_unique_pos_constraint_allows_soft_deleted_overlap(
 ) -> None:
     """A soft-deleted membership at (5,5) does NOT block a new active
     membership at the same coords. Partial index excludes
-    ``deleted_at IS NULL`` filter; matches Cocoa soft-delete pattern.
+    ``deleted_at IS NULL`` filter; matches Eyot soft-delete pattern.
     """
     ns = await namespace_factory()
     workspace = Workspace(namespace_id=ns.id, name="SoftDel Pos Workspace", slug="softdel-pos-workspace")

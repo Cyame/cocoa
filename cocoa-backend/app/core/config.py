@@ -8,7 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Cocoa backend configuration.
+    """Eyot backend configuration.
 
     Values are loaded from environment variables (and a local ``.env`` if
     present). All three keys are required by the deployment but the

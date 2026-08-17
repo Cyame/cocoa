@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-# Cocoa Backend Image — built with Aliyun (apt) + Tsinghua TUNA (PyPI) mirrors.
+# Eyot Backend Image — built with Aliyun (apt) + Tsinghua TUNA (PyPI) mirrors.
 #
 # Multi-stage build: a `builder` stage resolves + installs runtime deps via uv,
 # then the lean runtime stage copies only site-packages and the application tree.

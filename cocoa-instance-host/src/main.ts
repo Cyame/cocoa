@@ -1,5 +1,5 @@
 /**
- * Cocoa Instance Host entrypoint.
+ * Eyot Instance Host entrypoint.
  * Connects outbound to Backend Tunnel and drives `pi --mode rpc`.
  */
 

@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-# Cocoa Portal Static Image — built with npmmirror (China) + served by nginx:alpine.
+# Eyot Portal Static Image — built with npmmirror (China) + served by nginx:alpine.
 #
 # Multi-stage build: an `oven/bun:1.2` builder runs `bun install --frozen-lockfile`
 # and `bun run build` to produce the React SPA, then nginx:alpine serves the
@@ -8,7 +8,7 @@
 # Build context must be the repository root so `cocoa-portal/...` paths resolve.
 # Build: docker build -t cocoa-portal:latest -f cocoa-artifacts/docker/Dockerfile.portal .
 # Pinned base images — fix for "bun not in node base image" (pre-14b):
-#   Builder: oven/bun:1.2 (has bun pre-installed; matches Cocoa portal's bun 1.x lockfile)
+#   Builder: oven/bun:1.2 (has bun pre-installed; matches Eyot portal's bun 1.x lockfile)
 #   Runtime: nginx:1.27.4-alpine
 # Pull commands:
 #   docker pull oven/bun:1.2

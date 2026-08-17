@@ -1,4 +1,4 @@
-"""Event type constants for the Cocoa observability layer.
+"""Event type constants for the Eyot observability layer.
 
 Naming convention: ``<domain>.<action_past_tense>``
 

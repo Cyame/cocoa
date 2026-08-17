@@ -1,4 +1,4 @@
-"""Cocoa Tunnel WebSocket message protocol (PRD-v3.5 / P14b revival).
+"""Eyot Tunnel WebSocket message protocol (PRD-v3.5 / P14b revival).
 
 Frame shape aligns with Composer SSE (`chat.response.*`) and nodeskclaw Tunnel.
 """

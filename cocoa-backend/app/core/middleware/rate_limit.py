@@ -43,7 +43,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         try:
             rejection = self._check_rate_limit(request)
         except Exception:
-            # Middleware-internal failure: the app's CocoaError handler lives in
+            # Middleware-internal failure: the app's EyotError handler lives in
             # ExceptionMiddleware (inner layer) and never sees middleware exceptions,
             # so build the standard error envelope directly.
             return JSONResponse(

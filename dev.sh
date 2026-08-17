@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Cocoa local dev launcher.
+# Eyot local dev launcher.
 # Starts the FastAPI backend (:4510) and the Vite portal (:5173) in the
 # background, prefixed logs in logs/backend.log and logs/portal.log,
 # and tears both down on Ctrl+C.
@@ -186,7 +186,7 @@ sleep 2
 # ── 打印摘要 ──────────────────────────────────────────────
 echo ""
 echo "${BOLD}========================================${RESET}"
-echo "${BOLD} Cocoa 本地开发环境${RESET}"
+echo "${BOLD} Eyot 本地开发环境${RESET}"
 echo "${BOLD}========================================${RESET}"
 echo "  ${BLUE}BACKEND${RESET}  http://localhost:${BACKEND_PORT}  (pid=${BACKEND_PID}, log=logs/backend.log)"
 echo "  ${GREEN}PORTAL${RESET}   http://localhost:${PORTAL_PORT}  (pid=${PORTAL_PID}, log=logs/portal.log)"

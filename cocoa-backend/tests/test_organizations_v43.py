@@ -589,7 +589,7 @@ class TestCurrentOrgDependency:
     @pytest.mark.asyncio
     async def test_ambiguous_context_raises_400(self, session: AsyncSession) -> None:
         from app.api.deps import get_current_org
-        from app.core.errors import CocoaError
+        from app.core.errors import EyotError
         from app.core.gene_atoms import ensure_atom_genes
         from app.core.org_contract import ensure_org_contract
         from app.models.organization import Organization
@@ -606,7 +606,7 @@ class TestCurrentOrgDependency:
         await session.commit()
 
         cu = CurrentUser(user_id=user_id, is_super_admin=False, token="t")
-        with pytest.raises(CocoaError) as exc_info:
+        with pytest.raises(EyotError) as exc_info:
             await get_current_org(session, cu, None)
         assert exc_info.value.status_code == 400
         assert exc_info.value.error_code == "organization.context_required"

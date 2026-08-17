@@ -32,7 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import DB
 from app.core.dirs import _validate_no_traversal
-from app.core.errors import CocoaError, ConflictError, NotFoundError
+from app.core.errors import EyotError, ConflictError, NotFoundError
 from app.core.event_types import (
     FORNIX_FILE_CREATED,
     FORNIX_FILE_WRITTEN,
@@ -246,7 +246,7 @@ async def _hub_write_shared(
     try:
         parent_path, name = _split_hub_path(body.path)
     except ValueError as exc:
-        raise CocoaError(
+        raise EyotError(
             "internal.hub.path_invalid",
             "errors.internal.hub.path_invalid",
             f"invalid hub path {body.path!r}",
@@ -343,7 +343,7 @@ async def _hub_write_shared(
             session=db,
         )
         await db.commit()
-        raise CocoaError(
+        raise EyotError(
             "central_hub.fornix.sync_failed",
             "errors.central_hub.fornix.sync_failed",
             f"Failed to sync FornixFile '{file.id}' to the shared mount",
@@ -379,7 +379,7 @@ async def _hub_write_work(
     without mirroring to the shared mount or FornixFile rows.
     """
     if not body.path.startswith("work/") or len(body.path) <= len("work/"):
-        raise CocoaError(
+        raise EyotError(
             "internal.hub.work_path_invalid",
             "errors.internal.hub.work_path_invalid",
             f"work scope requires a path under 'work/', got {body.path!r}",
@@ -491,7 +491,7 @@ async def internal_hub_read(body: HubReadRequest, db: DB) -> dict:
     files: list[dict] = []
     for ref in body.refs:
         if ref.scope != "hub":
-            raise CocoaError(
+            raise EyotError(
                 "internal.hub.invalid_scope",
                 "errors.internal.hub.invalid_scope",
                 f"hub/read only supports scope='hub', got {ref.scope!r}",
@@ -501,7 +501,7 @@ async def internal_hub_read(body: HubReadRequest, db: DB) -> dict:
             _validate_no_traversal(ref.path)
             parent_path, name = _split_hub_path(ref.path)
         except ValueError as exc:
-            raise CocoaError(
+            raise EyotError(
                 "internal.hub.path_invalid",
                 "errors.internal.hub.path_invalid",
                 f"invalid hub path {ref.path!r}",
@@ -540,7 +540,7 @@ async def internal_hub_write(body: HubWriteRequest, db: DB) -> dict:
     try:
         _validate_no_traversal(body.path)
     except ValueError as exc:
-        raise CocoaError(
+        raise EyotError(
             "internal.hub.path_traversal",
             "errors.internal.hub.path_traversal",
             f"path traversal rejected: {body.path!r}",

@@ -1,4 +1,4 @@
-# Cocoa Backend Deployment for OrbStack.
+# Eyot Backend Deployment for OrbStack.
 #
 # Wave 1 of P14b: OrbStack-ready backend with HTTP health probes and secrets
 # sourced from `cocoa-backend-secrets`. The Secret must be created out-of-band
