@@ -101,7 +101,7 @@ async def lifespan(app: FastAPI):
 
     # v4.2: idempotently ensure the two system knowledge seeds exist.
     # Test clones (eyot_test_*) are skipped: they pin exact resolved counts
-    # and must stay seed-free.
+    # and must stay seed-free (they are seeded at the conftest template build).
     if "eyot_test" not in settings.DATABASE_URL:
         try:
             from app.core.knowledge import ensure_knowledge_seeds
@@ -111,6 +111,18 @@ async def lifespan(app: FastAPI):
                 await s.commit()
         except Exception:
             logger.opt(exception=True).error("Failed to ensure knowledge seeds")
+
+    # Eyot rename: default system data (default org + builtin 始祖 + permission
+    # atoms + cmd capabilities) is seeded idempotently at the app layer. Test
+    # clones get the same through the conftest template build.
+    if "eyot_test" not in settings.DATABASE_URL:
+        try:
+            from app.core.seeds import ensure_system_seeds
+
+            async with get_session_factory()() as s:
+                await ensure_system_seeds(s)
+        except Exception:
+            logger.opt(exception=True).error("Failed to ensure system seeds")
 
     try:
         async with get_session_factory()() as s:

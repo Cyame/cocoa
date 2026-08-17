@@ -62,6 +62,17 @@ async def _template_db():
         check=True,
         capture_output=True,
     )
+    # Eyot rename: seed default system data into the template so every
+    # per-test clone inherits it (default org + builtin 始祖 + permission
+    # atoms + cmd capabilities). Kept out of alembic so migrations stay
+    # schema-only; mirrors app lifespan seeding for prod/dev.
+    engine = create_async_engine(_url(_TEMPLATE_DB), echo=False)
+    factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async with factory() as s:
+        from app.core.seeds import ensure_system_seeds
+
+        await ensure_system_seeds(s)
+    await engine.dispose()
     yield _TEMPLATE_DB
     await _exec_admin(f'DROP DATABASE IF EXISTS {_TEMPLATE_DB} WITH (FORCE)')
 
