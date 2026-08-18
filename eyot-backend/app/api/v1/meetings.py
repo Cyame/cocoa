@@ -15,7 +15,7 @@ from fastapi import APIRouter, Query, status
 from sqlalchemy import select
 
 from app.api.deps import DB, CurrentUserDep, XOrgIdHeader
-from app.core.errors import EyotError, ConflictError, ForbiddenError, NotFoundError
+from app.core.errors import ConflictError, EyotError, ForbiddenError, NotFoundError
 from app.core.event_types import MEETING_CREATED
 from app.core.events import emit
 from app.core.openapi import add_error_responses

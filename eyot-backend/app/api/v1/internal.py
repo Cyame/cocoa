@@ -32,7 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import DB
 from app.core.dirs import _validate_no_traversal
-from app.core.errors import EyotError, ConflictError, NotFoundError
+from app.core.errors import ConflictError, EyotError, NotFoundError
 from app.core.event_types import (
     FORNIX_FILE_CREATED,
     FORNIX_FILE_WRITTEN,

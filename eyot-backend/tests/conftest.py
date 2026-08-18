@@ -22,6 +22,17 @@ from starlette.testclient import TestClient
 _ADMIN_DSN = "postgresql://postgres:postgres@127.0.0.1:5432/postgres"
 _TEMPLATE_DB = "eyot_test_template"
 _BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_PROXY_ENV_VARS = (
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "ALL_PROXY",
+    "http_proxy",
+    "https_proxy",
+    "all_proxy",
+)
+_ORIGINAL_PROXY_ENV = {
+    name: os.environ[name] for name in _PROXY_ENV_VARS if name in os.environ
+}
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -30,14 +41,33 @@ def pytest_configure(config: pytest.Config) -> None:
     ``app.core.config`` instantiates ``Settings()`` at module import time, so
     the env var must be set before test modules (or the ``client`` fixture)
     import the app. This keeps every FornixFile write out of the real
-    ``/var/eyot/workspaces`` mount.
+    ``/var/eyot/workspaces`` mount. Tests also mock all external HTTP calls, so
+    host proxy settings must not change their client-construction behavior.
     """
+    for name in _PROXY_ENV_VARS:
+        os.environ.pop(name, None)
     if "FORNIX_ROOT" not in os.environ:
         os.environ["FORNIX_ROOT"] = tempfile.mkdtemp(prefix="eyot_fornix_root_")
 
 
 def _url(db: str) -> str:
     return f"postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/{db}"
+
+
+def _run_alembic_upgrade(db: str) -> None:
+    """Run Alembic with the test database and original uv proxy settings."""
+    env = {
+        **os.environ,
+        "DATABASE_URL": _url(db),
+        **_ORIGINAL_PROXY_ENV,
+    }
+    subprocess.run(
+        ["uv", "run", "alembic", "upgrade", "head"],
+        cwd=_BACKEND_DIR,
+        env=env,
+        check=True,
+        capture_output=True,
+    )
 
 
 async def _exec_admin(sql: str) -> None:
@@ -54,14 +84,9 @@ async def _template_db():
     """Build the migrated schema template once per test session."""
     await _exec_admin(f'DROP DATABASE IF EXISTS {_TEMPLATE_DB} WITH (FORCE)')
     await _exec_admin(f'CREATE DATABASE {_TEMPLATE_DB}')
-    env = {**os.environ, "DATABASE_URL": _url(_TEMPLATE_DB)}
-    subprocess.run(
-        ["uv", "run", "alembic", "upgrade", "head"],
-        cwd=_BACKEND_DIR,
-        env=env,
-        check=True,
-        capture_output=True,
-    )
+    # Keep test HTTP clients proxy-free, but let uv retain the host proxy if it
+    # needs to resolve dependencies while launching Alembic.
+    _run_alembic_upgrade(_TEMPLATE_DB)
     # Eyot rename: seed default system data into the template so every
     # per-test clone inherits it (default org + builtin 始祖 + permission
     # atoms + cmd capabilities). Kept out of alembic so migrations stay

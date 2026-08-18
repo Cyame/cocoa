@@ -1,6 +1,6 @@
 {
   "name": "eyot-instance-host",
-  "version": "0.5.2.dev1",
+  "version": "0.5.2.dev3",
   "private": true,
   "type": "module",
   "description": "Eyot Instance Host — Tunnel WS client + pi --mode rpc bridge",

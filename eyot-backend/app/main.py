@@ -21,8 +21,8 @@ from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.db import get_session_factory
 from app.core.errors import (
-    EyotError,
     ConflictError,  # noqa: F401
+    EyotError,
     ForbiddenError,  # noqa: F401
     InternalError,  # noqa: F401
     NotFoundError,

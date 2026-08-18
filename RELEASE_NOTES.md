@@ -46,6 +46,13 @@ pre-1.0 trajectory.
 - 上述 `.omo/`、`AGENTS.md`、`.github/` 改动为本地态（gitignored，不入库）；
   本 commit 仅含 `docs/archive/` 12 个追踪文档。版号 0.5.2.dev1 → **0.5.2.dev2**。
 
+### 2026-08-18 — 后端测试隔离
+
+- pytest 启动时清除宿主机的 HTTP/HTTPS/SOCKS 代理变量，避免 mock 的
+  LLM 测试因本地代理缺少 `socksio` 而在客户端构造阶段失败。
+- 新增测试环境回归覆盖；后端全量测试为 **1049 passed / 1 skipped**。
+- Portal、Backend、Instance Host 的版本号统一到 `0.5.2.dev3`。
+
 ## 1.0
 
 _To be tagged. Sections for 1.x releases land here; `*.devN` builds above fold

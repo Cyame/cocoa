@@ -22,8 +22,8 @@ from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import DB, CurrentUserDep
 from app.core.errors import (
-    EyotError,
     ConflictError,
+    EyotError,
     ForbiddenError,
     NotFoundError,
     ValidationError,
