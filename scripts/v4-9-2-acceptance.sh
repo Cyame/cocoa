@@ -32,20 +32,20 @@ curl -s http://localhost:4510/health || true
 echo
 
 echo "== 4. Portal 页脚版本（应含 v4.9.2）=="
-echo "   经 NodePort 30173 取 index.html -> JS bundle -> grep 版本"
-JS=$(curl -s http://localhost:30173/ | grep -oE 'src="[^"]*"' | head -1 | sed 's/src="//;s/"//')
+echo "   经 NodePort 30174 取 index.html -> JS bundle -> grep 版本"
+JS=$(curl -s http://localhost:30174/ | grep -oE 'src="[^"]*"' | head -1 | sed 's/src="//;s/"//')
 echo "bundle: $JS"
 [ -n "$JS" ] || { echo "FAIL: 未取到 JS bundle"; }
-VERSION=$(curl -s "http://localhost:30173/$JS" | grep -oE '4\.9\.[0-9]+' | sort -u | head -1 || true)
+VERSION=$(curl -s "http://localhost:30174/$JS" | grep -oE '4\.9\.[0-9]+' | sort -u | head -1 || true)
 echo "bundle 内版本: $VERSION"
-echo "（若上方无输出或为空, 请浏览器打开 http://localhost:30173/ 看侧栏页脚应显示 v4.9.2）"
+echo "（若上方无输出或为空, 请浏览器打开 http://localhost:30174/ 看侧栏页脚应显示 v4.9.2）"
 
 echo "== 5. alembic head（应显示 head, 提示无新迁移）=="
 kubectl exec -n eyot deploy/eyot-backend -- alembic current 2>/dev/null | tail -1
 echo "   （v4.9.2 无 schema 变更: 无新迁移, head 即当前线上版本）"
 
 echo
-echo "== 6. 浏览器人工验收（浏览器打开 http://localhost:30173/）=="
+echo "== 6. 浏览器人工验收（浏览器打开 http://localhost:30174/）=="
 echo "   a) Genes 页 -> 深海基因 -> 创建: 能力多选区出现（从能力市场拉 checkbox）"
 echo "      勾选能力保存后, 基因 manifest 应含所选能力"
 echo "   b) Capabilities 页: 创建能力时应见 config_template + tags 字段"

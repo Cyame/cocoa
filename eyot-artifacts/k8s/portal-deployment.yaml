@@ -3,7 +3,7 @@
 # Wave 1 of P14b: nginx serving the React SPA built by Dockerfile.portal.
 # The container exposes /healthz for kubelet probes; SPA routes fall back to
 # /index.html. Service is NodePort so the host browser can hit the SPA
-# directly (OrbStack: http://localhost:30173). /api/ is proxied to
+# directly (OrbStack: http://localhost:30174). /api/ is proxied to
 # eyot-backend ClusterIP inside the cluster — no port-forward needed.
 ---
 apiVersion: apps/v1
@@ -58,4 +58,4 @@ spec:
   ports:
     - port: 5173
       targetPort: 5173
-      nodePort: 30173
+      nodePort: 30174

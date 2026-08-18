@@ -50,8 +50,9 @@ pre-1.0 trajectory.
 
 - pytest 启动时清除宿主机的 HTTP/HTTPS/SOCKS 代理变量，避免 mock 的
   LLM 测试因本地代理缺少 `socksio` 而在客户端构造阶段失败。
-- 新增测试环境回归覆盖；后端全量测试为 **1049 passed / 1 skipped**。
+- 新增测试环境回归覆盖；后端全量测试为 **1051 passed / 1 skipped**。
 - Portal、Backend、Instance Host 的版本号统一到 `0.5.2.dev3`。
+- OrbStack 中旧 Cocoa Portal 占用 `30173` 时，Eyot Portal 改用空闲 NodePort `30174`。
 
 ## 1.0
 

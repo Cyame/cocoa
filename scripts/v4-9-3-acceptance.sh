@@ -121,15 +121,15 @@ else:
 "
 
 echo
-echo "== 6. 浏览器人工验收（浏览器打开 http://localhost:30173/）=="
+echo "== 6. 浏览器人工验收（浏览器打开 http://localhost:30174/）=="
 echo "   a) 眷族详情 -> Distill tab: 输入技能名 + heuristic/llm 切换 -> 提交后显示能力候选（name/type/required_knowledge）+ gene_suggestion + engine_used"
 echo "   b) 能力市场 (/orgs/:id/capabilities): skill 型创建为结构化表单 + required_knowledge 多选; mcp/tool/command/lsp 分型渲染"
 echo "   c) 深海基因编辑: required_knowledge 勾选 + 排序; 能力编排器"
 echo "   d) Distill 结果弹窗: 字段与后端真实 manifest 对齐（default_gene_refs/has_knowledge 等）"
 echo
 echo "== 7. 版本（应 v4.9.3）=="
-JS=$(curl -s http://localhost:30173/ | grep -oE 'src="[^"]*"' | head -1 | sed 's/src="//;s/"//')
-VERSION=$(curl -s "http://localhost:30173/$JS" | grep -oE '4\.9\.3' | sort -u | head -1 || true)
+JS=$(curl -s http://localhost:30174/ | grep -oE 'src="[^"]*"' | head -1 | sed 's/src="//;s/"//')
+VERSION=$(curl -s "http://localhost:30174/$JS" | grep -oE '4\.9\.3' | sort -u | head -1 || true)
 echo "bundle 内版本: ${VERSION:-未检出（浏览器看侧栏页脚应 v4.9.3）}"
 echo
 echo "== DONE =="
