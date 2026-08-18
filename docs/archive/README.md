@@ -16,5 +16,5 @@
 | `metaphor-name-table-15d.md` | 15d 名称映射表完整快照（2026-08-07 归档；**已被 v5 映射表取代**） |
 
 **Current design SoT**: `.omo/evidence/audit-product-design.md`（v4）+ `.omo/evidence/v5-rename-decisions.md`（v5 命名）  
-**Implementation plans**: `.omo/plans/v4-*.md` + `.omo/plans/v5-roadmap.md`  
+**Implementation plans**: `.omo/plans/v4-*.md` + `.omo/plans/0x-roadmap.md`  
 **Direction**: `docs/roadmap.md`

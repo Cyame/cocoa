@@ -1,6 +1,6 @@
 > **Canonical source**: v5 命名基线（2026-08-07 终稿）。决策 SoT：`.omo/evidence/v5-rename-decisions.md`。
 > **Prior**: 15d（克苏鲁）命名已归档至 `docs/archive/terminology-15d.md`（只读）。
-> **执行波**: v5（`.omo/plans/v5-roadmap.md`）——v5.0 命名波起 UI 显示名逐步切换；后端代码名/DB/API 不动。
+> **执行波**: v5（`.omo/plans/0x-roadmap.md`）——v5.0 命名波起 UI 显示名逐步切换；后端代码名/DB/API 不动。
 
 One-line definitions for every Eyot code-term (backend), display-name (frontend 山海+生物世界观), and protocol entity. Code-terms stay English; display-names in parentheses are for product UI reference.
 
@@ -122,4 +122,4 @@ Code-term-only entities from the core domain model. No product UI display-names.
 
 ---
 
-*v5 命名基线 2026-08-07。15d 快照归档于 `docs/archive/terminology-15d.md`；决策 SoT `.omo/evidence/v5-rename-decisions.md`；执行总图 `.omo/plans/v5-roadmap.md`。*
+*v5 命名基线 2026-08-07。15d 快照归档于 `docs/archive/terminology-15d.md`；决策 SoT `.omo/evidence/v5-rename-decisions.md`；执行总图 `.omo/plans/0x-roadmap.md`。*

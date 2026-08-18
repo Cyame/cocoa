@@ -2,7 +2,7 @@
 
 > **Canonical source**: v5 命名基线（2026-08-07 终稿）。决策 SoT：`.omo/evidence/v5-rename-decisions.md`。
 > **Prior**: 15d（克苏鲁）命名快照归档于 `docs/archive/metaphor-name-table-15d.md`（只读）。
-> **执行波**: v5（`.omo/plans/v5-roadmap.md`）——v5.0 命名波起 UI 显示名逐步切换；后端代码名/DB/API 不动。
+> **执行波**: v5（`.omo/plans/0x-roadmap.md`）——v5.0 命名波起 UI 显示名逐步切换；后端代码名/DB/API 不动。
 
 ## Preamble
 
@@ -104,4 +104,4 @@ Slug = 英文动物名 kebab-case（DB unique）。Display = i18n key。
 
 ---
 
-*v5 映射表 2026-08-07。15d 快照归档于 `docs/archive/metaphor-name-table-15d.md`；决策 SoT `.omo/evidence/v5-rename-decisions.md`；执行总图 `.omo/plans/v5-roadmap.md`。*
+*v5 映射表 2026-08-07。15d 快照归档于 `docs/archive/metaphor-name-table-15d.md`；决策 SoT `.omo/evidence/v5-rename-decisions.md`；执行总图 `.omo/plans/0x-roadmap.md`。*

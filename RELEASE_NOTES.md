@@ -19,6 +19,9 @@ pre-1.0 trajectory.
   `eyot-portal` / `eyot-instance-host`), and directories.
   The acronym **E·Y·O·T = Entity · Yoke · Organization · Topology**.
 - **Version reset**: 5.2.1 → **0.5.2.dev1** (pre-1.0; tags will start at 1.0).
+- **0.x generation framing**: 版本轨重置为 **0.x pre-1.0**，正式 tag 从 1.0 起；MINOR 每完成一个切片 +1。
+  已交付切片等价映射：**0.4.x ≈ v4 功能收口**、**0.5.0 = v5.0 命名**、**0.5.1 = v5.1 定义**、
+  **0.5.2 = v5.2 UIUX**（v5 世代实现已落地，改名重置后以 0.x 编号）。**当前 active = 0.5.3（v5.3 视觉波）**。
 - **Alembic reset**: the 35 incremental migration files were squashed into a
   single **schema-only baseline** (`Base.metadata.create_all`).
 - **Seeding moved to the app layer**: a fresh database is now populated at

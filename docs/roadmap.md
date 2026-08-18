@@ -4,7 +4,7 @@
 > **Authority**: Supersedes archived pre-v4 roadmaps under `.omo/plans/archive/`.
 > **Design SoT (2026-08-01)**: `.omo/evidence/audit-product-design.md` (v3.5.x design correction; decisions D1–D11).
 > **Implementation wave**: **v4** — `.omo/plans/v4-roadmap.md` + `v4-0`…`v4-10`（v4.10 已完成；v4.9.5 closeout 完成）。
-> **Next generation**: **v5** — 完整世代（更名 → 定义 → UIUX → 视觉）；SoT `.omo/evidence/v5-rename-decisions.md` + 执行总图 `.omo/plans/v5-roadmap.md`。
+> **Next generation**: **v5** — 完整世代（更名 → 定义 → UIUX → 视觉）；SoT `.omo/evidence/v5-rename-decisions.md` + 执行总图 `.omo/plans/0x-roadmap.md`。
 > **Archived PRDs**: `docs/archive/` (prd-v1 … prd-v3.4.1). Subsystem `docs/*-system.md` = pre-v4 reference; conflicts → audit wins.
 > **Naming**: `docs/terminology.md` + `docs/metaphor-name-table.md`（**v5 命名基线**：大陆/区域/生境/始祖/血脉/后裔/5 动物；15d 版归档于 `docs/archive/`）。
 > **Last revision**: 2026-08-07（v5 完整世代立项 + 命名 SoT 闭环）。
@@ -21,24 +21,17 @@
 
 **Do not** treat `docs/archive/*` or `.omo/plans/archive/*` as current direction.
 
-### 0.1 Active wave — v4 functional closure
+### 0.1 Active wave — 0.5.3 视觉波（= v5.3）
+
+当前版本轨 **0.x**（pre-1.0，正式 tag 从 1.0 起）。已交付切片：**0.4.x ≈ v4 功能收口**（v4.0–v4.10，已归档）、**0.5.0 = v5.0 命名**、**0.5.1 = v5.1 定义**、**0.5.2 = v5.2 UIUX**（均已实现落地）。
+
+**当前唯一 active 切片 = 0.5.3（v5.3 视觉波）**：
 
 | Slice | Plan | Goal |
 |---|---|---|
-| Docs | Phase 0 (done in evidence) | Design correction + archive |
-| v4.0 | `v4-0-schema-auth-scope.md` | OrgContract + 原子 gene + 删 role |
-| v4.1 | `v4-1-capability-gene-crud.md` | Gene/Pack/Capability CRUD + scope 默认 |
-| v4.2 | `v4-2-knowledge-system.md` | Knowledge + WS>…>system override |
-| v4.3 | `v4-3-tenant-dashboard-ia.md` | Org 选择页 + 成员赋基因 + 小脑 |
-| v4.4 | `v4-4-clone-ops.md` | Clone + can_* + actor |
-| v4.5 | `v4-5-fornix-hub.md` | Fornix mount + Vault MVP |
-| v4.6 | `v4-6-learning-writeback.md` | Promote + Memory 目标 schema |
-| v4.7 | `v4-7-harness-collab.md` | D9；V47 已签核（notify-only 小脑、DB inject 队列、模板回复） |
-| v4.8 | `v4-8-meetings-schedules.md` | Meetings + scheduled-tasks |
-| v4.9 | `v4-9-closure-gate.md` | Zero functional holes + deploy |
-| v4.10 | `v4-10-default-prompts.md` | Default prompt polish |
+| 0.5.3 | `0-5-3-visual.md` | 视觉 SoT + `@theme` token + dark/light 双主题 + 壳层现代化 + 5 始祖头像资产 + Avatar 体系 + 密度/空态/一致性 |
 
-Out of v4: → **v5 完整世代**（更名/定义/UIUX/视觉，见 `.omo/plans/v5-roadmap.md`）；session-engine-v2 multimodal day1 remains §7 far queue（v6 协议锁定窗口）。
+0.5.3 之后（远期，§5.4 / §7）：Capability hub assist、Session engine v2（multimodal day-1）、Gene LLM real、nodeskclaw parity 候选（Voice / channels / multi-runtime…）。总图见 `.omo/plans/0x-roadmap.md`。
 
 ---
 
@@ -194,7 +187,7 @@ Eyot no longer plans primarily as open-ended "P-N feature waves". After foundati
 | **v1–v3.4.1** | Historical product slices | **Archived** → `docs/archive/` |
 | **v3.5.x design correction** | audit-review + D1–D11 → `audit-product-design.md` | **Done** (docs) |
 | **v4** | Functional closure (schema, tenant, knowledge, clone, harness collab, …) | **Done**（v4.0–v4.10 + v4.9.5 closeout 质量审查通过 2026-08-08）— `.omo/plans/v4-*.md` |
-| **v5** | 完整世代：更名（山海+生物世界观）+ 定义（5 始祖/6 subagent/镜像体系）+ UIUX + 视觉（原 3.6） | **In Progress**（v5.0 命名波已交付；**v5.1 定义波执行中** 2026-08-09）— `.omo/evidence/v5-rename-decisions.md` + `.omo/plans/v5-roadmap.md` |
+| **v5** | 完整世代：更名（山海+生物世界观）+ 定义（5 始祖/6 subagent/镜像体系）+ UIUX + 视觉（原 3.6） | **Done（v5.0 命名 / v5.1 定义 / v5.2 UIUX 已实现落地，等价 0.5.0–0.5.2）**；唯一剩余 **v5.3 视觉波 = 0.5.3**（当前 active，待实施）— `.omo/evidence/v5-rename-decisions.md` + `.omo/plans/0x-roadmap.md` |
 | **Later** | Session-engine-v2 multimodal, Voice, … | §7 far queue |
 
 Code identifiers follow 15d names (`Workspace`, `Entity`, `Passage`, `BaseClass`) — **v5 世代只改 UI 显示名与 5 动物 slug，代码名/DB/API 仍保持 15d**（见 `.omo/evidence/v5-rename-decisions.md`）。Pre-v2 names remain only in alembic history.
@@ -282,13 +275,13 @@ Full history: `.omo/plans/archive/` + `.omo/plans/archive/eyot-v2-roadmap.md` (p
 | Track | Intent | Plan |
 |---|---|---|
 | **3.5.x / 3.6** | 主流程闭环 + 纯视觉 UI 大重构（历史轨，已被 v4/v5 取代）| `.omo/plans/archive/product-version-track-3-5-3-6.md` |
-| **4.x** | v4 功能收口（已完成 v4.0–v4.10 + v4.9.5 closeout）| `.omo/plans/v4-roadmap.md` |
-| **5.x** | **v5 完整世代**：更名（命名波）→ 定义（抽象落地）→ UIUX → 视觉（原 3.6 内容并入尾段）| `.omo/plans/v5-roadmap.md` |
-| **0.x (Eyot)** | **2026-08-17 项目 Cocoa → Eyot 重置**：版本回退 5.2.1 → `0.5.2.dev1`（pre-1.0，正式 tag 从 1.0 起）；alembic 压平为单一 schema 基线，默认数据改由 app 层 idempotent seeder 注入。v5 的山海+生物命名（始祖/血脉/后裔、大陆/区域/生境）与抽象延续，但项目身份、版本轨与标识符（EYOT_*/eyot_dev/eyot_*）均为 Eyot | 见 `RELEASE_NOTES.md` |
+| **4.x** | v4 功能收口（已完成 v4.0–v4.10 + v4.9.5 closeout，等价 0.4.x 前置）| `.omo/plans/v4-roadmap.md`（已归档） |
+| **5.x** | v5 完整世代：更名 → 定义 → UIUX → 视觉（已交付到 0.5.2；等价 0.5.x 前身）| `.omo/plans/0x-roadmap.md`（已归档） |
+| **0.x (Eyot)** | **2026-08-17 Cocoa → Eyot 重置后唯一 active 版本轨**：pre-1.0 **0.x**，正式 tag 从 **1.0** 起；MINOR 每完成一个切片 +1。已交付切片等价映射：**0.4.x ≈ v4 功能收口 / 0.5.0=v5.0 命名 / 0.5.1=v5.1 定义 / 0.5.2=v5.2 UIUX**；**当前 active = 0.5.3（v5.3 视觉波）**。alembic 压平为单一 schema 基线，默认数据由 app 层 idempotent seeder 注入 | `.omo/plans/0x-roadmap.md`（0.x 总图） |
 
 **Working agreement:** 主功能仍有不通处与未修正项，随产品迭代逐步设计与变更；**不做**「先大改 UI 再通主流程」（v4 已闭环主流程；v5 视觉波在命名/定义/UIUX 之后）。
 
-> **历史轨**：3.5.x / 3.6 为文档纠偏与纯视觉轨；4.x/5.x 为已实施世代的实现轨（v5 命名与抽象沿用至今）；**当前为 Eyot 0.x pre-1.0 轨**（2026-08-17 Cocoa → Eyot 重置，见 §5.2 表格末行与 `RELEASE_NOTES.md`）。`v4-roadmap.md` / `v5-roadmap.md` 作为历史实现参考。
+> **历史轨**：3.5.x / 3.6 为文档纠偏与纯视觉轨；4.x/5.x 为已实施世代（等价 0.4.x / 0.5.0–0.5.2，命名与抽象沿用至今）；**当前唯一 active 版本轨为 Eyot 0.x pre-1.0**（2026-08-17 Cocoa → Eyot 重置，见 §5.2 表格末行与 `RELEASE_NOTES.md`）。`v4-roadmap.md` / `0x-roadmap.md` 已归档为历史实现参考；0.x 总图见 `.omo/plans/0x-roadmap.md`。
 
 ### 5.3 Now（历史轨 3.5.x 遗留；当前 v4 收尾 + v5 世代见 §5.2）
 
@@ -304,10 +297,10 @@ Full history: `.omo/plans/archive/` + `.omo/plans/archive/eyot-v2-roadmap.md` (p
 |---|---|---|
 | **PRD-v3.4.2** | 全神职基础 gene + capability（空间会话 / 拓扑邻接说话） | 建在 3.5 tunnel/pi 上；仍属 3.5.x 行为闭环 |
 | Cerebellum business | 未连线 `@` 转小脑的真实业务 | Stub exists; design in later 3.5.x slice |
-| **v5.3 视觉波**（原 3.6）| Portal / Composer / Topology visual overhaul | 已并入 v5 完整世代（`.omo/plans/v5-roadmap.md`） |
-| Avatar presets UI | 用户/血脉预设头像切换 | → **v5.2/v5.3**（原 Later-A） |
-| Visual + 始祖图 | 主视觉换皮、候选图挂卡片 | → **v5.3**（原 Later-B） |
-| Empty 生境 IDE polish | 空生境 IDE 深打磨、始祖预选 | → **v5.3** unless blocking introduce |
+| **0.5.3 视觉波**（= v5.3，原 3.6/5.3）| Portal / Composer / Topology visual overhaul（`@theme` token + dark/light + 壳层现代化 + 5 始祖头像资产 + Avatar 体系 + 密度/空态） | **当前 active 切片**（0.5.2 已交付后唯一未实施波）→ `.omo/plans/0-5-3-visual.md` |
+| Avatar presets UI | 用户/血脉预设头像切换 | → **0.5.3**（原 Later-A，并入 v5.3 Avatar 体系） |
+| Visual + 始祖图 | 主视觉换皮、候选图挂卡片 | → **0.5.3**（原 Later-B） |
+| Empty 生境 IDE polish | 空生境 IDE 深打磨、始祖预选 | → **0.5.3** unless blocking introduce |
 | Capability hub assist | skill/capability 中枢撰写 | Later-D |
 | Session engine v2 | Multimodal day-1 protocol | `.omo/drafts/session-engine-v2.md`（原 v4+ **后移**） |
 | Gene LLM real | Richer distill than heuristics | Former P16c |
@@ -412,7 +405,7 @@ Recorded so future planners do not lose intent:
 
 | 2026-08-02 | **V47-1…11 签核** — 全部接受顾问建议；v4.7 可排队实现（仍依赖 v4.5/v4.6）。 |
 
-| 2026-08-07 | **v5 完整世代立项** — 四切片（v5.0 命名 / v5.1 定义 / v5.2 UIUX / v5.3 视觉）；MAJOR bump 5.x；grill-me 会话闭环全部待定项：5 常驻始祖（狐狸/海狸/麻雀/郊狼/狮子）+ 6 subagent 能力（唤灵/灵视/衡判/游魂/潜知/百瞳 退出体系）、三层名始祖/血脉/后裔、结构术语大陆/区域/生境/迁徙路线、其余术语全量新词（成员/信号塔/标本/粮仓/足迹/诞生记录/领地地图/蜕变/演化/领悟/兽道）、rank 全量退役、slug 直接改名+存量 UPDATE、代码名不动。SoT `.omo/evidence/v5-rename-decisions.md` + `.omo/plans/v5-roadmap.md`；v4.9.5 closeout 先行。 |
+| 2026-08-07 | **v5 完整世代立项** — 四切片（v5.0 命名 / v5.1 定义 / v5.2 UIUX / v5.3 视觉）；MAJOR bump 5.x；grill-me 会话闭环全部待定项：5 常驻始祖（狐狸/海狸/麻雀/郊狼/狮子）+ 6 subagent 能力（唤灵/灵视/衡判/游魂/潜知/百瞳 退出体系）、三层名始祖/血脉/后裔、结构术语大陆/区域/生境/迁徙路线、其余术语全量新词（成员/信号塔/标本/粮仓/足迹/诞生记录/领地地图/蜕变/演化/领悟/兽道）、rank 全量退役、slug 直接改名+存量 UPDATE、代码名不动。SoT `.omo/evidence/v5-rename-decisions.md` + `.omo/plans/0x-roadmap.md`；v4.9.5 closeout 先行。 |
 | 2026-08-09 | **v5.0 命名波交付 + v5.1 定义波执行中** — 版本 5.0.2；6 降级 Memory 物理删光（迁移 `78137b7985e5` M2）；T1 落地 6 能力 subagent agent .md（intent/architecture/quality/explore/research/vision）；T6 Tunnel 协议清理（提交 a3f0b85：错误码中性化 host_spawn_error/host_stdin_closed/turn_rejected/host_error + done payload 去 finish_reason + control interrupt）。SoT 同步：`v5-rename-decisions.md` §六.2「Memory 经验回流」条目作废 + §七.1 扩充；terminology / metaphor-name-table 补能力 id 列。 |
 
 *Next update trigger: a v4 slice closes, or implementation of a signed plan starts.*
