@@ -323,7 +323,7 @@
   "composer": {
     "title": "编辑器",
     "tagline": "向一个或多个员工发送指令。用 @slug /command 触发动作。",
-    "placeholder": "输入 @已连线生物 说话，或 @slug /command。Cmd/Ctrl+Enter 发送。",
+    "placeholder": "输入 @已连线生物 说话，或 @slug /command。Cmd/Ctrl+Enter 发送，上/下方向键翻阅历史。",
     "send": "发送",
     "sending": "发送中...",
     "sendFailed": "发送失败",
@@ -345,7 +345,7 @@
     "statusDone": "已完毕",
     "statusFailed": "失败",
     "compartmentGeneral": "通用",
-    "sendHint": "Cmd/Ctrl+Enter 发送",
+    "sendHint": "Cmd/Ctrl+Enter 发送；上/下方向键翻阅历史",
     "transcriptEmpty": "还没有对话。连线后用 @生物 说话。",
     "roleUser": "你",
     "roleAssistant": "后裔",

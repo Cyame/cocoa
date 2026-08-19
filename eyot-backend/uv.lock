@@ -512,7 +512,7 @@ wheels = [
 
 [[package]]
 name = "eyot-backend"
-version = "0.5.2.dev3"
+version = "0.5.2.dev4"
 source = { virtual = "." }
 dependencies = [
     { name = "alembic" },

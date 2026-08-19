@@ -1,6 +1,6 @@
 [project]
 name = "eyot-backend"
-version = "0.5.2.dev3"
+version = "0.5.2.dev4"
 description = "Eyot backend service - FastAPI + SQLAlchemy async + Alembic"
 requires-python = ">=3.12"
 dependencies = [

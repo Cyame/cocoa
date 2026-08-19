@@ -538,7 +538,7 @@
   "composer": {
     "title": "Composer",
     "tagline": "Send a turn to one or more employees. Use @slug /command for actions.",
-    "placeholder": "Type @connected creature to chat, or @slug /command. Cmd/Ctrl+Enter to send.",
+    "placeholder": "Type @connected creature to chat, or @slug /command. Cmd/Ctrl+Enter to send; Up/Down for history.",
     "send": "Send",
     "sending": "Sending...",
     "sendFailed": "Send failed",
@@ -560,7 +560,7 @@
     "statusDone": "Done",
     "statusFailed": "Failed",
     "compartmentGeneral": "general",
-    "sendHint": "Cmd/Ctrl+Enter to send",
+    "sendHint": "Cmd/Ctrl+Enter to send; Up/Down for history",
     "transcriptEmpty": "No messages yet. Connect a beast trail, then @ a Creature.",
     "roleUser": "You",
     "roleAssistant": "Descendant",

@@ -12,6 +12,11 @@ import {
 import { api } from '@/lib/api';
 import { introduceEntityIntoWorkspace } from '@/lib/api/instances';
 import { resolveError } from '@/lib/apiError';
+import {
+  isCursorOnFirstLine,
+  isCursorOnLastLine,
+  useComposerCommandHistory,
+} from '@/lib/composerHistory';
 import { streamComposerTurn } from '@/lib/composerStream';
 import {
   buildOptimisticUserBubbles,
@@ -91,6 +96,7 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
   const [transcript, setTranscript] = useState<TranscriptMessage[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [cmdMenuOpen, setCmdMenuOpen] = useState(false);
+  const [mentionMenuOpen, setMentionMenuOpen] = useState(false);
   const [filterSpeaker, setFilterSpeaker] = useState('');
   const [filterRecipient, setFilterRecipient] = useState('');
   const [entityNameBySlug, setEntityNameBySlug] = useState<Readonly<Record<string, string>>>({});
@@ -109,6 +115,7 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
   const abortRef = useRef<AbortController | null>(null);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
   const streamFiltersRef = useRef<Map<string, AgentThinkingStreamFilter>>(new Map());
+  const commandHistory = useComposerCommandHistory(workspaceId);
 
   const entityLabel = useCallback(
     (slug: string | null | undefined, fallbackName?: string | null): string => {
@@ -420,6 +427,7 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
         body: JSON.stringify({ turn_text: outgoing, workspace_id: workspaceId }),
       });
       setDeliveryRows(result.results);
+      commandHistory.commit(outgoing);
       setText('');
 
       const turnIds: {
@@ -591,10 +599,42 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
     });
   }
 
+  function applyRecalled(next: string) {
+    setText(next);
+    requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (el !== null) {
+        el.focus();
+        el.setSelectionRange(next.length, next.length);
+      }
+    });
+  }
+
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault();
       void handleSend();
+      return;
+    }
+    if (e.nativeEvent.isComposing) return;
+    if (cmdMenuOpen || mentionMenuOpen) return;
+
+    const cursor = e.currentTarget.selectionStart;
+    if (e.key === 'ArrowUp') {
+      if (!isCursorOnFirstLine(text, cursor)) return;
+      const recalled = commandHistory.older(text);
+      if (recalled.action === 'ignore') return;
+      e.preventDefault();
+      if (recalled.action === 'apply') applyRecalled(recalled.text);
+      return;
+    }
+    if (e.key === 'ArrowDown') {
+      if (!commandHistory.isBrowsing()) return;
+      if (!isCursorOnLastLine(text, cursor)) return;
+      const recalled = commandHistory.newer();
+      if (recalled.action === 'ignore') return;
+      e.preventDefault();
+      if (recalled.action === 'apply') applyRecalled(recalled.text);
     }
   }
 
@@ -859,6 +899,7 @@ export default function ComposerPanel({ workspaceId, compact = false }: Composer
           onTextChange={setText}
           workspaceId={workspaceId}
           suppressed={cmdMenuOpen}
+          onOpenChange={setMentionMenuOpen}
           onIntroduceRequest={(entity) => {
             setIntroduceError(null);
             setIntroduceTarget(entity);

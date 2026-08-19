@@ -54,6 +54,12 @@ pre-1.0 trajectory.
 - Portal、Backend、Instance Host 的版本号统一到 `0.5.2.dev3`。
 - OrbStack 中旧 Cocoa Portal 占用 `30173` 时，Eyot Portal 改用空闲 NodePort `30174`。
 
+### 2026-08-19 — 0.5.2.dev4（Composer 命令历史）
+
+- Composer 主输入框支持 CLI 式上/下方向键翻阅已发送命令（按工作区写入 localStorage，最多 50 条）。
+- 与 `/` 命令补全、`@` 提及补全互斥；多行文本仅在首行/末行拦截方向键。
+- Portal、Backend、Instance Host 的版本号统一到 `0.5.2.dev4`。
+
 ## 1.0
 
 _To be tagged. Sections for 1.x releases land here; `*.devN` builds above fold

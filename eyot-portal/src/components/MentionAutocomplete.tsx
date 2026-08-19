@@ -67,6 +67,7 @@ export type MentionAutocompleteProps = {
   readonly onTextChange: (newText: string) => void;
   readonly workspaceId: string;
   readonly suppressed?: boolean;
+  readonly onOpenChange?: (open: boolean) => void;
   readonly onIntroduceRequest?: (entity: IntroduceTarget) => void;
   readonly refreshKey?: number;
 };
@@ -77,6 +78,7 @@ export function MentionAutocomplete({
   onTextChange,
   workspaceId,
   suppressed = false,
+  onOpenChange,
   onIntroduceRequest,
   refreshKey = 0,
 }: MentionAutocompleteProps) {
@@ -234,6 +236,10 @@ export function MentionAutocomplete({
     activeToken !== null &&
     dismissedStart !== activeToken.start &&
     filtered.length > 0;
+
+  useEffect(() => {
+    onOpenChange?.(visible);
+  }, [visible, onOpenChange]);
 
   useEffect(() => {
     setHighlighted(0);
