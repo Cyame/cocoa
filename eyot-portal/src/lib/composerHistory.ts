@@ -31,10 +31,14 @@ export function persistComposerHistory(
   entries: readonly string[],
   storage: WritableStorage = localStorage,
 ): void {
-  storage.setItem(
-    composerHistoryStorageKey(workspaceId),
-    JSON.stringify(entries.slice(-COMPOSER_HISTORY_MAX)),
-  );
+  try {
+    storage.setItem(
+      composerHistoryStorageKey(workspaceId),
+      JSON.stringify(entries.slice(-COMPOSER_HISTORY_MAX)),
+    );
+  } catch {
+    // Quota / private-mode failures must not block sending.
+  }
 }
 
 export function pushComposerHistory(entries: readonly string[], command: string): string[] {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   COMPOSER_HISTORY_MAX,
+  type ComposerHistoryBrowse,
   composerHistoryStorageKey,
   isCursorOnFirstLine,
   isCursorOnLastLine,
@@ -9,7 +10,6 @@ import {
   pushComposerHistory,
   recallNewer,
   recallOlder,
-  type ComposerHistoryBrowse,
 } from '@/lib/composerHistory';
 
 function memoryStorage(initial: Record<string, string> = {}) {
